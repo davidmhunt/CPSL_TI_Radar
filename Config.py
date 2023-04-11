@@ -1,5 +1,6 @@
 import serial
 import time
+import json
 
 class Config:
 
@@ -58,19 +59,45 @@ class Config:
 
         return
     
-
-
-
     def translateFromJSON(self,JSONFileName):
-        # TODO: add json parser code into this method
+        """Translates the JSON input file into the desired configuration format 
+        """
+        f = open(JSONFileName)
+        content = ''
+        for line in f: 
+            content += line
+        JSONconfig = json.loads(content)
+        return self.create_config(JSONconfig)
+        
+        
+    def get_JSON_data(self, dump, root=True):
+        """Recursively decomposes the input data in the JSON entry to produce a command in the desired format
+        """  
+        value = ''
+        if type(dump) in (dict,):
+            for key in dump:
+                item = dump[key]
+                if root:
+                    if '|' in key: key = key[:-key[::-1].index('|') - 1]  
+                    value += '\n{} '.format(key)
+                value += self.get_JSON_data(item, False)
+        elif type(dump) in (list, tuple,):
+            value += '{} '.format(''.join([self.get_JSON_data(v, False) for v in dump]))
+        else:
+            if dump is not None:
+                value += '{} '.format(dump)
+        return value
 
-        #TODO: should return the config in the proper format
-        pass
+    def create_config(self, cfg=None): 
+        """Add appropriate start and end commands to the configuration
+        """ 
+        post = ('sensorStop',) + ('flushCfg',) + tuple(self.get_JSON_data(cfg).split('\n')[1:][2:]) + ('sensorStart',)        
+        return post
+
 
     def sendConfigSerial(self):
         """Send the configuration to the mmWave radar, but do not start sensor operation
         """
-
 
         #read the configuration and send it to the device
         for i in self.config:
