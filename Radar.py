@@ -60,6 +60,7 @@ class Radar:
         self.processor = Processor(
             config_parameters=self.config.config_params,
             enable_plotting=enable_plotting,
+            plot_heatmap = False,
             jupyter=jupyter,
             verbose=verbose
         )
@@ -123,7 +124,7 @@ class Radar:
             packet_available = self.streamer.checkForNewPacket()
 
             if packet_available:
-                self.processor.performProcessing(self.currentPacket)
+                self.processor.performProcessing(self.streamer.currentPacket)
 
                 #TODO add code for tracking here (stored as (4 x N)
                 # array where each row contains the [x,y,z,vel] information

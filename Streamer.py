@@ -33,7 +33,7 @@ class Streamer:
         self.verbose = verbose
 
         #initialize the byte buffer
-        maxBufferSize = 2**16
+        maxBufferSize = 2**18
         self.byteBuffer = np.zeros(maxBufferSize,dtype = 'uint8')
         self.byteBufferLength = 0
 
@@ -83,9 +83,9 @@ class Streamer:
             byteVec (np.array(dtype='uint8')): buffer with data 
                 read from the data serial port
         """
-        maxBufferSize = 2**16
+        maxBufferSize = 2**18
         byteCount = len(byteVec)
-        
+
         # add the data to the end of the buffer, update buffer length
         if (self.byteBufferLength + byteCount) < maxBufferSize:
             self.byteBuffer[self.byteBufferLength:self.byteBufferLength + byteCount] = byteVec[:byteCount]
@@ -154,7 +154,7 @@ class Streamer:
                 
                 # Read the total packet length
                 totalPacketLen = np.matmul(self.byteBuffer[12:12+4],word)
-                
+
                 # Check that all the packet has been read
                 if (self.byteBufferLength >= totalPacketLen) and (self.byteBufferLength != 0):
 
