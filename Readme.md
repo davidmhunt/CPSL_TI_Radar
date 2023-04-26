@@ -14,7 +14,10 @@
 - _Radar.py_
 - Jupyter Notebook: _demo.ipynb_
 
-**Configurations Folder:** TI\_Radar\_Demo\_Visualizer/configurations ![](RackMultipart20230426-1-etjmtt_html_c3f863227b626158.png)
+![alt text](https://github.com/davidmhunt/TI_Radar_Demo_Visualizer/blob/klangell-patch-1/class_organization_diagram.png?raw=true)
+
+
+**Configurations Folder:** TI\_Radar\_Demo\_Visualizer/configurations 
 
 - Contains files in both JSON and demo visualizer configuration formats
 
