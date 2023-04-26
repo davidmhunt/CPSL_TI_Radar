@@ -11,6 +11,7 @@ class Processor:
     def __init__(self,
                  config_parameters,
                  enable_plotting = False,
+                 plot_heatmap = False,
                  jupyter = True,
                  verbose = False):
         """Initialize the Processor Class
@@ -38,17 +39,21 @@ class Processor:
         self.detected_objects = {}
         self.xyz_vel_coordinates = np.zeros(shape=(50,4))
 
+        #initialize the array to store the heatmap
+        self.heatmap = np.zeros(self.config_params["numRangeBins"] * 8, dtype=np.complex_)
+
         #initialize plotting
         self.plotting_enabled = enable_plotting
+        self.plot_heatmap = plot_heatmap
         self.jupyter = jupyter
         self.hdisplay = None #display handle for jupyter notebooks
         self.fig = None
-        self.ax1 = None
+        self.axs = []
         if enable_plotting:
             if self.jupyter:
                 self.hdisplay = display("",display_id=True)
-            self.fig = plt.figure()
-            self.ax1 = self.fig.add_subplot(1,1,1)
+            self.fig, new_ax = plt.subplots(1)
+            self.axs.append(new_ax)
             plt.title("Detected Points")
             plt.xlabel("X Coordinate (m)")
             plt.ylabel("Y Coordinate (m)")
@@ -68,6 +73,7 @@ class Processor:
 
         #TODO: added these even though we aren't actually using these
         MMWDEMO_UART_MSG_RANGE_PROFILE   = 2
+        MMWDEMO_UART_MSG_RANGE_AZIMUTH_HEATMAP   = 4
         MMWDEMO_UART_MSG_RANGE_DOPPLAR_HEATMAP   = 5
     
         header,idX = self.decodePacketHeader(Packet)
@@ -127,7 +133,7 @@ class Processor:
                 dopplerIdx[dopplerIdx > (self.config_params["numDopplerBins"]/2 - 1)] = dopplerIdx[dopplerIdx > (self.config_params["numDopplerBins"]/2 - 1)] - 65535
                 dopplerVal = dopplerIdx * self.config_params["dopplerResolutionMps"]
                 
-                #TODO These were in the original code, but did we need these
+                #TODO These were in the original code, but did we need these (K note - handles overflow case, not sure if we want?)
                 #x[x > 32767] = x[x > 32767] - 65536
                 #y[y > 32767] = y[y > 32767] - 65536
                 #z[z > 32767] = z[z > 32767] - 65536
@@ -152,19 +158,12 @@ class Processor:
                 print("Processor.decodePacket: detected_object {}".format(self.detected_objects))
                 print("Processor.decodePacket: xyz_vel_coordinates {}".format(self.xyz_vel_coordinates))
             #TODO: was in previous python script
-            """
-            if tlv_type == MMWDEMO_UART_MSG_RANGE_PROFILE: 
-                idX +=2;   
-            count = 0    
-            #print("Doppler bins: ", self.config["numDopplerBins"])
-            #print("Range bins: ", self.config["numRangeBins"])          
-            while tlv_type == MMWDEMO_UART_MSG_RANGE_DOPPLAR_HEATMAP and idX < len(byteBuffer)and (byteBuffer[idX] != 0 or byteBuffer[idX+2] != 0):
-                #print("heatmap working")
-                #print(byteBuffer[idX:idX+2])
-                count +=1
-                idX += 2
-            #print(count)
-            """
+            
+            if tlv_type == MMWDEMO_UART_MSG_RANGE_AZIMUTH_HEATMAP: 
+                for i in range(int(tlv_length/4)):
+                    self.heatmap[i] = complex(np.matmul(Packet[idX+2:idX+4],word),np.matmul(Packet[idX:idX+2],word)) # formatted im, re
+                    idX +=4; 
+
         if self.verbose:
             print("Processor.Streamer: Finished Processing Packet\n")
         
@@ -217,14 +216,24 @@ class Processor:
         y = self.detected_objects.get('y')
 
         #plot the data
-        self.ax1.cla()
-        self.ax1.scatter(x,y)
-        plt.title("Detected Points")
-        plt.xlabel("X Coordinate (m)")
-        plt.ylabel("Y Coordinate (m)")
-        plt.xlim((-10,10))
-        plt.ylim((0,10))
+        plt.tight_layout()
+        self.axs[0].cla()
+        self.axs[0].scatter(x,y)
+        self.axs[0].set_title("Detected Points")
+        self.axs[0].set_xlabel("X Coordinate (m)")
+        self.axs[0].set_ylabel("Y Coordinate (m)")
+        self.axs[0].set_xlim((-10,10))
+        self.axs[0].set_ylim((0,10))
         #plt.show()
+
+        #plot the data
+        if (self.plot_heatmap):
+            self.axs[1].cla()
+            disp= self.heatmap.reshape(self.config_params["numRangeBins"], 8)
+            self.axs[1].imshow(abs(disp), cmap='hot')
+            self.axs[1].set_title("Heatmap")
+            self.axs[1].set_xlim((0, 8))
+
 
         #special code for jupyter notebooks
         if self.jupyter:
