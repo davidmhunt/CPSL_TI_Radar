@@ -2,7 +2,7 @@ import serial
 import time
 import json
 
-class Config:
+class Controller:
     """The Radar serial class handles all serial communications between 
     """
 
@@ -11,7 +11,6 @@ class Config:
             config_file_name,
             translate_from_JSON = False,
             CLI_port = "COM4",
-            Data_port = "COM5",
             enable_serial = True,
             verbose = False):
         """Initialize the Config class
@@ -23,8 +22,6 @@ class Config:
                 JSON to the required format. Defaults to False.
             CLI_port (str, optional): Serial port used for CLI
                 (command line interface). Defaults to "COM4".
-            Data_port (str, optional): Serial port used for data
-                passing. Defaults to "COM5".
             enable_serial (bool, optional): on True, connect to
                 and configure the mmWave device. Defaults to True.
             verbose (bool, optional): on True, prints out relevant
@@ -54,7 +51,6 @@ class Config:
 
             #initialize the serial ports
             self.CLIport = serial.Serial(CLI_port, 115200)
-            self.Dataport = serial.Serial(Data_port, 921600)
 
             #send to the device
             self.sendConfigSerial()
