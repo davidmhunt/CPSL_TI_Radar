@@ -19,6 +19,7 @@ class _BackgroundProcess:
         """
         
         #processes exit flag (call from RADAR to exit the process)
+        #NOTE: This should only be triggerred by the Radar class or by a keyboard interrupt
         self.exit_called = False
         
         #save process name
