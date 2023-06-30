@@ -1,17 +1,14 @@
-
-
-class _Message:
-
+class _MessageTypes:
     #largest hex value corresponding to a message
     _LARGEST_MESSAGE_VALUE = 0x08
-    
+
     #init messages
     INIT_SUCCESS = 0x00
     INIT_FAIL = 0x01
 
     #exit messages
     EXIT = 0x02
-    
+
     #print messages
     PRINT_TO_TERMINAL = 0x03
 
@@ -24,12 +21,14 @@ class _Message:
     #New Data Available
     NEW_DATA = 0x08
 
+class _Message:
+
 
     def __init__(self,type,value = None):
         
         #check message type
         self.type = type
-        if type > _Message._LARGEST_MESSAGE_VALUE:
+        if type > _MessageTypes._LARGEST_MESSAGE_VALUE:
             raise InvalidMessageType(type)
         pass
 

@@ -4,7 +4,7 @@ import serial
 import time
 from _Background_Process import _BackgroundProcess
 from multiprocessing import Pipe,connection
-from _Message import _Message
+from _Message import _Message,_MessageTypes
 
 class CLIController(_BackgroundProcess):
     """The controller class handles CLI command and control with the radar
@@ -124,15 +124,15 @@ class CLIController(_BackgroundProcess):
     def _process_Radar_command(self,command:_Message):
         
         match command.type:
-            case _Message.EXIT:
+            case _MessageTypes.EXIT:
                 self.exit_called = True
-            case _Message.START_SENSOR:
+            case _MessageTypes.START_SENSOR:
                 self.serial_send_start_sensing()
-            case _Message.STOP_SENSOR:
+            case _MessageTypes.STOP_SENSOR:
                 self.serial_send_stop_sensing()
-            case _Message.SEND_CONFIG:
+            case _MessageTypes.SEND_CONFIG:
                 self.serial_send_config()
-            case _Message.LOAD_NEW_CONFIG:
+            case _MessageTypes.LOAD_NEW_CONFIG:
                 print("CLI_Controller._process_Radar_command: LOAD_NEW_CONFIG not enabled yet")
                 pass
             case _:

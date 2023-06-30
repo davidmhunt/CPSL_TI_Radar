@@ -1,7 +1,7 @@
 #python modules
 from multiprocessing import Process,Pipe,connection
 from multiprocessing import set_start_method
-from _Message import _Message
+from _Message import _Message,_MessageTypes
 import json
 import time
 import os
@@ -42,10 +42,10 @@ class Radar:
         try:
             
             #configure the radar
-            self._conn_CLI_Controller.send(_Message(_Message.SEND_CONFIG))
+            self._conn_CLI_Controller.send(_Message(_MessageTypes.SEND_CONFIG))
             
             #start the radar sensor
-            self._conn_CLI_Controller.send(_Message(_Message.START_SENSOR))
+            self._conn_CLI_Controller.send(_Message(_MessageTypes.START_SENSOR))
 
             #start running the sensor
             start_time = time.time()
@@ -66,10 +66,10 @@ class Radar:
     
     def close(self):
         #send sensor stop signal
-        self._conn_CLI_Controller.send(_Message(_Message.STOP_SENSOR))
+        self._conn_CLI_Controller.send(_Message(_MessageTypes.STOP_SENSOR))
 
         #send exit signal to each of the background processes
-        self._conn_CLI_Controller.send(_Message(_Message.EXIT))
+        self._conn_CLI_Controller.send(_Message(_MessageTypes.EXIT))
         
         #end controller process
         self._process_CLI_Controller.join()
@@ -143,13 +143,13 @@ class Radar:
             msg = conn.recv()
 
             match msg.type:
-                case _Message.INIT_FAIL:
+                case _MessageTypes.INIT_FAIL:
                     init_received = True
                     init_successful = False
-                case _Message.INIT_SUCCESS:
+                case _MessageTypes.INIT_SUCCESS:
                     init_received = True
                     init_successful = True
-                case _Message.PRINT_TO_TERMINAL:
+                case _MessageTypes.PRINT_TO_TERMINAL:
                     print(msg.value)
                 case _:
                     continue
@@ -162,9 +162,9 @@ class Radar:
         while conn.poll():
             msg = conn.recv()
             match msg.type:
-                case _Message.PRINT_TO_TERMINAL:
+                case _MessageTypes.PRINT_TO_TERMINAL:
                     print(msg.value)
-                case _Message.NEW_DATA:
+                case _MessageTypes.NEW_DATA:
                     print("Radar._conn_recv_process_updates: NEW_DATA message not currently enabled")
                 case _:
                     continue

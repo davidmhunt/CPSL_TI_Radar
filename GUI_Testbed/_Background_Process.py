@@ -1,5 +1,5 @@
 from multiprocessing import Pipe,connection
-from _Message import _Message
+from _Message import _Message,_MessageTypes
 import json
 import os
 
@@ -55,9 +55,9 @@ class _BackgroundProcess:
         
         #determine which message to send
         if init_success == True:
-            msg = _Message(_Message.INIT_SUCCESS)
+            msg = _Message(_MessageTypes.INIT_SUCCESS)
         else:
-            msg = _Message(_Message.INIT_FAIL)
+            msg = _Message(_MessageTypes.INIT_FAIL)
         
         self._conn_RADAR.send(msg)
     
@@ -67,7 +67,7 @@ class _BackgroundProcess:
         Args:
             message (str): The message to be printed on the terminal
         """
-        self._conn_RADAR.send(_Message(_Message.PRINT_TO_TERMINAL,message))
+        self._conn_RADAR.send(_Message(_MessageTypes.PRINT_TO_TERMINAL,message))
 
     def run(self):
         pass
