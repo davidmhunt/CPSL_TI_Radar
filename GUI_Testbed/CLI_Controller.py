@@ -79,9 +79,12 @@ class CLIController(_BackgroundProcess):
             return
 
         #send every command except for the sensor start command
+        successful_send = True
         for command in config:
             if(command != "sensorStart"):
-                self._serial_send_command(command)
+                successful_send = self._serial_send_command(command)
+                if not successful_send:
+                    return
             #don't send a sensor start command
             elif (command == "sensorStart"):
                 if self.verbose:
@@ -92,8 +95,11 @@ class CLIController(_BackgroundProcess):
     def serial_send_start_sensing(self):
         """Send the sensorStart command to the sensor to begin sensing
         """
-        self._serial_send_command("sensorStart")
-        self.sensor_running = True
+        successful_send = self._serial_send_command("sensorStart")
+        if not successful_send:
+            self.sensor_running = False
+        else:
+            self.sensor_running = True
 
     def serial_send_stop_sensing(self):
         """Send the sensorStop command to the sensor to halt sensing
@@ -107,22 +113,30 @@ class CLIController(_BackgroundProcess):
         Args:
             command (str): the command to send to the TI Radar
         """
+        successful_send = True
+
         #send the command over serial
         self.CLI_port.write((command+'\n').encode())
 
         #get the response from the sensor to confirm message was received
         resp = self.CLI_port.read_until("mmwDemo:/>").decode('utf-8')
-        #resp = " ".join(resp)
+        resp = resp.split("\n")
+        resp.reverse()
+        resp = " ".join(resp).strip("\r")
+
+        #check to make sure a response was received
+        if "mmwDemo:/>" not in resp:
+            self._conn_send_message_to_print("CLI_Controller._serial_send_command: Attempted to send {}, but received {} (expected to receive response with:'mmwDemo:/>')".format(command,resp))
+            self._conn_send_error_radar_message()
+            successful_send = False
+
         if self.verbose:
             #print sent command
             self._conn_send_message_to_print("CLI_sent:/>{}".format(command))
 
             #print received command
-            resp = resp.split("\n")
-            resp.reverse()
-            resp = " ".join(resp).strip("\r")
             self._conn_send_message_to_print(resp)
-        return
+        return successful_send
 
     def _process_Radar_command(self,command:_Message):
         
