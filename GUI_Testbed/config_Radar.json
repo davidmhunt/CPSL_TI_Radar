@@ -1,0 +1,8 @@
+{
+    "TI_Radar_config_path":"../configurations/1443config.cfg",
+    "CLI_Controller":
+        {
+            "CLI_port":"/dev/ttyACM0",
+            "verbose":true
+        }
+}

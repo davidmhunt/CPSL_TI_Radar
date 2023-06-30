@@ -1,0 +1,5 @@
+{
+    "config_Radar_path":"config_Radar.json",
+    "CLI_port":"/dev/ttyACM2",
+    "verbose":true
+}
