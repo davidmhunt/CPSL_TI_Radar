@@ -1,5 +1,5 @@
 #python modules
-from multiprocessing import Process,Pipe,connection
+from multiprocessing import Process,Pipe,connection,Queue
 from multiprocessing import set_start_method
 from _Message import _Message,_MessageTypes
 import json
@@ -10,22 +10,30 @@ import sys
 
 #TI_RADAR modules
 from CLI_Controller import CLIController
-import Streamer
+from Streamer import Streamer
+from Processor import Processor
 
 class Radar:
 
     def __init__(self,config_file_path):
         set_start_method('spawn')
 
+        #radar_error_detected (called to exit run loop due to ERROR_RADAR)
+        self.radar_error_detected = False
+        
         self._config_file_path = config_file_path
 
-        #reserve variables for background processes
-        self._process_CLI_Controller = None
-        self._Streamer = None
+        #background processes
+        self.background_process_classes = [CLIController]
+        self.background_process_names = ["CLIController"]
+        self.background_processes:list(Process) = []
 
         #reserve pipes for inter-process communication
         self._conn_CLI_Controller = None
         self._conn_Streamer = None
+        self._conn_Processor = None
+        #list of background process connections to simplify initialization, starting, and closing of background processes
+        self.background_process_connections:list(connection.Connection) = []
 
         self._prepare_background_processes()
 
@@ -49,81 +57,117 @@ class Radar:
 
             #start running the sensor
             start_time = time.time()
-            while(time.time() - start_time) < timeout:
+            while((time.time() - start_time) < timeout) and not self.radar_error_detected:
                 #check for updates from each background process
-                self._conn_recv_process_updates(self._conn_CLI_Controller)
+                self._conn_recv_background_process_updates()
 
                 #wait for 10ms before checking again
                 time.sleep(10e-3)
 
             self.close()
-        except KeyError:
+        except KeyboardInterrupt:
             #join all of the processes
 
             #end controller process
-            self._process_CLI_Controller.join()
-            print("Radar.close: CLI controller exited successfully")
+            self._join_processes()
     
     def close(self):
         #send sensor stop signal
         self._conn_CLI_Controller.send(_Message(_MessageTypes.STOP_SENSOR))
 
-        #send exit signal to each of the background processes
-        self._conn_CLI_Controller.send(_Message(_MessageTypes.EXIT))
-        
-        #end controller process
-        self._process_CLI_Controller.join()
-        print("Radar.close: CLI controller exited successfully")
+        #send EXIT commands to processes
+        self._conn_send_EXIT_commands()
+
+        #collect any remaining messages
+        self._conn_recv_background_process_updates()
+
+        #join the processes
+        self._join_processes()
+
+        print("Radar.close: closed successfully")
 
 
 ##Handling background processes/Multi Processing
 
     def _prepare_background_processes(self):
                 
-        #initialize inter-process communication
+        #initialize pipes between background processes and Radar class
         self._conn_CLI_Controller, conn_CLI_Controller_child = Pipe()
+        self._conn_Streamer,conn_Streamer_child = Pipe()
+        self._conn_Processor,conn_Processor_child = Pipe()
 
-
-        #prepare each process
-        self._process_CLI_Controller = Process(target=Radar._run_CLI_Controller,
-                                       args=(conn_CLI_Controller_child,self._config_file_path))
+        #initialize the lists of connections
+        background_process_connection_children = [conn_CLI_Controller_child,conn_Streamer_child,conn_Processor_child]
         
-        pass
+        self.background_process_connections = [
+            self._conn_CLI_Controller] #,
+#            self._conn_Streamer,
+#            self._conn_Processor]
 
-    def _run_CLI_Controller(conn,config_file_path):
+        #initialize data pipe between streamer and processor classes
+        conn_Streamer_data,conn_Processor_data = Pipe(False)
+
+        for i in range(len(self.background_process_classes)):
+
+            if self.background_process_classes[i] == Streamer:
+                data_conn = conn_Streamer_data
+            elif self.background_process_classes[i] == Processor:
+                data_conn = conn_Processor_data
+            else:
+                data_conn = None
+
+            self.background_processes.append(
+                Process(
+                    target=Radar._run_process,
+                    args=(
+                        self.background_process_classes[i],
+                        background_process_connection_children[i],
+                        self._config_file_path,
+                        data_conn
+                    )))
+        return
+
+    def _run_process(
+            process_class,
+            conn:connection.Connection,
+            config_file_path,
+            data_conn:connection.Connection=None):
         
-        #initialize the controller
-        CLIController(conn=conn,config_file_path=config_file_path)
+        #handling CLI controller
+        if data_conn==None:
+            process_class(conn=conn,config_file_path=config_file_path)
+        else:
+            process_class(conn=conn,config_file_path=config_file_path,data_conn=data_conn)
+        
+        return
     
     def _start_background_proceses(self):
+        """Starts all background processes
+
+        Returns:
+            _type_: True if all processes initialize correctly, False if at least one process failed to initialize
+        """
 
         start_success = True
 
-        #start controller process
-        if self._start_background_process(self._process_CLI_Controller,self._conn_CLI_Controller):
-            start_success = False
-        
-        else:
-            return start_success
+        for i in range(len(self.background_processes)):
 
-    def _start_background_process(self,process:Process, conn:connection.Connection):
-        """Start the given background process and ensure it has initialized correctly
+            #start the process
+            self.background_processes[i].start()
 
-        Args:
-            process (Process): The process to start
-            conn (connection.Connection): connection to the process
+            #confirm process initialized successfully
+            if self._conn_recv_init_status(self.background_process_connections[i]) == False:
 
-        Returns:
-            bool: True on init success, False on init fail
-        """
-        
-        #start the process
-        process.start()
+                start_success = False
+                print("Radar._start_background_processes: {} processes failed to start".format(self.background_process_names[i]))
 
-        #check for successful init and return the init status
-        init_success = self._conn_recv_init_status(conn)
+        return start_success
+    
+    def _join_processes(self):
+        for i in range(len(self.background_processes)):
+            self.background_processes[i].join()
+            print("Radar._join_processes: {} exited successfully".format(self.background_process_names[i]))
 
-        return init_success
     
 ### Handle communication between processes
     def _conn_recv_init_status(self, conn:connection.Connection):
@@ -156,18 +200,35 @@ class Radar:
         
         return init_successful
 
-    def _conn_recv_process_updates(self,conn:connection.Connection):
+    def _conn_recv_background_process_updates(self):
 
-        #process updates while they are available
-        while conn.poll():
-            msg = conn.recv()
-            match msg.type:
-                case _MessageTypes.PRINT_TO_TERMINAL:
-                    print(msg.value)
-                case _MessageTypes.NEW_DATA:
-                    print("Radar._conn_recv_process_updates: NEW_DATA message not currently enabled")
-                case _:
-                    continue
+        for i in range(len(self.background_process_connections)):
+            conn = self.background_process_connections[i]
+            try:
+                #process updates while they are available
+                while conn.poll():
+                    msg = conn.recv()
+                    match msg.type:
+                        case _MessageTypes.PRINT_TO_TERMINAL:
+                            print(msg.value)
+                        case _MessageTypes.NEW_DATA:
+                            print("Radar._conn_recv_process_updates: NEW_DATA message not currently enabled")
+                        case _MessageTypes.ERROR_RADAR:
+                            self.radar_error_detected = True
+                            print("Radar._conn_recv_background_process_updates: {} sent RADAR error".format(self.background_process_names[i]))
+                        case _:
+                            continue
+            except EOFError:
+                print("Radar._conn_recv_background_process_updates: {} was already closed, no message received".format(self.background_process_names[i]))
+    
+    def _conn_send_EXIT_commands(self):
+
+        for i in range(len(self.background_process_connections)):
+            try:
+                self.background_process_connections[i].send(_Message(_MessageTypes.EXIT))
+            except BrokenPipeError:
+                print("Radar._conn_send_EXIT_commands: {} was already closed, no EXIT message sent".format(self.background_process_names[i]))
+        return
 
     
 
@@ -195,6 +256,6 @@ if __name__ == '__main__':
     dir_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(dir_path)
     radar = Radar("config_Radar.json")
-    radar.run()
+    radar.run(timeout=5)
     #Exit the python code
     sys.exit()

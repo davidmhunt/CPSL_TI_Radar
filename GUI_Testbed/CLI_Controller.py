@@ -31,7 +31,7 @@ class CLIController(_BackgroundProcess):
         try:
             self.CLI_port = serial.Serial(self.config_Radar["CLI_Controller"]["CLI_port"],115200,timeout=30e-3)
         except serial.SerialException:
-            print("CLI_Controller.__init__:could not find serial port{}".format(self.config_CLI_Controller["CLI_port"]))
+            self._conn_send_message_to_print("CLI_Controller.__init__:could not find serial port{}".format(self.config_Radar["CLI_Controller"]["CLI_port"]))
             self._conn_send_init_status(init_success=False)
             return
         
@@ -74,7 +74,8 @@ class CLIController(_BackgroundProcess):
         try:
             config = [line.rstrip('\r\n') for line in open(self.TI_Radar_config_path)]
         except FileNotFoundError:
-            print("CLI_Controller.send_config:could not find {}".format(self.TI_Radar_config_path))
+            self._conn_send_message_to_print("CLI_Controller.send_config:could not find {}".format(self.TI_Radar_config_path))
+            self._conn_send_error_radar_message()
             return
 
         #send every command except for the sensor start command
@@ -85,6 +86,8 @@ class CLIController(_BackgroundProcess):
             elif (command == "sensorStart"):
                 if self.verbose:
                     self._conn_send_message_to_print("Config.sendConfigSerial: 'sensorStart' in config file. Skipping sensorStart command")
+        
+
     
     def serial_send_start_sensing(self):
         """Send the sensorStart command to the sensor to begin sensing

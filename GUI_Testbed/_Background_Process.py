@@ -2,12 +2,14 @@ from multiprocessing import Pipe,connection
 from _Message import _Message,_MessageTypes
 import json
 import os
+import sys
 
 class _BackgroundProcess:
     def __init__(self,
                  process_name,
                  conn:connection.Connection,
-                 config_file_path = 'config_RADAR.json'):
+                 config_file_path = 'config_RADAR.json',
+                 data_connection:connection.Connection = None):
         """Initialization process for all background processes
 
         Args:
@@ -24,13 +26,16 @@ class _BackgroundProcess:
         
         #establish connection to the parent class (radar)
         self._conn_RADAR = conn
+
+        #establish a Qu
         
         #get the Radar class configuration as well
         try:
             self.config_Radar = self._ParseJSON(config_file_path)
         except FileNotFoundError:
-            print("{}.__init__: could not find {} in {}".format(self._process_name, config_file_path,os.getcwd()))
-            return
+            self._conn_send_message_to_print("{}.__init__: could not find {} in {}".format(self._process_name, config_file_path,os.getcwd()))
+            self._conn_send_init_status(init_success=False)
+            sys.exit()
         
         return
     
@@ -69,6 +74,12 @@ class _BackgroundProcess:
         """
         self._conn_RADAR.send(_Message(_MessageTypes.PRINT_TO_TERMINAL,message))
 
+    def _conn_send_error_radar_message(self):
+        """Sends a ERROR_RADAR message to let Radar know something has gone wrong
+        """
+
+        self._conn_RADAR.send(_Message(_MessageTypes.ERROR_RADAR))
+    
     def run(self):
         pass
 

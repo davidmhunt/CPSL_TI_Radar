@@ -1,6 +1,6 @@
 class _MessageTypes:
     #largest hex value corresponding to a message
-    _LARGEST_MESSAGE_VALUE = 0x08
+    _LARGEST_MESSAGE_VALUE = 0x09
 
     #init messages
     INIT_SUCCESS = 0x00
@@ -20,6 +20,9 @@ class _MessageTypes:
 
     #New Data Available
     NEW_DATA = 0x08
+
+    #Other Errors
+    ERROR_RADAR = 0x09
 
 class _Message:
 
