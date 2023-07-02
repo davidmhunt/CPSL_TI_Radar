@@ -3,7 +3,7 @@ import os
 import serial
 import time
 from _Background_Process import _BackgroundProcess
-from multiprocessing import Pipe,connection
+from multiprocessing.connection import Connection
 from _Message import _Message,_MessageTypes
 
 class CLIController(_BackgroundProcess):
@@ -12,8 +12,8 @@ class CLIController(_BackgroundProcess):
 
     def __init__(
             self,
-            conn:connection,
-            config_file_path='config_CLI_Controller.json'):
+            conn:Connection,
+            config_file_path='config_Radar.json'):
         """Initialize the controller class
 
         Args:
@@ -28,18 +28,17 @@ class CLIController(_BackgroundProcess):
         self.verbose = self.config_Radar["CLI_Controller"]["verbose"]
 
         #initialize the serial port
-        try:
-            self.CLI_port = serial.Serial(self.config_Radar["CLI_Controller"]["CLI_port"],115200,timeout=30e-3)
-        except serial.SerialException:
-            self._conn_send_message_to_print("CLI_Controller.__init__:could not find serial port{}".format(self.config_Radar["CLI_Controller"]["CLI_port"]))
-            self._conn_send_init_status(init_success=False)
-            return
+        self._serial_init_serial_port(
+            address=self.config_Radar["CLI_Controller"]["CLI_port"],
+            baud_rate= 115200,
+            timeout=30e-3
+        )
         
         #send configuration file to the device
         self.sensor_running = False
 
         #send successful init status if successful
-        self._conn_send_init_status(init_success=True)
+        self._conn_send_init_status(init_success=self.init_success)
         self.run()
 
         return
@@ -48,7 +47,7 @@ class CLIController(_BackgroundProcess):
         try:
             while self.exit_called == False:
                 msg = self._conn_RADAR.recv()
-                self._process_Radar_command(msg)
+                self._conn_process_Radar_command(msg)
 
             #once exit is called close out and return
             self.close()
@@ -58,13 +57,13 @@ class CLIController(_BackgroundProcess):
     
     def close(self):
         #before exiting, close the serial port and turn the sensor off
-            if self.CLI_port.is_open == True:
-                #turn the sensor off
-                if self.sensor_running == True:
-                    self.serial_send_stop_sensing()
+        if self.serial_port.is_open == True:
+            #turn the sensor off
+            if self.sensor_running == True:
+                self.serial_send_stop_sensing()
 
-                #close the serial port
-                self.CLI_port.close()
+            #close the serial port
+            self.serial_port.close()
     
     def serial_send_config(self):
         """Send the TI Radar configuration over serial, but do not start radar sensing
@@ -116,10 +115,10 @@ class CLIController(_BackgroundProcess):
         successful_send = True
 
         #send the command over serial
-        self.CLI_port.write((command+'\n').encode())
+        self.serial_port.write((command+'\n').encode())
 
         #get the response from the sensor to confirm message was received
-        resp = self.CLI_port.read_until("mmwDemo:/>").decode('utf-8')
+        resp = self.serial_port.read_until("mmwDemo:/>").decode('utf-8')
         resp = resp.split("\n")
         resp.reverse()
         resp = " ".join(resp).strip("\r")
@@ -138,7 +137,7 @@ class CLIController(_BackgroundProcess):
             self._conn_send_message_to_print(resp)
         return successful_send
 
-    def _process_Radar_command(self,command:_Message):
+    def _conn_process_Radar_command(self,command:_Message):
         
         match command.type:
             case _MessageTypes.EXIT:
@@ -150,7 +149,8 @@ class CLIController(_BackgroundProcess):
             case _MessageTypes.SEND_CONFIG:
                 self.serial_send_config()
             case _MessageTypes.LOAD_NEW_CONFIG:
-                print("CLI_Controller._process_Radar_command: LOAD_NEW_CONFIG not enabled yet")
+                self._conn_send_message_to_print("CLI_Controller._process_Radar_command: LOAD_NEW_CONFIG not enabled yet")
                 pass
             case _:
-                print("CLI_Controller._process_Radar_command: command not recognized")
+                self._conn_send_message_to_print("CLI_Controller._process_Radar_command: command not recognized")
+                self._conn_send_error_radar_message()

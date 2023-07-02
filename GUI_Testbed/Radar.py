@@ -24,8 +24,8 @@ class Radar:
         self._config_file_path = config_file_path
 
         #background processes
-        self.background_process_classes = [CLIController]
-        self.background_process_names = ["CLIController"]
+        self.background_process_classes = [CLIController,Streamer]
+        self.background_process_names = ["CLIController","Streamer"]
         self.background_processes:list(Process) = []
 
         #reserve pipes for inter-process communication
@@ -51,6 +51,9 @@ class Radar:
             
             #configure the radar
             self._conn_CLI_Controller.send(_Message(_MessageTypes.SEND_CONFIG))
+
+            #start streaming data
+            self._conn_Streamer.send(_Message(_MessageTypes.START_STREAMING))
             
             #start the radar sensor
             self._conn_CLI_Controller.send(_Message(_MessageTypes.START_SENSOR))
@@ -74,6 +77,9 @@ class Radar:
     def close(self):
         #send sensor stop signal
         self._conn_CLI_Controller.send(_Message(_MessageTypes.STOP_SENSOR))
+
+        #stop streaming
+        self._conn_Streamer.send(_Message(_MessageTypes.STOP_STREAMING))
 
         #send EXIT commands to processes
         self._conn_send_EXIT_commands()
@@ -100,8 +106,8 @@ class Radar:
         background_process_connection_children = [conn_CLI_Controller_child,conn_Streamer_child,conn_Processor_child]
         
         self.background_process_connections = [
-            self._conn_CLI_Controller] #,
-#            self._conn_Streamer,
+            self._conn_CLI_Controller,
+            self._conn_Streamer]#,
 #            self._conn_Processor]
 
         #initialize data pipe between streamer and processor classes
@@ -137,7 +143,7 @@ class Radar:
         if data_conn==None:
             process_class(conn=conn,config_file_path=config_file_path)
         else:
-            process_class(conn=conn,config_file_path=config_file_path,data_conn=data_conn)
+            process_class(conn=conn,config_file_path=config_file_path,data_connection=data_conn)
         
         return
     

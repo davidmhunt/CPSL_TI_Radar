@@ -1,6 +1,6 @@
 class _MessageTypes:
     #largest hex value corresponding to a message
-    _LARGEST_MESSAGE_VALUE = 0x09
+    _LARGEST_MESSAGE_VALUE = 0x0B
 
     #init messages
     INIT_SUCCESS = 0x00
@@ -18,11 +18,15 @@ class _MessageTypes:
     SEND_CONFIG = 0x06
     LOAD_NEW_CONFIG = 0x07
 
+    #Streamer control messages
+    START_STREAMING = 0x08
+    STOP_STREAMING = 0x09
+    
     #New Data Available
-    NEW_DATA = 0x08
+    NEW_DATA = 0x0A
 
     #Other Errors
-    ERROR_RADAR = 0x09
+    ERROR_RADAR = 0x0B
 
 class _Message:
 

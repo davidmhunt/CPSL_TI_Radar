@@ -1,15 +1,17 @@
-from multiprocessing import Pipe,connection
+from multiprocessing.connection import Connection
 from _Message import _Message,_MessageTypes
 import json
 import os
 import sys
+import serial
+import serial.tools.list_ports
 
 class _BackgroundProcess:
     def __init__(self,
                  process_name,
-                 conn:connection.Connection,
+                 conn:Connection,
                  config_file_path = 'config_RADAR.json',
-                 data_connection:connection.Connection = None):
+                 data_connection:Connection = None):
         """Initialization process for all background processes
 
         Args:
@@ -22,25 +24,34 @@ class _BackgroundProcess:
         #NOTE: This should only be triggerred by the Radar class or by a keyboard interrupt
         self.exit_called = False
         
+        #init success flag
+        self.init_success = True
+        
         #save process name
         self._process_name = process_name
         
         #establish connection to the parent class (radar)
         self._conn_RADAR = conn
 
-        #establish a Qu
-        
+        #establish a connection to send byte data between processes
+        self._conn_data = data_connection
+
+        #initialize variable for a serial port
+        self.serial_port = None
+
         #get the Radar class configuration as well
         try:
-            self.config_Radar = self._ParseJSON(config_file_path)
+            self.config_Radar = self._parse_JSON(config_file_path)
         except FileNotFoundError:
             self._conn_send_message_to_print("{}.__init__: could not find {} in {}".format(self._process_name, config_file_path,os.getcwd()))
             self._conn_send_init_status(init_success=False)
+            self.init_success = False
             sys.exit()
         
         return
     
-    def _ParseJSON(self,json_file_path):
+## Parse JSON files and store for later use
+    def _parse_JSON(self,json_file_path):
         """Read a json file at the given path and return a json object
 
         Args:
@@ -56,7 +67,48 @@ class _BackgroundProcess:
         for line in f:
             content += line
         return json.loads(content)
-    
+
+## Initialize a serial port if required
+
+    def _serial_init_serial_port(
+            self,
+            address:str,baud_rate,
+            timeout=1,
+            close:bool = False):
+        """Initializze the serial port
+
+        Args:
+            address (str): serial port address (on windows "Serial1"),
+                (on Linux, try either "/dev/ttyACM1, or /dev/ttyUSB1)
+            baud_rate (int): baud rate of the serial connection
+            timeout (int, optional): Timeout duration in seconds. Defaults to 1.
+            close (bool, optional): Closes the serial port on True. Defaults to False.
+
+        Returns:
+            bool: True on successful initialization. False when cannot find serial port
+        """
+        
+        #initialize the serial port
+        try:
+            self.serial_port = serial.Serial(address,baud_rate,timeout=timeout)
+            if close:
+                self.serial_port.close()
+            return True
+        except serial.SerialException:
+            #get the available serial ports
+            available_ports = [comport.device for comport in serial.tools.list_ports.comports()]
+            
+            #send the error message
+            self._conn_send_message_to_print(
+                "{}.__init__:could not find serial port{}. Available ports are: {}".format(
+                self._process_name,
+                address,
+                available_ports))
+            self._conn_send_init_status(init_success=False)
+            self.init_success = False
+            return False
+
+## Handling inter-process communications between different processes
     def _conn_send_init_status(self,init_success:bool = True):
         
         #determine which message to send
@@ -81,6 +133,8 @@ class _BackgroundProcess:
 
         self._conn_RADAR.send(_Message(_MessageTypes.ERROR_RADAR))
     
+
+## Essential functions for all _BackgroundProcess classes
     def run(self):
         pass
 
