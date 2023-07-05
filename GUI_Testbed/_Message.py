@@ -1,6 +1,6 @@
 class _MessageTypes:
     #largest hex value corresponding to a message
-    _LARGEST_MESSAGE_VALUE = 0x0B
+    _LARGEST_MESSAGE_VALUE = 0x0D
 
     #init messages
     INIT_SUCCESS = 0x00
@@ -11,22 +11,27 @@ class _MessageTypes:
 
     #print messages
     PRINT_TO_TERMINAL = 0x03
+    PRINT_CLEAR_TERMINAL = 0x04
 
-    #TI radar operation messages
-    START_SENSOR = 0x04
-    STOP_SENSOR = 0x05
-    SEND_CONFIG = 0x06
-    LOAD_NEW_CONFIG = 0x07
+    #command executed - returned when a
+    #background process completes a command
+    COMMAND_EXECUTED = 0x05
 
-    #Streamer control messages
-    START_STREAMING = 0x08
-    STOP_STREAMING = 0x09
+    #CLI Controller TI radar operation messages
+    START_SENSOR = 0x06
+    STOP_SENSOR = 0x07
+    SEND_CONFIG = 0x08
+    LOAD_NEW_CONFIG = 0x09 #also supported by Processor
+
+    #Streamer/Processor control messages
+    START_STREAMING = 0x0A
+    STOP_STREAMING = 0x0B
     
     #New Data Available
-    NEW_DATA = 0x0A
+    NEW_DATA = 0x0C
 
     #Other Errors
-    ERROR_RADAR = 0x0B
+    ERROR_RADAR = 0x0D
 
 class _Message:
 

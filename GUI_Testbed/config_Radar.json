@@ -1,5 +1,9 @@
 {
-    "TI_Radar_config_path":"../configurations/1443config.cfg",
+    "TI_Radar_Config_Management":
+        {
+            "TI_Radar_config_path":"../configurations/1443config.cfg",
+            "export_JSON_config":false
+        },
     "CLI_Controller":
         {
             "CLI_port":"/dev/ttyACM0",
@@ -17,6 +21,10 @@
                     "enabled":false,
                     "data_file":"../raw_data_samples/scatterplot_only.dat"
                 },
+            "verbose":false
+        },
+    "Processor":
+        {
             "verbose":true
         }
 }

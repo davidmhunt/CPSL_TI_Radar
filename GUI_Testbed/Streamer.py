@@ -54,9 +54,9 @@ class Streamer(_BackgroundProcess):
                         #process all radar commands
                         while self._conn_RADAR.poll():
                             #receive and process the message from the RADAR class
-                            self._conn_process_Rardar_command()
+                            self._conn_process_Radar_command()
                 else:
-                    self._conn_process_Rardar_command()
+                    self._conn_process_Radar_command()
 
 
             #once exit is called close out and return
@@ -83,7 +83,7 @@ class Streamer(_BackgroundProcess):
             self._serial_init_serial_port(
                 address=self.config_Radar["Streamer"]["serial_streaming"]["data_port"],
                 baud_rate=921600,
-                timeout=10,
+                timeout=0.5,
                 close=True
             )
         elif self.file_streaming_enabled:
@@ -101,8 +101,7 @@ class Streamer(_BackgroundProcess):
             self.serial_port.close()
             self.streaming_enabled = False
             return
-        #TODO: make sure that I'm taking off the correct amount of the packet (only the magic word at the end)
-
+        
         #store the new packet in a bytearray
         self.current_packet = bytearray(self.magic_word)
         self.current_packet.extend(self.byte_buffer)
@@ -120,7 +119,6 @@ class Streamer(_BackgroundProcess):
             
             
     def _serial_decode_header(self,header:bytearray):
-        #TODO: add in capability to handle bad packets and a time-out
         #decode the header
         decoded_header = np.frombuffer(header,dtype=np.uint32)
         #process the header fields
@@ -139,17 +137,17 @@ class Streamer(_BackgroundProcess):
     
     def _serial_print_packet_header(self):
         #clear the terminal screen
-        #os.system('cls' if os.name == 'nt' else 'clear')
+        self._conn_send_clear_terminal()
 
         #print out the packet detection results
-        print("detected packets: {}".format(self.detected_packets))
-        print("\t version:{}".format(self.header["version"]))
-        print("\t total packet length:{}".format(self.header["packet_length"]))
-        print("\t platform:{}".format(self.header["platform"]))
-        print("\t Frame Number:{}".format(self.header["frame_number"]))
-        print("\t Time (CPU Cycles):{}".format(self.header["time"]))
-        print("\t Number of Detected Objects:{}".format(self.header["num_detected_objects"]))
-        print("\t Number of Data Structures in package:{}".format(self.header["num_data_structures"]))
+        self._conn_send_message_to_print("detected packets: {}".format(self.detected_packets))
+        self._conn_send_message_to_print("\t version:{}".format(self.header["version"]))
+        self._conn_send_message_to_print("\t total packet length:{}".format(self.header["packet_length"]))
+        self._conn_send_message_to_print("\t platform:{}".format(self.header["platform"]))
+        self._conn_send_message_to_print("\t Frame Number:{}".format(self.header["frame_number"]))
+        self._conn_send_message_to_print("\t Time (CPU Cycles):{}".format(self.header["time"]))
+        self._conn_send_message_to_print("\t Number of Detected Objects:{}".format(self.header["num_detected_objects"]))
+        self._conn_send_message_to_print("\t Number of Data Structures in package:{}".format(self.header["num_data_structures"]))
 
         return
     
@@ -166,7 +164,7 @@ class Streamer(_BackgroundProcess):
             packet_valid = False
         
         if self.verbose:
-            print("\t Valid Packet: {}".format(packet_valid))
+            self._conn_send_message_to_print("\t Valid Packet: {}".format(packet_valid))
         return packet_valid
     
     def _serial_reset_packet_detector(self):
@@ -179,7 +177,7 @@ class Streamer(_BackgroundProcess):
         #and is thus thrown out
         self.serial_port.read_until(expected=self.magic_word)
 
-    def _conn_process_Rardar_command(self):
+    def _conn_process_Radar_command(self):
 
         command:_Message = self._conn_RADAR.recv()
         match command.type:
@@ -196,3 +194,5 @@ class Streamer(_BackgroundProcess):
                 self._conn_send_message_to_print(
                     "Streamer._process_Radar_command: command not recognized")
                 self._conn_send_error_radar_message()
+        
+        self._conn_send_command_executed_message(command.type)

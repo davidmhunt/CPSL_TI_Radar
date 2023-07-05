@@ -24,7 +24,8 @@ class CLIController(_BackgroundProcess):
                        config_file_path)       
 
         #load the class variables
-        self.TI_Radar_config_path = self.config_Radar["TI_Radar_config_path"]
+        self.TI_Radar_config_path = ""
+        self.TI_Radar_config_loaded = False
         self.verbose = self.config_Radar["CLI_Controller"]["verbose"]
 
         #initialize the serial port
@@ -68,7 +69,12 @@ class CLIController(_BackgroundProcess):
     def serial_send_config(self):
         """Send the TI Radar configuration over serial, but do not start radar sensing
         """
-        
+        #confirm that a config file path has been loaded
+        if self.TI_Radar_config_loaded == False:
+            self._conn_send_message_to_print("CLI_Controller.send_config: no config file path loaded")
+            self._conn_send_error_radar_message()
+            return
+
         #load in the TI Radar config file
         try:
             config = [line.rstrip('\r\n') for line in open(self.TI_Radar_config_path)]
@@ -124,7 +130,7 @@ class CLIController(_BackgroundProcess):
         resp = " ".join(resp).strip("\r")
 
         #check to make sure a response was received
-        if "mmwDemo:/>" not in resp:
+        if ("mmwDemo:/>" not in resp) or ("Error" in resp) or ("Exception" in resp):
             self._conn_send_message_to_print("CLI_Controller._serial_send_command: Attempted to send {}, but received {} (expected to receive response with:'mmwDemo:/>')".format(command,resp))
             self._conn_send_error_radar_message()
             successful_send = False
@@ -149,8 +155,11 @@ class CLIController(_BackgroundProcess):
             case _MessageTypes.SEND_CONFIG:
                 self.serial_send_config()
             case _MessageTypes.LOAD_NEW_CONFIG:
-                self._conn_send_message_to_print("CLI_Controller._process_Radar_command: LOAD_NEW_CONFIG not enabled yet")
-                pass
+                self.TI_Radar_config_path = command.value
+                self.TI_Radar_config_loaded = True
             case _:
                 self._conn_send_message_to_print("CLI_Controller._process_Radar_command: command not recognized")
                 self._conn_send_error_radar_message()
+        
+        #send back command executed message
+        self._conn_send_command_executed_message(command.type)

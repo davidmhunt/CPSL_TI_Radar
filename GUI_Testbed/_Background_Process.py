@@ -91,6 +91,9 @@ class _BackgroundProcess:
         #initialize the serial port
         try:
             self.serial_port = serial.Serial(address,baud_rate,timeout=timeout)
+            #reset the buffers in case old data is on the serial line
+            self.serial_port.reset_input_buffer()
+            self.serial_port.reset_output_buffer()
             if close:
                 self.serial_port.close()
             return True
@@ -127,13 +130,30 @@ class _BackgroundProcess:
         """
         self._conn_RADAR.send(_Message(_MessageTypes.PRINT_TO_TERMINAL,message))
 
+    def _conn_send_clear_terminal(self):
+        """Send message for Radar object to clear the terminal
+        """
+        self._conn_RADAR.send(_Message(_MessageTypes.PRINT_CLEAR_TERMINAL))
+    
     def _conn_send_error_radar_message(self):
         """Sends a ERROR_RADAR message to let Radar know something has gone wrong
         """
 
         self._conn_RADAR.send(_Message(_MessageTypes.ERROR_RADAR))
     
+    def _conn_send_command_executed_message(self,command:_MessageTypes):
+        """Send command executed message notifying RADAR class that the 
+        specified command was successfully performed
 
+        Args:
+            command (_MessageTypes): The command that was successfully executed
+        """
+
+        self._conn_RADAR.send(
+            _Message(
+                type=_MessageTypes.COMMAND_EXECUTED,
+                value=command))
+        return
 ## Essential functions for all _BackgroundProcess classes
     def run(self):
         pass
