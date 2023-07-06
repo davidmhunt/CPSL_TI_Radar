@@ -418,6 +418,6 @@ if __name__ == '__main__':
     dir_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(dir_path)
     radar = Radar("config_Radar.json")
-    radar.run(timeout=5)
+    radar.run(timeout=20)
     #Exit the python code
     sys.exit()

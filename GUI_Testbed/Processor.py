@@ -10,6 +10,15 @@ import sys
 
 from _Background_Process import _BackgroundProcess
 
+class TLVTags:
+    DETECTED_POINTS = 1
+    RANGE_PROFILE = 2
+    NOISE_PROFILE=3
+    AZIMUTH_STATIC_HEAT_MAP=4
+    RANGE_DOPPLER_HEAT_MAP=5
+    STATS=6
+    
+
 class Processor(_BackgroundProcess):
     def __init__(self,
                  conn:Connection,
@@ -75,10 +84,12 @@ class Processor(_BackgroundProcess):
         
         #receive the latest packet from the processor
         while self._conn_data.poll():
-            self._conn_data.recv_bytes_into(self.current_packet)
+            self.current_packet = self._conn_data.recv_bytes()
 
         #TODO: Add code to process the packet
         self._process_header()
+
+        self._process_TLVs()
 
         return
     
@@ -96,6 +107,61 @@ class Processor(_BackgroundProcess):
         self.header["num_data_structures"] = decoded_header[8]
 
         return
+    
+    def _process_TLVs(self):
+
+        #first index is after the start of the packet
+        idx = 36
+        for i in range(self.header["num_data_structures"]):
+            TLV_info = np.frombuffer(self.current_packet[idx:idx+8],dtype=np.uint32)
+            TLV_tag = TLV_info[0]
+            TLV_length = TLV_info[1]
+            
+            #process the TLV data
+            self._process_TLV(TLV_tag,self.current_packet[idx:idx+TLV_length + 8])
+
+            #increment the index
+            idx += TLV_length + 8
+        
+        return
+    def _process_TLV(self,TLV_tag,data:bytearray):
+
+        #call the correct function to process to given TLV data
+        match TLV_tag:
+            case TLVTags.DETECTED_POINTS:
+                self._process_TLV_detected_points(data)
+
+
+    def _process_TLV_detected_points(self,data:bytearray):
+
+        descriptor = np.frombuffer(data[8:12],dtype=np.uint16)
+        num_objects = descriptor[0]
+        XYZQ_format = descriptor[1]
+        XYZQ_conversion = np.power(2,XYZQ_format)
+        
+        #start forming the detected objects array
+        objects_struct = np.frombuffer(data[12:],dtype=np.int16)
+        #reshape so that each row corresponds to a specific object
+        objects_struct = objects_struct.reshape([-1,6])
+
+        range_idxs = objects_struct[:,0].astype(np.uint16)
+        ranges = np.float32(range_idxs * self.radar_performance["range"]["range_idx_to_m"])
+
+        vel_idxs = objects_struct[:,1]
+        vels = np.float32(vel_idxs * self.radar_performance["velocity"]["vel_idx_to_m_per_s"])
+
+        peak_vals = (objects_struct[:,2]/XYZQ_conversion).astype(np.float32)
+
+        XYZ_coordinates = (objects_struct[:,3:]/XYZQ_conversion).astype(np.float32)
+
+        out_data = np.concatenate((XYZ_coordinates,vels[:,np.newaxis],ranges[:,np.newaxis],peak_vals[:,np.newaxis]),axis=1)
+
+        return out_data
+
+
+
+
+
     
     def _load_new_config(self, config_info:dict):
         """Load a new set of radar performance and radar configuration dictionaries into the processor class

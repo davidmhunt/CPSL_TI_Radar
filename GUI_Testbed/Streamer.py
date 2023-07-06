@@ -114,6 +114,9 @@ class Streamer(_BackgroundProcess):
 
         #check packet validity
         packet_valid = self._serial_check_packet_valid()
+
+        if packet_valid:
+            self._conn_data.send_bytes(self.current_packet)
         
         return
             

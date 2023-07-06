@@ -21,7 +21,7 @@
                     "enabled":false,
                     "data_file":"../raw_data_samples/scatterplot_only.dat"
                 },
-            "verbose":false
+            "verbose":true
         },
     "Processor":
         {
