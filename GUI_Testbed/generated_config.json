@@ -101,8 +101,8 @@
     "peakGrouping": {
         "subFrameIndex": null,
         "scheme": "1",
-        "range": "1",
-        "doppler": "1",
+        "range": "0",
+        "doppler": "0",
         "startRangeIndex": "1",
         "endRangeIndex": "114"
     },

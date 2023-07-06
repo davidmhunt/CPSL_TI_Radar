@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/short_range_3D.cfg",
+            "TI_Radar_config_path":"generated_config.json",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -26,10 +26,11 @@
                     "enabled":false,
                     "data_file":"../raw_data_samples/scatterplot_only.dat"
                 },
-            "verbose":false
+            "verbose":true
         },
     "Processor":
         {
-            "verbose":true
+            "verbose":true,
+            "save_plots_as_gif":true
         }
 }
