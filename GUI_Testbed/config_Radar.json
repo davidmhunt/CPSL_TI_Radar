@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM2",
+            "CLI_port":"/dev/ttyACM0",
             "verbose":true
         },
     "Streamer":
@@ -19,7 +19,7 @@
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyACM3"
+                    "data_port":"/dev/ttyACM1"
                 },
             "file_streaming":
                 {

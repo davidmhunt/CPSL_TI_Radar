@@ -67,9 +67,10 @@ class Streamer(_BackgroundProcess):
     
     def close(self):
         #before exiting, close the serial port and turn the sensor off
-        if self.serial_port.is_open == True:
-            #close the serial port
-            self.serial_port.close()
+        if self.serial_port != None:
+            if self.serial_port.is_open == True:
+                #close the serial port
+                self.serial_port.close()
     
     
     def _config_streaming_method(self):
@@ -116,7 +117,11 @@ class Streamer(_BackgroundProcess):
         packet_valid = self._serial_check_packet_valid()
 
         if packet_valid:
-            self._conn_data.send_bytes(self.current_packet)
+            try:
+                self._conn_data.send_bytes(self.current_packet)
+            except BrokenPipeError:
+                self._conn_send_message_to_print("Streamer._serial_get_next_packet: attempted to send new packet to Processor, but processor was closed")
+                self._conn_send_error_radar_message()
         
         return
             

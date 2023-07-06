@@ -91,7 +91,12 @@ class Processor(_BackgroundProcess):
         
         #receive the latest packet from the processor
         while self._conn_data.poll():
-            self.current_packet = self._conn_data.recv_bytes()
+            try:
+                self.current_packet = self._conn_data.recv_bytes()
+            except EOFError:
+                self._conn_send_message_to_print("Processor._process_new_packet: attempted to receive new packet from Streamer, but streamer was closed")
+                self._conn_send_error_radar_message()
+                return
 
         #TODO: Add code to process the packet
         self._process_header()

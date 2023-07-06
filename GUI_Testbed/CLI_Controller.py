@@ -58,13 +58,14 @@ class CLIController(_BackgroundProcess):
     
     def close(self):
         #before exiting, close the serial port and turn the sensor off
-        if self.serial_port.is_open == True:
-            #turn the sensor off
-            if self.sensor_running == True:
-                self.serial_send_stop_sensing()
+        if self.serial_port != None:
+            if self.serial_port.is_open == True:
+                #turn the sensor off
+                if self.sensor_running == True:
+                    self.serial_send_stop_sensing()
 
-            #close the serial port
-            self.serial_port.close()
+                #close the serial port
+                self.serial_port.close()
     
     def serial_send_config(self):
         """Send the TI Radar configuration over serial, but do not start radar sensing
@@ -85,6 +86,10 @@ class CLIController(_BackgroundProcess):
 
         #send every command except for the sensor start command
         successful_send = True
+
+        #flush the CLI port first
+        successful_send = self._serial_flush_CLI_port()
+        #send the remaining commands
         for command in config:
             if(command != "sensorStart") and ("%" not in command):
                 successful_send = self._serial_send_command(command)
@@ -112,6 +117,31 @@ class CLIController(_BackgroundProcess):
         self._serial_send_command("sensorStop")
         self.sensor_running = False
     
+    def _serial_flush_CLI_port(self):
+        """Only on initial power up, serial port sends unreadable bits.
+        This function overcomes this by sending a SensorStop and SensorFlush commands
+        
+
+        Returns:
+            bool: True if serial port flushed successfully, False if otherwise
+        """
+        
+        #send sensor stop
+        try:
+            self.serial_port.write(("sensorStop"+'\n').encode())
+            resp_raw = self.serial_port.read_until("mmwDemo:/>")
+            self.serial_port.write(("flushCfg"+'\n').encode())
+            resp_raw = self.serial_port.read_until("mmwDemo:/>")
+            self.serial_port.reset_input_buffer()
+            return True
+        except serial.SerialTimeoutException:
+            self._conn_send_message_to_print(
+                "CLI_Controller.serial_flush_CLI_port: Timed out waiting for new data. serial port closed")
+            self._conn_send_error_radar_message()
+            self.serial_port.close()
+            self.streaming_enabled = False
+            return False
+    
     def _serial_send_command(self,command):
         """Send a given command string over serial
 
@@ -131,9 +161,12 @@ class CLIController(_BackgroundProcess):
 
         #check to make sure a response was received
         if ("mmwDemo:/>" not in resp) or ("Error" in resp) or ("Exception" in resp):
-            self._conn_send_message_to_print("CLI_Controller._serial_send_command: Attempted to send {}, but received {} (expected to receive response with:'mmwDemo:/>')".format(command,resp))
-            self._conn_send_error_radar_message()
-            successful_send = False
+            if(command == "sensorStart") and ("sensorStart" in resp):
+                pass
+            else:
+                self._conn_send_message_to_print("CLI_Controller._serial_send_command: Attempted to send {}, but received {} (expected to receive response with:'mmwDemo:/>')".format(command,resp))
+                self._conn_send_error_radar_message()
+                successful_send = False
 
         if self.verbose:
             #print sent command

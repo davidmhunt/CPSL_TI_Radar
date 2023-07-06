@@ -73,7 +73,7 @@ class Radar:
         #start background processes
         if self._start_background_proceses() == False:
             print("Radar.run(): start failed, exiting")
-            self.close()
+            self.close(nominal_close=False)
             return
 
         try:
@@ -89,24 +89,34 @@ class Radar:
                 #wait for 10ms before checking again
                 time.sleep(10e-3)
 
-            self.close()
+            self.close(nominal_close=True)
         except KeyboardInterrupt:
             #join all of the processes, close not needed as background processes automatically close on keyboard interrupt
 
             #end controller process
             self._join_processes()
     
-    def close(self):
+    def close(self,nominal_close = True):
         """Exit all background processes and stop execution of the Radar class
         """
-        #send sensor stop signal
-        self._conn_CLI_Controller.send(_Message(_MessageTypes.STOP_SENSOR))
+        if nominal_close:
+            #send sensor stop signal
+            try:
+                self._conn_CLI_Controller.send(_Message(_MessageTypes.STOP_SENSOR))
+            except BrokenPipeError:
+                print("Radar.close: CLI_Controller was already closed, no STOP_SENSOR message sent")
 
-        #stop streaming
-        self._conn_Streamer.send(_Message(_MessageTypes.STOP_STREAMING))
+            #stop streaming
+            try:
+                self._conn_Streamer.send(_Message(_MessageTypes.STOP_STREAMING))
+            except BrokenPipeError:
+                print("Radar.close: Streamer was already closed, no STOP_STREAMING message sent")
 
-        #stop processing
-        self._conn_Processor.send(_Message(_MessageTypes.STOP_STREAMING))
+            #stop processing
+            try:
+                self._conn_Processor.send(_Message(_MessageTypes.STOP_STREAMING))
+            except BrokenPipeError:
+                print("Radar.close: Processor was already closed, no STOP_STREAMING message sent")
 
         #send EXIT commands to processes
         self._conn_send_EXIT_commands()
@@ -139,19 +149,22 @@ class Radar:
         self._conn_CLI_Controller.send(_Message(_MessageTypes.SEND_CONFIG))
 
         #wait until configuration sent
-        self._conn_wait_for_command_execution(
+        successful_execution = self._conn_wait_for_command_execution(
             conn=self._conn_CLI_Controller,
             command=_MessageTypes.SEND_CONFIG
         )
-        
-        #start streaming data
-        self._conn_Streamer.send(_Message(_MessageTypes.START_STREAMING))
-        
-        #start processing data
-        self._conn_Processor.send(_Message(_MessageTypes.START_STREAMING))
+        if successful_execution:
+            #start streaming data
+            self._conn_Streamer.send(_Message(_MessageTypes.START_STREAMING))
+            
+            #start processing data
+            self._conn_Processor.send(_Message(_MessageTypes.START_STREAMING))
 
-        #start the radar sensor
-        self._conn_CLI_Controller.send(_Message(_MessageTypes.START_SENSOR))
+            #start the radar sensor
+            self._conn_CLI_Controller.send(_Message(_MessageTypes.START_SENSOR))
+        else:
+            self.radar_error_detected = True
+
 
 ## Loading radar configurations
     def load_TI_radar_configuration(self):
@@ -373,7 +386,7 @@ class Radar:
             command (_MessageTypes): the specific command that is being executed
 
         Returns:
-            _type_: _description_
+            bool: True on successful execution, False when not executed correctly
         """
         command_executed = False
        
@@ -395,9 +408,10 @@ class Radar:
                         break
                     case _:
                         continue
+            return True
         except EOFError:
             print("Radar._conn_wait_for_command_execution: background process was already closed while waiting for command code: {}, no message received".format(command))
-
+            return False
 
 
 ### Other helpful code
