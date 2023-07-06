@@ -46,7 +46,11 @@ class Processor(_BackgroundProcess):
         self.header = {}
 
         #import tlv processor classes
-        self.tlv_processor_detected_objects = _TLVProcessor.DetectedPointsProcessor()
+        self.enable_plotting = self.config_Radar["Processor"]["enable_plotting"]
+        self.save_plots_as_gifs = self.config_Radar["Processor"]["save_plots_as_gif"]
+        self.tlv_processor_detected_objects = _TLVProcessor.DetectedPointsProcessor(
+            plotting_enabled=self.enable_plotting,
+            save_as_gif=self.save_plots_as_gifs)
         
         #initialize the streaming status
         self.streaming_enabled = False
@@ -84,7 +88,9 @@ class Processor(_BackgroundProcess):
     def close(self):
         """End Processor Operations (no custom behavior requred)
         """
-        pass
+        #save gifts to files if they were enabled
+        self.tlv_processor_detected_objects.save_gif_to_file()
+        return
 
 #processing packets
     def _process_new_packet(self):
@@ -157,7 +163,9 @@ class Processor(_BackgroundProcess):
         self.config_loaded = True
 
         #TODO: Update this to support other TLV types
-        self.tlv_processor_detected_objects.load_config(self.radar_performance)
+        self.tlv_processor_detected_objects.load_config(
+            radar_performance= self.radar_performance,
+            radar_config=self.radar_config)
 
     def _start_streaming(self):
         """sets the streaming_enabled flag to true. Checks to make sure that a configuration is loaded first

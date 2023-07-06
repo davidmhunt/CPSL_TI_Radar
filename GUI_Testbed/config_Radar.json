@@ -26,11 +26,12 @@
                     "enabled":false,
                     "data_file":"../raw_data_samples/scatterplot_only.dat"
                 },
-            "verbose":true
+            "verbose":false
         },
     "Processor":
         {
             "verbose":true,
+            "enable_plotting":true,
             "save_plots_as_gif":true
         }
 }
