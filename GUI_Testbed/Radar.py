@@ -134,7 +134,7 @@ class Radar:
             value = {"radar_config":self.config_manager.radar_config,
                      "radar_performance":self.config_manager.radar_performance}
         ))
-
+        
         #configure the TI radar via serial
         self._conn_CLI_Controller.send(_Message(_MessageTypes.SEND_CONFIG))
 
@@ -185,12 +185,17 @@ class Radar:
                     return False
             
             #compute radar performance parameters
-            self.config_manager.compute_radar_perforance()            
+            self.config_manager.compute_radar_perforance() 
+
+            #check for custom CFAR threshold
+            if self.config_Radar["TI_Radar_Config_Management"]["custom_CFAR"]["enabled"]:
+                self.config_manager.apply_new_CFAR_threshold(self.config_Radar["TI_Radar_Config_Management"]["custom_CFAR"]["threshold_dB"])
 
             return True
         except FileNotFoundError:
             print("Radar.load_TI_radar_configuration: Could not find config file")
             return False
+
 
 ##Handling background processes/Multi Processing
 
@@ -418,6 +423,6 @@ if __name__ == '__main__':
     dir_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(dir_path)
     radar = Radar("config_Radar.json")
-    radar.run(timeout=20)
+    radar.run(timeout=60)
     #Exit the python code
     sys.exit()

@@ -86,7 +86,7 @@ class CLIController(_BackgroundProcess):
         #send every command except for the sensor start command
         successful_send = True
         for command in config:
-            if(command != "sensorStart"):
+            if(command != "sensorStart") and ("%" not in command):
                 successful_send = self._serial_send_command(command)
                 if not successful_send:
                     return

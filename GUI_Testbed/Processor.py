@@ -1,12 +1,16 @@
 from multiprocessing.connection import Connection
 from multiprocessing import connection
 from _Message import _Message,_MessageTypes
+import _TLVProcessor
 from collections import OrderedDict
 import time
 import json
 import numpy as np
 import os
 import sys
+
+#plotting
+import matplotlib.pyplot as plt
 
 from _Background_Process import _BackgroundProcess
 
@@ -41,6 +45,9 @@ class Processor(_BackgroundProcess):
         self.magic_word = bytearray([0x02,0x01,0x04,0x03,0x06,0x05,0x08,0x07])
         self.header = {}
 
+        #import tlv processor classes
+        self.tlv_processor_detected_objects = _TLVProcessor.DetectedPointsProcessor()
+        
         #initialize the streaming status
         self.streaming_enabled = False
 
@@ -129,39 +136,7 @@ class Processor(_BackgroundProcess):
         #call the correct function to process to given TLV data
         match TLV_tag:
             case TLVTags.DETECTED_POINTS:
-                self._process_TLV_detected_points(data)
-
-
-    def _process_TLV_detected_points(self,data:bytearray):
-
-        descriptor = np.frombuffer(data[8:12],dtype=np.uint16)
-        num_objects = descriptor[0]
-        XYZQ_format = descriptor[1]
-        XYZQ_conversion = np.power(2,XYZQ_format)
-        
-        #start forming the detected objects array
-        objects_struct = np.frombuffer(data[12:],dtype=np.int16)
-        #reshape so that each row corresponds to a specific object
-        objects_struct = objects_struct.reshape([-1,6])
-
-        range_idxs = objects_struct[:,0].astype(np.uint16)
-        ranges = np.float32(range_idxs * self.radar_performance["range"]["range_idx_to_m"])
-
-        vel_idxs = objects_struct[:,1]
-        vels = np.float32(vel_idxs * self.radar_performance["velocity"]["vel_idx_to_m_per_s"])
-
-        peak_vals = (objects_struct[:,2]/XYZQ_conversion).astype(np.float32)
-
-        XYZ_coordinates = (objects_struct[:,3:]/XYZQ_conversion).astype(np.float32)
-
-        out_data = np.concatenate((XYZ_coordinates,vels[:,np.newaxis],ranges[:,np.newaxis],peak_vals[:,np.newaxis]),axis=1)
-
-        return out_data
-
-
-
-
-
+                self.tlv_processor_detected_objects.process_new_data(data)
     
     def _load_new_config(self, config_info:dict):
         """Load a new set of radar performance and radar configuration dictionaries into the processor class
@@ -175,6 +150,9 @@ class Processor(_BackgroundProcess):
 
         #set config loaded flag
         self.config_loaded = True
+
+        #TODO: Update this to support other TLV types
+        self.tlv_processor_detected_objects.load_config(self.radar_performance)
 
     def _start_streaming(self):
         """sets the streaming_enabled flag to true. Checks to make sure that a configuration is loaded first

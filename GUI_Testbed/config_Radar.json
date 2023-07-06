@@ -1,12 +1,17 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/1443config.cfg",
-            "export_JSON_config":false
+            "TI_Radar_config_path":"../configurations/short_range_3D.cfg",
+            "export_JSON_config":true,
+            "custom_CFAR":
+                {
+                    "enabled":true,
+                    "threshold_dB":12
+                }
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM0",
+            "CLI_port":"/dev/ttyACM2",
             "verbose":true
         },
     "Streamer":
@@ -14,14 +19,14 @@
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyACM1"
+                    "data_port":"/dev/ttyACM3"
                 },
             "file_streaming":
                 {
                     "enabled":false,
                     "data_file":"../raw_data_samples/scatterplot_only.dat"
                 },
-            "verbose":true
+            "verbose":false
         },
     "Processor":
         {

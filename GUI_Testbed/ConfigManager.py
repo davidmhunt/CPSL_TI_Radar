@@ -127,6 +127,35 @@ class ConfigManager:
                 return 2
             case 7:
                 return 3
+    
+    def _get_num_Rx_antennas(self):
+        """REturn the number of Rx Antennas used in the configuration
+
+        Returns:
+            _type_: _description_
+        """
+
+        match int(self.radar_config["channelCfg"]["rxChannelEn"]):
+            case 1:
+                return 1
+            case 3:
+                return 2
+            case 15:
+                return 4
+            
+#computing a custom CFAR threshold
+    def apply_new_CFAR_threshold(self,T_db:int):
+        
+        N = self._get_num_Tx_antennas() * self._get_num_Rx_antennas()
+
+        N_prime = np.power(2,np.ceil(np.log2(N)))
+
+        T_cli = int(512 * T_db * N /(6 * N_prime))
+
+        self.radar_config["cfarCfg"]["threshold"] = T_cli
+
+        #export the new configuration
+        self.export_config_as_cfg("generated_config_custom_CFAR.cfg")
 
 
 #Importing from JSON
@@ -231,7 +260,9 @@ class ConfigManager:
         #reset the radar config
         self.radar_config = OrderedDict()
         for line in f:
-            self._load_cfg_command_from_line(line)
+            #skip comments (marked by %)
+            if "%" not in line:
+                self._load_cfg_command_from_line(line)
         
         self.TI_radar_config_path = TI_radar_config_path
         self.config_loaded = True
