@@ -1,206 +1,206 @@
 import serial
 import time
+import json
 import numpy as np
-from Processor import Processor
+import os
+import sys
 
+#helper classes
+from _Background_Process import _BackgroundProcess
+from multiprocessing.connection import Connection
+from _Message import _Message,_MessageTypes
 
-# Streamer class -> use either loadFile + readFromFile (in a loop w/ delays) OR readRealTime (also must be in a loop with delays). Both read methods will return the next packet available, if there is one
-
-class Streamer:
+class Streamer(_BackgroundProcess):
 
     def __init__(self,
-                 enable_serial=False,
-                 data_file = "data_stream.dat",
-                 CLIPort:serial.Serial =None,
-                 DataPort:serial.Serial =None,
-                 verbose = False):
-        """Initialize the streamer class
+                 conn:Connection,
+                 data_connection:Connection, 
+                 config_file_path='config_Radar.json'):
 
-        Args:
-            enable_serial (bool, optional): On True, streams data from the radar. 
-                On False, reads data from data_file and processes the 
-                read data. Defaults to False.
-            data_file (str, optional): file path to the raw serial data file.
-                 Defaults to "data_stream.dat".
-            CLIPort (serial.Serial, optional): serial.Serial object used to send
-                commands to the radar. Defaults to None.
-            DataPort (serial.Serial, optional): serial.Serial object used to read
-                raw data from the radar. Defaults to None.
-            verbose (bool, optional): On True, prints debugging information. Defaults to False.
-        """
+        super().__init__("Streamer",conn,config_file_path,data_connection)
 
-        #save verbose setting
-        self.verbose = verbose
-
-        #initialize the byte buffer
-        maxBufferSize = 2**18
-        self.byteBuffer = np.zeros(maxBufferSize,dtype = 'uint8')
-        self.byteBufferLength = 0
-
-        #initialize the packet buffer
-        self.currentPacket = np.empty(0)
-
-        #configure the serial ports
-        self.CLIport = CLIPort
-        self.DataPort = DataPort
-
-        #load data in from a file if read_from_file is true
-        self.serial_enabled = enable_serial
-        if not self.serial_enabled:
-            self.loadFile(data_file)
+        #configure the streaming method
+        self.serial_streaming_enabled = False
+        self.file_streaming_enabled = False
+        self.data_file_path = ""
+        self._config_streaming_method()
         
+        #initialize the packet detector
+        self.detected_packets = 0
+        self.current_packet = bytearray()
+        self.byte_buffer = bytearray()
+        self.magic_word = bytearray([0x02,0x01,0x04,0x03,0x06,0x05,0x08,0x07])
+        self.header = {}
+
+        #initialize the streaming status
+        self.streaming_enabled = False
+
+        #set verbose status
+        self.verbose = self.config_Radar["Streamer"]["verbose"]
+
+        self._conn_send_init_status(self.init_success)
+        self.run()
+
         return
 
+    def run(self):
+        try:
+            while self.exit_called == False:
+                #if streaming enabled, minimize blocking/waiting
+                if self.streaming_enabled:
+                    self._serial_get_next_packet()
+                    #process new RADAR commands if availble
+                    if self._conn_RADAR.poll():
+                        #process all radar commands
+                        while self._conn_RADAR.poll():
+                            #receive and process the message from the RADAR class
+                            self._conn_process_Radar_command()
+                else:
+                    self._conn_process_Radar_command()
+
+
+            #once exit is called close out and return
+            self.close()
+        except KeyboardInterrupt:
+            self.close()
+            sys.exit()
+    
+    def close(self):
+        #before exiting, close the serial port and turn the sensor off
+        if self.serial_port != None:
+            if self.serial_port.is_open == True:
+                #close the serial port
+                self.serial_port.close()
+    
+    
+    def _config_streaming_method(self):
         
-    def loadFile(self,data_file): 
-        """Import raw serial data saved in a local file
+        #determine which streaming methods are enabled
+        self.serial_streaming_enabled = self.config_Radar["Streamer"]["serial_streaming"]["enabled"]
+        self.file_streaming_enabled = self.config_Radar["Streamer"]["file_streaming"]["enabled"]
 
-        Args:
-            data_file (str): file path to the raw serial data file
-        """
-        byteVec = np.fromfile(data_file, dtype="byte")
-        self.updateBuffer(byteVec)
+        #configure the serial port if serial streaming is enabled
+        if self.serial_streaming_enabled:
+            self._serial_init_serial_port(
+                address=self.config_Radar["Streamer"]["serial_streaming"]["data_port"],
+                baud_rate=921600,
+                timeout=0.5,
+                close=True
+            )
+        elif self.file_streaming_enabled:
+            self.data_file_path = self.config_Radar["Streamer"]["file_streaming"]["data_file"]
+    
+    def _serial_get_next_packet(self):
 
-        if self.verbose:
-            print("Streamer.loadFile: Loaded data from {}".format(data_file))
+        #read the new packet (strip off the magic word)
+        try:
+            self.byte_buffer = self.serial_port.read_until(expected=self.magic_word)[:-8]
+        except serial.SerialTimeoutException:
+            self._conn_send_message_to_print(
+                "Streamer._get_next_packet_serial: Timed out waiting for new data. serial port closed")
+            self._conn_send_error_radar_message()
+            self.serial_port.close()
+            self.streaming_enabled = False
+            return
+        
+        #store the new packet in a bytearray
+        self.current_packet = bytearray(self.magic_word)
+        self.current_packet.extend(self.byte_buffer)
+
+        #increment the packet count
+        self.detected_packets += 1
+        
+        #decode the header
+        self._serial_decode_header(self.current_packet[:36])
+
+        #check packet validity
+        packet_valid = self._serial_check_packet_valid()
+
+        if packet_valid:
+            try:
+                self._conn_data.send_bytes(self.current_packet)
+            except BrokenPipeError:
+                self._conn_send_message_to_print("Streamer._serial_get_next_packet: attempted to send new packet to Processor, but processor was closed")
+                self._conn_send_error_radar_message()
+        
         return
+            
+            
+    def _serial_decode_header(self,header:bytearray):
+        #decode the header
+        decoded_header = np.frombuffer(header,dtype=np.uint32)
+        #process the header fields
+        self.header["version"] = format(decoded_header[2],'x')
+        self.header["packet_length"] = decoded_header[3]
+        self.header["platform"] = format(decoded_header[4],'x')
+        self.header["frame_number"] = decoded_header[5]
+        self.header["time"] = decoded_header[6]
+        self.header["num_detected_objects"] = decoded_header[7]
+        self.header["num_data_structures"] = decoded_header[8]
 
-    def readFromSerial(self): 
-        """Reads in any waiting data and adds it to the buffer
+        if(self.verbose):
+            self._serial_print_packet_header()
+
+        return
+    
+    def _serial_print_packet_header(self):
+        #clear the terminal screen
+        self._conn_send_clear_terminal()
+
+        #print out the packet detection results
+        self._conn_send_message_to_print("detected packets: {}".format(self.detected_packets))
+        self._conn_send_message_to_print("\t version:{}".format(self.header["version"]))
+        self._conn_send_message_to_print("\t total packet length:{}".format(self.header["packet_length"]))
+        self._conn_send_message_to_print("\t platform:{}".format(self.header["platform"]))
+        self._conn_send_message_to_print("\t Frame Number:{}".format(self.header["frame_number"]))
+        self._conn_send_message_to_print("\t Time (CPU Cycles):{}".format(self.header["time"]))
+        self._conn_send_message_to_print("\t Number of Detected Objects:{}".format(self.header["num_detected_objects"]))
+        self._conn_send_message_to_print("\t Number of Data Structures in package:{}".format(self.header["num_data_structures"]))
+
+        return
+    
+    def _serial_check_packet_valid(self):
+        """Check to see if the current packet is valid. Assumes that the current packet is loaded into self.current_packet and that the corresponding header has been processed and loaded into self.header
 
         Returns:
-            _type_: _description_
+            bool: True if packet is valid, False if packet is not valid
         """
-        readBuffer = self.DataPort.read(self.DataPort.in_waiting)
-        byteVec = np.frombuffer(readBuffer, dtype = 'uint8')
-        self.updateBuffer(byteVec)
-        return
-
-    def updateBuffer(self, byteVec): 
-        """Update ByteBuffer by append byteVec to the end
-
-        Args:
-            byteVec (np.array(dtype='uint8')): buffer with data 
-                read from the data serial port
-        """
-        maxBufferSize = 2**18
-        byteCount = len(byteVec)
-
-        # add the data to the end of the buffer, update buffer length
-        if (self.byteBufferLength + byteCount) < maxBufferSize:
-            self.byteBuffer[self.byteBufferLength:self.byteBufferLength + byteCount] = byteVec[:byteCount]
-            self.byteBufferLength = self.byteBufferLength + byteCount
+        packet_valid = False
+        if self.header["packet_length"] == len(self.current_packet):
+            packet_valid = True
         else:
-            print("Streamer.updateBuffer: Buffer is full")
+            packet_valid = False
         
-        return
-
-    def checkForNewPacket(self): 
-        """Check for a new packet. If a new packet is detected,
-             update self.currentPacket and return True to note 
-             that a new packet was detected
-
-        Returns:
-            bool: True if new packet was detected
-        """
-        #magic word for detecting packet start
-        magicWord = [2, 1, 4, 3, 6, 5, 8, 7]
-
-        # word array to convert 4 bytes to a 32 bit number
-        word = [1, 2**8, 2**16, 2**24]
-
-        # Check that the buffer has some data
-        if self.byteBufferLength > 16:
-            
-            # Check for all possible locations of the magic word
-            possibleLocs = np.where(self.byteBuffer == magicWord[0])[0]
-
-            # Identify all possible packet start locations (all of the places that the magic word occurs in)
-            startIdx = []
-            for loc in possibleLocs:
-
-                #get the possible magic word
-                check = self.byteBuffer[loc:loc+8]
-
-                #check to make sure that the magic word matches
-                if np.all(check == magicWord):
-                    startIdx.append(loc)
-                
-            # Check that startIdx is not empty
-            if startIdx:
-                
-                #check to make sure that the packet is a valid packet
-                packet_start_i = 0
-                for i in range(len(startIdx)-1): 
-                    #TODO: added code to check for the case of only partially received packets or corrupt packets
-                    packet_start_i = i
-                    stated_packetLen = np.matmul(self.byteBuffer[startIdx[i] + 12:startIdx[i] + 12+4],word)
-
-                    actual_packetLen = startIdx[i + 1] - startIdx[i]
-
-                    if stated_packetLen == actual_packetLen:
-                        break
-
-
-                    #check that the total packet length matches the 
-                # Remove the data before the first start index
-                if startIdx[packet_start_i] > 0 and startIdx[packet_start_i] < self.byteBufferLength:
-                    self.byteBuffer[:self.byteBufferLength-startIdx[packet_start_i]] = self.byteBuffer[startIdx[packet_start_i]:self.byteBufferLength]
-
-                    self.byteBuffer[self.byteBufferLength-startIdx[packet_start_i]:] = np.zeros(len(self.byteBuffer[self.byteBufferLength-startIdx[packet_start_i]:]),dtype = 'uint8')
-
-                    self.byteBufferLength = self.byteBufferLength - startIdx[packet_start_i]
-                
-                
-                # Read the total packet length
-                totalPacketLen = np.matmul(self.byteBuffer[12:12+4],word)
-
-                # Check that all the packet has been read
-                if (self.byteBufferLength >= totalPacketLen) and (self.byteBufferLength != 0):
-
-                    #extract the current packet (hard copy so that data not over-written in next steps)
-                    self.currentPacket = self.byteBuffer[:totalPacketLen].copy()
-
-                    #remove the current packet from the buffer
-                    self.byteBuffer[:self.byteBufferLength - totalPacketLen] = self.byteBuffer[totalPacketLen:self.byteBufferLength] 
-
-                    #add zeros where the packet previously was
-                    self.byteBuffer[self.byteBufferLength - totalPacketLen:] = np.zeros(len(self.byteBuffer[self.byteBufferLength - totalPacketLen:]),dtype = 'uint8') 
-
-                    #update current buffer length
-                    self.byteBufferLength = self.byteBufferLength - totalPacketLen
-
-                    #return True to note that a new packet was detected
-                    return True
-        else:
-            #return False to note that no new packet was detected
-            return False
-
-    def start_serial_stream(self):
-        """Start a serial stream
-        """
-        self.CLIport.write(('sensorStart\n').encode())
         if self.verbose:
-            print("Streamer.start_serial_stream: sent 'sensorStart'")
-            
-            #wait for 0.07 s for the command to be sent
-            time.sleep(0.07)
+            self._conn_send_message_to_print("\t Valid Packet: {}".format(packet_valid))
+        return packet_valid
+    
+    def _serial_reset_packet_detector(self):
 
-            #get the response from the sensor to confirm message was received
-            resp = self.CLIport.read(self.CLIport.in_waiting).decode('utf-8')
-            print("Streamer.start_serial_stream: received '{}'".format(resp))
-
-    def stop_serial_stream(self):
-        """Stop the serial stream
-        """
-        self.CLIport.write(('sensorStop\n').encode())
-        if self.verbose:
-            print("Streamer.stop_serial_stream: sent 'sensorStop'")
-            
-            #wait for 0.07 s for the command to be sent
-            time.sleep(0.07)
-
-            #get the response from the sensor to confirm message was received
-            resp = self.CLIport.read(self.CLIport.in_waiting).decode('utf-8')
-            print("Streamer.stop_serial_stream: received '{}'".format(resp))
+        #flush the input buffer
+        self.serial_port.reset_input_buffer()
         
+        #find the first magic word in the buffer
+        #NOTE: the first packet received is not likely to be complete,
+        #and is thus thrown out
+        self.serial_port.read_until(expected=self.magic_word)
+
+    def _conn_process_Radar_command(self):
+
+        command:_Message = self._conn_RADAR.recv()
+        match command.type:
+            case _MessageTypes.EXIT:
+                self.exit_called = True
+            case _MessageTypes.START_STREAMING:
+                self.serial_port.open()
+                self._serial_reset_packet_detector()
+                self.streaming_enabled = True
+            case _MessageTypes.STOP_STREAMING:
+                self.serial_port.close()
+                self.streaming_enabled = False
+            case _:
+                self._conn_send_message_to_print(
+                    "Streamer._process_Radar_command: command not recognized")
+                self._conn_send_error_radar_message()
+        
+        self._conn_send_command_executed_message(command.type)
