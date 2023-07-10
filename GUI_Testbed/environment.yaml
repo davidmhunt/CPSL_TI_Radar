@@ -1,0 +1,11 @@
+name: TI_Radar_GUI
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pyserial
+  - matplotlib
+  - scipy
+  - numpy
+  - pyqt
+  - imageio

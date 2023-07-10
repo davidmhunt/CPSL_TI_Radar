@@ -1,37 +1,25 @@
 {
-    "_comment_": [
-        "Range Resolution (m): 0.125",
-        "Unambiguous range (m): 6.4",
-        "Maximum Radial Velocity (m/s): 1.25",
-        "Radial velocity resolution (m/s): 0.04"
-    ],
-    "_settings_": {
-        "rxAntennas": 4,
-        "txAntennas": 3,
-        "rangeBias": 0.08,
-        "verbose": false
-    },
     "dfeDataOutputMode": {
-        "type": 1
+        "modeType": 1
     },
     "channelCfg": {
-        "rxMask": 15,
-        "txMask": 5,
+        "rxChannelEn": 15,
+        "txChannelEn": 5,
         "cascading": 0
     },
     "adcCfg": {
-        "adcBits": 2,
-        "outputFormat": 1
+        "numADCBits": 2,
+        "adcOutputFmt": 1
     },
     "adcbufCfg": {
-        "subFrameIndex": null,
-        "outputFormat": 0,
-        "sampleSwap": 1,
-        "channelInterleave": 0,
+        "subFrameIdx": null,
+        "adcOutputFmt": 0,
+        "SampleSwap": 1,
+        "ChannelInterleave": 0,
         "chirpThreshold": 1
     },
     "profileCfg": {
-        "id": 0,
+        "profileId": 0,
         "startFreq": 77,
         "idleTime": 429,
         "adcStartTime": 7,
@@ -46,30 +34,28 @@
         "hpfCornerFreq2": 0,
         "rxGain": 30
     },
-    "chirpCfg": {
-        "startIndex": 0,
-        "endIndex": 0,
-        "profile": 0,
-        "variation": {
-            "startFreq": 0,
-            "freqSlope": 0,
-            "idleTime": 0,
-            "adcStartTime": 0
+    "chirpCfg": [
+        {
+            "startIndex": 0,
+            "endIndex": 0,
+            "profile": 0,
+            "startFreqVariation":0,
+            "freqSlopVariation":0,
+            "idleTimeVariation":0,
+            "ADCStartTimeVariation":0,
+            "txMask": 1
         },
-        "txMask": 1
-    },
-    "chirpCfg": {
-        "startIndex": 1,
-        "endIndex": 1,
-        "profile": 0,
-        "variation": {
-            "startFreq": 0,
-            "freqSlope": 0,
-            "idleTime": 0,
-            "adcStartTime": 0
-        },
-        "txMask": 4
-    },
+        {
+            "startIndex": 1,
+            "endIndex": 1,
+            "profile": 0,
+            "startFreqVariation":0,
+            "freqSlopVariation":0,
+            "idleTimeVariation":0,
+            "ADCStartTimeVariation":0,
+            "txMask": 4
+        }
+    ],
     "frameCfg": {
         "startIndex": 0,
         "endIndex": 1,
@@ -112,8 +98,11 @@
     },
     "multiObjBeamForming": {
         "subFrameIndex": null,
-        "enabled": 1,
+        "FeatureEnabled": 1,
         "threshold": 0.5
+    },
+    "clutterRemoval": {
+        "enabled": 0
     },
     "calibDcRangeSig": {
         "subFrameIndex": null,
@@ -121,9 +110,6 @@
         "negativeBinIndex": -5,
         "positiveBinIndex": 8,
         "chirps": 256
-    },
-    "clutterRemoval": {
-        "enabled": 0
     },
     "compRangeBiasAndRxChanPhase": {
         "rangeBias": null,
@@ -140,6 +126,18 @@
         "enabled": 0,
         "targetDistance": 1.5,
         "searchWindow": 0.2
+    },
+    "CQRxSatMonitor":{
+        "profile":0,
+        "satMonSel":3,
+        "priSliceDuration":5,
+        "numSlices":123,
+        "rxChanMask":0
+    },
+    "CQSigImgMonitor":{
+        "profile":0,
+        "numSlices":119,
+        "numSamplesPerSlice":4
     },
     "analogMonitor": {
         "rxSaturation": 1,

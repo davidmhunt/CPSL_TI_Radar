@@ -3,6 +3,8 @@ import time
 import json
 
 class Config:
+    """The Radar serial class handles all serial communications between 
+    """
 
     def __init__(
             self,
