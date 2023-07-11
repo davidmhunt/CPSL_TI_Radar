@@ -9,6 +9,7 @@ import time
 from collections import OrderedDict
 import imageio
 import io
+from multiprocessing.connection import Listener
 
 class DetectedPointsProcessor:
     def __init__(self,plotting_enabled=True, save_as_gif = False):
@@ -39,6 +40,11 @@ class DetectedPointsProcessor:
         self.scat_xy:PathCollection = None
         self.scat_yz:PathCollection = None
 
+        #TLV client connection to send data to an external process
+        self._conn_listener_enabled = False
+        self._listener = None
+        self._conn_listener = None
+
     def load_config(self,radar_performance:dict, radar_config:OrderedDict):
 
         #load the new radar performance values
@@ -50,7 +56,24 @@ class DetectedPointsProcessor:
 
         #init saving to a gif
         self._init_save_to_gif()
-    
+
+
+# Sending data to an external process
+    def init_conn_client(self,address,authkey):
+        """initialize the client connection to send data to an external process
+
+        Args:
+            address (tuple): address in the form ('localhost',address)
+            authkey (binary string): authentication key in the form b'authkey' 
+        """
+
+        #setup a new connection with a listener at the address
+        #blocks until the connection is established
+        self._listener = Listener(address,authkey=authkey)
+        self._conn_listener = self._listener.accept()
+        self._conn_listener_enabled = True
+
+# Handling plots and saving plots to a .gif
     def _init_plots(self):
         if self.plotting_enabled:
             
@@ -96,6 +119,24 @@ class DetectedPointsProcessor:
         if self.plotting_enabled and self.save_as_gif_enabled:
             imageio.mimsave(self.gif_file_name,self.image_frames,duration=self.frame_duration)
 
+    def _update_plots(self):
+        x = self.detected_objects[:,0]
+        y = self.detected_objects[:,1]
+        z = self.detected_objects[:,2]
+        self.scat_xy.set_offsets(np.c_[x,y])
+        self.scat_yz.set_offsets(np.c_[y,z])
+        
+        #update the plots
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+        if self.save_as_gif_enabled:
+            buf = io.BytesIO()
+            self.fig.savefig(buf,format='png',dpi=300)
+            buf.seek(0)
+            self.image_frames.append(imageio.imread(buf))
+
+#processing data
     def process_new_data(self,data:bytearray):
         descriptor = np.frombuffer(data[8:12],dtype=np.uint16)
         num_objects = descriptor[0]
@@ -122,22 +163,8 @@ class DetectedPointsProcessor:
         if self.plotting_enabled:
             self._update_plots()
         
-        return
-    
-    def _update_plots(self):
-        x = self.detected_objects[:,0]
-        y = self.detected_objects[:,1]
-        z = self.detected_objects[:,2]
-        self.scat_xy.set_offsets(np.c_[x,y])
-        self.scat_yz.set_offsets(np.c_[y,z])
+        if self._conn_listener_enabled:
+            self._conn_listener.send(self.detected_objects)
         
-        #update the plots
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-
-        if self.save_as_gif_enabled:
-            buf = io.BytesIO()
-            self.fig.savefig(buf,format='png',dpi=300)
-            buf.seek(0)
-            self.image_frames.append(imageio.imread(buf))
+        return
         

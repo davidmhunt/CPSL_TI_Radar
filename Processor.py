@@ -1,5 +1,5 @@
 from multiprocessing.connection import Connection
-from multiprocessing import connection
+from multiprocessing import connection,AuthenticationError
 from _Message import _Message,_MessageTypes
 import _TLVProcessor
 from collections import OrderedDict
@@ -46,11 +46,11 @@ class Processor(_BackgroundProcess):
         self.header = {}
 
         #import tlv processor classes
-        self.enable_plotting = self.config_Radar["Processor"]["enable_plotting"]
-        self.save_plots_as_gifs = self.config_Radar["Processor"]["save_plots_as_gif"]
-        self.tlv_processor_detected_objects = _TLVProcessor.DetectedPointsProcessor(
-            plotting_enabled=self.enable_plotting,
-            save_as_gif=self.save_plots_as_gifs)
+        self.enable_plotting = False
+        self.save_plots_as_gifs = False
+        self.tlv_processor_detected_objects = None
+
+        self._init_TLV_processes()
         
         #initialize the streaming status
         self.streaming_enabled = False
@@ -92,6 +92,37 @@ class Processor(_BackgroundProcess):
         self.tlv_processor_detected_objects.save_gif_to_file()
         return
 
+#configure TLV processors
+    def _init_TLV_processes(self):
+
+        #import tlv processor classes
+        self.enable_plotting = self.config_Radar["Processor"]["enable_plotting"]
+        self.save_plots_as_gifs = self.config_Radar["Processor"]["save_plots_as_gif"]
+        
+        self.tlv_processor_detected_objects = _TLVProcessor.DetectedPointsProcessor(
+            plotting_enabled=self.enable_plotting,
+            save_as_gif=self.save_plots_as_gifs)
+    
+    def _init_TLV_listeners(self):
+
+        #get the TLV client initialization information
+        TLV_listener_info = self.config_Radar["Processor"]["TLV_listener_info"]
+        
+        #generate the authentication string
+        authkey_str = TLV_listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        #get the TLV client addresses
+        detected_points_address = ('localhost', int(TLV_listener_info["DetectedPointsProcessor"]))
+
+        #wait for the TLV clients to connect to their listeners
+        try:
+            self.tlv_processor_detected_objects.init_conn_client(detected_points_address,authkey)
+        except AuthenticationError:
+            self._conn_send_message_to_print("Processor._init_TLV_listeners: experienced Authentication error when attempting to connect to Client")
+            self._conn_send_error_radar_message()
+
+
 #processing packets
     def _process_new_packet(self):
         
@@ -104,7 +135,6 @@ class Processor(_BackgroundProcess):
                 self._conn_send_error_radar_message()
                 return
 
-        #TODO: Add code to process the packet
         self._process_header()
 
         self._process_TLVs()
@@ -145,10 +175,15 @@ class Processor(_BackgroundProcess):
     def _process_TLV(self,TLV_tag,data:bytearray):
 
         #call the correct function to process to given TLV data
-        match TLV_tag:
-            case TLVTags.DETECTED_POINTS:
-                self.tlv_processor_detected_objects.process_new_data(data)
-    
+        try:
+            match TLV_tag:
+                case TLVTags.DETECTED_POINTS:
+                    self.tlv_processor_detected_objects.process_new_data(data)
+        except BrokenPipeError:
+            self._conn_send_message_to_print("Processor._process_TLV: attempted to send data to Listener, but Client process was already closed")
+            self._conn_send_error_radar_message()
+
+#Loading new radar configurations
     def _load_new_config(self, config_info:dict):
         """Load a new set of radar performance and radar configuration dictionaries into the processor class
 
@@ -167,6 +202,7 @@ class Processor(_BackgroundProcess):
             radar_performance= self.radar_performance,
             radar_config=self.radar_config)
 
+#Streaming/processing of radar samples
     def _start_streaming(self):
         """sets the streaming_enabled flag to true. Checks to make sure that a configuration is loaded first
         """
@@ -192,6 +228,9 @@ class Processor(_BackgroundProcess):
                 self._start_streaming()
             case _MessageTypes.STOP_STREAMING:
                 self.streaming_enabled = False
+            case _MessageTypes.CONFIG_TLV_LISTENERS:
+                self._init_TLV_listeners()
+                self._conn_send_command_executed_message(_MessageTypes.CONFIG_TLV_LISTENERS)
             case _:
                 self._conn_send_message_to_print(
                     "Processor._process_Radar_command: command not recognized")

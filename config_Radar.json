@@ -32,6 +32,14 @@
         {
             "verbose":true,
             "enable_plotting":true,
-            "save_plots_as_gif":true
+            "save_plots_as_gif":false,
+            "TLV_listener_info":{
+                "authkey":"TLV_client",
+                "DetectedPointsProcessor":6000
+            }
+        },
+    "ROS":
+        {
+            "enabled":true
         }
 }

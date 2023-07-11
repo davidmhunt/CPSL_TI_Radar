@@ -1,6 +1,6 @@
 class _MessageTypes:
     #largest hex value corresponding to a message
-    _LARGEST_MESSAGE_VALUE = 0x0D
+    _LARGEST_MESSAGE_VALUE = 0x0E
 
     #init messages
     INIT_SUCCESS = 0x00
@@ -26,12 +26,15 @@ class _MessageTypes:
     #Streamer/Processor control messages
     START_STREAMING = 0x0A
     STOP_STREAMING = 0x0B
+
+    #configure TLV Clients
+    CONFIG_TLV_LISTENERS = 0x0C
     
     #New Data Available
-    NEW_DATA = 0x0C
+    NEW_DATA = 0x0D
 
     #Other Errors
-    ERROR_RADAR = 0x0D
+    ERROR_RADAR = 0x0E
 
 class _Message:
 

@@ -32,7 +32,7 @@ class Radar:
         #TI radar configuration management
         self._config_file_path = config_file_path
 
-        #get the Radar class configuration as well
+        #get the Radar class configuration
         try:
             self.config_Radar = self._parse_json(config_file_path)
         except FileNotFoundError:
@@ -56,13 +56,15 @@ class Radar:
 
         self._prepare_background_processes()
 
+        self.ROS_enabled = bool(self.config_Radar["ROS"]["enabled"])
+
         return
     
     def run(self, timeout = 20):
         """Run the Radar Class
 
         Args:
-            timeout (int, optional): Duration of operation. Defaults to 20.
+            timeout (int, optional): Duration of operation. Defaults to 20. Ignored if ROS is enabled
         """
 
         #load the radar configuration
@@ -82,7 +84,8 @@ class Radar:
 
             #start running the sensor
             start_time = time.time()
-            while((time.time() - start_time) < timeout) and not self.radar_error_detected:
+
+            while(self.ROS_enabled or ((time.time() - start_time) < timeout)) and not self.radar_error_detected:
                 #check for updates from each background process
                 self._conn_recv_background_process_updates()
 
@@ -153,6 +156,19 @@ class Radar:
             conn=self._conn_CLI_Controller,
             command=_MessageTypes.SEND_CONFIG
         )
+
+        if self.ROS_enabled:
+            #tell processor to connect TLV processors to ROS clients
+            print("Radar.start_Radar:waiting for TLV listeners to connect to ROS clients")
+            self._conn_Processor.send(_Message(_MessageTypes.CONFIG_TLV_LISTENERS))
+
+            ROS_connected = self._conn_wait_for_command_execution(
+                conn=self._conn_Processor,
+                command=_MessageTypes.CONFIG_TLV_LISTENERS
+            )
+
+            successful_execution = ROS_connected and successful_execution
+
         if successful_execution:
             #start streaming data
             self._conn_Streamer.send(_Message(_MessageTypes.START_STREAMING))
@@ -405,10 +421,11 @@ class Radar:
                     case _MessageTypes.ERROR_RADAR:
                         self.radar_error_detected = True
                         print("Radar._conn_wait_for_command_execution: received RADAR error while waiting for command code:{}".format(command))
+                        command_executed = False
                         break
                     case _:
                         continue
-            return True
+            return command_executed
         except EOFError:
             print("Radar._conn_wait_for_command_execution: background process was already closed while waiting for command code: {}, no message received".format(command))
             return False
@@ -437,6 +454,6 @@ if __name__ == '__main__':
     dir_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(dir_path)
     radar = Radar("config_Radar.json")
-    radar.run(timeout=5)
+    radar.run(timeout=20)
     #Exit the python code
     sys.exit()
