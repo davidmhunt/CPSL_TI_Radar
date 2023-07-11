@@ -453,7 +453,7 @@ if __name__ == '__main__':
     #create the controller object
     dir_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(dir_path)
-    radar = Radar("config_Radar.json")
+    radar = Radar("../config_Radar.json")
     radar.run(timeout=20)
     #Exit the python code
     sys.exit()
