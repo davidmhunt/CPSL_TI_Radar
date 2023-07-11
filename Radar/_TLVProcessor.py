@@ -164,7 +164,7 @@ class DetectedPointsProcessor:
             self._update_plots()
         
         if self._conn_listener_enabled:
-            self._conn_listener.send(self.detected_objects)
+            self._conn_listener.send(XYZ_coordinates)
         
         return
         
