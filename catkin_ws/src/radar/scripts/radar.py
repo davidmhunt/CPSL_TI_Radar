@@ -34,7 +34,10 @@ def publish_point_cloud():
             # Create fields for point cloud message
             fields = [PointField('x', 0, PointField.FLOAT32, 1),
                     PointField('y', 4, PointField.FLOAT32, 1),
-                    PointField('z', 8, PointField.FLOAT32, 1)]
+                    PointField('z', 8, PointField.FLOAT32, 1),
+                    PointField('vel', 12, PointField.FLOAT32, 1),
+                    PointField('rng', 16, PointField.FLOAT32, 1),
+                    PointField('intensity', 20, PointField.FLOAT32, 1)]
 
             # Convert numpy array to string of bytes
             data_str = radar_point_cloud_xyz.tobytes()
@@ -46,7 +49,7 @@ def publish_point_cloud():
             msg.width = radar_point_cloud_xyz.shape[0]
             msg.fields = fields
             msg.is_bigendian = False
-            msg.point_step = 12
+            msg.point_step = 24
             msg.row_step = len(data_str)
             msg.data = data_str
 
