@@ -1,0 +1,8 @@
+<launch>
+    <node pkg="radar" type="radar_static_transform.py" name="radar_static_transform" respawn="false" output="screen">
+    </node>
+
+    <node pkg="radar" type="radar.py" name="radar" respawn="false" output = "screen">
+        
+    </node>
+</launch>
