@@ -5,11 +5,6 @@ import rospy
 from sensor_msgs.msg import PointCloud2, PointField
 import std_msgs.msg
 
-#coordinate transformations
-import tf
-import tf2_ros
-import geometry_msgs.msg
-
 #other modules
 import numpy as np
 from multiprocessing.connection import Client
