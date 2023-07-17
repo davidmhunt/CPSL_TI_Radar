@@ -1,12 +1,26 @@
 #!/usr/bin/env python
 
+#ROS modules
 import rospy
 from sensor_msgs.msg import PointCloud2, PointField
 import std_msgs.msg
+
+#coordinate transformations
+import tf
+import tf2_ros
+import geometry_msgs.msg
+
+#other modules
 import numpy as np
 from multiprocessing.connection import Client
 
+
+
+
 def publish_point_cloud():
+    """Initializes a ROS node to connect to the Radar streamer and publish the
+      data in a ROS format
+    """
     # Initialize ROS node
     rospy.init_node('radar', anonymous=True)
 
@@ -29,7 +43,7 @@ def publish_point_cloud():
             # Create header for point cloud message
             header = std_msgs.msg.Header()
             header.stamp = rospy.Time.now()
-            header.frame_id = 'map'
+            header.frame_id = 'Radar'
 
             # Create fields for point cloud message
             fields = [PointField('x', 0, PointField.FLOAT32, 1),
