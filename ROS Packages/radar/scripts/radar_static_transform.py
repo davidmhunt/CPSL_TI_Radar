@@ -27,7 +27,7 @@ def init_radar_static_frame():
     #create the header
     static_transformStamped.header.stamp = rospy.Time.now()
     #TODO: Change frame_id to be desired parent frame id
-    static_transformStamped.header.frame_id = "turtle1" #"vicon/Drone1/Drone1"
+    static_transformStamped.header.frame_id = "vicon/drone1/drone1" #"turtle1"
     static_transformStamped.child_frame_id = "Radar"
 
     #specify translation transformation (m)
