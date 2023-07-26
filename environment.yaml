@@ -9,3 +9,5 @@ dependencies:
   - numpy
   - pyqt
   - imageio
+  - jupyterlab
+  - pandas
