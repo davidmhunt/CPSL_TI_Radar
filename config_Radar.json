@@ -1,11 +1,11 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"generated_config.json",
+            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "threshold_dB":12
                 }
         },
@@ -18,13 +18,18 @@
         {
             "serial_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "data_port":"/dev/ttyACM1"
                 },
             "file_streaming":
                 {
                     "enabled":false,
                     "data_file":"../raw_data_samples/scatterplot_only.dat"
+                },
+            "DCA1000_streaming":
+                {
+                    "enabled":true,
+                    "ip_address":"192.168.33.30"
                 },
             "verbose":false
         },
@@ -40,6 +45,6 @@
         },
     "ROS":
         {
-            "enabled":true
+            "enabled":false
         }
 }

@@ -160,7 +160,7 @@ class CLIController(_BackgroundProcess):
         resp = " ".join(resp).strip("\r")
 
         #check to make sure a response was received
-        if ("mmwDemo:/>" not in resp) or ("Error" in resp) or ("Exception" in resp):
+        if False: #("mmwDemo:/>" not in resp) or ("Error" in resp) or ("Exception" in resp):
             if(command == "sensorStart") and ("sensorStart" in resp):
                 pass
             else:

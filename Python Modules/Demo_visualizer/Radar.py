@@ -10,8 +10,15 @@ import sys
 
 
 #TI_RADAR modules
+
+#CLI_controllers
 from CLI_Controller import CLIController
-from Streamer import Streamer
+
+#Streamers
+from Streamers.Serial_Streamer import SerialStreamer
+from Streamers.DCA1000_Streamer import DCA1000Streamer
+from Streamers._Streamer import _Streamer
+
 from Processor import Processor
 from ConfigManager import ConfigManager
 
@@ -228,6 +235,29 @@ class Radar:
 
 ##Handling background processes/Multi Processing
 
+    def _determine_background_processes_from_config(self):
+        """Determine the background processes that need to be enabled for streaming and processing
+
+        Returns:
+            bool: True when a valid set is used, False if there was an error
+        """
+        if self.config_Radar["Streamer"]["serial_streaming"]["enabled"]:
+            #background processes
+            self.background_process_classes = [CLIController,SerialStreamer,Processor]
+            self.background_process_names = ["CLIController","SerialStreamer","Processor"]
+            return True
+        elif self.config_Radar["Streamer"]["DCA1000_streaming"]["enabled"]:
+            #TODO:Update the Processor Class
+            self.background_process_classes = [CLIController,DCA1000Streamer,Processor]
+            self.background_process_names = ["CLIController","DCA1000Streamer","Processor"]
+            return True
+        elif self.config_Radar["Streamer"]["file_streaming"]["enabled"]:
+            #TODO: Enable streaming data from a file
+            print("Radar._determine_background_processes_from_config: file streaming not yet enabled")
+            return False
+        else:
+            return False
+
     def _prepare_background_processes(self):
         """Prepare all of the background processes and their associated
         connections
@@ -251,7 +281,7 @@ class Radar:
 
         for i in range(len(self.background_process_classes)):
 
-            if self.background_process_classes[i] == Streamer:
+            if self.background_process_classes[i].__base__ == _Streamer:
                 data_conn = conn_Streamer_data
             elif self.background_process_classes[i] == Processor:
                 data_conn = conn_Processor_data
@@ -453,7 +483,7 @@ if __name__ == '__main__':
     #create the controller object
     dir_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(dir_path)
-    radar = Radar("../config_Radar.json")
+    radar = Radar("/home/david/Documents/TI_Radar_Demo_Visualizer/config_Radar.json")
     radar.run(timeout=20)
     #Exit the python code
     sys.exit()

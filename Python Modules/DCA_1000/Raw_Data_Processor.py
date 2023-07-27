@@ -2,6 +2,8 @@ import os
 import numpy as np
 from scipy.constants import c,pi
 import matplotlib.pyplot as plt
+import imageio
+import io
 
 class RawDataProcessor:
     
@@ -44,6 +46,16 @@ class RawDataProcessor:
         #raw radar cube (indexed by [rx channel, sample, chirp, frame])
         self.adc_data_cube = None
         self.num_frames = None
+
+        #plotting
+        self.fig = None
+        self.axs = None
+        
+        #variables for saving a gif
+        self.save_as_gif_enabled = None #TODO:implement this ability
+        self.gif_file_name = "GeneratedHeatMap.gif"
+        self.image_frames = None
+        self.frame_duration = None
 
         return
 
@@ -154,34 +166,69 @@ class RawDataProcessor:
             max_rng_idx = self.samples_per_chirp - 1
 
         #create the plot
-        fig,axs = plt.subplots(nrows=1,ncols=2,figsize=(8,4))
+        self.fig,self.axs = plt.subplots(nrows=1,ncols=2,figsize=(8,4))
 
         #improve spacing between subplots
-        fig.subplots_adjust(wspace=0.4)
+        self.fig.subplots_adjust(wspace=0.4)
 
         #plot polar coordinates
-        polar_plt = axs[0].pcolormesh(self.thetas[min_rng_idx:max_rng_idx,:],self.rhos[min_rng_idx:max_rng_idx,:],range_azimuth_response[min_rng_idx:max_rng_idx,:],cmap="gray",vmin=v_min)
-        axs[0].set_xlabel('Angle(radians)',fontsize=RawDataProcessor.font_size_axis_labels)
-        axs[0].set_ylabel('Range (m)',fontsize=RawDataProcessor.font_size_axis_labels)
-        axs[0].set_title('Range-Azimuth\nHeatmap (Polar)',fontsize=RawDataProcessor.font_size_title)
+        polar_plt = self.axs[0].pcolormesh(self.thetas[min_rng_idx:max_rng_idx,:],self.rhos[min_rng_idx:max_rng_idx,:],range_azimuth_response[min_rng_idx:max_rng_idx,:],cmap="gray",vmin=v_min)
+        self.axs[0].set_xlabel('Angle(radians)',fontsize=RawDataProcessor.font_size_axis_labels)
+        self.axs[0].set_ylabel('Range (m)',fontsize=RawDataProcessor.font_size_axis_labels)
+        self.axs[0].set_title('Range-Azimuth\nHeatmap (Polar)',fontsize=RawDataProcessor.font_size_title)
 
         if enable_color_bar:
-            cbar = fig.colorbar(polar_plt)
+            cbar = self.fig.colorbar(polar_plt)
             cbar.set_label("Relative Power (dB)",size=RawDataProcessor.font_size_color_bar)
             cbar.ax.tick_params(labelsize=RawDataProcessor.font_size_color_bar)
 
         #convert polar to cartesian
-        cartesian_plot = axs[1].pcolormesh(self.x_s[min_rng_idx:max_rng_idx,:],self.y_s[min_rng_idx:max_rng_idx,:],range_azimuth_response[min_rng_idx:max_rng_idx,:],shading='gouraud',cmap="gray",vmin = v_min)
-        axs[1].set_xlabel('X (m)',fontsize=RawDataProcessor.font_size_axis_labels)
-        axs[1].set_ylabel('Y (m)',fontsize=RawDataProcessor.font_size_axis_labels)
-        axs[1].set_title('Range-Azimuth\nHeatmap (Cartesian)',fontsize=RawDataProcessor.font_size_title)
+        cartesian_plot = self.axs[1].pcolormesh(self.x_s[min_rng_idx:max_rng_idx,:],self.y_s[min_rng_idx:max_rng_idx,:],range_azimuth_response[min_rng_idx:max_rng_idx,:],shading='gouraud',cmap="gray",vmin = v_min)
+        self.axs[1].set_xlabel('X (m)',fontsize=RawDataProcessor.font_size_axis_labels)
+        self.axs[1].set_ylabel('Y (m)',fontsize=RawDataProcessor.font_size_axis_labels)
+        self.axs[1].set_title('Range-Azimuth\nHeatmap (Cartesian)',fontsize=RawDataProcessor.font_size_title)
 
         if enable_color_bar:
-            cbar = fig.colorbar(cartesian_plot)
+            cbar = self.fig.colorbar(cartesian_plot)
             cbar.set_label("Relative Power (dB)",size=RawDataProcessor.font_size_color_bar)
             cbar.ax.tick_params(labelsize=RawDataProcessor.font_size_color_bar)
 
-        plt.show()
+        #plt.show()
+    
+    def _init_save_to_gif(self, frame_duration_s):
+        #initialize the image frames
+        self.image_frames = []
+        self.frame_duration = frame_duration_s
+    
+    def _save_gif_to_file(self):
+        #save to a gif
+        imageio.mimsave(self.gif_file_name,self.image_frames,duration=self.frame_duration,loop=0)
+
+    def generate_gif(self,
+                    frame_period_s,
+                    enable_color_bar = True,
+                    cutoff_val_dB = 30,
+                    range_lims = None):
+        
+        #initialize the ability to save to a .gif file
+        self._init_save_to_gif(frame_period_s)
+
+        for i in range(self.num_frames):
+            #plot the heatmap
+            self.plot_range_azimuth_heatmap(frame=i,
+                                            chirp=0,
+                                            enable_color_bar=enable_color_bar,
+                                            cutoff_val_dB=cutoff_val_dB,
+                                            range_lims=range_lims)
+
+            buf = io.BytesIO()
+            self.fig.savefig(buf,format='png',dpi=300)
+            buf.seek(0)
+            self.image_frames.append(imageio.imread(buf))
+        
+        self._save_gif_to_file()
+
+
 
 
 

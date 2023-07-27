@@ -313,7 +313,8 @@ class ConfigManager:
             case "analogMonitor":
                 self._load_analogMonitor_from_cfg(str_split)
             case _:
-                if key not in ["sensorStop","flushCfg","sensorStart"]:
+                if key not in ["sensorStop","flushCfg","sensorStart", "setProfileCfg","testFmkCfg"]:
+                    #TODO:Added the last two to support iwr_raw_rosnode configurations
                     raise InvalidConfiguration("Received unknown configuration command")
         
 

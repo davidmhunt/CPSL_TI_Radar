@@ -56,7 +56,7 @@ class Processor(_BackgroundProcess):
         self.streaming_enabled = False
 
         #set the verbose status
-        self.verboses = self.config_Radar["Processor"]["verbose"]
+        self.verbose = self.config_Radar["Processor"]["verbose"]
 
         self._conn_send_init_status(self.init_success)
         self.run()

@@ -113,6 +113,11 @@ class _BackgroundProcess:
 
 ## Handling inter-process communications between different processes
     def _conn_send_init_status(self,init_success:bool = True):
+        """Send the initialization status back to the radar class
+
+        Args:
+            init_success (bool, optional): True if initialization was successful. Defaults to True.
+        """
         
         #determine which message to send
         if init_success == True:

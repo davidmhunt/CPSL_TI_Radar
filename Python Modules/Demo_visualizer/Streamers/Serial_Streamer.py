@@ -1,29 +1,23 @@
 import serial
-import time
-import json
 import numpy as np
-import os
 import sys
 
 #helper classes
-from _Background_Process import _BackgroundProcess
 from multiprocessing.connection import Connection
 from _Message import _Message,_MessageTypes
+from _Streamer import _Streamer
 
-class Streamer(_BackgroundProcess):
+class SerialStreamer(_Streamer):
 
     def __init__(self,
-                 conn:Connection,
-                 data_connection:Connection, 
-                 config_file_path='config_Radar.json'):
+                 conn: Connection,
+                 data_connection: Connection,
+                 config_file_path = 'config_Radar.json'):
 
-        super().__init__("Streamer",conn,config_file_path,data_connection)
-
-        #configure the streaming method
-        self.serial_streaming_enabled = False
-        self.file_streaming_enabled = False
-        self.data_file_path = ""
-        self._config_streaming_method()
+        super().__init__(conn,data_connection,config_file_path)
+        
+        #configure serial streaming
+        self._config_serial_streaming()
         
         #initialize the packet detector
         self.detected_packets = 0
@@ -32,38 +26,10 @@ class Streamer(_BackgroundProcess):
         self.magic_word = bytearray([0x02,0x01,0x04,0x03,0x06,0x05,0x08,0x07])
         self.header = {}
 
-        #initialize the streaming status
-        self.streaming_enabled = False
-
-        #set verbose status
-        self.verbose = self.config_Radar["Streamer"]["verbose"]
-
         self._conn_send_init_status(self.init_success)
         self.run()
 
         return
-
-    def run(self):
-        try:
-            while self.exit_called == False:
-                #if streaming enabled, minimize blocking/waiting
-                if self.streaming_enabled:
-                    self._serial_get_next_packet()
-                    #process new RADAR commands if availble
-                    if self._conn_RADAR.poll():
-                        #process all radar commands
-                        while self._conn_RADAR.poll():
-                            #receive and process the message from the RADAR class
-                            self._conn_process_Radar_command()
-                else:
-                    self._conn_process_Radar_command()
-
-
-            #once exit is called close out and return
-            self.close()
-        except KeyboardInterrupt:
-            self.close()
-            sys.exit()
     
     def close(self):
         #before exiting, close the serial port and turn the sensor off
@@ -73,24 +39,18 @@ class Streamer(_BackgroundProcess):
                 self.serial_port.close()
     
     
-    def _config_streaming_method(self):
-        
-        #determine which streaming methods are enabled
-        self.serial_streaming_enabled = self.config_Radar["Streamer"]["serial_streaming"]["enabled"]
-        self.file_streaming_enabled = self.config_Radar["Streamer"]["file_streaming"]["enabled"]
-
-        #configure the serial port if serial streaming is enabled
-        if self.serial_streaming_enabled:
-            self._serial_init_serial_port(
+    def _config_serial_streaming(self):
+        """Configure the serial port for streaming the data
+        """
+        self._serial_init_serial_port(
                 address=self.config_Radar["Streamer"]["serial_streaming"]["data_port"],
                 baud_rate=921600,
                 timeout=0.5,
                 close=True
             )
-        elif self.file_streaming_enabled:
-            self.data_file_path = self.config_Radar["Streamer"]["file_streaming"]["data_file"]
     
-    def _serial_get_next_packet(self):
+    
+    def _get_next_frame_packet(self):
 
         #read the new packet (strip off the magic word)
         try:
@@ -120,7 +80,7 @@ class Streamer(_BackgroundProcess):
             try:
                 self._conn_data.send_bytes(self.current_packet)
             except BrokenPipeError:
-                self._conn_send_message_to_print("Streamer._serial_get_next_packet: attempted to send new packet to Processor, but processor was closed")
+                self._conn_send_message_to_print("SerialStreamer._serial_get_next_packet: attempted to send new packet to Processor, but processor was closed")
                 self._conn_send_error_radar_message()
         
         return
