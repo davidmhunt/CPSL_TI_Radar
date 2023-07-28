@@ -4,6 +4,8 @@ from scipy.constants import c,pi
 import matplotlib.pyplot as plt
 import imageio
 import io
+from IPython.display import display, clear_output
+from tqdm import tqdm
 
 class RawDataProcessor:
     
@@ -56,6 +58,7 @@ class RawDataProcessor:
         self.gif_file_name = "GeneratedHeatMap.gif"
         self.image_frames = None
         self.frame_duration = None
+        self.hdisplay = None
 
         return
 
@@ -149,7 +152,8 @@ class RawDataProcessor:
                                    chirp=0,
                                    enable_color_bar = True,
                                    cutoff_val_dB = 30,
-                                   range_lims = None):
+                                   range_lims = None,
+                                   jupyter = False):
         
         #compute the range azimuth response
         range_azimuth_response = self.compute_range_azimuth_heatmap(frame,chirp)
@@ -193,7 +197,6 @@ class RawDataProcessor:
             cbar.set_label("Relative Power (dB)",size=RawDataProcessor.font_size_color_bar)
             cbar.ax.tick_params(labelsize=RawDataProcessor.font_size_color_bar)
 
-        #plt.show()
     
     def _init_save_to_gif(self, frame_duration_s):
         #initialize the image frames
@@ -208,23 +211,30 @@ class RawDataProcessor:
                     frame_period_s,
                     enable_color_bar = True,
                     cutoff_val_dB = 30,
-                    range_lims = None):
+                    range_lims = None,
+                    jupyter = False):
         
         #initialize the ability to save to a .gif file
         self._init_save_to_gif(frame_period_s)
 
-        for i in range(self.num_frames):
+        if jupyter:
+            self.hdisplay = display("",display_id=True)
+            plt.ioff()
+
+        for i in tqdm(range(self.num_frames)):
             #plot the heatmap
             self.plot_range_azimuth_heatmap(frame=i,
                                             chirp=0,
                                             enable_color_bar=enable_color_bar,
                                             cutoff_val_dB=cutoff_val_dB,
-                                            range_lims=range_lims)
+                                            range_lims=range_lims,
+                                            jupyter=jupyter)
 
             buf = io.BytesIO()
             self.fig.savefig(buf,format='png',dpi=300)
             buf.seek(0)
             self.image_frames.append(imageio.imread(buf))
+            plt.close(self.fig)
         
         self._save_gif_to_file()
 

@@ -3,3 +3,4 @@ GUI_Testbed/__pycache__/*
 catkin_ws/build*
 catkin_ws/devel*
 *.pyc
+*.gif
