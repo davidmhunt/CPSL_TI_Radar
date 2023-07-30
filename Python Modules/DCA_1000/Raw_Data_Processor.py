@@ -55,7 +55,7 @@ class RawDataProcessor:
         
         #variables for saving a gif
         self.save_as_gif_enabled = None #TODO:implement this ability
-        self.gif_file_name = "GeneratedHeatMap.gif"
+        self.gif_file_name = "GeneratedHeatMap_zoomed.mp4"
         self.image_frames = None
         self.frame_duration = None
         self.hdisplay = None
@@ -205,7 +205,9 @@ class RawDataProcessor:
     
     def _save_gif_to_file(self):
         #save to a gif
-        imageio.mimsave(self.gif_file_name,self.image_frames,duration=self.frame_duration,loop=0)
+        #imageio.mimsave(self.gif_file_name,self.image_frames,duration=self.frame_duration,loop=0)
+        #save to a mp4
+        imageio.mimsave(self.gif_file_name,self.image_frames,fps = 1/self.frame_duration)
 
     def generate_gif(self,
                     frame_period_s,
@@ -220,7 +222,7 @@ class RawDataProcessor:
         if jupyter:
             self.hdisplay = display("",display_id=True)
             plt.ioff()
-
+        pt_1 = self.num_frames//2
         for i in tqdm(range(self.num_frames)):
             #plot the heatmap
             self.plot_range_azimuth_heatmap(frame=i,

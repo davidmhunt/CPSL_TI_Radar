@@ -19,3 +19,4 @@ dependencies:
   - pip
   - pip:
     - open3d
+    - imageio[ffmpeg]

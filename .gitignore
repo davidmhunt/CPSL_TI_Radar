@@ -4,3 +4,4 @@ catkin_ws/build*
 catkin_ws/devel*
 *.pyc
 *.gif
+*.mp4
