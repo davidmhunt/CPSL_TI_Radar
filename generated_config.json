@@ -1,0 +1,165 @@
+{
+    "dfeDataOutputMode": {
+        "modeType": "1"
+    },
+    "channelCfg": {
+        "rxChannelEn": "15",
+        "txChannelEn": "5",
+        "cascading": "0"
+    },
+    "adcCfg": {
+        "numADCBits": "2",
+        "adcOutputFmt": "1"
+    },
+    "adcbufCfg": {
+        "subFrameIdx": null,
+        "adcOutputFmt": "0",
+        "SampleSwap": "1",
+        "ChannelInterleave": "0",
+        "chirpThreshold": "1"
+    },
+    "profileCfg": {
+        "profileId": "0",
+        "startFreq": "77",
+        "idleTime": "429",
+        "adcStartTime": "7",
+        "rampEndTime": "57.14",
+        "txOutPower": "0",
+        "txPhaseShifter": "0",
+        "freqSlope": "70",
+        "txStartTime": "1",
+        "adcSamples": "240",
+        "sampleRate": "4884",
+        "hpfCornerFreq1": "0",
+        "hpfCornerFreq2": "0",
+        "rxGain": "30"
+    },
+    "chirpCfg": [
+        {
+            "startIndex": "0",
+            "endIndex": "0",
+            "profile": "0",
+            "startFreqVariation": "0",
+            "freqSlopVariation": "0",
+            "idleTimeVariation": "0",
+            "ADCStartTimeVariation": "0",
+            "txMask": "1"
+        },
+        {
+            "startIndex": "1",
+            "endIndex": "1",
+            "profile": "0",
+            "startFreqVariation": "0",
+            "freqSlopVariation": "0",
+            "idleTimeVariation": "0",
+            "ADCStartTimeVariation": "0",
+            "txMask": "4"
+        }
+    ],
+    "frameCfg": {
+        "startIndex": "0",
+        "endIndex": "1",
+        "loops": "16",
+        "frames": "0",
+        "periodicity": "100",
+        "trigger": "1",
+        "triggerDelay": "0"
+    },
+    "lowPower": {
+        "chain": "0",
+        "adcMode": "1"
+    },
+    "guiMonitor": {
+        "subFrameIndex": null,
+        "detectedObjects": "1",
+        "rangeProfile": "0",
+        "noiseProfile": "0",
+        "rangeAzimuthHeatMap": "0",
+        "rangeDopplerHeatMap": "0",
+        "statsInfo": "0"
+    },
+    "cfarCfg": {
+        "subFrameIndex": null,
+        "direction": "0",
+        "mode": "2",
+        "noiseWindow": "8",
+        "guardLength": "4",
+        "shiftDivisor": "3",
+        "cyclic": "0",
+        "threshold": "1280"
+    },
+    "peakGrouping": {
+        "subFrameIndex": null,
+        "scheme": "1",
+        "range": "1",
+        "doppler": "1",
+        "startRangeIndex": "1",
+        "endRangeIndex": "229"
+    },
+    "multiObjBeamForming": {
+        "subFrameIndex": null,
+        "FeatureEnabled": "1",
+        "threshold": "0.5"
+    },
+    "clutterRemoval": {
+        "enabled": "0"
+    },
+    "calibDcRangeSig": {
+        "subFrameIndex": null,
+        "enabled": "0",
+        "negativeBinIndex": "-5",
+        "positiveBinIndex": "8",
+        "chirps": "256"
+    },
+    "compRangeBiasAndRxChanPhase": {
+        "rangeBias": null,
+        "phaseBias": [
+            "0.0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0",
+            "1",
+            "0"
+        ]
+    },
+    "measureRangeBiasAndRxChanPhase": {
+        "enabled": "0",
+        "targetDistance": "1.5",
+        "searchWindow": "0.2"
+    },
+    "CQRxSatMonitor": {
+        "profile": "0",
+        "satMonSel": "3",
+        "priSliceDuration": "5",
+        "numSlices": "123",
+        "rxChanMask": "0"
+    },
+    "CQSigImgMonitor": {
+        "profile": "0",
+        "numSlices": "119",
+        "numSamplesPerSlice": "4"
+    },
+    "analogMonitor": {
+        "rxSaturation": "1",
+        "sigImgBand": "1"
+    }
+}

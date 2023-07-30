@@ -31,7 +31,7 @@ class _Streamer(_BackgroundProcess):
         try:
             while self.exit_called == False:
                 #if streaming enabled, minimize blocking/waiting
-                if self.streaming_enabled and (self.serial_streaming_enabled or self.file_streaming_enabled):
+                if self.streaming_enabled:
                     self._get_next_frame_packet()
                     #process new RADAR commands if availble
                     if self._conn_RADAR.poll():

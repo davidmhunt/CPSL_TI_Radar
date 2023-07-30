@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/Python Modules/CPSL_TI_Radar/CPSL_TI_Radar_settings.json",
+            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/IWR_Demos/1443config.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -18,7 +18,7 @@
         {
             "serial_streaming":
                 {
-                    "enabled":false,
+                    "enabled":true,
                     "data_port":"/dev/ttyACM1"
                 },
             "file_streaming":

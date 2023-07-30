@@ -31,7 +31,9 @@ class Radar:
             settings_file_path (str): path to .json settings file for Radar
                 class and its associated background processes
         """
-        set_start_method('spawn')
+
+        if __name__ == '__main__':
+            set_start_method('spawn')
 
         #radar_error_detected (called to exit run loop due to ERROR_RADAR)
         self.radar_error_detected = False
@@ -55,7 +57,7 @@ class Radar:
         success = self._determine_background_processes_from_config()
         if not success:
             print("Radar.__init__: Failed to setup background processes correctly")
-            return
+            sys.exit()
         self.background_processes:list(Process) = []
 
         #reserve pipes for inter-process communication
@@ -291,7 +293,7 @@ class Radar:
                 data_conn = conn_Processor_data
             else:
                 data_conn = None
-
+            
             self.background_processes.append(
                 Process(
                     target=Radar._run_process,
@@ -300,7 +302,7 @@ class Radar:
                         background_process_connection_children[i],
                         self._settings_file_path,
                         data_conn
-                    )))
+            )))
         return
 
     def _run_process(
