@@ -4,14 +4,12 @@ from matplotlib.collections import PathCollection
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import matplotlib
-from PyQt5 import QtCore,QtWidgets
-import time
 from collections import OrderedDict
 import imageio
 import io
 from multiprocessing.connection import Listener
 
-class DetectedPointsProcessor:
+class _PointCloudTLVProcessor:
     def __init__(self,plotting_enabled=True, save_as_gif = False):
         
         matplotlib.use("QtAgg")

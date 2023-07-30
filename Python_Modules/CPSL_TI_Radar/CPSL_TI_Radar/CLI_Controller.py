@@ -13,24 +13,24 @@ class CLIController(_BackgroundProcess):
     def __init__(
             self,
             conn:Connection,
-            config_file_path='config_Radar.json'):
+            settings_file_path='config_Radar.json'):
         """Initialize the controller class
 
         Args:
-            config_file_path (str): _description_
+            settings_file_path (str): _description_
         """
         super().__init__("CLI_Controller",
                        conn,
-                       config_file_path)       
+                       settings_file_path)       
 
         #load the class variables
         self.TI_Radar_config_path = ""
         self.TI_Radar_config_loaded = False
-        self.verbose = self.config_Radar["CLI_Controller"]["verbose"]
+        self.verbose = self._settings["CLI_Controller"]["verbose"]
 
         #initialize the serial port
         self._serial_init_serial_port(
-            address=self.config_Radar["CLI_Controller"]["CLI_port"],
+            address=self._settings["CLI_Controller"]["CLI_port"],
             baud_rate= 115200,
             timeout=30e-3
         )

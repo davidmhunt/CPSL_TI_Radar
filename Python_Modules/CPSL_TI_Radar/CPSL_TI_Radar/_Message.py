@@ -27,8 +27,8 @@ class _MessageTypes:
     START_STREAMING = 0x0A
     STOP_STREAMING = 0x0B
 
-    #configure TLV Clients
-    CONFIG_TLV_LISTENERS = 0x0C
+    #configure listeners (to send data to other processes)
+    CONFIG_LISTENERS = 0x0C
     
     #New Data Available
     NEW_DATA = 0x0D

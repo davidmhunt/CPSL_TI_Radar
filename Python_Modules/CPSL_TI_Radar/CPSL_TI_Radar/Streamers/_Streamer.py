@@ -15,15 +15,22 @@ class _Streamer(_BackgroundProcess):
     def __init__(self,
                  conn:Connection,
                  data_connection:Connection, 
-                 config_file_path='config_Radar.json'):
+                 settings_file_path='config_Radar.json'):
+        """Initialize the parent Streamer class
 
-        super().__init__("Streamer",conn,config_file_path,data_connection)
+        Args:
+            conn (Connection): connection to the Radar class
+            data_connection (Connection): connection to the Processor Class
+            settings_file_path (str, optional): Path to the radar settings json file. Defaults to 'config_Radar.json'.
+        """
+
+        super().__init__("Streamer",conn,settings_file_path,data_connection)
 
         #initialize the streaming status
         self.streaming_enabled = False
 
         #set verbose status
-        self.verbose = self.config_Radar["Streamer"]["verbose"]
+        self.verbose = self._settings["Streamer"]["verbose"]
 
         return
 
@@ -57,6 +64,16 @@ class _Streamer(_BackgroundProcess):
 
         #must be implemented in child class
         pass
+
+    def _start_streaming(self):
+        
+        #implemented in the child class
+        pass
+
+    def _stop_streaming(self):
+
+        #implemented in child class
+        pass
             
             
     
@@ -67,11 +84,10 @@ class _Streamer(_BackgroundProcess):
             case _MessageTypes.EXIT:
                 self.exit_called = True
             case _MessageTypes.START_STREAMING:
-                self.serial_port.open()
-                self._serial_reset_packet_detector()
+                self._start_streaming()
                 self.streaming_enabled = True
             case _MessageTypes.STOP_STREAMING:
-                self.serial_port.close()
+                self._stop_streaming()
                 self.streaming_enabled = False
             case _:
                 self._conn_send_message_to_print(

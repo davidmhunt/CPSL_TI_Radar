@@ -19,7 +19,12 @@ from CPSL_TI_Radar.Streamers.Serial_Streamer import SerialStreamer
 from CPSL_TI_Radar.Streamers.DCA1000_Streamer import DCA1000Streamer
 from CPSL_TI_Radar.Streamers._Streamer import _Streamer
 
-from CPSL_TI_Radar.Processors.Processor import Processor
+#Processors
+from CPSL_TI_Radar.Processors._Processor import _Processor
+from CPSL_TI_Radar.Processors.IWR_Demo_Processor import IWRDemoProcessor
+from CPSL_TI_Radar.Processors.DCA1000_Processor import DCA1000Processor
+
+#configuration management
 from CPSL_TI_Radar.ConfigManager import ConfigManager
 
 class Radar:
@@ -31,9 +36,6 @@ class Radar:
             settings_file_path (str): path to .json settings file for Radar
                 class and its associated background processes
         """
-
-        if __name__ == '__main__':
-            set_start_method('spawn')
 
         #radar_error_detected (called to exit run loop due to ERROR_RADAR)
         self.radar_error_detected = False
@@ -173,11 +175,11 @@ class Radar:
         if self.ROS_enabled:
             #tell processor to connect TLV processors to ROS clients
             print("Radar.start_Radar:waiting for TLV listeners to connect to ROS clients")
-            self._conn_Processor.send(_Message(_MessageTypes.CONFIG_TLV_LISTENERS))
+            self._conn_Processor.send(_Message(_MessageTypes.CONFIG_LISTENERS))
 
             ROS_connected = self._conn_wait_for_command_execution(
                 conn=self._conn_Processor,
-                command=_MessageTypes.CONFIG_TLV_LISTENERS
+                command=_MessageTypes.CONFIG_LISTENERS
             )
 
             successful_execution = ROS_connected and successful_execution
@@ -249,13 +251,12 @@ class Radar:
         """
         if self._settings["Streamer"]["serial_streaming"]["enabled"]:
             #background processes
-            self.background_process_classes = [CLIController,SerialStreamer,Processor]
-            self.background_process_names = ["CLIController","SerialStreamer","Processor"]
+            self.background_process_classes = [CLIController,SerialStreamer,IWRDemoProcessor]
+            self.background_process_names = ["CLIController","SerialStreamer","IWRDemoProcessor"]
             return True
         elif self._settings["Streamer"]["DCA1000_streaming"]["enabled"]:
-            #TODO:Update the Processor Class
-            self.background_process_classes = [CLIController,DCA1000Streamer,Processor]
-            self.background_process_names = ["CLIController","DCA1000Streamer","Processor"]
+            self.background_process_classes = [CLIController,DCA1000Streamer,DCA1000Processor]
+            self.background_process_names = ["CLIController","DCA1000Streamer","DCA1000Processor"]
             return True
         elif self._settings["Streamer"]["file_streaming"]["enabled"]:
             #TODO: Enable streaming data from a file
@@ -289,7 +290,7 @@ class Radar:
 
             if self.background_process_classes[i].__base__ == _Streamer:
                 data_conn = conn_Streamer_data
-            elif self.background_process_classes[i] == Processor:
+            elif self.background_process_classes[i].__base__ == _Processor:
                 data_conn = conn_Processor_data
             else:
                 data_conn = None
@@ -308,7 +309,7 @@ class Radar:
     def _run_process(
             process_class,
             conn:Connection,
-            config_file_path,
+            settings_file_path,
             data_conn:Connection=None):
         """Run the background process (called when the process
         is started)
@@ -316,7 +317,7 @@ class Radar:
         Args:
             process_class (_type_): Class of object to run
             conn (Connection): connection for the object to communicate with the Radar
-            config_file_path (_type_): path to JSON config file
+            settings_file_path (_type_): path to JSON config file
             data_conn (Connection, optional): Optional paremeter
                 to allow background process to send data to another backgorund
                 process. Defaults to None.
@@ -324,9 +325,9 @@ class Radar:
         
         #handling CLI controller
         if data_conn==None:
-            process_class(conn=conn,config_file_path=config_file_path)
+            process_class(conn=conn,settings_file_path=settings_file_path)
         else:
-            process_class(conn=conn,config_file_path=config_file_path,data_connection=data_conn)
+            process_class(conn=conn,settings_file_path=settings_file_path,data_connection=data_conn)
         
         return
     

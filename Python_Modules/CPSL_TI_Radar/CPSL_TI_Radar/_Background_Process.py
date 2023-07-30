@@ -10,14 +10,14 @@ class _BackgroundProcess:
     def __init__(self,
                  process_name,
                  conn:Connection,
-                 config_file_path = 'config_RADAR.json',
+                 settings_file_path = 'config_RADAR.json',
                  data_connection:Connection = None):
         """Initialization process for all background processes
 
         Args:
             process_name (str): the name of the process
             conn (connection): connection to the parent process (RADAR)
-            config_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
+            settings_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
         """
         
         #processes exit flag (call from RADAR to exit the process)
@@ -41,9 +41,9 @@ class _BackgroundProcess:
 
         #get the Radar class configuration as well
         try:
-            self.config_Radar = self._parse_JSON(config_file_path)
+            self._settings = self._parse_JSON(settings_file_path)
         except FileNotFoundError:
-            self._conn_send_message_to_print("{}.__init__: could not find {} in {}".format(self._process_name, config_file_path,os.getcwd()))
+            self._conn_send_message_to_print("{}.__init__: could not find {} in {}".format(self._process_name, settings_file_path,os.getcwd()))
             self._conn_send_init_status(init_success=False)
             self.init_success = False
             sys.exit()

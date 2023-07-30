@@ -12,9 +12,9 @@ class SerialStreamer(_Streamer):
     def __init__(self,
                  conn: Connection,
                  data_connection: Connection,
-                 config_file_path = 'config_Radar.json'):
+                 settings_file_path = 'config_Radar.json'):
 
-        super().__init__(conn,data_connection,config_file_path)
+        super().__init__(conn,data_connection,settings_file_path)
         
         #configure serial streaming
         self._config_serial_streaming()
@@ -43,7 +43,7 @@ class SerialStreamer(_Streamer):
         """Configure the serial port for streaming the data
         """
         self._serial_init_serial_port(
-                address=self.config_Radar["Streamer"]["serial_streaming"]["data_port"],
+                address=self._settings["Streamer"]["serial_streaming"]["data_port"],
                 baud_rate=921600,
                 timeout=0.5,
                 close=True
@@ -85,7 +85,15 @@ class SerialStreamer(_Streamer):
         
         return
             
-            
+    def _start_streaming(self):
+        
+        self.serial_port.open()
+        self._serial_reset_packet_detector()
+    
+    def _stop_streaming(self):
+
+        self.serial_port.close()
+
     def _serial_decode_header(self,header:bytearray):
         #decode the header
         decoded_header = np.frombuffer(header,dtype=np.uint32)
