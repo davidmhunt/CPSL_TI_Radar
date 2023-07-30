@@ -1,5 +1,5 @@
 from multiprocessing.connection import Connection
-from _Message import _Message,_MessageTypes
+from CPSL_TI_Radar._Message import _Message,_MessageTypes
 import json
 import os
 import sys

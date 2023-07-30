@@ -4,8 +4,8 @@ import sys
 
 #helper classes
 from multiprocessing.connection import Connection
-from _Message import _Message,_MessageTypes
-from _Streamer import _Streamer
+from CPSL_TI_Radar._Message import _Message,_MessageTypes
+from CPSL_TI_Radar.Streamers._Streamer import _Streamer
 
 class SerialStreamer(_Streamer):
 

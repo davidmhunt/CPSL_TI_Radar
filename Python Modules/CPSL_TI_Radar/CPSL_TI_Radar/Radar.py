@@ -2,7 +2,7 @@
 from multiprocessing import Process,Pipe,Queue
 from multiprocessing.connection import Connection
 from multiprocessing import set_start_method
-from _Message import _Message,_MessageTypes
+from CPSL_TI_Radar._Message import _Message,_MessageTypes
 import json
 import time
 import os
@@ -12,23 +12,23 @@ import sys
 #TI_RADAR modules
 
 #CLI_controllers
-from CLI_Controller import CLIController
+from CPSL_TI_Radar.CLI_Controller import CLIController
 
 #Streamers
-from Streamers.Serial_Streamer import SerialStreamer
-from Streamers.DCA1000_Streamer import DCA1000Streamer
-from Streamers._Streamer import _Streamer
+from CPSL_TI_Radar.Streamers.Serial_Streamer import SerialStreamer
+from CPSL_TI_Radar.Streamers.DCA1000_Streamer import DCA1000Streamer
+from CPSL_TI_Radar.Streamers._Streamer import _Streamer
 
-from Processor import Processor
-from ConfigManager import ConfigManager
+from CPSL_TI_Radar.Processors.Processor import Processor
+from CPSL_TI_Radar.ConfigManager import ConfigManager
 
 class Radar:
 
-    def __init__(self,config_file_path):
+    def __init__(self,settings_file_path):
         """Initialize a new Radar class
 
         Args:
-            config_file_path (str): path to .json config file for Radar
+            settings_file_path (str): path to .json settings file for Radar
                 class and its associated background processes
         """
         set_start_method('spawn')
@@ -36,22 +36,26 @@ class Radar:
         #radar_error_detected (called to exit run loop due to ERROR_RADAR)
         self.radar_error_detected = False
         
-        #TI radar configuration management
-        self._config_file_path = config_file_path
+        #TI radar settings management
+        self._settings_file_path = settings_file_path
 
         #get the Radar class configuration
         try:
-            self.config_Radar = self._parse_json(config_file_path)
+            self._settings = self._parse_json(settings_file_path)
         except FileNotFoundError:
-            print("Radar.__init__: could not find {} in {}".format(config_file_path,os.getcwd()))
+            print("Radar.__init__: could not find {} in {}".format(settings_file_path,os.getcwd()))
             sys.exit()
 
         #initialize a configuration manager object
         self.config_manager = ConfigManager()
 
         #background processes
-        self.background_process_classes = [CLIController,Streamer,Processor]
-        self.background_process_names = ["CLIController","Streamer","Processor"]
+        self.background_process_classes = None
+        self.background_process_names = None
+        success = self._determine_background_processes_from_config()
+        if not success:
+            print("Radar.__init__: Failed to setup background processes correctly")
+            return
         self.background_processes:list(Process) = []
 
         #reserve pipes for inter-process communication
@@ -63,7 +67,7 @@ class Radar:
 
         self._prepare_background_processes()
 
-        self.ROS_enabled = bool(self.config_Radar["ROS"]["enabled"])
+        self.ROS_enabled = bool(self._settings["ROS"]["enabled"])
 
         return
     
@@ -198,7 +202,7 @@ class Radar:
         """
 
         #determine if the provided config is a .json or .cfg
-        TI_radar_config_path:str = self.config_Radar["TI_Radar_Config_Management"]["TI_Radar_config_path"]
+        TI_radar_config_path:str = self._settings["TI_Radar_Config_Management"]["TI_Radar_config_path"]
         
         file_type = TI_radar_config_path.split(".")
         file_type = file_type[-1]
@@ -208,7 +212,7 @@ class Radar:
                 case "cfg":
                     self.config_manager.load_config_from_cfg(TI_radar_config_path)
 
-                    if self.config_Radar["TI_Radar_Config_Management"]["export_JSON_config"]:
+                    if self._settings["TI_Radar_Config_Management"]["export_JSON_config"]:
                         self.config_manager.export_config_as_json("generated_config.json")
                 #if .json, generate a .cfg
                 case "json":
@@ -224,8 +228,8 @@ class Radar:
             self.config_manager.compute_radar_perforance() 
 
             #check for custom CFAR threshold
-            if self.config_Radar["TI_Radar_Config_Management"]["custom_CFAR"]["enabled"]:
-                self.config_manager.apply_new_CFAR_threshold(self.config_Radar["TI_Radar_Config_Management"]["custom_CFAR"]["threshold_dB"])
+            if self._settings["TI_Radar_Config_Management"]["custom_CFAR"]["enabled"]:
+                self.config_manager.apply_new_CFAR_threshold(self._settings["TI_Radar_Config_Management"]["custom_CFAR"]["threshold_dB"])
 
             return True
         except FileNotFoundError:
@@ -241,17 +245,17 @@ class Radar:
         Returns:
             bool: True when a valid set is used, False if there was an error
         """
-        if self.config_Radar["Streamer"]["serial_streaming"]["enabled"]:
+        if self._settings["Streamer"]["serial_streaming"]["enabled"]:
             #background processes
             self.background_process_classes = [CLIController,SerialStreamer,Processor]
             self.background_process_names = ["CLIController","SerialStreamer","Processor"]
             return True
-        elif self.config_Radar["Streamer"]["DCA1000_streaming"]["enabled"]:
+        elif self._settings["Streamer"]["DCA1000_streaming"]["enabled"]:
             #TODO:Update the Processor Class
             self.background_process_classes = [CLIController,DCA1000Streamer,Processor]
             self.background_process_names = ["CLIController","DCA1000Streamer","Processor"]
             return True
-        elif self.config_Radar["Streamer"]["file_streaming"]["enabled"]:
+        elif self._settings["Streamer"]["file_streaming"]["enabled"]:
             #TODO: Enable streaming data from a file
             print("Radar._determine_background_processes_from_config: file streaming not yet enabled")
             return False
@@ -294,7 +298,7 @@ class Radar:
                     args=(
                         self.background_process_classes[i],
                         background_process_connection_children[i],
-                        self._config_file_path,
+                        self._settings_file_path,
                         data_conn
                     )))
         return
@@ -478,12 +482,3 @@ class Radar:
         for line in f:
             content += line
         return json.loads(content)
-
-if __name__ == '__main__':
-    #create the controller object
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    os.chdir(dir_path)
-    radar = Radar("/home/david/Documents/TI_Radar_Demo_Visualizer/config_Radar.json")
-    radar.run(timeout=20)
-    #Exit the python code
-    sys.exit()

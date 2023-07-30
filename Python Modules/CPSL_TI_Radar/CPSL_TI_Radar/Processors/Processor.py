@@ -1,7 +1,6 @@
 from multiprocessing.connection import Connection
 from multiprocessing import connection,AuthenticationError
-from _Message import _Message,_MessageTypes
-import _TLVProcessor
+
 from collections import OrderedDict
 import time
 import json
@@ -12,7 +11,9 @@ import sys
 #plotting
 import matplotlib.pyplot as plt
 
-from _Background_Process import _BackgroundProcess
+from CPSL_TI_Radar._Background_Process import _BackgroundProcess
+from CPSL_TI_Radar._Message import _Message,_MessageTypes
+from CPSL_TI_Radar.Processors._TLVProcessor_PointCloud import DetectedPointsProcessor
 
 class TLVTags:
     DETECTED_POINTS = 1
@@ -99,7 +100,7 @@ class Processor(_BackgroundProcess):
         self.enable_plotting = self.config_Radar["Processor"]["enable_plotting"]
         self.save_plots_as_gifs = self.config_Radar["Processor"]["save_plots_as_gif"]
         
-        self.tlv_processor_detected_objects = _TLVProcessor.DetectedPointsProcessor(
+        self.tlv_processor_detected_objects = DetectedPointsProcessor(
             plotting_enabled=self.enable_plotting,
             save_as_gif=self.save_plots_as_gifs)
     

@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
+            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/Python Modules/CPSL_TI_Radar/CPSL_TI_Radar_settings.json",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -28,7 +28,7 @@
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "ip_address":"192.168.33.30"
                 },
             "verbose":false
@@ -36,7 +36,7 @@
     "Processor":
         {
             "verbose":true,
-            "enable_plotting":false,
+            "enable_plotting":true,
             "save_plots_as_gif":false,
             "TLV_listener_info":{
                 "authkey":"TLV_client",

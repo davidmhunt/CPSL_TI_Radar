@@ -4,11 +4,11 @@ import json
 import numpy as np
 import os
 import sys
+from multiprocessing.connection import Connection
 
 #helper classes
-from _Background_Process import _BackgroundProcess
-from multiprocessing.connection import Connection
-from _Message import _Message,_MessageTypes
+from CPSL_TI_Radar._Background_Process import _BackgroundProcess
+from CPSL_TI_Radar._Message import _Message,_MessageTypes
 
 class _Streamer(_BackgroundProcess):
 
