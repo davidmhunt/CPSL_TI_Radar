@@ -156,13 +156,18 @@ class Radar:
             value=self.config_manager.TI_radar_config_path
         ))
 
-        #send the configuration to the processor class
-        self._conn_Processor.send(_Message(
+        #send the configuration to the Processor and Streamer classes
+        self._conn_Streamer.send(_Message(
             type=_MessageTypes.LOAD_NEW_CONFIG,
             value = {"radar_config":self.config_manager.radar_config,
                      "radar_performance":self.config_manager.radar_performance}
         ))
         
+        self._conn_Processor.send(_Message(
+            type=_MessageTypes.LOAD_NEW_CONFIG,
+            value = {"radar_config":self.config_manager.radar_config,
+                     "radar_performance":self.config_manager.radar_performance}
+        ))
         #configure the TI radar via serial
         self._conn_CLI_Controller.send(_Message(_MessageTypes.SEND_CONFIG))
 

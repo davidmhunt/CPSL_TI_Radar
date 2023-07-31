@@ -19,10 +19,8 @@ class SerialStreamer(_Streamer):
         #configure serial streaming
         self._config_serial_streaming()
         
-        #initialize the packet detector
+        #initialize the serial packet detector
         self.detected_packets = 0
-        self.current_packet = bytearray()
-        self.byte_buffer = bytearray()
         self.magic_word = bytearray([0x02,0x01,0x04,0x03,0x06,0x05,0x08,0x07])
         self.header = {}
 
@@ -89,10 +87,12 @@ class SerialStreamer(_Streamer):
         
         self.serial_port.open()
         self._serial_reset_packet_detector()
+        self.streaming_enabled = True
     
     def _stop_streaming(self):
 
         self.serial_port.close()
+        self.streaming_enabled = False
 
     def _serial_decode_header(self,header:bytearray):
         #decode the header
@@ -152,23 +152,3 @@ class SerialStreamer(_Streamer):
         #NOTE: the first packet received is not likely to be complete,
         #and is thus thrown out
         self.serial_port.read_until(expected=self.magic_word)
-
-    def _conn_process_Radar_command(self):
-
-        command:_Message = self._conn_RADAR.recv()
-        match command.type:
-            case _MessageTypes.EXIT:
-                self.exit_called = True
-            case _MessageTypes.START_STREAMING:
-                self.serial_port.open()
-                self._serial_reset_packet_detector()
-                self.streaming_enabled = True
-            case _MessageTypes.STOP_STREAMING:
-                self.serial_port.close()
-                self.streaming_enabled = False
-            case _:
-                self._conn_send_message_to_print(
-                    "Streamer._process_Radar_command: command not recognized")
-                self._conn_send_error_radar_message()
-        
-        self._conn_send_command_executed_message(command.type)

@@ -4,6 +4,7 @@ import json
 import numpy as np
 import os
 import sys
+from collections import OrderedDict
 from multiprocessing.connection import Connection
 
 #helper classes
@@ -25,6 +26,15 @@ class _Streamer(_BackgroundProcess):
         """
 
         super().__init__("Streamer",conn,settings_file_path,data_connection)
+
+        #parameters to store radar configuration
+        self.config_loaded = False
+        self.radar_performance = {}
+        self.radar_config = OrderedDict()
+        
+        #storing data
+        self.current_packet = bytearray()
+        self.byte_buffer = bytearray()
 
         #initialize the streaming status
         self.streaming_enabled = False
@@ -56,6 +66,21 @@ class _Streamer(_BackgroundProcess):
             self.close()
             sys.exit()
     
+    def _load_new_config(self, config_info:dict):
+        """Load a new set of radar performance and radar configuration dictionaries into the processor class
+
+        Args:
+            config_info (dict): Dictionary with entries for "radar_config" and "radar_performance"
+        """
+        #load a new set of radar performance specs and radar configuration dictionaries into the processor class
+        self.radar_config=config_info["radar_config"]
+        self.radar_performance=config_info["radar_performance"]
+
+        #set config loaded flag
+        self.config_loaded = True
+
+        return
+    
     def close(self):
         #implemented by child
         pass
@@ -68,11 +93,13 @@ class _Streamer(_BackgroundProcess):
     def _start_streaming(self):
         
         #implemented in the child class
+        #function must set self.streaming_enabled
         pass
 
     def _stop_streaming(self):
 
         #implemented in child class
+        #function must set self.streaming_enabled
         pass
             
             
@@ -85,10 +112,10 @@ class _Streamer(_BackgroundProcess):
                 self.exit_called = True
             case _MessageTypes.START_STREAMING:
                 self._start_streaming()
-                self.streaming_enabled = True
             case _MessageTypes.STOP_STREAMING:
                 self._stop_streaming()
-                self.streaming_enabled = False
+            case _MessageTypes.LOAD_NEW_CONFIG:
+                self._load_new_config(command.value)
             case _:
                 self._conn_send_message_to_print(
                     "Streamer._process_Radar_command: command not recognized")

@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/IWR_Demos/1443config.cfg",
+            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -18,7 +18,7 @@
         {
             "serial_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "data_port":"/dev/ttyACM1"
                 },
             "file_streaming":
@@ -28,10 +28,13 @@
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":false,
-                    "ip_address":"192.168.33.30"
+                    "enabled":true,
+                    "FPGA_IP":"192.168.33.180",
+                    "system_IP":"192.168.33.30",
+                    "data_port":4098,
+                    "cmd_port":4096
                 },
-            "verbose":false
+            "verbose":true
         },
     "Processor":
         {
