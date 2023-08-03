@@ -64,14 +64,11 @@ class DCA1000Processor(_Processor):
         self.y_s = None
 
         #plotting
-        self.plotting_enabled = True
+        self.plotting_enabled = self._settings["Processor"]["enable_plotting"]
         self.fig = None
         self.axs = None
         self.rng_az_cart = None #range az cartesian image
         self.rng_az_sph = None #range az spherical image
-
-        matplotlib.use("QtAgg")
-        plt.ion()
 
         self._conn_send_init_status(self.init_success)
         self.run()
@@ -116,8 +113,8 @@ class DCA1000Processor(_Processor):
         self.y_s = np.multiply(self.rhos,np.cos(self.thetas))
 
         #reload plotting if enabled
-        #if self.plotting_enabled:
-        #    self._init_plots()
+        if self.plotting_enabled:
+            self._init_plots()
 
         return
 
@@ -136,8 +133,8 @@ class DCA1000Processor(_Processor):
         range_azimuth_response = self._compute_frame_normalized_range_azimuth_heatmaps(adc_data_cube)
 
         if self.plotting_enabled:
-            self._plot_range_azimuth_heatmap_spherical(range_azimuth_response[:,:,0])
-            #self._update_plots(range_azimuth_response[:,:,0])
+            #self._plot_range_azimuth_heatmap_spherical(range_azimuth_response[:,:,0])
+            self._update_plots(range_azimuth_response[:,:,0])
 
         #TODO: add code to send to listeners
         return
@@ -225,6 +222,9 @@ class DCA1000Processor(_Processor):
     def _init_plots(self):
         if self.plotting_enabled:
 
+            matplotlib.use("QtAgg")
+            plt.ion()
+            
             #if there was already a figure open, close it so that the new one can be created
             if self.fig != None:
                 plt.close(self.fig)
