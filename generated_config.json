@@ -11,18 +11,25 @@
         "numADCBits": "2",
         "adcOutputFmt": "1"
     },
+    "adcbufCfg": {
+        "subFrameIdx": null,
+        "adcOutputFmt": "0",
+        "SampleSwap": "1",
+        "ChannelInterleave": "0",
+        "chirpThreshold": "1"
+    },
     "profileCfg": {
         "profileId": "0",
         "startFreq": "77",
-        "idleTime": "58",
+        "idleTime": "429",
         "adcStartTime": "7",
-        "rampEndTime": "40",
+        "rampEndTime": "57.14",
         "txOutPower": "0",
         "txPhaseShifter": "0",
-        "freqSlope": "100",
+        "freqSlope": "70",
         "txStartTime": "1",
-        "adcSamples": "304",
-        "sampleRate": "9499",
+        "adcSamples": "240",
+        "sampleRate": "4884",
         "hpfCornerFreq1": "0",
         "hpfCornerFreq2": "0",
         "rxGain": "30"
@@ -52,7 +59,7 @@
     "frameCfg": {
         "startIndex": "0",
         "endIndex": "1",
-        "loops": "32",
+        "loops": "16",
         "frames": "0",
         "periodicity": "33.33",
         "trigger": "1",
@@ -60,6 +67,6 @@
     },
     "lowPower": {
         "chain": "0",
-        "adcMode": "0"
+        "adcMode": "1"
     }
 }

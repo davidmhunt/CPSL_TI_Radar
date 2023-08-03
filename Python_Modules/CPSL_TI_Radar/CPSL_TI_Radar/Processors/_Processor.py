@@ -96,12 +96,14 @@ class _Processor(_BackgroundProcess):
     def _process_new_packet(self):
         
         #receive the latest packet from the processor
+        #TODO: currently a risk of the processor dropping packets here
         while self._conn_data.poll():
             try:
                 self.current_packet = self._conn_data.recv_bytes()
             except EOFError:
                 self._conn_send_message_to_print("Processor._process_new_packet: attempted to receive new packet from Streamer, but streamer was closed")
                 self._conn_send_error_radar_message()
+                self.streaming_enabled = False
                 return
 
         #TODO: Define remaining custom behavior to actually process the packet

@@ -39,6 +39,7 @@ class ConfigManager:
         if self.config_loaded:
             self.radar_performance["range"] = self._compute_range_performance()
             self.radar_performance["velocity"] = self._compute_velocity_performance()
+            self.radar_performance["angle"] = self._compute_angle_performance()
         else:
             raise ConfigNotLoaded("ConfigManager.compute_radar_performance: Attempted to compute performance specs, but no configuration was loaded")
     
@@ -100,6 +101,7 @@ class ConfigManager:
         num_doppler_bins = num_chirps_per_frame / num_Tx_antennas
         vel_performance["num_doppler_bins"] = num_doppler_bins
 
+        #TODO: fix this to handle virtual antennas
         #velocity_resolution_m_per_s
         vel_res = lambda_m / (2 * chirp_period_us * 1e-6 * num_chirps_per_frame)
         vel_performance["vel_res"] = vel_res
@@ -113,6 +115,35 @@ class ConfigManager:
 
         return vel_performance
     
+    #TODO: add function to compute angular performance
+    def _compute_angle_performance(self):
+        """Returns a dictionary of key angular performance settings/specs
+
+        Returns:
+            dict: Dictionary of key angular performance specs
+        """
+
+        angle_performance = {}
+
+        #NOTE Only supporting 2D configurations at this time
+        #determine if virtual antennas are in use
+        num_tx_antennas = self._get_num_Tx_antennas()
+        num_rx_antennas = self._get_num_Rx_antennas()
+
+        if num_tx_antennas > 1:
+            virtual_antennas_enabled = True
+        else:
+            virtual_antennas_enabled = False
+        
+        num_az_antennas = num_tx_antennas * num_rx_antennas
+
+        angle_performance["num_rx_antennas"] = num_rx_antennas
+        angle_performance["virtual_anetnnas_enabled"] = virtual_antennas_enabled
+        angle_performance["num_az_antennas"] = num_az_antennas
+
+        return angle_performance
+
+
     def _get_num_Tx_antennas(self):
         """Return the number of Tx Antennas used in the configuration
 
@@ -314,7 +345,6 @@ class ConfigManager:
                 self._load_analogMonitor_from_cfg(str_split)
             case _:
                 if key not in ["sensorStop","flushCfg","sensorStart", "setProfileCfg","testFmkCfg"]:
-                    #TODO:Added the last two to support iwr_raw_rosnode configurations
                     raise InvalidConfiguration("Received unknown configuration command")
         
 

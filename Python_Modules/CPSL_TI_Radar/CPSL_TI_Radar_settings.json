@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
+            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/custom_configs/1443config.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM0",
+            "CLI_port":"/dev/ttyACM1",
             "verbose":true
         },
     "Streamer":
@@ -19,7 +19,7 @@
             "serial_streaming":
                 {
                     "enabled":false,
-                    "data_port":"/dev/ttyACM1"
+                    "data_port":"/dev/ttyACM2"
                 },
             "file_streaming":
                 {

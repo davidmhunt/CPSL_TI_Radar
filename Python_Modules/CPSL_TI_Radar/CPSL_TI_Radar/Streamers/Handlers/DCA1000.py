@@ -222,7 +222,7 @@ class DCA1000Handler:
         data.extend(struct.pack('<H',1470))
 
         #define packet delay to 25us
-        data.extend(struct.pack('<H',))
+        data.extend(struct.pack('<H',25))
 
         #add "future use" part of command
         data.extend(bytearray([0x00,0x00]))
