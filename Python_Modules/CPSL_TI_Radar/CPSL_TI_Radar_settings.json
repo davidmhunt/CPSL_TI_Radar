@@ -34,12 +34,12 @@
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "verbose":true
+            "verbose":false
         },
     "Processor":
         {
             "verbose":true,
-            "enable_plotting":false,
+            "enable_plotting":true,
             "save_plots_as_gif":false,
             "TLV_listener_info":{
                 "authkey":"TLV_client",

@@ -1,15 +1,12 @@
 from multiprocessing.connection import Connection
 from multiprocessing import connection,AuthenticationError
 
-from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import cv2
 
 from CPSL_TI_Radar.Processors._Processor import _Processor
-from CPSL_TI_Radar._Message import _Message,_MessageTypes
-from CPSL_TI_Radar.Processors.TLV_Processors._PointCloud import _PointCloudTLVProcessor
-from CPSL_TI_Radar.Processors.TLV_Processors._TLVTags import TLVTags
 
 class DCA1000Processor(_Processor):
 
@@ -70,12 +67,17 @@ class DCA1000Processor(_Processor):
         self.rng_az_cart = None #range az cartesian image
         self.rng_az_sph = None #range az spherical image
 
+        #video
+        self.zoom = 5
+
         self._conn_send_init_status(self.init_success)
         self.run()
 
         return
     
     def close(self):
+        #if self.plotting_enabled:
+        #    cv2.destroyAllWindows()
         pass
 
     def _load_new_config(self, config_info: dict):
@@ -114,7 +116,7 @@ class DCA1000Processor(_Processor):
 
         #reload plotting if enabled
         if self.plotting_enabled:
-            self._init_plots()
+            self._init_video()
 
         return
 
@@ -134,8 +136,16 @@ class DCA1000Processor(_Processor):
 
         if self.plotting_enabled:
             #self._plot_range_azimuth_heatmap_spherical(range_azimuth_response[:,:,0])
-            self._update_plots(range_azimuth_response[:,:,0])
+            video_data = np.flip(range_azimuth_response[:,:,0])
+            video_data = (video_data * 255).astype(np.uint8)
 
+            #resize to make it larger
+            video_data = cv2.resize(video_data,
+                                    (self.num_angle_bins * self.zoom,
+                                     self.max_range_bin * self.zoom ))
+             # update the data with new values
+            cv2.imshow("Range-Azimuth Response",video_data)
+            cv2.waitKey(1)
         #TODO: add code to send to listeners
         return
     
@@ -158,7 +168,8 @@ class DCA1000Processor(_Processor):
             #reshape to index as [rx channel, sample, chirp]
             adc_data_cube = np.reshape(adc_data,(self.rx_channels,self.samples_per_chirp,self.total_chirps_per_frame),order="F")
 
-            virtual_array_data_cube = np.zeros((self.num_az_antennas,self.samples_per_chirp,self.chirp_loops_per_frame))
+            virtual_array_data_cube = np.zeros_like(adc_data_cube,shape=(self.num_az_antennas,self.samples_per_chirp,self.chirp_loops_per_frame))
+            #virtual_array_data_cube = np.zeros((self.num_az_antennas,self.samples_per_chirp,self.chirp_loops_per_frame))
 
             tx_1_chirps = np.arange(0,self.total_chirps_per_frame,2)
             tx_2_chirps = np.arange(1,self.total_chirps_per_frame,2)
@@ -219,11 +230,26 @@ class DCA1000Processor(_Processor):
 
         return data
 
+    def _init_video(self):
+
+        cv2.namedWindow("Range-Azimuth Response",cv2.WINDOW_NORMAL)
+
+        cv2.resizeWindow(
+            "Range-Azimuth Response",
+            self.num_angle_bins * self.zoom,
+            self.max_range_bin * self.zoom)
+
+        return
+###
+###
+###
+### ARCHIVED CODE: THE FOLLOWING CODE DOES NOT CURRENTLY WORK
+###
+###
+###
+
     def _init_plots(self):
         if self.plotting_enabled:
-
-            matplotlib.use("QtAgg")
-            plt.ion()
             
             #if there was already a figure open, close it so that the new one can be created
             if self.fig != None:
@@ -266,7 +292,6 @@ class DCA1000Processor(_Processor):
             self.fig.canvas.flush_events()
 
             return
-
 
     def _update_plots(self,rng_az_response:np.ndarray):
         """Update the polar and spherical versions of the range-azimuth response
