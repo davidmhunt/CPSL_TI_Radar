@@ -1,0 +1,19 @@
+name: myenv
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pyserial
+  - matplotlib
+  - scipy
+  - numpy
+  - imageio[ffmpeg]
+  - jupyterlab
+  - pandas
+  - ipykernel
+  - spyder
+  - scikit-learn
+  - tqdm
+  - natsort
+  - open3d
+  - opencv-python
