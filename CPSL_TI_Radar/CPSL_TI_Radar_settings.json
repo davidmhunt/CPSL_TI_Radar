@@ -34,20 +34,32 @@
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "verbose":false
+            "verbose":true
         },
     "Processor":
         {
             "verbose":true,
-            "enable_plotting":true,
+            "enable_plotting":false,
             "save_plots_as_gif":false,
-            "TLV_listener_info":{
+            "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
                 "DetectedPointsProcessor":6000
+            },
+            "DCA1000_Listeners":{
+                "authkey":"DCA1000_client",
+                "RawPacketData":{
+                    "addr":6001,
+                    "enabled":true
+                },
+                "NormRngAzResp":{
+                    "addr":6002,
+                    "enabled":true
+                }
             }
+
         },
-    "ROS":
+    "ROS/Listeners":
         {
-            "enabled":false
+            "enabled":true
         }
 }

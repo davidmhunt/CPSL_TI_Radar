@@ -71,7 +71,7 @@ class Radar:
 
         self._prepare_background_processes()
 
-        self.ROS_enabled = bool(self._settings["ROS"]["enabled"])
+        self.listeners_enabled = bool(self._settings["ROS/Listeners"]["enabled"])
 
         return
     
@@ -79,7 +79,7 @@ class Radar:
         """Run the Radar Class
 
         Args:
-            timeout (int, optional): Duration of operation. Defaults to 20. Ignored if ROS is enabled
+            timeout (int, optional): Duration of operation. Defaults to 20. Ignored if ROS/Listeners is enabled
         """
 
         #load the radar configuration
@@ -100,7 +100,7 @@ class Radar:
             #start running the sensor
             start_time = time.time()
 
-            while(self.ROS_enabled or ((time.time() - start_time) < timeout)) and not self.radar_error_detected:
+            while(self.listeners_enabled or ((time.time() - start_time) < timeout)) and not self.radar_error_detected:
                 #check for updates from each background process
                 self._conn_recv_background_process_updates()
 
@@ -177,17 +177,17 @@ class Radar:
             command=_MessageTypes.SEND_CONFIG
         )
 
-        if self.ROS_enabled:
-            #tell processor to connect TLV processors to ROS clients
-            print("Radar.start_Radar:waiting for TLV listeners to connect to ROS clients")
+        if self.listeners_enabled:
+            #tell processor to connect TLV processors to ROS/Listeners clients
+            print("Radar.start_Radar:waiting for TLV listeners to connect to ROS/Listeners clients")
             self._conn_Processor.send(_Message(_MessageTypes.CONFIG_LISTENERS))
 
-            ROS_connected = self._conn_wait_for_command_execution(
+            listeners_connected = self._conn_wait_for_command_execution(
                 conn=self._conn_Processor,
                 command=_MessageTypes.CONFIG_LISTENERS
             )
 
-            successful_execution = ROS_connected and successful_execution
+            successful_execution = listeners_connected and successful_execution
 
         if successful_execution:
             #start streaming data

@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import cv2
+from multiprocessing.connection import Listener
 
 from CPSL_TI_Radar.Processors._Processor import _Processor
 
@@ -67,6 +68,18 @@ class DCA1000Processor(_Processor):
         self.rng_az_cart = None #range az cartesian image
         self.rng_az_sph = None #range az spherical image
 
+        #listeners
+        self._listeners_enabled = False
+        self._listener_RawPacketData_enabled = False
+        self._listener_RawPacketData = None
+        self._conn_RawPacketData = None
+        self._conn_RawPacketData_enabled = False
+
+        self._listener_NormRngAzResp_enabled = False
+        self._listener_NormRngAzResp = None
+        self._conn_NormRngAzResp = None
+        self._conn_NormRngAzResp_enabled = None
+
         #video
         self.zoom = 5
 
@@ -121,8 +134,39 @@ class DCA1000Processor(_Processor):
         return
 
     def _init_listeners(self):
-        #TODO: Implement this function
-        pass
+        
+        #get listener client enabled status
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        #get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        #check enabled status
+        self._listener_RawPacketData_enabled = listener_info["RawPacketData"]["enabled"]
+        self._listener_NormRngAzResp_enabled = listener_info["NormRngAzResp"]["enabled"]
+
+        self._listeners_enabled = True
+
+        try:
+            #setup the respective listeners
+            if self._listener_RawPacketData_enabled:
+                RawPacketData_addr = ('localhost', int(listener_info["RawPacketData"]["addr"]))
+                self._listener_RawPacketData = Listener(RawPacketData_addr,authkey=authkey)
+                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect RawPacketData listener")
+                self._conn_RawPacketData = self._listener_RawPacketData.accept()
+                self._conn_RawPacketData_enabled = True
+                #TODO: Add code to enable the listeners
+            if self._listener_NormRngAzResp_enabled:
+                NormRngAzResp_addr = ('localhost', int(listener_info["NormRngAzResp"]["addr"]))
+                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect NormRngAzResp listener")
+                self._listener_NormRngAzResp = Listener(NormRngAzResp_addr,authkey=authkey)
+                self._conn_NormRngAzResp = self._listener_NormRngAzResp.accept()
+                self._conn_NormRngAzResp_enabled = True
+                #TODO: Add code to enable the listeners
+        except AuthenticationError:
+            self._conn_send_message_to_print("DCA1000Processor._init_listeners: experienced Authentication error when attempting to connect to Client")
+            self._conn_send_error_radar_message()
 
 #processing packets
     def _process_new_packet(self):
@@ -146,9 +190,23 @@ class DCA1000Processor(_Processor):
              # update the data with new values
             cv2.imshow("Range-Azimuth Response",video_data)
             cv2.waitKey(1)
-        #TODO: add code to send to listeners
+        
+        self._conn_send_data_to_listeners(range_azimuth_response,adc_data_cube)
         return
     
+    def _conn_send_data_to_listeners(self,
+                                     range_azimuth_response:np.ndarray,
+                                     adc_data_cube:np.ndarray):
+        
+        if self._listeners_enabled:
+            #send ADC data cube
+            if self._conn_RawPacketData_enabled:
+                adc_packet = np.frombuffer(self.current_packet,dtype=np.int16)
+                self._conn_RawPacketData.send(adc_packet)
+            if self._conn_NormRngAzResp_enabled:
+                self._conn_NormRngAzResp.send(range_azimuth_response)
+    
+
     def _get_raw_ADC_data_cube(self):
         """Generate the raw ADC data cube from the streamed packet
 

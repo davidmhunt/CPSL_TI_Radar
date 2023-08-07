@@ -70,7 +70,7 @@ class IWRDemoProcessor(_Processor):
     def _init_listeners(self):
 
         #get the TLV client initialization information
-        TLV_listener_info = self._settings["Processor"]["TLV_listener_info"]
+        TLV_listener_info = self._settings["Processor"]["IWR_Demo_Listeners"]
         
         #generate the authentication string
         authkey_str = TLV_listener_info["authkey"]

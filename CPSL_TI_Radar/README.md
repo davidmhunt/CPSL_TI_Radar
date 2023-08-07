@@ -79,5 +79,32 @@ The hardware should now be ready to use
 ## Running the Radar
 
 
+## Streaming data to ROS
+
+### Option 1: IWR1443 Demo (No DCA1000)
+
+If you setup the IWR1443 to run the demo, follow these directions to obtain pointcloud data from the radar board
+
+### Option 2: IWR1443 with DCA1000 
+
+If you setup the IWR1443 and DCA1000 to support raw data streaming over ethernet, follow these directions to obtain the raw data and other processed data from the DCA1000 in ROS
+
+#### 1. Add radar ROS package into catkin workspace
+
+1. Copy the radar ros package folder into your current catkin workspace
+
+2. Navigate to your catkin directory and source the setup.bash file for your catkin workspace using the following code
+```
+cd ~/catkin_ws
+source devel/setup.bash
+```
+3. Run catkin_make to make the newly added radar package
+```
+catkin_make
+```
+
+#### 2. Run code with ROS
+
+
 
 
