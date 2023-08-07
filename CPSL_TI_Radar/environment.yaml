@@ -1,0 +1,5 @@
+name: TI_Radar_GUI
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
