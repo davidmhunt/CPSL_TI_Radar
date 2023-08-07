@@ -263,10 +263,6 @@ class Radar:
             self.background_process_classes = [CLIController,DCA1000Streamer,DCA1000Processor]
             self.background_process_names = ["CLIController","DCA1000Streamer","DCA1000Processor"]
             return True
-        elif self._settings["Streamer"]["file_streaming"]["enabled"]:
-            #TODO: Enable streaming data from a file
-            print("Radar._determine_background_processes_from_config: file streaming not yet enabled")
-            return False
         else:
             return False
 

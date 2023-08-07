@@ -21,11 +21,6 @@
                     "enabled":false,
                     "data_port":"/dev/ttyACM1"
                 },
-            "file_streaming":
-                {
-                    "enabled":false,
-                    "data_file":"../raw_data_samples/scatterplot_only.dat"
-                },
             "DCA1000_streaming":
                 {
                     "enabled":true,
