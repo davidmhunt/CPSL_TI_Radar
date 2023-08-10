@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/custom_configs/1443config.cfg",
+            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/1443config.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -48,6 +48,10 @@
                 },
                 "NormRngAzResp":{
                     "addr":6002,
+                    "enabled":true
+                },
+                "NormRngDopResp":{
+                    "addr":6003,
                     "enabled":true
                 }
             }
