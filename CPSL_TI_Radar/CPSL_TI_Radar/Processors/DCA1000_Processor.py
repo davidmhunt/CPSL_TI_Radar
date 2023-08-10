@@ -270,12 +270,12 @@ class DCA1000Processor(_Processor):
             )
             cv2.imshow("Range-Doppler Response",video_data_rng_dop)
             cv2.waitKey(1)
-        self._conn_send_data_to_listeners(range_azimuth_response,adc_data_cube)
+        self._conn_send_data_to_listeners(range_azimuth_response,range_doppler_response)
         return
     
     def _conn_send_data_to_listeners(self,
                                      range_azimuth_response:np.ndarray,
-                                     adc_data_cube:np.ndarray):
+                                     range_doppler_response:np.ndarray):
         
         if self._listeners_enabled:
             #send ADC data cube
@@ -284,6 +284,8 @@ class DCA1000Processor(_Processor):
                 self._conn_RawPacketData.send(adc_packet)
             if self._conn_NormRngAzResp_enabled:
                 self._conn_NormRngAzResp.send(range_azimuth_response)
+            if self._conn_NormRngDopResp_enabled:
+                self._conn_NormRngDopResp.send(range_doppler_response)
     
 
     def _get_raw_ADC_data_cube(self):
