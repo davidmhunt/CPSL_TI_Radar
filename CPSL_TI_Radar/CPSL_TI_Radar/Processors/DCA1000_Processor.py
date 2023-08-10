@@ -4,7 +4,7 @@ from multiprocessing import connection,AuthenticationError
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-#import cv2
+import cv2
 from multiprocessing.connection import Listener
 
 from CPSL_TI_Radar.Processors._Processor import _Processor
@@ -51,6 +51,10 @@ class DCA1000Processor(_Processor):
         
         #compute range bins
         self.range_bins = None
+
+        #velocity bins
+        self.num_vel_bins = 0
+        self.velocity_bins = None
 
         #compute angular parameters
         self.phase_shifts = None
@@ -207,8 +211,8 @@ class DCA1000Processor(_Processor):
 
             video_data_rng_dop = cv2.resize(
                 video_data_rng_dop,
-                self.num_vel_bins * self.zoom,
-                self.max_range_bin * self.zoom
+                (self.num_vel_bins * self.zoom,
+                self.max_range_bin * self.zoom)
             )
             cv2.imshow("Range-Doppler Response",video_data_rng_dop)
             cv2.waitKey(1)
