@@ -34,7 +34,7 @@
     "Processor":
         {
             "verbose":true,
-            "enable_plotting":true,
+            "enable_plotting":false,
             "save_plots_as_gif":false,
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
@@ -44,10 +44,14 @@
                 "authkey":"DCA1000_client",
                 "RawPacketData":{
                     "addr":6001,
-                    "enabled":false
+                    "enabled":true
                 },
                 "NormRngAzResp":{
                     "addr":6002,
+                    "enabled":true
+                },
+                "NormRngDopResp":{
+                    "addr":6003,
                     "enabled":false
                 }
             }
@@ -55,6 +59,6 @@
         },
     "ROS/Listeners":
         {
-            "enabled":false
+            "enabled":true
         }
 }

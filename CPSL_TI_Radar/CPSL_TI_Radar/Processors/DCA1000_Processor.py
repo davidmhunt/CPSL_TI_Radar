@@ -4,8 +4,9 @@ from multiprocessing import connection,AuthenticationError
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-import cv2
+#import cv2
 from multiprocessing.connection import Listener
+import threading
 
 from CPSL_TI_Radar.Processors._Processor import _Processor
 
@@ -85,6 +86,11 @@ class DCA1000Processor(_Processor):
         self._conn_NormRngAzResp = None
         self._conn_NormRngAzResp_enabled = None
 
+        self._listener_NormRngDopResp_enabled = False
+        self._listener_NormRngDopResp = None
+        self._conn_NormRngDopResp = None
+        self._conn_NormRngDopResp_enabled = None
+
         #video
         self.zoom = 5
 
@@ -157,29 +163,77 @@ class DCA1000Processor(_Processor):
         #check enabled status
         self._listener_RawPacketData_enabled = listener_info["RawPacketData"]["enabled"]
         self._listener_NormRngAzResp_enabled = listener_info["NormRngAzResp"]["enabled"]
+        self._listener_NormRngDopResp_enabled = listener_info["NormRngDopResp"]["enabled"]
 
         self._listeners_enabled = True
-
         try:
+
+            threads = []
+
             #setup the respective listeners
             if self._listener_RawPacketData_enabled:
-                RawPacketData_addr = ('localhost', int(listener_info["RawPacketData"]["addr"]))
-                self._listener_RawPacketData = Listener(RawPacketData_addr,authkey=authkey)
                 self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect RawPacketData listener")
-                self._conn_RawPacketData = self._listener_RawPacketData.accept()
-                self._conn_RawPacketData_enabled = True
-                #TODO: Add code to enable the listeners
+                t = threading.Thread(target=self._init_RawPacketData_listener)
+                threads.append(t)
+                t.start()
             if self._listener_NormRngAzResp_enabled:
-                NormRngAzResp_addr = ('localhost', int(listener_info["NormRngAzResp"]["addr"]))
                 self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect NormRngAzResp listener")
-                self._listener_NormRngAzResp = Listener(NormRngAzResp_addr,authkey=authkey)
-                self._conn_NormRngAzResp = self._listener_NormRngAzResp.accept()
-                self._conn_NormRngAzResp_enabled = True
-                #TODO: Add code to enable the listeners
+                t = threading.Thread(target=self._init_NormRngAzResp_listener)
+                threads.append(t)
+                t.start()
+            if self._listener_NormRngDopResp_enabled:
+                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect NormRngDopResp listener")
+                t = threading.Thread(target=self._init_NormRngDopResp_listener)
+                threads.append(t)
+                t.start()
+            
+            for t in threads:
+                t.join()
         except AuthenticationError:
             self._conn_send_message_to_print("DCA1000Processor._init_listeners: experienced Authentication error when attempting to connect to Client")
             self._conn_send_error_radar_message()
 
+    def _init_RawPacketData_listener(self):
+
+        #get listener info
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        #get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        RawPacketData_addr = ('localhost', int(listener_info["RawPacketData"]["addr"]))
+        self._listener_RawPacketData = Listener(RawPacketData_addr,authkey=authkey)
+        self._conn_RawPacketData = self._listener_RawPacketData.accept()
+        self._conn_RawPacketData_enabled = True
+    
+    def _init_NormRngAzResp_listener(self):
+
+        #get listener info
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        #get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        NormRngAzResp_addr = ('localhost', int(listener_info["NormRngAzResp"]["addr"]))
+        self._listener_NormRngAzResp = Listener(NormRngAzResp_addr,authkey=authkey)
+        self._conn_NormRngAzResp = self._listener_NormRngAzResp.accept()
+        self._conn_NormRngAzResp_enabled = True
+    
+    def _init_NormRngDopResp_listener(self):
+
+        #get listener info
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        #get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        NormRngDopResp_addr = ('localhost', int(listener_info["NormRngDopResp"]["addr"]))
+        self._listener_NormRngDopResp = Listener(NormRngDopResp_addr,authkey=authkey)
+        self._conn_NormRngDopResp = self._listener_NormRngDopResp.accept()
+        self._conn_NormRngDopResp_enabled = True
 #processing packets
     def _process_new_packet(self):
         
