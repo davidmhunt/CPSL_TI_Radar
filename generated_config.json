@@ -1,0 +1,72 @@
+{
+    "dfeDataOutputMode": {
+        "modeType": "1"
+    },
+    "channelCfg": {
+        "rxChannelEn": "15",
+        "txChannelEn": "5",
+        "cascading": "0"
+    },
+    "adcCfg": {
+        "numADCBits": "2",
+        "adcOutputFmt": "1"
+    },
+    "adcbufCfg": {
+        "subFrameIdx": null,
+        "adcOutputFmt": "0",
+        "SampleSwap": "1",
+        "ChannelInterleave": "0",
+        "chirpThreshold": "1"
+    },
+    "profileCfg": {
+        "profileId": "0",
+        "startFreq": "77",
+        "idleTime": "10",
+        "adcStartTime": "7",
+        "rampEndTime": "57.14",
+        "txOutPower": "0",
+        "txPhaseShifter": "0",
+        "freqSlope": "70",
+        "txStartTime": "1",
+        "adcSamples": "240",
+        "sampleRate": "4884",
+        "hpfCornerFreq1": "0",
+        "hpfCornerFreq2": "0",
+        "rxGain": "30"
+    },
+    "chirpCfg": [
+        {
+            "startIndex": "0",
+            "endIndex": "0",
+            "profile": "0",
+            "startFreqVariation": "0",
+            "freqSlopVariation": "0",
+            "idleTimeVariation": "0",
+            "ADCStartTimeVariation": "0",
+            "txMask": "1"
+        },
+        {
+            "startIndex": "1",
+            "endIndex": "1",
+            "profile": "0",
+            "startFreqVariation": "0",
+            "freqSlopVariation": "0",
+            "idleTimeVariation": "0",
+            "ADCStartTimeVariation": "0",
+            "txMask": "4"
+        }
+    ],
+    "frameCfg": {
+        "startIndex": "0",
+        "endIndex": "0",
+        "loops": "64",
+        "frames": "0",
+        "periodicity": "33.33",
+        "trigger": "1",
+        "triggerDelay": "0"
+    },
+    "lowPower": {
+        "chain": "0",
+        "adcMode": "1"
+    }
+}

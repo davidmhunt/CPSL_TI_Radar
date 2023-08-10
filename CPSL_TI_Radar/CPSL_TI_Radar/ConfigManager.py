@@ -91,26 +91,26 @@ class ConfigManager:
         num_Tx_antennas = self._get_num_Tx_antennas()
         chirp_start_profile_idx = int(self.radar_config["frameCfg"]["startIndex"])
         chirp_end_profile_idx = int(self.radar_config["frameCfg"]["endIndex"])
-        num_loops = float(self.radar_config["frameCfg"]["loops"])
-        num_chirps_per_frame = int((chirp_end_profile_idx - chirp_start_profile_idx + 1) * num_loops)
+        chirps_per_loop = chirp_end_profile_idx - chirp_start_profile_idx + 1
+        chirp_loops_per_frame = float(self.radar_config["frameCfg"]["loops"])
+        num_chirps_per_frame = int((chirp_end_profile_idx - chirp_start_profile_idx + 1) * chirp_loops_per_frame)
         ramp_end_time_us = float(self.radar_config["profileCfg"]["rampEndTime"])
         idle_time_us = float(self.radar_config["profileCfg"]["idleTime"])
         chirp_period_us = ramp_end_time_us + idle_time_us
 
         #num_doppler_bins
-        num_doppler_bins = num_chirps_per_frame / num_Tx_antennas
-        vel_performance["num_doppler_bins"] = num_doppler_bins
+        vel_performance["num_doppler_bins"] = chirp_loops_per_frame
+        
 
-        #TODO: fix this to handle virtual antennas
         #velocity_resolution_m_per_s
-        vel_res = lambda_m / (2 * chirp_period_us * 1e-6 * num_chirps_per_frame)
+        vel_res = lambda_m / (2 * chirp_period_us * chirps_per_loop * 1e-6 * num_chirps_per_frame)
         vel_performance["vel_res"] = vel_res
 
         #vel_idx_to_m_per_s
         vel_performance["vel_idx_to_m_per_s"] = vel_res
 
         #max_velocity
-        vel_max = lambda_m / (4 * chirp_period_us * 1e-6 * num_Tx_antennas)
+        vel_max = lambda_m / (4 * chirp_period_us * chirps_per_loop * 1e-6 * num_Tx_antennas)
         vel_performance["vel_max"] = vel_max
 
         return vel_performance
@@ -127,15 +127,19 @@ class ConfigManager:
 
         #NOTE Only supporting 2D configurations at this time
         #determine if virtual antennas are in use
-        num_tx_antennas = self._get_num_Tx_antennas()
         num_rx_antennas = self._get_num_Rx_antennas()
 
-        if num_tx_antennas > 1:
+        #determine if virtual antennas are enabled
+        chirp_start_profile_idx = int(self.radar_config["frameCfg"]["startIndex"])
+        chirp_end_profile_idx = int(self.radar_config["frameCfg"]["endIndex"])
+        chirps_per_loop = chirp_end_profile_idx - chirp_start_profile_idx + 1
+
+        if chirps_per_loop > 1:
             virtual_antennas_enabled = True
         else:
             virtual_antennas_enabled = False
         
-        num_az_antennas = num_tx_antennas * num_rx_antennas
+        num_az_antennas = chirps_per_loop * num_rx_antennas
 
         angle_performance["num_rx_antennas"] = num_rx_antennas
         angle_performance["virtual_anetnnas_enabled"] = virtual_antennas_enabled

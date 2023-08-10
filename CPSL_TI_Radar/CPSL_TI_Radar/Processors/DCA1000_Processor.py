@@ -4,7 +4,7 @@ from multiprocessing import connection,AuthenticationError
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-import cv2
+#import cv2
 from multiprocessing.connection import Listener
 
 from CPSL_TI_Radar.Processors._Processor import _Processor
@@ -34,7 +34,8 @@ class DCA1000Processor(_Processor):
         self.max_range_bin = 128 #enable this a bit better
         self.num_chirps_to_save = 0 #set from config
         self.num_angle_bins = 64
-        self.power_range_dB = [80,105]
+        self.rng_az_power_range_dB = [80,105]
+        self.rng_dop_poer_range_dB = [70,140]
 
 
         #key radar parameters
@@ -117,6 +118,13 @@ class DCA1000Processor(_Processor):
         range_res = self.radar_performance["range"]["range_res"]
         self.range_bins = np.arange(0,self.samples_per_chirp) * range_res
 
+        #compute doppler bins
+        vel_res = self.radar_performance["velocity"]["vel_res"]
+        vel_max = self.radar_performance["velocity"]["vel_max"]
+        self.num_vel_bins = int(self.radar_performance["velocity"]["num_doppler_bins"])
+        self.velocity_bins = np.arange(-1 * vel_max,vel_max,vel_res)
+
+
         #compute angular parameters
         self.phase_shifts = np.arange(np.pi,-np.pi  - 2 * np.pi /(self.num_angle_bins - 1),-2 * np.pi / (self.num_angle_bins-1))
         self.phase_shifts[-1] = -1 * np.pi #round last entry to be exactly pi
@@ -178,19 +186,32 @@ class DCA1000Processor(_Processor):
 
         range_azimuth_response = self._compute_frame_normalized_range_azimuth_heatmaps(adc_data_cube)
 
+        range_doppler_response = self._compute_normalized_range_doppler_response(adc_data_cube)
+
         if self.plotting_enabled:
-            #self._plot_range_azimuth_heatmap_spherical(range_azimuth_response[:,:,0])
-            video_data = np.flip(range_azimuth_response[:,:,0])
-            video_data = (video_data * 255).astype(np.uint8)
+            #update range azimuth image
+            video_data_rng_az = np.flip(range_azimuth_response[:,:,0])
+            video_data_rng_az = (video_data_rng_az * 255).astype(np.uint8)
 
             #resize to make it larger
-            video_data = cv2.resize(video_data,
+            video_data_rng_az = cv2.resize(video_data_rng_az,
                                     (self.num_angle_bins * self.zoom,
                                      self.max_range_bin * self.zoom ))
-             # update the data with new values
-            cv2.imshow("Range-Azimuth Response",video_data)
+            # update the data with new values
+            cv2.imshow("Range-Azimuth Response",video_data_rng_az)
             cv2.waitKey(1)
-        
+
+            #update range doppler image
+            video_data_rng_dop = np.flip(range_doppler_response)
+            video_data_rng_dop = (video_data_rng_dop * 255).astype(np.uint8)
+
+            video_data_rng_dop = cv2.resize(
+                video_data_rng_dop,
+                self.num_vel_bins * self.zoom,
+                self.max_range_bin * self.zoom
+            )
+            cv2.imshow("Range-Doppler Response",video_data_rng_dop)
+            cv2.waitKey(1)
         self._conn_send_data_to_listeners(range_azimuth_response,adc_data_cube)
         return
     
@@ -240,7 +261,7 @@ class DCA1000Processor(_Processor):
             #reshape to index as [rx channel, sample, chirp]
             adc_data_cube = np.reshape(adc_data,(self.rx_channels,self.samples_per_chirp,self.total_chirps_per_frame),order="F")
 
-            return virtual_array_data_cube
+            return adc_data_cube
     
     def _compute_frame_normalized_range_azimuth_heatmaps(self,adc_data_cube:np.ndarray):
 
@@ -279,22 +300,62 @@ class DCA1000Processor(_Processor):
         data = data[:self.max_range_bin,:]
 
         #perform thresholding on the input data
-        data[data <= self.power_range_dB[0]] = self.power_range_dB[0]
-        data[data >= self.power_range_dB[1]] = self.power_range_dB[1]
+        data[data <= self.rng_az_power_range_dB[0]] = self.rng_az_power_range_dB[0]
+        data[data >= self.rng_az_power_range_dB[1]] = self.rng_az_power_range_dB[1]
         
         #normalize the data
-        data = (data - self.power_range_dB[0]) / \
-            (self.power_range_dB[1] - self.power_range_dB[0])
+        data = (data - self.rng_az_power_range_dB[0]) / \
+            (self.rng_az_power_range_dB[1] - self.rng_az_power_range_dB[0])
+
+        return data
+    
+    def _compute_normalized_range_doppler_response(self,adc_data_cube:np.ndarray):
+
+        #get the data from a single antenna
+        data = adc_data_cube[0,:,:]
+
+        #compute range FFT
+        data = np.fft.fftshift(np.fft.fft(data,axis=0))
+
+        #compute doppler FFT
+        data = 20 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(data,axis=1))))
+
+        max_db = np.max(data)
+
+        #filter to only the desired output ranges
+        data = data[:self.max_range_bin,:]
+
+        #TODO implement thresholding
+        #perform thresholding on the input data
+        data[data <= self.rng_dop_poer_range_dB[0]] = self.rng_dop_poer_range_dB[0]
+        data[data >= self.rng_dop_poer_range_dB[1]] = self.rng_dop_poer_range_dB[1]
+        
+        #normalize the data
+        data = (data - self.rng_dop_poer_range_dB[0]) / \
+            (self.rng_dop_poer_range_dB[1] - self.rng_dop_poer_range_dB[0])
 
         return data
 
+
+
+
     def _init_video(self):
+
+        #Range-Azimuth Response
 
         cv2.namedWindow("Range-Azimuth Response",cv2.WINDOW_NORMAL)
 
         cv2.resizeWindow(
             "Range-Azimuth Response",
             self.num_angle_bins * self.zoom,
+            self.max_range_bin * self.zoom)
+        
+        #Range-Doppler Response
+        cv2.namedWindow("Range-Doppler Response",cv2.WINDOW_NORMAL)
+
+        cv2.resizeWindow(
+            "Range-Doppler Response",
+            self.num_vel_bins * self.zoom,
             self.max_range_bin * self.zoom)
 
         return

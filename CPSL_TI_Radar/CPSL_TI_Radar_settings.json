@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/TI_Radar_Demo_Visualizer/configurations/DCA1000/custom_configs/1443config.cfg",
+            "TI_Radar_config_path":"/home/david/Documents/CPSL_TI_Radar/configurations/DCA1000/custom_configs/1443config.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -44,17 +44,17 @@
                 "authkey":"DCA1000_client",
                 "RawPacketData":{
                     "addr":6001,
-                    "enabled":true
+                    "enabled":false
                 },
                 "NormRngAzResp":{
                     "addr":6002,
-                    "enabled":true
+                    "enabled":false
                 }
             }
 
         },
     "ROS/Listeners":
         {
-            "enabled":true
+            "enabled":false
         }
 }
