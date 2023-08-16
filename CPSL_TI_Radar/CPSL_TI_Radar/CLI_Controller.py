@@ -12,16 +12,21 @@ class CLIController(_BackgroundProcess):
 
     def __init__(
             self,
-            conn:Connection,
+            conn_parent:Connection,
             settings_file_path='config_Radar.json'):
-        """Initialize the controller class
+        """Initialization process for the CLI Controller Class
 
         Args:
-            settings_file_path (str): _description_
+            conn_parent (connection): connection to the parent process (RADAR)
+            settings_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
         """
-        super().__init__("CLI_Controller",
-                       conn,
-                       settings_file_path)       
+        super().__init__(
+            process_name="CLI_Controller",
+            conn_parent=conn_parent,
+            conn_processor_data=None,
+            conn_handler_data=None,
+            settings_file_path=settings_file_path
+        )     
 
         #load the class variables
         self.TI_Radar_config_path = ""
@@ -47,7 +52,7 @@ class CLIController(_BackgroundProcess):
     def run(self):
         try:
             while self.exit_called == False:
-                msg = self._conn_RADAR.recv()
+                msg = self._conn_parent.recv()
                 self._conn_process_Radar_command(msg)
 
             #once exit is called close out and return
@@ -73,7 +78,7 @@ class CLIController(_BackgroundProcess):
         #confirm that a config file path has been loaded
         if self.TI_Radar_config_loaded == False:
             self._conn_send_message_to_print("CLI_Controller.send_config: no config file path loaded")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
             return
 
         #load in the TI Radar config file
@@ -81,7 +86,7 @@ class CLIController(_BackgroundProcess):
             config = [line.rstrip('\r\n') for line in open(self.TI_Radar_config_path)]
         except FileNotFoundError:
             self._conn_send_message_to_print("CLI_Controller.send_config:could not find {}".format(self.TI_Radar_config_path))
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
             return
 
         #send every command except for the sensor start command
@@ -137,7 +142,7 @@ class CLIController(_BackgroundProcess):
         except serial.SerialTimeoutException:
             self._conn_send_message_to_print(
                 "CLI_Controller.serial_flush_CLI_port: Timed out waiting for new data. serial port closed")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
             self.serial_port.close()
             self.streaming_enabled = False
             return False
@@ -165,7 +170,7 @@ class CLIController(_BackgroundProcess):
                 pass
             else:
                 self._conn_send_message_to_print("CLI_Controller._serial_send_command: Attempted to send {}, but received {} (expected to receive response with:'mmwDemo:/>')".format(command,resp))
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
                 successful_send = False
 
         if self.verbose:
@@ -192,7 +197,7 @@ class CLIController(_BackgroundProcess):
                 self.TI_Radar_config_loaded = True
             case _:
                 self._conn_send_message_to_print("CLI_Controller._process_Radar_command: command not recognized")
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
         
         #send back command executed message
         self._conn_send_command_executed_message(command.type)

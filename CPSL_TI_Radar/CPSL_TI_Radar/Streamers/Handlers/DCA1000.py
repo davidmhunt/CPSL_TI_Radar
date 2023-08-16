@@ -1,6 +1,12 @@
 
 import socket
 import struct
+from CPSL_TI_Radar._Message import _Message
+from CPSL_TI_Radar._Message import _MessageTypes
+from CPSL_TI_Radar._Background_Process import _BackgroundProcess
+import sys
+
+from multiprocessing.connection import Connection
 
 class DCA1000CommandCodes:
     
@@ -20,13 +26,13 @@ class DCA1000CommandCodes:
     READ_FPGA_VERSION = 0x0E
 
 
-class DCA1000Handler:
+class DCA1000Handler(_BackgroundProcess):
     
     def __init__(self,
-                 FPGA_IP:str='192.168.33.180',
-                 system_IP:str = '192.168.33.30',
-                 cmd_port:int = 4096,
-                 data_port:int = 4098):
+                 conn_parent:Connection,
+                 conn_handler_data:Connection,
+                 settings_file_path = 'config_RADAR.json'
+                 ):
         """Initialize the DCA1000 handler for given ip address, command port, and data port
 
         Args:
@@ -37,27 +43,35 @@ class DCA1000Handler:
             bool: True if DCA1000 initialized correctly, False if not
         """
 
-        self.init_success = True
-
+        #initialize background process parent class
+        super().__init__("DCA1000Handler",
+                         conn_parent=conn_parent,
+                         settings_file_path=settings_file_path,
+                         conn_processor_data=None,
+                         conn_handler_data=conn_handler_data)
+        
         #connectivity
-        self.system_IP = system_IP
-        self.FPGA_IP = FPGA_IP
+        self.system_IP = None
+        self.FPGA_IP = None
         
         #FPGA version
         self.FPGA_version:str = None
         
         #commands
-        self.cmd_port = cmd_port
+        self.cmd_port = None
         self.cmd_socket = None
         self.cmd_socket_bound = False
         self.cmd_header = 0xa55a
         self.cmd_footer = 0xEEAA
 
         #data streaming
-        self.data_port = data_port
+        self.data_port = None
         self.data_socket = None
         self.data_socket_bound = False
         self.streaming_enabled = False
+
+        #initialize connection information
+        self._init_DCA1000_connection_information()
 
         #connect to data capture board
         self._init_ethernet_sockets()
@@ -66,7 +80,24 @@ class DCA1000Handler:
         if self.init_success:
             self._init_DCA1000_FPGA()
         
+        #if the FPGA was initialized successfully, send the version of the FPGA to print
+        if self.init_success:
+            out_str = "DCA1000Handler: Initialized successfully with FPGA Version {}".format(self.FPGA_version)
+            self._conn_send_message_to_print(out_str)
+        
+        self._conn_send_init_status(self.init_success)
+
+        self.run()
         return 
+
+    def _init_DCA1000_connection_information(self):
+
+        #get the ip address
+        self.system_IP = self._settings["Streamer"]["DCA1000_streaming"]["system_IP"]
+        self.FPGA_IP = self._settings["Streamer"]["DCA1000_streaming"]["FPGA_IP"]
+        self.data_port = self._settings["Streamer"]["DCA1000_streaming"]["data_port"]
+        self.cmd_port = self._settings["Streamer"]["DCA1000_streaming"]["cmd_port"]
+
 
     def _init_ethernet_sockets(self):
         """Bind to the cmd and data ethernet ports. Handle errors accordingly
@@ -81,7 +112,7 @@ class DCA1000Handler:
             self.cmd_socket_bound = True
             self.cmd_socket.settimeout(1e-3)
         except socket.error:
-            print("DCA1000._init_ethernet_sockets: Failed to connect to cmd socket")
+            self._conn_send_message_to_print("DCA1000._init_ethernet_sockets: Failed to connect to cmd socket")
             self.init_success = False
 
         #bind to data socket
@@ -93,20 +124,42 @@ class DCA1000Handler:
             self.data_socket_bound = True
             self.data_socket.settimeout(1)
         except socket.error:
-            print("DCA1000._init_ethernet_sockets: Failed to connect to data socket")
+            self._conn_send_message_to_print("DCA1000._init_ethernet_sockets: Failed to connect to data socket")
             self.init_success = False
     
     def close(self):
         """Close all sockets if they are currently open
         """
         if self.streaming_enabled:
-            self.stop_streaming()
+            self._stop_streaming()
         
         if self.cmd_socket_bound:
             self.cmd_socket.close()
         if self.data_socket_bound:
             self.data_socket.close()
     
+    def run(self):
+
+        try:
+            while self.exit_called == False:
+                if self.streaming_enabled:
+                    #get the next udp packet
+                    self.get_next_udp_packet()
+                    if self._conn_parent.poll():
+                        while self._conn_parent.poll():
+                            #while commands are available from the streamer process them
+                            self._conn_process_parent_command()
+                
+                else:
+                    self._conn_process_parent_command()
+            
+            self.close()
+        
+        except KeyboardInterrupt:
+            self.close()
+            sys.exit()
+
+#initializing the DCA1000 FPGA
     def _init_DCA1000_FPGA(self):
         """Send commands to initialize the DCA1000 and obtain the FPGA version
         """
@@ -137,12 +190,12 @@ class DCA1000Handler:
 
         #check init satus
         if num_fails > 0:
-            print("DCA1000._init_DCA1000_FPGA: {} commands failed".format(num_fails))
+            self._conn_send_message_to_print("DCA1000._init_DCA1000_FPGA: {} commands failed".format(num_fails))
             self.init_success = False
         
         return
 
-#sending and receiving commands
+#sending and receiving commands to DCA1000 FPGA
     def _send_command(self,command_code:int,data:bytearray=None):
         """Send command to the DCA1000
 
@@ -210,7 +263,7 @@ class DCA1000Handler:
             print("DCA1000._receive_command_response: cmd_socket is not connected")
             return 0x00
 
-#custom commands/responses
+#custom commands/responses to DCA1000 FPGA
     def _send_CONFIG_PACKET_DATA(self):
         """Send command to configure the packet data on the FPGA
         """
@@ -270,13 +323,33 @@ class DCA1000Handler:
 
         self.FPGA_version = "{}.{}".format(major_version,minor_version)
 
-#Handle starting and stopping streaming
-    def start_streaming(self):
-        """Start streaming on DCA1000
+#obtaining packets from the DCA1000 FPGA
+    def get_next_udp_packet(self):
+        try:
+            msg,server = self.data_socket.recvfrom(1472)
+        except socket.error as e:
+            self._conn_send_message_to_print("DCA1000Handler.get_next_udp_packet: experienced the following socket error when attempting to get next packet:{}".format(e))
+            self._conn_send_parent_error_message()
+            self._stop_streaming()
+            self.streaming_enabled = False
+            return
 
-        Returns:
-        bool: True if streaming successfully started, False if not 
+        #send the message to the streamer class
+        try:
+            self._conn_handler_data.send_bytes(msg)
+        except BrokenPipeError:
+            self._conn_send_message_to_print("DCA1000Handler.get_next_udp_packet: attempted to send new udp packet to Streamer, but streamer was closed")
+            self._conn_send_parent_error_message()
+            self._stop_streaming()
+            self.streaming_enabled = False
+
+#Handle starting and stopping streaming
+    def _start_streaming(self):
+        """Start streaming on DCA1000
         """
+
+        #success is true if streaming is enabled
+        success = True
         if self.data_socket_bound == True:
             if self.streaming_enabled == False:
                 #send record start command
@@ -286,21 +359,31 @@ class DCA1000Handler:
                 status = self._recv_command_response(DCA1000CommandCodes.RECORD_START)
 
                 if status == 0:
-                    self.streaming_enabled = True
-                    return True #streaming started successfully
+                    success = True #streaming started successfully
                 else:
-                    return False #error occured when attempting to start streaming
+                    success = False #error occured when attempting to start streaming
             else:
-                return True #streaming was already going
+                success =  True #streaming was already going
         else:
-            return False #socket was not yet bounded
+            success =  False #socket was not yet bounded
         
-    def stop_streaming(self):
+        if success:
+            self.streaming_enabled = True
+        else:
+            self.streaming_enabled = False
+            self._conn_send_message_to_print("DCA1000_Handler_start_streaming: experienced error when attempting to start streaming")
+            self._conn_send_parent_error_message()  
+
+    def _stop_streaming(self):
         """Stop streaming on the DCA1000
 
         Returns:
             bool: True if streaming stopped successfully, False if not
         """
+        
+        #success is true if streaming stopped successfully
+        success = True
+
         if self.data_socket_bound == True:
             if self.streaming_enabled == True:
                 #send record start command
@@ -311,15 +394,38 @@ class DCA1000Handler:
 
                 if status == 0:
                     self.streaming_enabled = False
-                    return True #streaming started successfully
+                    success = True #streaming started successfully
                 else:
-                    return False #error occured when attempting to start streaming
+                    success = False #error occured when attempting to start streaming
             else:
-                return True #streaming was already going
+                success = True #streaming was already going
         else:
-            return False #socket was not yet bounded
+            success = False #socket was not yet bounded
+        
+        if success:
+            self.streaming_enabled = False
+        else:
+            self.streaming_enabled = False #disable streaming due to error
+            self._conn_send_message_to_print("DCA1000_Handler_start_streaming: experienced error when attempting to start streaming")
+            self._conn_send_parent_error_message() 
 
+#Handle communication with parent (streamer class)
+    def _conn_process_parent_command(self):
 
+        command:_Message = self._conn_parent.recv()
+        match command.type:
+            case _MessageTypes.EXIT:
+                self.exit_called = True
+            case _MessageTypes.START_STREAMING:
+                self._start_streaming()
+            case _MessageTypes.STOP_STREAMING:
+                self._stop_streaming()
+            case _:
+                self._conn_send_message_to_print(
+                    "DCA1000Handler._process_Streamer_command: command not recognized")
+                self._conn_send_parent_error_message()
+        
+        self._conn_send_command_executed_message(command.type)
 
         
 

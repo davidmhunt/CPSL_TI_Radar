@@ -12,14 +12,21 @@ from CPSL_TI_Radar.Processors.TLV_Processors._TLVTags import TLVTags
 
 class IWRDemoProcessor(_Processor):
     def __init__(self,
-                 conn:Connection,
-                 data_connection:Connection,
+                 conn_parent:Connection,
+                 conn_processor_data:Connection,
                  settings_file_path='config_Radar.json'):
         
-        super().__init__(conn=conn,
+        super().__init__(conn_parent=conn_parent,
                          settings_file_path=settings_file_path,
-                         data_connection=data_connection)
-        
+                         conn_processor_data=conn_processor_data)
+        """Initialization process for IWR Demo Processor class
+
+        Args:
+            conn_parent (connection): connection to the parent process (RADAR)
+            conn_processor_data (Connection): connection to pass data between Processors and Streamers.
+            settings_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
+        """
+
         #buffers for processing packets
         self.magic_word = bytearray([0x02,0x01,0x04,0x03,0x06,0x05,0x08,0x07])
         self.header = {}
@@ -84,7 +91,7 @@ class IWRDemoProcessor(_Processor):
             self.tlv_processor_detected_objects.init_conn_client(detected_points_address,authkey)
         except AuthenticationError:
             self._conn_send_message_to_print("IWR_Demo_Processor_init_TLV_listeners: experienced Authentication error when attempting to connect to Client")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
 
 
 #processing packets
@@ -140,5 +147,5 @@ class IWRDemoProcessor(_Processor):
                     self.tlv_processor_detected_objects.process_new_data(data)
         except BrokenPipeError:
             self._conn_send_message_to_print("IWR_Demo_Processor_process_TLV: attempted to send data to Listener, but Client process was already closed")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
 

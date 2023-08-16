@@ -9,14 +9,19 @@ import serial.tools.list_ports
 class _BackgroundProcess:
     def __init__(self,
                  process_name,
-                 conn:Connection,
-                 settings_file_path = 'config_RADAR.json',
-                 data_connection:Connection = None):
+                 conn_parent:Connection,
+                 conn_processor_data:Connection = None,
+                 conn_handler_data:Connection = None,
+                 settings_file_path = 'config_RADAR.json'):
         """Initialization process for all background processes
 
         Args:
             process_name (str): the name of the process
-            conn (connection): connection to the parent process (RADAR)
+            conn_parent (connection): connection to the parent process (RADAR)
+            conn_processor_data (Connection): connection to pass data between Processors and Streamers.
+                Defaults to None.
+            conn_handler_data (Connection): connection to pass data between Handlers and Streamers.
+                Defaults to None.
             settings_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
         """
         
@@ -30,11 +35,14 @@ class _BackgroundProcess:
         #save process name
         self._process_name = process_name
         
-        #establish connection to the parent class (radar)
-        self._conn_RADAR = conn
+        #establish connection to the parent class
+        self._conn_parent = conn_parent
 
-        #establish a connection to send byte data between processes
-        self._conn_data = data_connection
+        #establish a connection to send byte data from Streamer to Processor
+        self._conn_processor_data = conn_processor_data
+
+        #establish a connection to send byte data from Handler to Streamer
+        self._conn_handler_data = conn_handler_data
 
         #initialize variable for a serial port
         self.serial_port = None
@@ -125,7 +133,7 @@ class _BackgroundProcess:
         else:
             msg = _Message(_MessageTypes.INIT_FAIL)
         
-        self._conn_RADAR.send(msg)
+        self._conn_parent.send(msg)
     
     def _conn_send_message_to_print(self,message:str):
         """Send a message to the Radar object to print on the terminal
@@ -133,18 +141,18 @@ class _BackgroundProcess:
         Args:
             message (str): The message to be printed on the terminal
         """
-        self._conn_RADAR.send(_Message(_MessageTypes.PRINT_TO_TERMINAL,message))
+        self._conn_parent.send(_Message(_MessageTypes.PRINT_TO_TERMINAL,message))
 
     def _conn_send_clear_terminal(self):
         """Send message for Radar object to clear the terminal
         """
-        self._conn_RADAR.send(_Message(_MessageTypes.PRINT_CLEAR_TERMINAL))
+        self._conn_parent.send(_Message(_MessageTypes.PRINT_CLEAR_TERMINAL))
     
-    def _conn_send_error_radar_message(self):
-        """Sends a ERROR_RADAR message to let Radar know something has gone wrong
+    def _conn_send_parent_error_message(self):
+        """Sends a ERROR message to let parent know something has gone wrong
         """
 
-        self._conn_RADAR.send(_Message(_MessageTypes.ERROR_RADAR))
+        self._conn_parent.send(_Message(_MessageTypes.ERROR))
     
     def _conn_send_command_executed_message(self,command:_MessageTypes):
         """Send command executed message notifying RADAR class that the 
@@ -154,7 +162,7 @@ class _BackgroundProcess:
             command (_MessageTypes): The command that was successfully executed
         """
 
-        self._conn_RADAR.send(
+        self._conn_parent.send(
             _Message(
                 type=_MessageTypes.COMMAND_EXECUTED,
                 value=command))

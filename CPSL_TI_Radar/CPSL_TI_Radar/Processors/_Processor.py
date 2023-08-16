@@ -20,14 +20,25 @@ class TLVTags:
 
 class _Processor(_BackgroundProcess):
     def __init__(self,
-                 conn:Connection,
-                 data_connection:Connection,
+                 conn_parent:Connection,
+                 conn_processor_data:Connection,
                  settings_file_path='config_Radar.json'):
         
-        super().__init__(process_name="Processor",
-                         conn=conn,
-                         settings_file_path=settings_file_path,
-                         data_connection=data_connection)
+        """Initialization process for parent Processor class
+
+        Args:
+            conn_parent (connection): connection to the parent process (RADAR)
+            conn_processor_data (Connection): connection to pass data between Processors and Streamers.
+            settings_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
+        """
+        
+        super().__init__(
+            process_name="Processor",
+            conn_parent=conn_parent,
+            conn_processor_data=conn_processor_data,
+            conn_handler_data=None,
+            settings_file_path=settings_file_path
+        )
         
         
         #byte array for the current packet of data
@@ -52,9 +63,9 @@ class _Processor(_BackgroundProcess):
                 #process new messages from either the Radar or the 
                 if self.streaming_enabled:
                     #wait until either the Radar or the Processor sends data
-                    ready_conns = connection.wait([self._conn_RADAR,self._conn_data],timeout=None)
+                    ready_conns = connection.wait([self._conn_parent,self._conn_processor_data],timeout=None)
                     for conn in ready_conns:
-                        if conn == self._conn_RADAR:
+                        if conn == self._conn_parent:
                             self._conn_process_Radar_command()
                         else: #must be new data available
                             self._process_new_packet()
@@ -97,12 +108,12 @@ class _Processor(_BackgroundProcess):
         
         #receive the latest packet from the processor
         #TODO: currently a risk of the processor dropping packets here
-        while self._conn_data.poll():
+        while self._conn_processor_data.poll():
             try:
-                self.current_packet = self._conn_data.recv_bytes()
+                self.current_packet = self._conn_processor_data.recv_bytes()
             except EOFError:
                 self._conn_send_message_to_print("Processor._process_new_packet: attempted to receive new packet from Streamer, but streamer was closed")
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
                 self.streaming_enabled = False
                 return
 
@@ -131,7 +142,7 @@ class _Processor(_BackgroundProcess):
         """
         if self.config_loaded == False:
             self._conn_send_message_to_print("Processor._start_streaming: Attempted to start streaming without loading a configuration first")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
         else:
             self.streaming_enabled = True
         
@@ -141,7 +152,7 @@ class _Processor(_BackgroundProcess):
         """Wait for and then execute commands from the Radar class. Sends the command type back to the Radar as confirmation that the command has been performed
         """
         
-        command:_Message = self._conn_RADAR.recv()
+        command:_Message = self._conn_parent.recv()
         match command.type:
             case _MessageTypes.EXIT:
                 self.exit_called = True
@@ -157,7 +168,7 @@ class _Processor(_BackgroundProcess):
             case _:
                 self._conn_send_message_to_print(
                     "Processor._process_Radar_command: command not recognized")
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
             
         self._conn_send_command_executed_message(command.type)
         

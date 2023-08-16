@@ -5,6 +5,7 @@ import struct
 
 #helper classes
 from multiprocessing.connection import Connection
+from multiprocessing import Process,Pipe
 from CPSL_TI_Radar._Message import _Message,_MessageTypes
 from CPSL_TI_Radar.Streamers._Streamer import _Streamer
 from CPSL_TI_Radar.Streamers.Handlers.DCA1000 import DCA1000Handler
@@ -12,16 +13,27 @@ from CPSL_TI_Radar.Streamers.Handlers.DCA1000 import DCA1000Handler
 class DCA1000Streamer(_Streamer):
 
     def __init__(self,
-                 conn: Connection,
-                 data_connection: Connection,
+                 conn_parent: Connection,
+                 conn_processor_data: Connection,
+                 conn_handler_data: Connection,
                  settings_file_path = 'config_Radar.json'):
+        """Initialize the DCA1000 Streamer class
+
+        Args:
+            conn_parent (Connection): connection to the Radar class
+            conn_processor_data (Connection): connection to the Processor Class
+            conn_handler_data (Connection, optional): connection to a Handler Class (in event of DCA1000).
+                Defaults to None
+            settings_file_path (str, optional): Path to the radar settings json file. Defaults to 'config_Radar.json'.
+        """
         
-        super().__init__(conn,data_connection,settings_file_path)
-
-        #initialize streaming over ethernet on the DCA1000
-        self.dca1000_handler = None
-        self._init_DCA1000Handler()
-
+        super().__init__(
+            conn_parent = conn_parent,
+            conn_processor_data = conn_processor_data,
+            conn_handler_data=conn_handler_data,
+            settings_file_path=settings_file_path
+        )
+        
         #packet handling
         self.udp_packet_num = 0
         self.udp_byte_count = 0
@@ -33,30 +45,11 @@ class DCA1000Streamer(_Streamer):
 
         self._conn_send_init_status(self.init_success)
         self.run()
-
-        return
-    
-    def _init_DCA1000Handler(self):
-        """Initialize the DCA1000Handler class to interact with the DCA1000
-        """
-
-        #get the ip address
-        system_IP = self._settings["Streamer"]["DCA1000_streaming"]["system_IP"]
-        FPGA_IP = self._settings["Streamer"]["DCA1000_streaming"]["FPGA_IP"]
-        data_port = self._settings["Streamer"]["DCA1000_streaming"]["data_port"]
-        cmd_port = self._settings["Streamer"]["DCA1000_streaming"]["cmd_port"]
-
-        #create the dca1000 handler
-        self.dca1000_handler = DCA1000Handler(FPGA_IP=FPGA_IP,
-                                              system_IP=system_IP,
-                                              data_port=data_port,
-                                              cmd_port=cmd_port)
         
-        if self.dca1000_handler.init_success == False:
-            self.init_success = False
-        elif self.verbose:
-            self._conn_send_message_to_print("DCA1000 Initialized successfully with FPGA Version {}".format(self.dca1000_handler.FPGA_version))
+        return
 
+    
+#loading new configurations
     def _load_new_config(self, config_info: dict):
         """Over-rided version of _load_new_config to do additional processing for the DCA1000. Load a new set of radar performance and radar configuration dictionaries into the processor class
 
@@ -82,44 +75,32 @@ class DCA1000Streamer(_Streamer):
         """End the streamer process
         """
 
-        #close DCA1000 ports
-        self.dca1000_handler.close()
-        #TODO: check for error handling if needed
+        return
 
 #start and stop streaming
     def _start_streaming(self):
         """Start streaming on DCA1000
         """
         
-        success = self.dca1000_handler.start_streaming()
-        if success:
-            self.streaming_enabled = True
-        else:
-            self._conn_send_message_to_print("DCA1000_Streamer._start_streaming: DCA1000 failed to start streaming")
-            self._conn_send_error_radar_message()
+        self.streaming_enabled = True
     
     def _stop_streaming(self):
         """Stop Streaming on DCA1000
         """
 
-        success = self.dca1000_handler.stop_streaming()
-        if success:
-            self.streaming_enabled = False
-        else:
-            self._conn_send_message_to_print("DCA1000_Streamer._start_streaming: DCA1000 failed to stop streaming")
-            self._conn_send_error_radar_message()
+        self.streaming_enabled = False
 
 #process new packets
     def _get_next_frame_packet(self):
-        """Get the next UDP packet and check for new frames
+        """Get the next UDP packet and send to the processor
         """
         
         #get the next packet of data from the DCA1000
         try:
-            msg,server = self.dca1000_handler.data_socket.recvfrom(1472)
-        except socket.error as e:
-            self._conn_send_message_to_print("DCA1000_Streamer._get_next_frame_packet: experienced the following socket error when attempting to get next packet:{}".format(e))
-            self._conn_send_error_radar_message()
+            msg = self._conn_handler_data.recv_bytes()
+        except EOFError:
+            self._conn_send_message_to_print("DCA1000_Streamer._get_next_frame_packet: DCA1000Handler closed, unable to read data")
+            self._conn_send_parent_error_message()
             self._stop_streaming()
             self.streaming_enabled = False
             return
@@ -194,10 +175,12 @@ class DCA1000Streamer(_Streamer):
             
             #send to the processor
             try:
-                self._conn_data.send_bytes(self.current_packet)
+                self._conn_processor_data.send_bytes(self.current_packet)
             except BrokenPipeError:
                 self._conn_send_message_to_print("DCA1000Streamer._check_for_new_frame: attempted to send new packet to Processor, but processor was closed")
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
+                self._stop_streaming()
+                self.streaming_enabled = False
             
             self.num_detected_frames += 1
 

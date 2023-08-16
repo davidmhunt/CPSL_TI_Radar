@@ -20,22 +20,29 @@ class DCA1000Processor(_Processor):
     font_size_color_bar = 10
 
     def __init__(self,
-                 conn:Connection,
-                 data_connection:Connection,
+                 conn_parent:Connection,
+                 conn_processor_data:Connection,
                  settings_file_path='config_Radar.json'):
+        """Initialization process for DCA1000 Processor class
+
+        Args:
+            conn_parent (connection): connection to the parent process (RADAR)
+            conn_processor_data (Connection): connection to pass data between Processors and Streamers.
+            settings_file_path (str, optional): path to the RADAR config file. Defaults to 'config_RADAR.json'.
+        """
         
-        super().__init__(conn=conn,
+        super().__init__(conn_parent=conn_parent,
                          settings_file_path=settings_file_path,
-                         data_connection=data_connection)
+                         conn_processor_data=conn_processor_data)
         
         self.current_packet = bytearray()
-
+        
         #key radar parameters
         #TODO: enable these at a later time
         self.max_range_bin = 128 #enable this a bit better
         self.num_chirps_to_save = 0 #set from config
         self.num_angle_bins = 64
-        self.rng_az_power_range_dB = [80,105]
+        self.rng_az_power_range_dB = [60,105]
         self.rng_dop_poer_range_dB = [70,140]
 
 
@@ -191,7 +198,7 @@ class DCA1000Processor(_Processor):
                 t.join()
         except AuthenticationError:
             self._conn_send_message_to_print("DCA1000Processor._init_listeners: experienced Authentication error when attempting to connect to Client")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
 
     def _init_RawPacketData_listener(self):
 
@@ -279,13 +286,18 @@ class DCA1000Processor(_Processor):
         
         if self._listeners_enabled:
             #send ADC data cube
-            if self._conn_RawPacketData_enabled:
-                adc_packet = np.frombuffer(self.current_packet,dtype=np.int16)
-                self._conn_RawPacketData.send(adc_packet)
-            if self._conn_NormRngAzResp_enabled:
-                self._conn_NormRngAzResp.send(range_azimuth_response)
-            if self._conn_NormRngDopResp_enabled:
-                self._conn_NormRngDopResp.send(range_doppler_response)
+            try:
+                if self._conn_RawPacketData_enabled:
+                    adc_packet = np.frombuffer(self.current_packet,dtype=np.int16)
+                    self._conn_RawPacketData.send(adc_packet)
+                if self._conn_NormRngAzResp_enabled:
+                    self._conn_NormRngAzResp.send(range_azimuth_response)
+                if self._conn_NormRngDopResp_enabled:
+                    self._conn_NormRngDopResp.send(range_doppler_response)
+            except ConnectionResetError:
+                self._conn_send_message_to_print("DCA1000 Processor.__conn_send_data_to_listeners: A listener was already closed or reset")
+                self._conn_send_parent_error_message()
+                self.streaming_enabled = False
     
 
     def _get_raw_ADC_data_cube(self):
