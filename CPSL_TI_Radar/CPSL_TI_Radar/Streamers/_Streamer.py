@@ -14,18 +14,27 @@ from CPSL_TI_Radar._Message import _Message,_MessageTypes
 class _Streamer(_BackgroundProcess):
 
     def __init__(self,
-                 conn:Connection,
-                 data_connection:Connection, 
+                 conn_parent:Connection,
+                 conn_processor_data:Connection, 
+                 conn_handler_data:Connection = None,
                  settings_file_path='config_Radar.json'):
         """Initialize the parent Streamer class
 
         Args:
-            conn (Connection): connection to the Radar class
-            data_connection (Connection): connection to the Processor Class
+            conn_parent (Connection): connection to the Radar class
+            conn_processor_data (Connection): connection to the Processor Class
+            conn_handler_data (Connection, optional): connection to a Handler Class (in event of DCA1000).
+                Defaults to None
             settings_file_path (str, optional): Path to the radar settings json file. Defaults to 'config_Radar.json'.
         """
 
-        super().__init__("Streamer",conn,settings_file_path,data_connection)
+        super().__init__(
+            process_name="Streamer",
+            conn_parent=conn_parent,
+            conn_processor_data=conn_processor_data,
+            conn_handler_data=conn_handler_data,
+            settings_file_path=settings_file_path
+        )
 
         #parameters to store radar configuration
         self.config_loaded = False
@@ -51,9 +60,9 @@ class _Streamer(_BackgroundProcess):
                 if self.streaming_enabled:
                     self._get_next_frame_packet()
                     #process new RADAR commands if availble
-                    if self._conn_RADAR.poll():
+                    if self._conn_parent.poll():
                         #process all radar commands
-                        while self._conn_RADAR.poll():
+                        while self._conn_parent.poll():
                             #receive and process the message from the RADAR class
                             self._conn_process_Radar_command()
                 else:
@@ -106,7 +115,7 @@ class _Streamer(_BackgroundProcess):
     
     def _conn_process_Radar_command(self):
 
-        command:_Message = self._conn_RADAR.recv()
+        command:_Message = self._conn_parent.recv()
         match command.type:
             case _MessageTypes.EXIT:
                 self.exit_called = True
@@ -119,6 +128,6 @@ class _Streamer(_BackgroundProcess):
             case _:
                 self._conn_send_message_to_print(
                     "Streamer._process_Radar_command: command not recognized")
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
         
         self._conn_send_command_executed_message(command.type)

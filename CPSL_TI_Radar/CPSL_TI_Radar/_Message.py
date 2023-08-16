@@ -34,7 +34,7 @@ class _MessageTypes:
     NEW_DATA = 0x0D
 
     #Other Errors
-    ERROR_RADAR = 0x0E
+    ERROR = 0x0E
 
 class _Message:
 

@@ -24,6 +24,9 @@ from CPSL_TI_Radar.Processors._Processor import _Processor
 from CPSL_TI_Radar.Processors.IWR_Demo_Processor import IWRDemoProcessor
 from CPSL_TI_Radar.Processors.DCA1000_Processor import DCA1000Processor
 
+#Handlers
+from CPSL_TI_Radar.Streamers.Handlers.DCA1000 import DCA1000Handler
+
 #configuration management
 from CPSL_TI_Radar.ConfigManager import ConfigManager
 
@@ -66,6 +69,7 @@ class Radar:
         self._conn_CLI_Controller = None
         self._conn_Streamer = None
         self._conn_Processor = None
+        self._conn_Handler = None #reserved for DCA1000 handler at the moment
         #list of background process connections to simplify initialization, starting, and closing of background processes
         self.background_process_connections:list(Connection) = []
 
@@ -136,6 +140,13 @@ class Radar:
             except BrokenPipeError:
                 print("Radar.close: Processor was already closed, no STOP_STREAMING message sent")
 
+            #stop processing
+            if DCA1000Handler in self.background_process_classes:
+                try:
+                    self._conn_Handler.send(_Message(_MessageTypes.STOP_STREAMING))
+                except BrokenPipeError:
+                    print("Radar.close: DCA1000Handler was already closed, no STOP_STREAMING message sent")
+
         #send EXIT commands to processes
         self._conn_send_EXIT_commands()
 
@@ -190,6 +201,11 @@ class Radar:
             successful_execution = listeners_connected and successful_execution
 
         if successful_execution:
+
+            #start streaming on handler (if enabled)
+            if DCA1000Handler in self.background_process_classes:
+                self._conn_Handler.send(_Message(_MessageTypes.START_STREAMING))
+
             #start streaming data
             self._conn_Streamer.send(_Message(_MessageTypes.START_STREAMING))
             
@@ -260,8 +276,8 @@ class Radar:
             self.background_process_names = ["CLIController","SerialStreamer","IWRDemoProcessor"]
             return True
         elif self._settings["Streamer"]["DCA1000_streaming"]["enabled"]:
-            self.background_process_classes = [CLIController,DCA1000Streamer,DCA1000Processor]
-            self.background_process_names = ["CLIController","DCA1000Streamer","DCA1000Processor"]
+            self.background_process_classes = [CLIController,DCA1000Streamer,DCA1000Processor,DCA1000Handler]
+            self.background_process_names = ["CLIController","DCA1000Streamer","DCA1000Processor","DCA1000Handler"]
             return True
         else:
             return False
@@ -285,16 +301,36 @@ class Radar:
             self._conn_Processor]
 
         #initialize data pipe between streamer and processor classes
-        conn_Processor_data,conn_Streamer_data = Pipe(False)
+        conn_processor_data_PROCESSOR,conn_processor_data_STREAMER = Pipe(False)
+
+        #initialize handler if DCA1000 being used
+        if DCA1000Handler in self.background_process_classes:
+            #initialize the connection to the Radar class
+            self._conn_Handler,conn_Handler_child = Pipe()
+
+            background_process_connection_children.append(conn_Handler_child)
+            self.background_process_connections.append(self._conn_Handler)
+
+            #initialize data passing between Streamer and Handler
+            conn_handler_data_STREAMER,conn_handler_data_HANDLER = Pipe(False)
 
         for i in range(len(self.background_process_classes)):
 
             if self.background_process_classes[i].__base__ == _Streamer:
-                data_conn = conn_Streamer_data
+                conn_processor_data = conn_processor_data_STREAMER
+                if DCA1000Handler in self.background_process_classes:
+                    conn_handler_data = conn_handler_data_STREAMER
+                else:
+                    conn_handler_data = None
             elif self.background_process_classes[i].__base__ == _Processor:
-                data_conn = conn_Processor_data
+                conn_processor_data = conn_processor_data_PROCESSOR
+                conn_handler_data = None
+            elif self.background_process_classes[i] == DCA1000Handler:
+                conn_processor_data = None
+                conn_handler_data = conn_handler_data_HANDLER
             else:
-                data_conn = None
+                conn_processor_data = None
+                conn_handler_data = None
             
             self.background_processes.append(
                 Process(
@@ -303,15 +339,17 @@ class Radar:
                         self.background_process_classes[i],
                         background_process_connection_children[i],
                         self._settings_file_path,
-                        data_conn
+                        conn_processor_data,
+                        conn_handler_data
             )))
         return
 
     def _run_process(
             process_class,
-            conn:Connection,
+            conn_parent:Connection,
             settings_file_path,
-            data_conn:Connection=None):
+            conn_processor_data:Connection=None,
+            conn_handler_data:Connection = None):
         """Run the background process (called when the process
         is started)
 
@@ -319,16 +357,41 @@ class Radar:
             process_class (_type_): Class of object to run
             conn (Connection): connection for the object to communicate with the Radar
             settings_file_path (_type_): path to JSON config file
-            data_conn (Connection, optional): Optional paremeter
-                to allow background process to send data to another backgorund
-                process. Defaults to None.
+            conn_processor_data (Connection, optional): Optional paremeter
+                to allow streamer and processor classes to send data to eachother.
+                Defaults to None.
+            conn_handler_data (Connection, optional): Optional parameter to
+                allow a handler and streamer class to send data between eachother.
+                Defaults to None
         """
         
-        #handling CLI controller
-        if data_conn==None:
-            process_class(conn=conn,settings_file_path=settings_file_path)
-        else:
-            process_class(conn=conn,settings_file_path=settings_file_path,data_connection=data_conn)
+        #CLI controller
+        if process_class == CLIController:
+            process_class(
+                conn_parent=conn_parent,settings_file_path=settings_file_path)
+        
+        #Streamers
+        elif process_class.__base__ == _Streamer:
+            process_class(
+                conn_parent=conn_parent,
+                conn_processor_data=conn_processor_data,
+                conn_handler_data=conn_handler_data,
+                settings_file_path=settings_file_path)
+        
+        #Processors
+        elif process_class.__base__ == _Processor:
+            process_class(
+                conn_parent=conn_parent,
+                conn_processor_data=conn_processor_data,
+                settings_file_path=settings_file_path
+            )
+        
+        #Handlers
+        elif process_class == DCA1000Handler:
+            process_class(
+                conn_parent = conn_parent,
+                conn_handler_data = conn_handler_data,
+                settings_file_path=settings_file_path)
         
         return
     
@@ -411,7 +474,7 @@ class Radar:
                             continue #ignore these commands
                         case _MessageTypes.NEW_DATA:
                             print("Radar._conn_recv_process_updates: NEW_DATA message not currently enabled")
-                        case _MessageTypes.ERROR_RADAR:
+                        case _MessageTypes.ERROR:
                             self.radar_error_detected = True
                             print("Radar._conn_recv_background_process_updates: {} sent RADAR error".format(self.background_process_names[i]))
                         case _:
@@ -456,7 +519,7 @@ class Radar:
                     case _MessageTypes.PRINT_TO_TERMINAL:
                         print(msg.value)
                         continue
-                    case _MessageTypes.ERROR_RADAR:
+                    case _MessageTypes.ERROR:
                         self.radar_error_detected = True
                         print("Radar._conn_wait_for_command_execution: received RADAR error while waiting for command code:{}".format(command))
                         command_executed = False

@@ -10,12 +10,27 @@ from CPSL_TI_Radar.Streamers._Streamer import _Streamer
 class SerialStreamer(_Streamer):
 
     def __init__(self,
-                 conn: Connection,
-                 data_connection: Connection,
+                 conn_parent: Connection,
+                 conn_processor_data: Connection,
+                 conn_handler_data: Connection = None,
                  settings_file_path = 'config_Radar.json'):
+        """Initialize the Serial Streamer class
 
-        super().__init__(conn,data_connection,settings_file_path)
-        
+        Args:
+            conn_parent (Connection): connection to the Radar class
+            conn_processor_data (Connection): connection to the Processor Class
+            conn_handler_data (Connection, optional): connection to a Handler Class (in event of DCA1000).
+                UNUSED FOR SERIAL STREAMER. Defaults to None
+            settings_file_path (str, optional): Path to the radar settings json file. Defaults to 'config_Radar.json'.
+        """
+
+        super().__init__(
+            conn_parent=conn_parent,
+            conn_processor_data=conn_processor_data,
+            conn_handler_data=conn_handler_data,
+            settings_file_path=settings_file_path
+        )
+                
         #configure serial streaming
         self._config_serial_streaming()
         
@@ -56,7 +71,7 @@ class SerialStreamer(_Streamer):
         except serial.SerialTimeoutException:
             self._conn_send_message_to_print(
                 "Streamer._get_next_packet_serial: Timed out waiting for new data. serial port closed")
-            self._conn_send_error_radar_message()
+            self._conn_send_parent_error_message()
             self.serial_port.close()
             self.streaming_enabled = False
             return
@@ -76,10 +91,10 @@ class SerialStreamer(_Streamer):
 
         if packet_valid:
             try:
-                self._conn_data.send_bytes(self.current_packet)
+                self._conn_processor_data.send_bytes(self.current_packet)
             except BrokenPipeError:
                 self._conn_send_message_to_print("SerialStreamer._serial_get_next_packet: attempted to send new packet to Processor, but processor was closed")
-                self._conn_send_error_radar_message()
+                self._conn_send_parent_error_message()
         
         return
             

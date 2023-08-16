@@ -110,7 +110,7 @@ class ConfigManager:
         vel_performance["vel_idx_to_m_per_s"] = vel_res
 
         #max_velocity
-        vel_max = lambda_m / (4 * chirp_period_us * chirps_per_loop * 1e-6 * num_Tx_antennas)
+        vel_max = lambda_m / (4 * chirp_period_us * chirps_per_loop * 1e-6)
         vel_performance["vel_max"] = vel_max
 
         return vel_performance
