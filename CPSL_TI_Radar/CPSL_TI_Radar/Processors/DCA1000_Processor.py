@@ -39,10 +39,10 @@ class DCA1000Processor(_Processor):
         
         #key radar parameters
         #TODO: enable these at a later time
-        self.max_range_bin = 128 #enable this a bit better
+        self.max_range_bin = 64 #enable this a bit better
         self.num_chirps_to_save = 0 #set from config
         self.num_angle_bins = 64
-        self.rng_az_power_range_dB = [60,105]
+        self.rng_az_power_range_dB = [70,105]
         self.rng_dop_poer_range_dB = [70,140]
 
 

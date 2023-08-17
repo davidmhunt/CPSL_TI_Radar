@@ -21,15 +21,15 @@
     "profileCfg": {
         "profileId": "0",
         "startFreq": "77",
-        "idleTime": "10",
+        "idleTime": "100",
         "adcStartTime": "7",
-        "rampEndTime": "40",
+        "rampEndTime": "100",
         "txOutPower": "0",
         "txPhaseShifter": "0",
-        "freqSlope": "70",
+        "freqSlope": "35",
         "txStartTime": "1",
-        "adcSamples": "128",
-        "sampleRate": "4267",
+        "adcSamples": "64",
+        "sampleRate": "2000",
         "hpfCornerFreq1": "0",
         "hpfCornerFreq2": "0",
         "rxGain": "30"
@@ -59,9 +59,9 @@
     "frameCfg": {
         "startIndex": "0",
         "endIndex": "0",
-        "loops": "128",
+        "loops": "64",
         "frames": "0",
-        "periodicity": "50",
+        "periodicity": "100",
         "trigger": "1",
         "triggerDelay": "0"
     },
