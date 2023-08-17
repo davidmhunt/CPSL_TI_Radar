@@ -83,10 +83,10 @@ class DCA1000Processor(_Processor):
 
         #listeners
         self._listeners_enabled = False
-        self._listener_RawPacketData_enabled = False
-        self._listener_RawPacketData = None
-        self._conn_RawPacketData = None
-        self._conn_RawPacketData_enabled = False
+        self._listener_ADCDataCube_enabled = False
+        self._listener_ADCDataCube = None
+        self._conn_ADCDataCube = None
+        self._conn_ADCDataCube_enabled = False
 
         self._listener_NormRngAzResp_enabled = False
         self._listener_NormRngAzResp = None
@@ -168,7 +168,7 @@ class DCA1000Processor(_Processor):
         authkey = authkey_str.encode()
 
         #check enabled status
-        self._listener_RawPacketData_enabled = listener_info["RawPacketData"]["enabled"]
+        self._listener_ADCDataCube_enabled = listener_info["ADCDataCube"]["enabled"]
         self._listener_NormRngAzResp_enabled = listener_info["NormRngAzResp"]["enabled"]
         self._listener_NormRngDopResp_enabled = listener_info["NormRngDopResp"]["enabled"]
 
@@ -178,9 +178,9 @@ class DCA1000Processor(_Processor):
             threads = []
 
             #setup the respective listeners
-            if self._listener_RawPacketData_enabled:
-                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect RawPacketData listener")
-                t = threading.Thread(target=self._init_RawPacketData_listener)
+            if self._listener_ADCDataCube_enabled:
+                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect ADCDataCube listener")
+                t = threading.Thread(target=self._init_ADCDataCube_listener)
                 threads.append(t)
                 t.start()
             if self._listener_NormRngAzResp_enabled:
@@ -200,7 +200,7 @@ class DCA1000Processor(_Processor):
             self._conn_send_message_to_print("DCA1000Processor._init_listeners: experienced Authentication error when attempting to connect to Client")
             self._conn_send_parent_error_message()
 
-    def _init_RawPacketData_listener(self):
+    def _init_ADCDataCube_listener(self):
 
         #get listener info
         listener_info = self._settings["Processor"]["DCA1000_Listeners"]
@@ -209,10 +209,10 @@ class DCA1000Processor(_Processor):
         authkey_str = listener_info["authkey"]
         authkey = authkey_str.encode()
 
-        RawPacketData_addr = ('localhost', int(listener_info["RawPacketData"]["addr"]))
-        self._listener_RawPacketData = Listener(RawPacketData_addr,authkey=authkey)
-        self._conn_RawPacketData = self._listener_RawPacketData.accept()
-        self._conn_RawPacketData_enabled = True
+        ADCDataCube_addr = ('localhost', int(listener_info["ADCDataCube"]["addr"]))
+        self._listener_ADCDataCube = Listener(ADCDataCube_addr,authkey=authkey)
+        self._conn_ADCDataCube = self._listener_ADCDataCube.accept()
+        self._conn_ADCDataCube_enabled = True
     
     def _init_NormRngAzResp_listener(self):
 
@@ -277,19 +277,19 @@ class DCA1000Processor(_Processor):
             )
             cv2.imshow("Range-Doppler Response",video_data_rng_dop)
             cv2.waitKey(1)
-        self._conn_send_data_to_listeners(range_azimuth_response,range_doppler_response)
+        self._conn_send_data_to_listeners(adc_data_cube, range_azimuth_response,range_doppler_response)
         return
     
     def _conn_send_data_to_listeners(self,
+                                     adc_data_cube:np.ndarray,
                                      range_azimuth_response:np.ndarray,
                                      range_doppler_response:np.ndarray):
         
         if self._listeners_enabled:
             #send ADC data cube
             try:
-                if self._conn_RawPacketData_enabled:
-                    adc_packet = np.frombuffer(self.current_packet,dtype=np.int16)
-                    self._conn_RawPacketData.send(adc_packet)
+                if self._conn_ADCDataCube_enabled:
+                    self._conn_ADCDataCube.send(adc_data_cube)
                 if self._conn_NormRngAzResp_enabled:
                     self._conn_NormRngAzResp.send(range_azimuth_response)
                 if self._conn_NormRngDopResp_enabled:

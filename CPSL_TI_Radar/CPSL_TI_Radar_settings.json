@@ -42,7 +42,7 @@
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",
-                "RawPacketData":{
+                "ADCDataCube":{
                     "addr":6001,
                     "enabled":true
                 },
