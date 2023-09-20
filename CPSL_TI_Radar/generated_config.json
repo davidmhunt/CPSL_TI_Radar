@@ -59,7 +59,7 @@
     "frameCfg": {
         "startIndex": "0",
         "endIndex": "0",
-        "loops": "64",
+        "loops": "40",
         "frames": "0",
         "periodicity": "100",
         "trigger": "1",
