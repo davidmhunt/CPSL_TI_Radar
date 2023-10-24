@@ -2,9 +2,6 @@ from multiprocessing.connection import Connection
 from multiprocessing import connection,AuthenticationError
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-#import cv2
 from multiprocessing.connection import Listener
 import threading
 
@@ -74,13 +71,6 @@ class DCA1000Processor(_Processor):
         self.x_s = None
         self.y_s = None
 
-        #plotting
-        self.plotting_enabled = self._settings["Processor"]["enable_plotting"]
-        self.fig = None
-        self.axs = None
-        self.rng_az_cart = None #range az cartesian image
-        self.rng_az_sph = None #range az spherical image
-
         #listeners
         self._listeners_enabled = False
         self._listener_ADCDataCube_enabled = False
@@ -108,17 +98,12 @@ class DCA1000Processor(_Processor):
         self._conn_PointCloud = None
         self._conn_PointCloud_enabled = None
 
-        #video
-        self.zoom = 5
-
         self._conn_send_init_status(self.init_success)
         self.run()
 
         return
     
     def close(self):
-        #if self.plotting_enabled:
-        #    cv2.destroyAllWindows()
         pass
 
     def _load_new_config(self, config_info: dict):
@@ -161,10 +146,6 @@ class DCA1000Processor(_Processor):
         self.thetas,self.rhos = np.meshgrid(self.angle_bins,self.range_bins[:self.max_range_bin])
         self.x_s = np.multiply(self.rhos,np.sin(self.thetas))
         self.y_s = np.multiply(self.rhos,np.cos(self.thetas))
-
-        #reload plotting if enabled
-        if self.plotting_enabled:
-            self._init_video()
 
         return
 
@@ -325,30 +306,6 @@ class DCA1000Processor(_Processor):
         else:
             point_cloud = None
         
-        # if self.plotting_enabled:
-        #     #update range azimuth image
-        #     video_data_rng_az = np.flip(range_azimuth_response[:,:,0])
-        #     video_data_rng_az = (video_data_rng_az * 255).astype(np.uint8)
-
-        #     #resize to make it larger
-        #     video_data_rng_az = cv2.resize(video_data_rng_az,
-        #                             (self.num_angle_bins * self.zoom,
-        #                              self.max_range_bin * self.zoom ))
-        #     # update the data with new values
-        #     cv2.imshow("Range-Azimuth Response",video_data_rng_az)
-        #     cv2.waitKey(1)
-
-        #     #update range doppler image
-        #     video_data_rng_dop = np.flip(range_doppler_response)
-        #     video_data_rng_dop = (video_data_rng_dop * 255).astype(np.uint8)
-
-        #     video_data_rng_dop = cv2.resize(
-        #         video_data_rng_dop,
-        #         (self.num_vel_bins * self.zoom,
-        #         self.max_range_bin * self.zoom)
-        #     )
-        #     cv2.imshow("Range-Doppler Response",video_data_rng_dop)
-        #     cv2.waitKey(1)
         self._conn_send_data_to_listeners(adc_data_cube, range_azimuth_response,range_doppler_response, point_cloud)
         return
     
@@ -482,160 +439,3 @@ class DCA1000Processor(_Processor):
             (self.rng_dop_poer_range_dB[1] - self.rng_dop_poer_range_dB[0])
 
         return data
-
-
-
-
-    def _init_video(self):
-
-        #Range-Azimuth Response
-
-        cv2.namedWindow("Range-Azimuth Response",cv2.WINDOW_NORMAL)
-
-        cv2.resizeWindow(
-            "Range-Azimuth Response",
-            self.num_angle_bins * self.zoom,
-            self.max_range_bin * self.zoom)
-        
-        #Range-Doppler Response
-        cv2.namedWindow("Range-Doppler Response",cv2.WINDOW_NORMAL)
-
-        cv2.resizeWindow(
-            "Range-Doppler Response",
-            self.num_vel_bins * self.zoom,
-            self.max_range_bin * self.zoom)
-
-        return
-###
-###
-###
-### ARCHIVED CODE: THE FOLLOWING CODE DOES NOT CURRENTLY WORK
-###
-###
-###
-
-    def _init_plots(self):
-        if self.plotting_enabled:
-            
-            #if there was already a figure open, close it so that the new one can be created
-            if self.fig != None:
-                plt.close(self.fig)
-            
-            self.fig,self.axs = plt.subplots(2)
-            plt.subplots_adjust(hspace=0.6)
-
-            #initialize the full plot
-            self.fig.suptitle("Range Azimuth Heatmaps")
-
-            #initialize an array of zero'd data
-            dummy_data = np.zeros_like(self.x_s,dtype=float)
-
-            #initialize the cartesian plot
-            self.rng_az_cart = self.axs[0].pcolormesh(
-                self.x_s,
-                self.y_s,
-                dummy_data,
-                shading='gouraud',
-                cmap="gray")
-            self.axs[0].set_xlabel('X (m)',fontsize=DCA1000Processor.font_size_axis_labels)
-            self.axs[0].set_ylabel('Y (m)',fontsize=DCA1000Processor.font_size_axis_labels)
-            self.axs[0].set_title('Range-Azimuth\nHeatmap (Cartesian)',fontsize=DCA1000Processor.font_size_title)
-
-            #initialize the spherical plot
-            range_res = range_res = self.radar_performance["range"]["range_res"]
-            max_range = self.max_range_bin * range_res
-            self.rng_az_sph = self.axs[1].imshow(
-                    dummy_data,
-                    cmap="gray",
-                    extent=[self.angle_bins[-1],self.angle_bins[0],
-                            self.range_bins[0],max_range],
-                            aspect='auto')
-            self.axs[1].set_xlabel('Angle(radians)',fontsize=DCA1000Processor.font_size_axis_labels)
-            self.axs[1].set_ylabel('Range (m)',fontsize=DCA1000Processor.font_size_axis_labels)
-            self.axs[1].set_title('Range-Azimuth\nHeatmap (Polar)',fontsize=DCA1000Processor.font_size_title)
-
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
-
-            return
-
-    def _update_plots(self,rng_az_response:np.ndarray):
-        """Update the polar and spherical versions of the range-azimuth response
-
-        Args:
-            rng_az_response (np.ndarray): num_range_bins x num_angle_bins normalized range azimuth response
-        """
-
-        #update the cartesian plot
-        self.rng_az_cart.set_array(rng_az_response)
-
-        #update the spherical plot
-        self.rng_az_sph.set_data(np.flip(rng_az_response))
-
-        #update the plots
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-    
-    def _plot_range_azimuth_heatmap_cartesian(self,
-                                              rng_az_response:np.ndarray,
-                                              ax:plt.Axes=None,
-                                              show=True):
-        """Plot the range azimuth heatmap (for a single chirp) in cartesian coordinates
-
-        Args:
-            rng_az_response (np.ndarray): num_range_bins x num_angle_bins normalized range azimuth response
-            ax (plt.Axes, optional): The axis to plot on. If none provided, one is created. Defaults to None.
-            show (bool): on True, shows plot. Default to True
-        """
-        if not ax:
-            fig = plt.figure()
-            ax = fig.add_subplot()
-        
-        cartesian_plot = ax.pcolormesh(
-            self.x_s,
-            self.y_s,
-            rng_az_response,
-            shading='gouraud',
-            cmap="gray")
-        ax.set_xlabel('X (m)',fontsize=DCA1000Processor.font_size_axis_labels)
-        ax.set_ylabel('Y (m)',fontsize=DCA1000Processor.font_size_axis_labels)
-        ax.set_title('Range-Azimuth\nHeatmap (Cartesian)',fontsize=DCA1000Processor.font_size_title)
-
-        if show:
-            plt.show()
-        
-    def _plot_range_azimuth_heatmap_spherical(self,
-                                              rng_az_response:np.ndarray,
-                                              ax:plt.Axes = None,
-                                              show = True):
-        """Plot the range azimuth heatmap in spherical coordinates
-
-        Args:
-            rng_az_response (np.ndarray): num_range_bins x num_angle_bins normalized range azimuth response
-            ax (plt.Axes, optional): The axis to plot on. If none provided, one is created. Defaults to None.
-            show (bool): on True, shows plot. Default to True
-        """
-
-        if not ax:
-            fig = plt.figure()
-            ax = fig.add_subplot()
-
-        #plot polar coordinates
-        range_res = range_res = self.radar_performance["range"]["range_res"]
-        max_range = self.max_range_bin * range_res
-        ax.imshow(np.flip(rng_az_response),
-                  cmap="gray",
-                  extent=[self.angle_bins[-1],self.angle_bins[0],
-                          self.range_bins[0],max_range],
-                          aspect='auto')
-        ax.set_xlabel('Angle(radians)',fontsize=DCA1000Processor.font_size_axis_labels)
-        ax.set_ylabel('Range (m)',fontsize=DCA1000Processor.font_size_axis_labels)
-        ax.set_title('Range-Azimuth\nHeatmap (Polar)',fontsize=DCA1000Processor.font_size_title)
-
-        #if enable_color_bar:
-        #    cbar = self.fig.colorbar(polar_plt)
-        #    cbar.set_label("Relative Power (dB)",size=RadarDataProcessor.font_size_color_bar)
-        #    cbar.ax.tick_params(labelsize=RadarDataProcessor.font_size_color_bar)
-        if show:
-            plt.show()
-
