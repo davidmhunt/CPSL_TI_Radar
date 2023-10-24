@@ -42,7 +42,7 @@ class DCA1000Processor(_Processor):
         self.max_range_bin = 64 #enable this a bit better
         self.num_chirps_to_save = 0 #set from config
         self.num_angle_bins = 64
-        self.rng_az_power_range_dB = [70,105]
+        self.rng_az_power_range_dB = [60,105]
         self.rng_dop_poer_range_dB = [70,140]
 
 
@@ -97,6 +97,16 @@ class DCA1000Processor(_Processor):
         self._listener_NormRngDopResp = None
         self._conn_NormRngDopResp = None
         self._conn_NormRngDopResp_enabled = None
+
+        self._listener_RadCloudModel_enabled = False
+        self._listener_RadCloudModel = None
+        self._conn_RadCloudModel = None
+        self._conn_RadCloudModel_enabled = None
+
+        self._listener_PointCloud_enabled = False
+        self._listener_PointCloud = None
+        self._conn_PointCloud = None
+        self._conn_PointCloud_enabled = None
 
         #video
         self.zoom = 5
@@ -171,6 +181,8 @@ class DCA1000Processor(_Processor):
         self._listener_ADCDataCube_enabled = listener_info["ADCDataCube"]["enabled"]
         self._listener_NormRngAzResp_enabled = listener_info["NormRngAzResp"]["enabled"]
         self._listener_NormRngDopResp_enabled = listener_info["NormRngDopResp"]["enabled"]
+        self._listener_RadCloudModel_enabled = listener_info["RadCloudModel"]["enabled"]
+        self._listener_PointCloud_enabled = listener_info["PointCloud"]["enabled"]
 
         self._listeners_enabled = True
         try:
@@ -191,6 +203,16 @@ class DCA1000Processor(_Processor):
             if self._listener_NormRngDopResp_enabled:
                 self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect NormRngDopResp listener")
                 t = threading.Thread(target=self._init_NormRngDopResp_listener)
+                threads.append(t)
+                t.start()
+            if self._listener_RadCloudModel_enabled:
+                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect RadCloudModel listener")
+                t = threading.Thread(target=self._init_RadCloudModel_listener)
+                threads.append(t)
+                t.start()
+            if self._listener_PointCloud_enabled:
+                self._conn_send_message_to_print("DCA1000Processor._init_listeners: connect PointCloud listener")
+                t = threading.Thread(target=self._init_PointCloud_listener)
                 threads.append(t)
                 t.start()
             
@@ -241,6 +263,34 @@ class DCA1000Processor(_Processor):
         self._listener_NormRngDopResp = Listener(NormRngDopResp_addr,authkey=authkey)
         self._conn_NormRngDopResp = self._listener_NormRngDopResp.accept()
         self._conn_NormRngDopResp_enabled = True
+    
+    def _init_RadCloudModel_listener(self):
+
+        #get listener info
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        #get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        RadCloudModel_addr = ('localhost', int(listener_info["RadCloudModel"]["addr"]))
+        self._listener_RadCloudModel = Listener(RadCloudModel_addr,authkey=authkey)
+        self._conn_RadCloudModel = self._listener_RadCloudModel.accept()
+        self._conn_RadCloudModel_enabled = True
+    
+    def _init_PointCloud_listener(self):
+
+        #get listener info
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        #get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        PointCloud_addr = ('localhost', int(listener_info["PointCloud"]["addr"]))
+        self._listener_PointCloud = Listener(PointCloud_addr,authkey=authkey)
+        self._conn_PointCloud = self._listener_PointCloud.accept()
+        self._conn_PointCloud_enabled = True
 #processing packets
     def _process_new_packet(self):
         
@@ -252,38 +302,61 @@ class DCA1000Processor(_Processor):
         range_azimuth_response = self._compute_frame_normalized_range_azimuth_heatmaps(adc_data_cube)
 
         range_doppler_response = self._compute_normalized_range_doppler_response(adc_data_cube)
+        
+        #compute point cloud
+        if self._conn_RadCloudModel_enabled:
+            
+            #send range azimuth response to RadCloud model
+            try:
+                self._conn_RadCloudModel.send(range_azimuth_response)
+            except ConnectionResetError:
+                self._conn_send_message_to_print("DCA1000 Processor._process_new_packet: Error sending to RadCloud Model")
+                self._conn_send_parent_error_message()
+                self.streaming_enabled = False
+            
+            #receive the generated point cloud
+            try:
+                point_cloud = np.float32(self._conn_RadCloudModel.recv())
+            except EOFError:
+                self._conn_send_message_to_print("DCA1000 Processor._process_new_packet: Error receiving from RadCloud Model")
+                self._conn_send_parent_error_message()
+                self.streaming_enabled = False
+        
+        else:
+            point_cloud = None
+        
+        # if self.plotting_enabled:
+        #     #update range azimuth image
+        #     video_data_rng_az = np.flip(range_azimuth_response[:,:,0])
+        #     video_data_rng_az = (video_data_rng_az * 255).astype(np.uint8)
 
-        if self.plotting_enabled:
-            #update range azimuth image
-            video_data_rng_az = np.flip(range_azimuth_response[:,:,0])
-            video_data_rng_az = (video_data_rng_az * 255).astype(np.uint8)
+        #     #resize to make it larger
+        #     video_data_rng_az = cv2.resize(video_data_rng_az,
+        #                             (self.num_angle_bins * self.zoom,
+        #                              self.max_range_bin * self.zoom ))
+        #     # update the data with new values
+        #     cv2.imshow("Range-Azimuth Response",video_data_rng_az)
+        #     cv2.waitKey(1)
 
-            #resize to make it larger
-            video_data_rng_az = cv2.resize(video_data_rng_az,
-                                    (self.num_angle_bins * self.zoom,
-                                     self.max_range_bin * self.zoom ))
-            # update the data with new values
-            cv2.imshow("Range-Azimuth Response",video_data_rng_az)
-            cv2.waitKey(1)
+        #     #update range doppler image
+        #     video_data_rng_dop = np.flip(range_doppler_response)
+        #     video_data_rng_dop = (video_data_rng_dop * 255).astype(np.uint8)
 
-            #update range doppler image
-            video_data_rng_dop = np.flip(range_doppler_response)
-            video_data_rng_dop = (video_data_rng_dop * 255).astype(np.uint8)
-
-            video_data_rng_dop = cv2.resize(
-                video_data_rng_dop,
-                (self.num_vel_bins * self.zoom,
-                self.max_range_bin * self.zoom)
-            )
-            cv2.imshow("Range-Doppler Response",video_data_rng_dop)
-            cv2.waitKey(1)
-        self._conn_send_data_to_listeners(adc_data_cube, range_azimuth_response,range_doppler_response)
+        #     video_data_rng_dop = cv2.resize(
+        #         video_data_rng_dop,
+        #         (self.num_vel_bins * self.zoom,
+        #         self.max_range_bin * self.zoom)
+        #     )
+        #     cv2.imshow("Range-Doppler Response",video_data_rng_dop)
+        #     cv2.waitKey(1)
+        self._conn_send_data_to_listeners(adc_data_cube, range_azimuth_response,range_doppler_response, point_cloud)
         return
     
     def _conn_send_data_to_listeners(self,
                                      adc_data_cube:np.ndarray,
                                      range_azimuth_response:np.ndarray,
-                                     range_doppler_response:np.ndarray):
+                                     range_doppler_response:np.ndarray,
+                                     point_cloud:np.ndarray):
         
         if self._listeners_enabled:
             #send ADC data cube
@@ -294,6 +367,8 @@ class DCA1000Processor(_Processor):
                     self._conn_NormRngAzResp.send(range_azimuth_response)
                 if self._conn_NormRngDopResp_enabled:
                     self._conn_NormRngDopResp.send(range_doppler_response)
+                if self._conn_PointCloud_enabled:
+                    self._conn_PointCloud.send(point_cloud)
             except ConnectionResetError:
                 self._conn_send_message_to_print("DCA1000 Processor.__conn_send_data_to_listeners: A listener was already closed or reset")
                 self._conn_send_parent_error_message()

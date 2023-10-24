@@ -53,6 +53,14 @@
                 "NormRngDopResp":{
                     "addr":6003,
                     "enabled":true
+                },
+                "RadCloudModel":{
+                    "addr":6004,
+                    "enabled":true
+                },
+                "PointCloud":{
+                    "addr":6005,
+                    "enabled":true
                 }
             }
 
