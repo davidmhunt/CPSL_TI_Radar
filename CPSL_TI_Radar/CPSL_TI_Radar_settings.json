@@ -56,11 +56,11 @@
                 },
                 "RadCloudModel":{
                     "addr":6004,
-                    "enabled":true
+                    "enabled":false
                 },
                 "PointCloud":{
                     "addr":6005,
-                    "enabled":true
+                    "enabled":false
                 }
             }
 

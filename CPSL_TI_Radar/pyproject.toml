@@ -10,11 +10,10 @@ packages = [{include = "CPSL_TI_Radar"}]
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
 pyserial = "^3.5"
-scipy = "^1.11.1"
-numpy = "^1.25.1"
+scipy = "^1.11.3"
+numpy = "^1.26.1"
 jupyterlab = "^4.0.3"
-ipykernel = "^6.25.0"
-
+ipykernel = "^6.26.0"
 
 [build-system]
 requires = ["poetry-core"]
