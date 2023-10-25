@@ -4,23 +4,24 @@ Add description of repository here
 
 ## Installing Dependencies
 In order for the code to work properly, the following steps are required
-1. Setup Conda Environment
+1. Install correct version of python
 2. Install CPSL_TI_Radar using Poetry
 
-### 1. Setup Conda Environment
-1. If you haven't done so already, install Anaconda using this [User Guide](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)
-
-2. We have provided a .yaml file that will install all of the necessary dependencies to run the code. 
-
+### 1. Setup Python environment
+1. On ubuntu systems, start by adding the deadsnakes PPA to add the required versions of python
 ```
-conda env create --file environment.yaml
+sudo add-apt-repository ppa:deadsnakes/ppa
 ```
 
-This will create a new conda environment called: "TI_Radar_GUI". Note: If you have already created this environment and need to update it, the following command can be added
-
+2. Next, update the package list
 ```
-conda env update --file  environment.yaml --prune
+sudo apt update
 ```
+3. Finally, install python 3.10 along with the required development dependencies
+```
+sudo apt install python3.10 python3.10-dev
+```
+The following resources may be helpful [Deadsnakes PPA description](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa), [Tutorial on Deadsnakes on Ubuntu](https://preocts.github.io/python/20221230-deadsnakes/)
 ### 2. Install CPSL_TI_Radar using Poetry
 
 #### Installing Poetry:
@@ -47,6 +48,12 @@ If you get an an error saying: "Failed to unlock the collection!", execute the f
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 ```
 
+#### Updating CPSL_TI_Radar
+If the pyproject.toml file is updated, the poetry installation must also be updated. Use the following commands to update the version of poetry
+```
+poetry lock --no-update
+poetry install
+```
 ## Preparing the Hardware
 
 There are two potential use cases using the CPSL_TI_Radar code. They are:
