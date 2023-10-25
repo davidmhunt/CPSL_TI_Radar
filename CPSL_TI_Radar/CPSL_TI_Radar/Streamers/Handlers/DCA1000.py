@@ -112,7 +112,7 @@ class DCA1000Handler(_BackgroundProcess):
             # Default, set the socket to send/receive from ("192.168.33.30",4098)
             self.cmd_socket.bind((self.system_IP, self.cmd_port))
             self.cmd_socket_bound = True
-            self.cmd_socket.settimeout(1e-3)
+            self.cmd_socket.settimeout(1)
         except socket.error:
             self._conn_send_message_to_print(
                 "DCA1000._init_ethernet_sockets: Failed to connect to cmd socket"
