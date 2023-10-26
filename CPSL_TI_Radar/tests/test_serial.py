@@ -119,7 +119,7 @@ def check_streamer_DCA1000():
         # Default, set the socket to send/receive from ("192.168.33.30",4098)
         cmd_socket.bind((system_IP, cmd_port))
         cmd_socket_bound = True
-        cmd_socket.settimeout(1e-3)
+        cmd_socket.settimeout(1)
         init_success = True
     except socket.error:
         init_success = False
