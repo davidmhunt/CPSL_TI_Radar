@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/vel_detection_high_vres.cfg",
+            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/medium_range.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
