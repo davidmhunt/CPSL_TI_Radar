@@ -26,7 +26,7 @@
         "rampEndTime": "40",
         "txOutPower": "0",
         "txPhaseShifter": "0",
-        "freqSlope": "66.7",
+        "freqSlope": "94",
         "txStartTime": "1",
         "adcSamples": "64",
         "sampleRate": "2000",
