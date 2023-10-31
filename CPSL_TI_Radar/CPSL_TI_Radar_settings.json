@@ -61,6 +61,10 @@
                 "PointCloud":{
                     "addr":6005,
                     "enabled":false
+                },
+                "MultiPath":{
+                    "addr":6006,
+                    "enabled":true
                 }
             }
 

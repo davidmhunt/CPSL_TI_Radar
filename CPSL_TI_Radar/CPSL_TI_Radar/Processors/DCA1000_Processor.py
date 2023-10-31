@@ -101,6 +101,12 @@ class DCA1000Processor(_Processor):
         self._conn_PointCloud = None
         self._conn_PointCloud_enabled = None
 
+        #multipath listeners
+        self._listener_MultiPath_enabled = False
+        self._listener_MultiPath = None
+        self._conn_MultiPath = None
+        self._conn_MultiPath_enabled = None
+
         self._conn_send_init_status(self.init_success)
         self.run()
 
@@ -175,6 +181,9 @@ class DCA1000Processor(_Processor):
         self._listener_RadCloudModel_enabled = listener_info["RadCloudModel"]["enabled"]
         self._listener_PointCloud_enabled = listener_info["PointCloud"]["enabled"]
 
+        #multipath detection
+        self._listener_MultiPath_enabled = listener_info["MultiPath"]["enabled"]
+
         self._listeners_enabled = True
         try:
             threads = []
@@ -213,6 +222,15 @@ class DCA1000Processor(_Processor):
                     "DCA1000Processor._init_listeners: connect PointCloud listener"
                 )
                 t = threading.Thread(target=self._init_PointCloud_listener)
+                threads.append(t)
+                t.start()
+
+            #multi-path
+            if self._listener_MultiPath_enabled:
+                self._conn_send_message_to_print(
+                    "DCA1000Processor._init_listeners: connect MultiPath listener"
+                )
+                t = threading.Thread(target=self._init_MultiPath_listener)
                 threads.append(t)
                 t.start()
 
@@ -292,6 +310,19 @@ class DCA1000Processor(_Processor):
         self._conn_PointCloud = self._listener_PointCloud.accept()
         self._conn_PointCloud_enabled = True
 
+    def _init_MultiPath_listener(self):
+        # get listener info
+        listener_info = self._settings["Processor"]["DCA1000_Listeners"]
+
+        # get the authentication string
+        authkey_str = listener_info["authkey"]
+        authkey = authkey_str.encode()
+
+        MultiPath_addr = ("localhost", int(listener_info["MultiPath"]["addr"]))
+        self._listener_MultiPath = Listener(MultiPath_addr, authkey=authkey)
+        self._conn_MultiPath = self._listener_MultiPath.accept()
+        self._conn_MultiPath_enabled = True
+
     # processing packets
     def _process_new_packet(self):
         # load the packet into the current_packet byte array
@@ -302,6 +333,8 @@ class DCA1000Processor(_Processor):
         range_azimuth_response = self._compute_frame_normalized_range_azimuth_heatmaps(
             adc_data_cube
         )
+
+        multi_path_cells = self._identify_multipath_in_range_az_response(range_azimuth_response)
 
         range_doppler_response = self._compute_normalized_range_doppler_response(
             adc_data_cube
@@ -333,7 +366,11 @@ class DCA1000Processor(_Processor):
             point_cloud = None
 
         self._conn_send_data_to_listeners(
-            adc_data_cube, range_azimuth_response, range_doppler_response, point_cloud
+            adc_data_cube,
+            range_azimuth_response,
+            range_doppler_response, 
+            point_cloud,
+            multi_path_cells
         )
         return
 
@@ -343,6 +380,7 @@ class DCA1000Processor(_Processor):
         range_azimuth_response: np.ndarray,
         range_doppler_response: np.ndarray,
         point_cloud: np.ndarray,
+        multi_path_cells:np.ndarray
     ):
         if self._listeners_enabled:
             # send ADC data cube
@@ -355,6 +393,9 @@ class DCA1000Processor(_Processor):
                     self._conn_NormRngDopResp.send(range_doppler_response)
                 if self._conn_PointCloud_enabled:
                     self._conn_PointCloud.send(point_cloud)
+                #multi-path
+                if self._conn_MultiPath_enabled:
+                    self._conn_MultiPath.send(multi_path_cells)
             except ConnectionResetError:
                 self._conn_send_message_to_print(
                     "DCA1000 Processor.__conn_send_data_to_listeners: A listener was already closed or reset"
@@ -473,6 +514,22 @@ class DCA1000Processor(_Processor):
         )
 
         return data
+    
+    def _identify_multipath_in_range_az_response(self, frame_range_az_heatmaps: np.ndarray):
+
+        #compute the variance for each range-azimuth bin across all of the chirps
+        multi_path_cells = np.var(frame_range_az_heatmaps,axis=2)
+
+        max = np.max(multi_path_cells)
+
+        multi_path_cells = multi_path_cells / max #cells with the highest variance will be filtered out
+
+        #get cells with the most variance
+        multi_path_cells = np.multiply(frame_range_az_heatmaps[:,:,0], (1 - multi_path_cells))
+
+        #multi_path_cells = np.multiply((1-multi_path_cells),frame_range_az_heatmaps[0])
+
+        return multi_path_cells
 
     def _compute_normalized_range_doppler_response(self, adc_data_cube: np.ndarray):
         # get the data from a single antenna
