@@ -43,10 +43,9 @@ class DCA1000Processor(_Processor):
         self.max_range_bin = 64  # enable this a bit better
         self.num_chirps_to_save = 0  # set from config
         self.num_angle_bins = 64
-        self.rng_az_power_range_dB = [60, 105]
         self.rng_dop_poer_range_dB = [70, 140]
 
-        # key radar parameters
+        # key angular radar parameters
         self.rx_channels = 0
         self.num_az_antennas = 0
         self.virtual_antennas_enabled = 0
@@ -65,8 +64,20 @@ class DCA1000Processor(_Processor):
         self.velocity_bins = None
 
         # compute angular parameters
-        self.phase_shifts = None
+        self.AoA_method = "FFT" #'FFT','Bartlet','Capon'
         self.angle_bins = None
+
+        #specify power ranges
+        self.rng_az_power_range_dB_FFT = [60, 105]
+        self.rng_az_power_range_dB_Bartlet = [120,200]
+        self.rng_az_power_range_dB_Capon = [50,95]
+
+        
+        #capon and bartlet transform variables
+        self.angle_range_deg = [-90,90]
+        self.spatial_signatures = None
+        self.a_phi = None
+        self.a_phi_H = None
 
         # mesh grid coordinates for plotting
         self.thetas = None
@@ -140,15 +151,15 @@ class DCA1000Processor(_Processor):
         self.num_vel_bins = int(self.radar_performance["velocity"]["num_doppler_bins"])
         self.velocity_bins = np.arange(-1 * vel_max, vel_max, vel_res)
 
-        # compute angular parameters
-        self.phase_shifts = np.arange(
-            np.pi,
-            -np.pi - 2 * np.pi / (self.num_angle_bins - 1),
-            -2 * np.pi / (self.num_angle_bins - 1),
-        )
-        self.phase_shifts[-1] = -1 * np.pi  # round last entry to be exactly pi
-        self.angle_bins = np.arcsin(self.phase_shifts / np.pi)
+        self._init_AoA_compute_method()
 
+        self._init_plot_grid()
+        
+        return
+    
+    def _init_plot_grid(self):
+        """Initialize the grid for plotting in cartesian/polar (assumes angle/range bins already defined)
+        """
         # mesh grid coordinates for plotting
         self.thetas, self.rhos = np.meshgrid(
             self.angle_bins, self.range_bins[: self.max_range_bin]
@@ -156,8 +167,86 @@ class DCA1000Processor(_Processor):
         self.x_s = np.multiply(self.rhos, np.sin(self.thetas))
         self.y_s = np.multiply(self.rhos, np.cos(self.thetas))
 
-        return
 
+    def _init_AoA_compute_method(self):
+
+        method = self._settings["Processor"]["AoA_Processor"]
+
+        match method:
+            case "FFT":
+                self.AoA_method = "FFT"
+                self._init_AoA_FFT()
+            case "Bartlet":
+                self.AoA_method = "Bartlet"
+                self._init_AoA_Bartlet_Capon()
+            case "Capon":
+                self.AoA_method = "Capon"
+                self._init_AoA_Bartlet_Capon()
+            case _:
+                self._conn_send_message_to_print("DCA1000_Processor._init_AoA_compute_method: did not receive valid AoA method")
+                self._conn_send_parent_error_message()
+                return
+    
+    def _init_AoA_FFT(self):
+
+        #get the range of potential phase shifts
+        phase_shifts = np.arange(
+            np.pi,
+            -np.pi - 2 * np.pi / (self.num_angle_bins - 1),
+            -2 * np.pi / (self.num_angle_bins - 1),
+        )
+        phase_shifts[-1] = -1 * np.pi  # round last entry to be exactly pi
+        
+        #convert the phase shifts to their respective AoA bins
+        self.angle_bins = np.arcsin(phase_shifts / np.pi)
+    
+    def  _init_AoA_Bartlet_Capon(self):
+
+        #get the step size for the angle bins
+        step = (self.angle_range_deg[1] - self.angle_range_deg[0]) / self.num_angle_bins
+        angles_deg = np.arange(self.angle_range_deg[0],self.angle_range_deg[1],step)
+        self.angle_bins = np.deg2rad(angles_deg)
+
+        #compute the spatial signatures
+        self.a_phi = self._compute_spatial_signatures(self.angle_bins)
+        self.a_phi_H = np.conj(np.transpose(self.a_phi,axes=(0,2,1)))
+
+
+    def _compute_spatial_signature(self,angle_rad):
+        """Compute the spatial signature for the Capon/Bartlet methods for a 
+        linear array geometry at a specific angle with lambda/2 spacing between elements
+
+        Args:
+            angle_rad (_type_): the angle to compute the spatial signature at
+
+        Returns:
+            np.ndarray(dtype=np.complex_): spatial signature with num_az_antennas elements
+        """
+        indicies = np.arange(0,self.num_az_antennas,dtype=np.float32)
+        spatial_signature = np.exp(1j * np.pi * indicies * np.sin(angle_rad))
+
+        return spatial_signature
+    
+    def _compute_spatial_signatures(self,angles_rad:np.ndarray):
+        """Compute the spatial signatures used by the Capon and Bartlet AoA estimation techniques for a given set of AoA's
+
+        Args:
+            angles_rad (np.ndarray): Array of angles to compute the spatial signatures at
+
+        Returns:
+            np.ndarray: num_angle_bins x num_az_antennas x 1 array of spatial signatures
+            which can easily be used for np.matmul() operations
+        """
+
+        spatial_signatures = np.zeros(
+            shape=(self.num_angle_bins,self.num_az_antennas,1),
+            dtype=np.complex_)
+
+        for i in range(len(angles_rad)):
+            spatial_signatures[i,:,0] = self._compute_spatial_signature(angles_rad[i])
+        
+        return spatial_signatures
+    
     def _init_listeners(self):
         # get listener client enabled status
         listener_info = self._settings["Processor"]["DCA1000_Listeners"]
@@ -299,7 +388,7 @@ class DCA1000Processor(_Processor):
 
         adc_data_cube = self._get_raw_ADC_data_cube()
 
-        range_azimuth_response = self._compute_frame_normalized_range_azimuth_heatmaps(
+        range_azimuth_response = self._compute_normalized_range_azimuth_heatmap(
             adc_data_cube
         )
 
@@ -418,7 +507,18 @@ class DCA1000Processor(_Processor):
 
             return adc_data_cube
 
-    def _compute_frame_normalized_range_azimuth_heatmaps(
+    def _compute_normalized_range_azimuth_heatmap(self,adc_data_cube:np.ndarray):
+
+        #use the appropriate range-azimuth heatmap computation method
+        match self.AoA_method:
+            case "FFT":
+                return self._compute_normalized_range_azimuth_heatmap_FFT(adc_data_cube)
+            case "Bartlet":
+                return self._compute_normalized_range_azimuth_heatmap_bartlet(adc_data_cube)
+            case "Capon":
+                return self._compute_normalized_range_azimuth_heatmap_capon(adc_data_cube)
+
+    def _compute_normalized_range_azimuth_heatmap_FFT(
         self, adc_data_cube: np.ndarray
     ):
         frame_range_az_heatmaps = np.zeros(
@@ -428,13 +528,14 @@ class DCA1000Processor(_Processor):
         for i in range(self.num_chirps_to_save):
             frame_range_az_heatmaps[
                 :, :, i
-            ] = self._compute_chirp_normalized_range_azimuth_heatmap(
+            ] = self._compute_chirp_normalized_range_azimuth_heatmap_FFT(
                 adc_data_cube, chirp=i
             )
 
         return frame_range_az_heatmaps
+    
 
-    def _compute_chirp_normalized_range_azimuth_heatmap(
+    def _compute_chirp_normalized_range_azimuth_heatmap_FFT(
         self, adc_data_cube: np.ndarray, chirp=0
     ):
         """Compute the range azimuth heatmap for a single chirp in the raw ADC data frame
@@ -454,7 +555,7 @@ class DCA1000Processor(_Processor):
         # compute Range FFT
         data = np.fft.fftshift(np.fft.fft(data, axis=0))
 
-        # compute range response
+        # compute azimuth response
         data = 20 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(data, axis=-1))))
 
         # [for debugging] to get an idea of what the max should be
@@ -464,15 +565,120 @@ class DCA1000Processor(_Processor):
         data = data[: self.max_range_bin, :]
 
         # perform thresholding on the input data
-        data[data <= self.rng_az_power_range_dB[0]] = self.rng_az_power_range_dB[0]
-        data[data >= self.rng_az_power_range_dB[1]] = self.rng_az_power_range_dB[1]
+        data[data <= self.rng_az_power_range_dB_FFT[0]] = self.rng_az_power_range_dB_FFT[0]
+        data[data >= self.rng_az_power_range_dB_FFT[1]] = self.rng_az_power_range_dB_FFT[1]
 
         # normalize the data
-        data = (data - self.rng_az_power_range_dB[0]) / (
-            self.rng_az_power_range_dB[1] - self.rng_az_power_range_dB[0]
+        data = (data - self.rng_az_power_range_dB_FFT[0]) / (
+            self.rng_az_power_range_dB_FFT[1] - self.rng_az_power_range_dB_FFT[0]
         )
 
         return data
+    
+    def _compute_normalized_range_azimuth_heatmap_bartlet(
+        self, adc_data_cube: np.ndarray
+    ):
+        """Compute the normalized range-azimuth heatmap using the bartlet method
+
+        Args:
+            adc_data_cube (np.ndarray): num_Rx_antennas x num_adc_samples x num_chirps ADC data cube
+
+        Returns:
+            np.ndarray: num_range_bins x num_angle_bins x 1 range-azimuth response using bartlet method
+        """
+        #get the ADC data cube into the correct format
+        adc_data_cube = np.transpose(adc_data_cube,axes=(1,0,2))
+        
+        #compute the range FFT
+        rng_fft = np.fft.fft(adc_data_cube,axis=0)
+
+        L_rng_bins = np.shape(adc_data_cube)[0]
+        I_angle_bins = self.num_angle_bins
+        p_bartlet = np.zeros(
+            shape=(L_rng_bins,I_angle_bins),dtype=np.complex_)
+        
+        for l in range(L_rng_bins):
+            # x_n = np.transpose(rng_fft[l,:,:,np.newaxis],axes=(1,0,2))
+            x_n = np.expand_dims(np.transpose(rng_fft[l,:,:]),axis=-1) #NxMx1
+            x_n_h = np.conj(np.transpose(x_n,axes=(0,2,1)))
+
+            Rxx = np.mean(np.matmul(x_n,x_n_h),axis=0)
+
+            p = self.a_phi_H @ Rxx @ self.a_phi
+
+            p_bartlet[l,:] = p[:,0,0]
+
+        #convert to dB
+        p_bartlet = 20 * np.log10(np.abs(p_bartlet))
+
+        # filter to only output the desired ranges
+        p_bartlet = p_bartlet[: self.max_range_bin, :]
+
+        # perform thresholding on the input data
+        p_bartlet[p_bartlet <= self.rng_az_power_range_dB_Bartlet[0]] = self.rng_az_power_range_dB_Bartlet[0]
+        p_bartlet[p_bartlet >= self.rng_az_power_range_dB_Bartlet[1]] = self.rng_az_power_range_dB_Bartlet[1]
+
+        # normalize the data
+        p_bartlet = (p_bartlet - self.rng_az_power_range_dB_Bartlet[0]) / (
+            self.rng_az_power_range_dB_Bartlet[1] - self.rng_az_power_range_dB_Bartlet[0]
+        )
+        
+        #expand the dimmentsions to align with the other formats
+        p_bartlet = np.expand_dims(p_bartlet,axis=-1)
+        return p_bartlet
+    
+    def _compute_normalized_range_azimuth_heatmap_capon(
+        self, adc_data_cube: np.ndarray
+    ):
+        """Compute the normalized range-azimuth heatmap using the Capon method
+
+        Args:
+            adc_data_cube (np.ndarray): num_Rx_antennas x num_adc_samples x num_chirps ADC data cube
+
+        Returns:
+            np.ndarray: num_range_bins x num_angle_bins x 1 range-azimuth response using capon method
+        """
+        #get the ADC data cube into the correct format
+        adc_data_cube = np.transpose(adc_data_cube,axes=(1,0,2))
+        
+        #compute the range FFT
+        rng_fft = np.fft.fft(adc_data_cube,axis=0)
+
+        L_rng_bins = np.shape(adc_data_cube)[0]
+        I_angle_bins = self.num_angle_bins
+        p_capon = np.zeros(
+            shape=(L_rng_bins,I_angle_bins),dtype=np.complex_)
+        
+        for l in range(L_rng_bins):
+            # x_n = np.transpose(rng_fft[l,:,:,np.newaxis],axes=(1,0,2))
+            x_n = np.expand_dims(np.transpose(rng_fft[l,:,:]),axis=-1) #NxMx1
+            x_n_h = np.conj(np.transpose(x_n,axes=(0,2,1)))
+
+            Rxx = np.mean(np.matmul(x_n,x_n_h),axis=0)
+            Rxx_inv = np.linalg.inv(Rxx)
+
+            p = self.a_phi_H @ Rxx_inv @ self.a_phi
+
+            p_capon[l,:] = 1.0 / p[:,0,0]
+
+        #convert to dB
+        p_capon = 20 * np.log10(np.abs(p_capon))
+
+        # filter to only output the desired ranges
+        p_capon = p_capon[: self.max_range_bin, :]
+
+        # perform thresholding on the input data
+        p_capon[p_capon <= self.rng_az_power_range_dB_Capon[0]] = self.rng_az_power_range_dB_Capon[0]
+        p_capon[p_capon >= self.rng_az_power_range_dB_Capon[1]] = self.rng_az_power_range_dB_Capon[1]
+
+        # normalize the data
+        p_capon = (p_capon - self.rng_az_power_range_dB_Capon[0]) / (
+            self.rng_az_power_range_dB_Capon[1] - self.rng_az_power_range_dB_Capon[0]
+        )
+        
+        #expand the dimmentsions to align with the other formats
+        p_capon = np.expand_dims(p_capon,axis=-1)
+        return p_capon
 
     def _compute_normalized_range_doppler_response(self, adc_data_cube: np.ndarray):
         # get the data from a single antenna
