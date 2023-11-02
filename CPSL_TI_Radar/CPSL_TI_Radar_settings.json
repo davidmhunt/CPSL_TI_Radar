@@ -63,7 +63,7 @@
                     "enabled":false
                 }
             },
-            "AoA_Processor":"FFT"
+            "AoA_Processor":"Capon"
 
         },
     "ROS/Listeners":
