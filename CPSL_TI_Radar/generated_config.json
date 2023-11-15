@@ -21,7 +21,7 @@
     "profileCfg": {
         "profileId": "0",
         "startFreq": "77",
-        "idleTime": "60",
+        "idleTime": "160",
         "adcStartTime": "7",
         "rampEndTime": "40",
         "txOutPower": "0",
@@ -61,7 +61,7 @@
         "endIndex": "1",
         "loops": "64",
         "frames": "0",
-        "periodicity": "50",
+        "periodicity": "100",
         "trigger": "1",
         "triggerDelay": "0"
     },
