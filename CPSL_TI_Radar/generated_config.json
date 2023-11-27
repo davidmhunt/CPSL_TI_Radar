@@ -61,7 +61,7 @@
         "endIndex": "1",
         "loops": "64",
         "frames": "0",
-        "periodicity": "100",
+        "periodicity": "50",
         "trigger": "1",
         "triggerDelay": "0"
     },
