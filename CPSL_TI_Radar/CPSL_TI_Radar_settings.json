@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/short_range.cfg",
+            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/long_range_no_virtual_array.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -56,11 +56,11 @@
                 },
                 "RadCloudModel":{
                     "addr":6004,
-                    "enabled":false
+                    "enabled":true
                 },
                 "PointCloud":{
                     "addr":6005,
-                    "enabled":false
+                    "enabled":true
                 }
             },
             "AoA_Processor":"FFT"
