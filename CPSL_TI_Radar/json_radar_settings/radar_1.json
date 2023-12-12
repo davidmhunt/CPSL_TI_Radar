@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM2",
+            "CLI_port":"/dev/ttyACM0",
             "verbose":true
         },
     "Streamer":
@@ -19,7 +19,7 @@
             "serial_streaming":
                 {
                     "enabled":false,
-                    "data_port":"/dev/ttyACM3"
+                    "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
                 {
@@ -56,11 +56,11 @@
                 },
                 "RadCloudModel":{
                     "addr":6004,
-                    "enabled":true
+                    "enabled":false
                 },
                 "PointCloud":{
                     "addr":6005,
-                    "enabled":true
+                    "enabled":false
                 }
             },
             "AoA_Processor":"FFT"

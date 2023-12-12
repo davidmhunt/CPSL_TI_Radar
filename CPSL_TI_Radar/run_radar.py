@@ -11,10 +11,10 @@ def main(settings_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'settings_path',
-          type=str, nargs='?',
-            default='CPSL_TI_Radar_settings.json',
-              help='path to settings file')
+        '--json_config',
+        type=str,
+        default='json_radar_settings/radar_1.json',
+        help='path to settings file')
     args = parser.parse_args()
 
     main(args.settings_path)
