@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM0",
+            "CLI_port":"/dev/ttyACM2",
             "verbose":true
         },
     "Streamer":
@@ -19,13 +19,13 @@
             "serial_streaming":
                 {
                     "enabled":false,
-                    "data_port":"/dev/ttyACM1"
+                    "data_port":"/dev/ttyACM3"
                 },
             "DCA1000_streaming":
                 {
                     "enabled":true,
-                    "FPGA_IP":"192.168.33.181",
-                    "system_IP":"192.168.33.31",
+                    "FPGA_IP":"192.168.34.180",
+                    "system_IP":"192.168.34.30",
                     "data_port":4092,
                     "cmd_port":4090
                 },
@@ -43,24 +43,24 @@
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",
                 "ADCDataCube":{
-                    "addr":6001,
+                    "addr":6011,
                     "enabled":true
                 },
                 "NormRngAzResp":{
-                    "addr":6002,
+                    "addr":6012,
                     "enabled":true
                 },
                 "NormRngDopResp":{
-                    "addr":6003,
+                    "addr":6013,
                     "enabled":true
                 },
                 "RadCloudModel":{
-                    "addr":6004,
-                    "enabled":true
+                    "addr":6014,
+                    "enabled":false
                 },
                 "PointCloud":{
-                    "addr":6005,
-                    "enabled":true
+                    "addr":6015,
+                    "enabled":false
                 }
             },
             "AoA_Processor":"FFT"

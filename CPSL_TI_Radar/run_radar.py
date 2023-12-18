@@ -1,10 +1,12 @@
 from CPSL_TI_Radar.Radar import Radar
 import argparse
 import sys
+import os
 
 
-def main(settings_path):
-    radar = Radar(settings_path)
+def main(json_config):
+    json_config = os.path.join("json_radar_settings",json_config)
+    radar = Radar(json_config)
     radar.run(timeout=20)
 
 #create the controller object
@@ -13,9 +15,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--json_config',
         type=str,
-        default='json_radar_settings/radar_1.json',
+        default='radar_1.json',
         help='path to settings file')
     args = parser.parse_args()
 
-    main(args.settings_path)
+    main(args.json_config)
     sys.exit()
