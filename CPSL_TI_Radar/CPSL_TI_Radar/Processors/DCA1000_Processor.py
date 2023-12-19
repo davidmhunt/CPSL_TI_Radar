@@ -68,7 +68,7 @@ class DCA1000Processor(_Processor):
         self.angle_bins = None
 
         #specify power ranges
-        self.rng_az_power_range_dB_FFT = [60, 105]
+        self.rng_az_power_range_dB_FFT = [67, 105]
         self.rng_az_power_range_dB_Bartlet = [120,200]
         self.rng_az_power_range_dB_Capon = [50,95]
 
