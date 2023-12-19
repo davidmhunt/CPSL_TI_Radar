@@ -62,7 +62,8 @@
                     "addr":6005,
                     "enabled":false
                 }
-            }
+            },
+            "AoA_Processor":"FFT"
 
         },
     "ROS/Listeners":
