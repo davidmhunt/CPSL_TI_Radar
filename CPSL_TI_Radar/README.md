@@ -95,8 +95,8 @@ Prior to running the radar/streaming samples, two key files must be updated. The
 
 The following sections describe how to configure both files
 
-### 1. CPSL_TI_Radar_settings.json
-The CPSL_TI_Radar_settings.json file is used to configure all of the code used to interface with either the DCA1000 or IWR1443. The main sections of the .json file are described below
+### 1. Radar Configuration
+The radar is configured using the .json configuration files located in the [json_radar_settings](./json_radar_settings/) folder. This configuration is used to configure all of the code used to interface with either the DCA1000 or IWR1443. The main sections of the .json file are described below
 
 #### TI_Radar_Config_management
 * TI_Radar_config_path: specifies the path to the IWR's .cfg file. Example files are located in the [configurations](../configurations/) folder. Be sure the choose the one corresponding to either the DCA1000, or the IWR Demo depending on your use case. 
@@ -116,68 +116,47 @@ This part of the JSON file determines where the data is coming from. Only one of
 This part of the json addresses how the raw data is processed
 
 * enable_plotting: if not using ROS or another outside visualization technique, set this to true to view the streamed data on the device
+    * NOTE: DOES NOT WORK WHEN STREAMING FROM DCA1000
 * save_plots_as_gif: if streaming a scatter plot of detections from the IWR, set to true to save the streamed plots as a .gif.
     * NOTE: DOES NOT WORK WHEN STREAMING FROM DCA1000
 * IWR_Demo_Listeners: if streaming from the IWR directly, this specifies the address and authkey that should be used to connect to the processor and receive the point cloud. 
 * DCA1000_Listeners: if streaming from the DCA1000, this specifies the address, authkey, and enable status for connecting to the DCA1000 processors. Currently, the DCA1000 Processor can send the following data:
     * raw packet data - the raw packets from the DCA1000
     * Normalized range-azimuth response - the normalized range azimuth response
+    * Normalized range-doppler response - the normalized range doppler response
+    * RadCloud Model - previously used for the ICRA paper to connect to the model
+        * NOTE: leave this set to false unless using the results from the ICRA paper. This function is now handled in ROS
+    * Point Cloud - the ouptut of the radcloud model
+        * Note: leave this set to false unless using the results from the ICRA paper as this function is now handled in ROS
+* AoA_Processor (in development): the AoA processing method. Can be set to "FFT", "Bartlet", and "Capon"
 
 #### ROS/Listeners:
 If using ROS nodes to connect to the Radar code, set this to true. Otherwise set it to false. To make it easier to receive the data, we provide several starter ROS nodes in associated [CPSL_TI_Radar_ROS Repository](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
 
 ### 2. Radar .cfg file
 
-Several sample .cfg files are located in the [configurations](../configurations/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation.
+Several sample .cfg files are located in the [configurations](../configurations/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation. 
+* To understand a particular configuration, there are a few helpful notebooks located in the [utilities_and_notebooks](./utilities_and_notebooks/) folder including the [print_config](./utilities_and_notebooks/print_config.ipynb) notebook which will decode the config and list the key parameters. 
 
 ## Running the Radar
 
-Once the .cfg and CPSL_TI_Radar_settings.json files have been updated and the hardware has been setup, run the following code to start radar operations.
+### Run Tests
 
+Several tests have been pre-defined to verify that the radar and DCA1000 have been connected successfully. To run the tests, perform the following commands:
 ```
-poetry run python run_radar.py
+poetry run pyest --json_config radar_1.json
 ```
-
-### Note 1: If using ROS/Listeners
-
-If you are using ROS nodes or other listeners, be sure to start the CPSL_TI_Radar code first and then start the listeners after that. The code will prompt you to start the listeners when required.For instructions on how to use the ROS nodes, please refer to the following repository: [CPSL_TI_Radar_ROS Repository](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
-
-### Note 2: custom settings.json file
-
-If you are using a different settings.json file or are using a file from another path, use the following command to start radar operations
-
+* Notes:
+    * the --json_config is an optional parameter (defaults to radar_1.json) that allows the user to specify a specific radar configuration to run tests on. Please ensure that the configuration is saved in the [json_radar_settings](./json_radar_settings/) folder though.
+    * the -x option can also be used to stop tests after the first failure
+### Run Radar
+If all of the tests pass, run the following command to start the radar operations
 ```
-poetry run python run_radar.py SETTINGS_PATH
+poetry run pytest --json_config radar_1.json
 ```
+* Notes:
+    * the --json_config is an optional parameter (defaults to radar_1.json) that allows the user to specify a specific radar configuration to run tests on. Please ensure that the configuration is saved in the [json_radar_settings](./json_radar_settings/) folder though.
+    
+## ROS Integration
 
-where SETTINGS_PATH is the path to the new settings.json file
-
-## Streaming data to ROS
-
-### Option 1: IWR1443 Demo (No DCA1000)
-
-If you setup the IWR1443 to run the demo, follow these directions to obtain pointcloud data from the radar board
-
-### Option 2: IWR1443 with DCA1000 
-
-If you setup the IWR1443 and DCA1000 to support raw data streaming over ethernet, follow these directions to obtain the raw data and other processed data from the DCA1000 in ROS
-
-#### 1. Add radar ROS package into catkin workspace
-
-1. Copy the radar ros package folder into your current catkin workspace
-
-2. Navigate to your catkin directory and source the setup.bash file for your catkin workspace using the following code
-```
-cd ~/catkin_ws
-source devel/setup.bash
-```
-3. Run catkin_make to make the newly added radar package
-```
-catkin_make
-```
-
-#### 2. Run code with ROS
-
-
-
-
+While this code can operate on its own, it is indented to be utilized with a set of ROS nodes defined in the [CPSL_TI_Radar_ROS Repository](https://github.com/davidmhunt/CPSL_TI_Radar_ROS). For instructions on how to use the ROS nodes, please see the repository's README file. Note: If you are using ROS nodes or other listeners, be sure to start the CPSL_TI_Radar code first and then start the listeners after that. The code will prompt you to start the listeners when required.
