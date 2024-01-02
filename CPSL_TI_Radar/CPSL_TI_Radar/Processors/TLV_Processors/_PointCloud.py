@@ -37,7 +37,22 @@ class _PointCloudTLVProcessor:
         self._conn_listener_enabled = True
 
     # processing data
-    def process_new_data(self, data: bytearray):
+    def process_new_data_6843(self,data:bytearray):
+        
+        #access the points as a float
+        points = np.frombuffer(data[8:],dtype=np.float32)
+
+        #reshape so that each row corresponds to a specific object
+        points = points.reshape([-1,4])
+
+        self.detected_objects = points
+
+        if self._conn_listener_enabled:
+            self._conn_listener.send(self.detected_objects)
+
+        return
+
+    def process_new_data_1443(self, data: bytearray):
         descriptor = np.frombuffer(data[8:12], dtype=np.uint16)
         num_objects = descriptor[0]
         XYZQ_format = descriptor[1]

@@ -48,8 +48,6 @@ class IWRDemoProcessor(_Processor):
 
     def close(self):
         """End Processor Operations (no custom behavior requred)"""
-        # save gifts to files if they were enabled
-        self.tlv_processor_detected_objects.save_gif_to_file()
         return
 
     # Loading new radar configurations
@@ -84,7 +82,7 @@ class IWRDemoProcessor(_Processor):
         # get the TLV client addresses
         detected_points_address = (
             "localhost",
-            int(TLV_listener_info["_PointCloudTLVProcessor"]),
+            int(TLV_listener_info["DetectedPointsProcessor"]),
         )
 
         # wait for the TLV clients to connect to their listeners
@@ -104,14 +102,14 @@ class IWRDemoProcessor(_Processor):
         super()._process_new_packet()
 
         self._process_header()
-
+        
         self._process_TLVs()
 
         return
 
     def _process_header(self):
         # decode the header
-        decoded_header = np.frombuffer(self.current_packet[:36], dtype=np.uint32)
+        decoded_header = np.frombuffer(self.current_packet[:40], dtype=np.uint32)
         # process the header fields
         self.header["version"] = format(decoded_header[2], "x")
         self.header["packet_length"] = decoded_header[3]
@@ -120,19 +118,20 @@ class IWRDemoProcessor(_Processor):
         self.header["time"] = decoded_header[6]
         self.header["num_detected_objects"] = decoded_header[7]
         self.header["num_data_structures"] = decoded_header[8]
-
+        self.header["sub_frame_number"] = decoded_header[9] #only for 6843isk
         return
 
     def _process_TLVs(self):
         # first index is after the start of the packet
-        idx = 36
+        idx = 40
         for i in range(self.header["num_data_structures"]):
             TLV_info = np.frombuffer(
                 self.current_packet[idx : idx + 8], dtype=np.uint32
             )
             TLV_tag = TLV_info[0]
             TLV_length = TLV_info[1]
-
+            # print("num_objects:{}".format(self.header["num_detected_objects"]))
+            # print("tag: {}, length: {}".format(TLV_tag,TLV_length))
             # process the TLV data
             self._process_TLV(TLV_tag, self.current_packet[idx : idx + TLV_length + 8])
 
@@ -146,7 +145,7 @@ class IWRDemoProcessor(_Processor):
         try:
             match TLV_tag:
                 case TLVTags.DETECTED_POINTS:
-                    self.tlv_processor_detected_objects.process_new_data(data)
+                    self.tlv_processor_detected_objects.process_new_data_6843(data)
         except BrokenPipeError:
             self._conn_send_message_to_print(
                 "IWR_Demo_Processor_process_TLV: attempted to send data to Listener, but Client process was already closed"
