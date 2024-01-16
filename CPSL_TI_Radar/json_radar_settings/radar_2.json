@@ -24,8 +24,8 @@
             "DCA1000_streaming":
                 {
                     "enabled":true,
-                    "FPGA_IP":"192.168.34.180",
-                    "system_IP":"192.168.34.30",
+                    "FPGA_IP":"192.168.1.181",
+                    "system_IP":"192.168.1.100",
                     "data_port":4092,
                     "cmd_port":4090
                 },
