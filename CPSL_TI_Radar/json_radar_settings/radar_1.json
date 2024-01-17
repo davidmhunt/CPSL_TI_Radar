@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/long_range_no_virtual_array.cfg",
+            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/short_range.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {

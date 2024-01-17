@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM2",
+            "CLI_port":"/dev/ttyACM0",
             "verbose":true
         },
     "Streamer":
@@ -19,15 +19,15 @@
             "serial_streaming":
                 {
                     "enabled":false,
-                    "data_port":"/dev/ttyACM3"
+                    "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
                 {
                     "enabled":true,
-                    "FPGA_IP":"192.168.1.181",
-                    "system_IP":"192.168.1.100",
-                    "data_port":4092,
-                    "cmd_port":4090
+                    "FPGA_IP":"192.168.33.180",
+                    "system_IP":"192.168.33.30",
+                    "data_port":4098,
+                    "cmd_port":4096
                 },
             "verbose":true
         },
@@ -38,28 +38,28 @@
             "save_plots_as_gif":false,
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
-                "DetectedPointsProcessor":6010
+                "DetectedPointsProcessor":6000
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",
                 "ADCDataCube":{
-                    "addr":6011,
+                    "addr":6001,
                     "enabled":true
                 },
                 "NormRngAzResp":{
-                    "addr":6012,
+                    "addr":6002,
                     "enabled":true
                 },
                 "NormRngDopResp":{
-                    "addr":6013,
+                    "addr":6003,
                     "enabled":true
                 },
                 "RadCloudModel":{
-                    "addr":6014,
+                    "addr":6004,
                     "enabled":false
                 },
                 "PointCloud":{
-                    "addr":6015,
+                    "addr":6005,
                     "enabled":false
                 }
             },
