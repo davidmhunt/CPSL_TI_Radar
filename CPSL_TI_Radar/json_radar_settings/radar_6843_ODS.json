@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/6843_lr_CFAR_7dB.cfg",
+            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/6843_ODS_lr_CFAR_10dB.cfg",
             "export_JSON_config":false,
             "custom_CFAR":
                 {
@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyUSB0",
+            "CLI_port":"/dev/ttyUSB2",
             "verbose":true
         },
     "Streamer":
@@ -19,7 +19,7 @@
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyUSB1"
+                    "data_port":"/dev/ttyUSB4"
                 },
             "DCA1000_streaming":
                 {
@@ -38,7 +38,7 @@
             "save_plots_as_gif":false,
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
-                "DetectedPointsProcessor":6000
+                "DetectedPointsProcessor":6010
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",
