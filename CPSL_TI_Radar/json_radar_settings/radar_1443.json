@@ -6,7 +6,7 @@
             "custom_CFAR":
                 {
                     "enabled":true,
-                    "threshold_dB":7
+                    "threshold_dB":10
                 }
         },
     "CLI_Controller":
@@ -39,7 +39,7 @@
             "SDK_version":"2.1",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
-                "DetectedPointsProcessor":6000
+                "DetectedPointsProcessor":6010
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",
