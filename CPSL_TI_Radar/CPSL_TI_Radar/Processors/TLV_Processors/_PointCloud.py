@@ -37,7 +37,7 @@ class _PointCloudTLVProcessor:
         self._conn_listener_enabled = True
 
     # processing data
-    def process_new_data_6843(self,data:bytearray):
+    def process_new_data_sdk_3_5(self,data:bytearray):
         
         #access the points as a float
         points = np.frombuffer(data[8:],dtype=np.float32)
@@ -52,7 +52,7 @@ class _PointCloudTLVProcessor:
 
         return
 
-    def process_new_data_1443(self, data: bytearray):
+    def process_new_data_sdk_2_1(self, data: bytearray):
         descriptor = np.frombuffer(data[8:12], dtype=np.uint16)
         num_objects = descriptor[0]
         XYZQ_format = descriptor[1]
@@ -80,12 +80,20 @@ class _PointCloudTLVProcessor:
         self.detected_objects = np.concatenate(
             (
                 XYZ_coordinates,
-                vels[:, np.newaxis],
-                ranges[:, np.newaxis],
-                peak_vals[:, np.newaxis],
+                vels[:, np.newaxis]
             ),
             axis=1,
         )
+        
+        # self.detected_objects = np.concatenate(
+        #     (
+        #         XYZ_coordinates,
+        #         vels[:, np.newaxis],
+        #         ranges[:, np.newaxis],
+        #         peak_vals[:, np.newaxis],
+        #     ),
+        #     axis=1,
+        # )
 
         if self._conn_listener_enabled:
             self._conn_listener.send(self.detected_objects)

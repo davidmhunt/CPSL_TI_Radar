@@ -36,6 +36,7 @@
             "verbose":true,
             "enable_plotting":false,
             "save_plots_as_gif":false,
+            "SDK_version":"2.1",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
                 "DetectedPointsProcessor":6010
