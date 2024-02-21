@@ -1,12 +1,12 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/1443_lr.cfg",
+            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/1443_lr_3D.cfg",
             "export_JSON_config":false,
             "custom_CFAR":
                 {
                     "enabled":true,
-                    "threshold_dB":10
+                    "threshold_dB":7
                 }
         },
     "CLI_Controller":
@@ -39,7 +39,7 @@
             "SDK_version":"2.1",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
-                "DetectedPointsProcessor":6010
+                "DetectedPointsProcessor":6020
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",

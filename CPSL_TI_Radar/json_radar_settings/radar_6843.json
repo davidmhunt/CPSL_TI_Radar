@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/6843_lr_CFAR_10dB.cfg",
+            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/6843_lr_CFAR_7dB_3D.cfg",
             "export_JSON_config":false,
             "custom_CFAR":
                 {
@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyUSB1",
+            "CLI_port":"/dev/ttyUSB2",
             "verbose":true
         },
     "Streamer":
@@ -19,7 +19,7 @@
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyUSB2"
+                    "data_port":"/dev/ttyUSB3"
                 },
             "DCA1000_streaming":
                 {
