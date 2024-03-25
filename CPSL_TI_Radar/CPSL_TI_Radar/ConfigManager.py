@@ -372,6 +372,13 @@ class ConfigManager:
                     "sensorStart",
                     "setProfileCfg",
                     "testFmkCfg",
+                    "extendedMaxVelocity",
+                    "bpmCfg",
+                    "lvdsStreamCfg",
+                    "aoaFovCfg",
+                    "cfarFovCfg",
+                    "cfarFovCfg",
+                    "calibData"
                 ]:
                     raise InvalidConfiguration("Received unknown configuration command")
 

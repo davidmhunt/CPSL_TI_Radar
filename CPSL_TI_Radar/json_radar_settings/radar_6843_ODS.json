@@ -1,8 +1,8 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/DCA1000/custom_configs/short_range.cfg",
-            "export_JSON_config":true,
+            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/6843_ODS_lr_CFAR_10dB.cfg",
+            "export_JSON_config":false,
             "custom_CFAR":
                 {
                     "enabled":false,
@@ -11,19 +11,19 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM0",
+            "CLI_port":"/dev/ttyUSB2",
             "verbose":true
         },
     "Streamer":
         {
             "serial_streaming":
                 {
-                    "enabled":false,
-                    "data_port":"/dev/ttyACM1"
+                    "enabled":true,
+                    "data_port":"/dev/ttyUSB4"
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "FPGA_IP":"192.168.1.180",
                     "system_IP":"192.168.1.100",
                     "data_port":4098,
@@ -33,27 +33,27 @@
         },
     "Processor":
         {
-            "verbose":true,
+            "verbose":false,
             "enable_plotting":false,
             "save_plots_as_gif":false,
-            "SDK_version":"2.1",
+            "SDK_version":"3.5",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
-                "DetectedPointsProcessor":6000
+                "DetectedPointsProcessor":6010
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",
                 "ADCDataCube":{
                     "addr":6001,
-                    "enabled":true
+                    "enabled":false
                 },
                 "NormRngAzResp":{
                     "addr":6002,
-                    "enabled":true
+                    "enabled":false
                 },
                 "NormRngDopResp":{
                     "addr":6003,
-                    "enabled":true
+                    "enabled":false
                 },
                 "RadCloudModel":{
                     "addr":6004,

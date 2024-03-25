@@ -24,8 +24,8 @@
             "DCA1000_streaming":
                 {
                     "enabled":true,
-                    "FPGA_IP":"192.168.34.180",
-                    "system_IP":"192.168.34.30",
+                    "FPGA_IP":"192.168.1.181",
+                    "system_IP":"192.168.1.100",
                     "data_port":4092,
                     "cmd_port":4090
                 },
@@ -36,9 +36,10 @@
             "verbose":true,
             "enable_plotting":false,
             "save_plots_as_gif":false,
+            "SDK_version":"2.1",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
-                "DetectedPointsProcessor":6000
+                "DetectedPointsProcessor":6010
             },
             "DCA1000_Listeners":{
                 "authkey":"DCA1000_client",

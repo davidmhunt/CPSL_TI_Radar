@@ -42,6 +42,11 @@ class _Processor(_BackgroundProcess):
             settings_file_path=settings_file_path,
         )
 
+        #determine the IWR type
+        self.sdk_version = None
+        self.init_SDK_version()
+            #options are "IWR1443" and "IWR6843"
+        
         # byte array for the current packet of data
         self.current_packet = bytearray()
 
@@ -57,6 +62,25 @@ class _Processor(_BackgroundProcess):
         self.verbose = self._settings["Processor"]["verbose"]
 
         return
+
+    def init_SDK_version(self):
+
+        #set the IWR type
+        try:
+            self.sdk_version = self._settings["Processor"]["SDK_version"]
+
+            if self.sdk_version not in ["3.5","2.1"]:
+                self._conn_send_message_to_print(
+                "Processor.__init__: SDK Version ({}) is invalid".format(self.sdk_version))
+                self._conn_send_init_status(init_success=False)
+                self.init_success = False
+                sys.exit()
+        except KeyError:
+            self._conn_send_message_to_print(
+                "Processor.__init__: could not find SDK_version in json config")
+            self._conn_send_init_status(init_success=False)
+            self.init_success = False
+            sys.exit()
 
     def run(self):
         try:

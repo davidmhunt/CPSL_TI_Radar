@@ -101,5 +101,5 @@ Here is are few common errors that I experienced along with solutions for how to
 
 This error is caused when the LD_LIBRARY_PATH variable does not contain the Release folder. To add it, use the following command (all one line). Here, replace "/home/david/CPSL_TI_Radar" with the path to the directory stored on your machine.
 ```
-export LD_LIBRARY_PATH= $LD_LIBRARY_PATH:/home/david/CPSL_TI_Radar/DCA_Programming/SourceCode/Release/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/david/CPSL_TI_Radar/DCA_Programming/SourceCode/Release/
 ```

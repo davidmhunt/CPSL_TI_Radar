@@ -85,7 +85,10 @@ class SerialStreamer(_Streamer):
         self.detected_packets += 1
 
         # decode the header
-        self._serial_decode_header(self.current_packet[:36])
+        if len(self.current_packet) <= 36:
+            return 
+        else:
+            self._serial_decode_header(self.current_packet[:36])
 
         # check packet validity
         packet_valid = self._serial_check_packet_valid()

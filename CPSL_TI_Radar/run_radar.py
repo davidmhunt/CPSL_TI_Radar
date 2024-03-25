@@ -7,7 +7,7 @@ import os
 def main(json_config):
     json_config = os.path.join("json_radar_settings",json_config)
     radar = Radar(json_config)
-    radar.run(timeout=20)
+    radar.run(timeout=60)
 
 #create the controller object
 if __name__ == '__main__':
