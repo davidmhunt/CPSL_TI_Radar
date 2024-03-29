@@ -11,7 +11,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyUSB2",
+            "CLI_port":"/dev/ttyUSB1",
             "verbose":true
         },
     "Streamer":
@@ -19,7 +19,7 @@
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyUSB3"
+                    "data_port":"/dev/ttyUSB2"
                 },
             "DCA1000_streaming":
                 {
