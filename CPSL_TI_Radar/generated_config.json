@@ -4,7 +4,7 @@
     },
     "channelCfg": {
         "rxChannelEn": "15",
-        "txChannelEn": "5",
+        "txChannelEn": "1",
         "cascading": "0"
     },
     "adcCfg": {
@@ -21,15 +21,15 @@
     "profileCfg": {
         "profileId": "0",
         "startFreq": "77",
-        "idleTime": "160",
+        "idleTime": "10",
         "adcStartTime": "7",
-        "rampEndTime": "40",
+        "rampEndTime": "25",
         "txOutPower": "0",
         "txPhaseShifter": "0",
-        "freqSlope": "94",
-        "txStartTime": "1",
-        "adcSamples": "64",
-        "sampleRate": "2000",
+        "freqSlope": "65",
+        "txStartTime": "0",
+        "adcSamples": "128",
+        "sampleRate": "10000",
         "hpfCornerFreq1": "0",
         "hpfCornerFreq2": "0",
         "rxGain": "30"
@@ -44,22 +44,12 @@
             "idleTimeVariation": "0",
             "ADCStartTimeVariation": "0",
             "txMask": "1"
-        },
-        {
-            "startIndex": "1",
-            "endIndex": "1",
-            "profile": "0",
-            "startFreqVariation": "0",
-            "freqSlopVariation": "0",
-            "idleTimeVariation": "0",
-            "ADCStartTimeVariation": "0",
-            "txMask": "4"
         }
     ],
     "frameCfg": {
         "startIndex": "0",
-        "endIndex": "1",
-        "loops": "64",
+        "endIndex": "0",
+        "loops": "255",
         "frames": "0",
         "periodicity": "50",
         "trigger": "1",
