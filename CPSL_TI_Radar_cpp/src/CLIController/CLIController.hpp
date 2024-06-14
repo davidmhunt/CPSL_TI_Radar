@@ -1,27 +1,24 @@
 #ifndef CLICONTROLLER
 #define CLICONTROLLER
 
-#include <iostream>
-#include <cstdlib>
 #include <string>
+#include <boost/asio.hpp>
+#include <iostream>
+#include <fstream>
+#include <bitset>
+#include "SystemConfigReader.hpp"
 
-#include <nlohmann/json.hpp>
+class CLIController {
+public:
+    CLIController(const std::string& jsonFilePath);
+    void run();
 
-using json = nlohmann::json;
+private:
+    SystemConfigReader system_config_reader;
+    boost::asio::io_service io_service;
+    boost::asio::serial_port cli_port;
 
-namespace CLIController_namespace {
-
-    class CLIController{
-
-        private:
-
-            std::string json_config_file;
-        
-        public:
-
-            CLIController(){}
-    };
-
-}
+    void sendCommand(const std::string& command);
+};
 
 #endif

@@ -10,7 +10,7 @@ if (NOT nlohmann_json_FOUND)
 endif()
 
 #create the utilities library
-add_library(Utilities JSONHandler.cpp)
+add_library(Utilities JSONHandler.cpp SystemConfigReader.cpp)
 
 #link libraries as needed
 target_link_libraries(Utilities PUBLIC nlohmann_json::nlohmann_json)
