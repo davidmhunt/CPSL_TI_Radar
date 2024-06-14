@@ -1,8 +1,8 @@
 
 #add subdirectories
 add_subdirectory(utilities)
+add_subdirectory(CLIController)
 
-#add libraries
-add_library(CLIController CLIController.cpp)
+#if new libraries are created in this folder, declare them here
 
-target_link_libraries(CLIController PRIVATE Utilities)
+#link libraries
