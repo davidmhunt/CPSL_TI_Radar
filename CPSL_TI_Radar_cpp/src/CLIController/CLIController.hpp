@@ -12,6 +12,8 @@ class CLIController {
 public:
     CLIController(const std::string& jsonFilePath);
     void run();
+    void sendStartCommand();
+    void sendStopCommand();
 
 private:
     SystemConfigReader system_config_reader;

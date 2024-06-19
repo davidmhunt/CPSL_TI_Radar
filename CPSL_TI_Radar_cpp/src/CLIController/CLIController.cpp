@@ -10,6 +10,11 @@ CLIController::CLIController(const string& jsonFilePath):
     cli_port.set_option(serial_port_base::baud_rate(115200));
 }
 
+/**
+ * @brief Runs the CLI controller, sends all CLI commands in the config file
+ * except for the sensorStart command
+ * 
+ */
 void CLIController::run() {
 
     //get the configuration file path
@@ -30,12 +35,37 @@ void CLIController::run() {
         if (command.empty() || command[0] == '#' || command[0] == '%') {
             continue;
         }
-
-        //send the command
-        sendCommand(command);
+        else if (command.find("sensorStart") == std::string::npos)
+        {
+            //send all commands except for the start command
+            CLIController::sendCommand(command);
+        }        
     }
 }
 
+/**
+ * @brief Send the sensor start command
+ * 
+ */
+void CLIController::sendStartCommand()
+{
+    CLIController::sendCommand("sensorStart");
+}
+
+/**
+ * @brief Send the sensor stop command
+ * 
+ */
+void CLIController::sendStopCommand()
+{
+    CLIController::sendCommand("sensorStop");
+}
+
+/**
+ * @brief Send a command to the IWR
+ * 
+ * @param command command to be sent to the board
+ */
 void CLIController::sendCommand(const string& command) {
 
     std::cout << "Sent command: " << command << endl; 
@@ -64,7 +94,7 @@ void CLIController::sendCommand(const string& command) {
 
     const char* raw_data = boost::asio::buffer_cast<const char*>(response.data());
     size_t raw_data_size = response.size();
-
+    //TODO: ONly print the part before the "Done" message
     string resp(raw_data, raw_data_size);
     cout << "Received response: " << resp << endl;
 
