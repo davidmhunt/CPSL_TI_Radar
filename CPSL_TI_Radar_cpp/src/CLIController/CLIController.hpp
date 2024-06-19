@@ -15,7 +15,7 @@ public:
 
 private:
     SystemConfigReader system_config_reader;
-    boost::asio::io_service io_service;
+    boost::asio::io_context io_context;
     boost::asio::serial_port cli_port;
 
     void sendCommand(const std::string& command);
