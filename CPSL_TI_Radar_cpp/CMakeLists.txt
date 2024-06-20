@@ -15,14 +15,17 @@ add_executable(CPSL_TI_Radar_CPP main.cpp)
 
 #perform linking
 target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Utilities
-                                        PRIVATE CLIController)
+                                        PRIVATE CLIController
+                                        PRIVATE DCA1000Commands
+                                        PRIVATE DCA1000Handler)
 
 #include directories
 target_include_directories(CPSL_TI_Radar_CPP PRIVATE
                         ${PROJECT_BINARY_DIR}
                         ${PROJECT_SOURCE_DIR}/src
                         ${PROJECT_SOURCE_DIR}/src/utilities
-                        ${PROJECT_SOURCE_DIR}/src/CLIController)
+                        ${PROJECT_SOURCE_DIR}/src/CLIController
+                        ${PROJECT_SOURCE_DIR}/src/DCA1000)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
