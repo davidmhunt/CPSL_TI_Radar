@@ -19,7 +19,10 @@ DCA1000::~DCA1000() {
     }
 }
 
-bool DCA1000::bind() {
+bool DCA1000::binding() {
+    if (m_configSocket >= 0) {
+        close(m_configSocket);
+    }
     // Create socket
     m_configSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (m_configSocket < 0) {
@@ -33,13 +36,22 @@ bool DCA1000::bind() {
     timeout.tv_usec = 0;
     setsockopt(m_configSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
+    //set up addresses
+   // struct sockaddr_in configAddr;
+    //configAddr.sin_family = AF_INET;
+   // configAddr.sin_addr.s_addr = inet_addr(m_systemIP.c_str());
+   // configAddr.sin_port = htons(m_dataPort);
+
+    std::cout << m_systemIP << "\n";
+    std::cout << m_dataPort;
+
     // Bind socket to receive at the system IP and config port
     struct sockaddr_in configAddr;
     configAddr.sin_family = AF_INET;
-    configAddr.sin_port = htons(m_configPort);
+    configAddr.sin_port = htons(m_dataPort);
     inet_pton(AF_INET, m_systemIP.c_str(), &(configAddr.sin_addr));
 
-    if (::bind(m_configSocket, (struct sockaddr*)&configAddr, sizeof(configAddr)) < 0) {
+    if (bind(m_configSocket, (struct sockaddr*)&configAddr, sizeof(configAddr)) < 0) {
         std::cerr << "Failed to bind socket" << std::endl;
         close(m_configSocket);
         m_configSocket = -1;

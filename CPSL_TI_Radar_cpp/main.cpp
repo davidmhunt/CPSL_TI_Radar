@@ -23,12 +23,27 @@ int main(int, char**){
     
     //setup the DCA1000
     DCA1000Handler dca1000_handler(config_reader);
-    
-    float fpga_version = dca1000_handler.send_readFPGAVersion();
 
-    std::cout << "FPGA version: " << fpga_version << std::endl;
+    //initialize the DCA1000
+    if(dca1000_handler.initialize() == false){
+        return false;
+    }
 
     //send a configuration to the radar board
     CLIController cli_controller(config_file);
     cli_controller.run();
+
+    //send record start command
+    dca1000_handler.send_recordStart();
+
+    //send sensor start command
+    cli_controller.sendStartCommand();
+
+    //define a buffer
+    std::vector<uint8_t> data_buffer(1472,0);
+    while (true)
+    {
+        dca1000_handler.get_next_udp_packets(data_buffer);
+    }
+    
 }

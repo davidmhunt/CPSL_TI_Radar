@@ -12,7 +12,7 @@ public:
     DCA1000(const RadarConfigReader& configReader);
     ~DCA1000();
 
-    bool bind();
+    bool binding();
     bool sendCommand(const uint8_t* command, size_t commandSize);
     bool receiveResponse(uint8_t* buffer, size_t bufferSize, ssize_t& receivedBytes);
 

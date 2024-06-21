@@ -11,7 +11,6 @@
 class CLIController {
 public:
     CLIController(const std::string& jsonFilePath);
-    ~CLIController();
     void run();
     void sendStartCommand();
     void sendStopCommand();

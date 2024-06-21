@@ -1,34 +1,49 @@
-#include "RadarConfigReaderDONE.hpp"
-#include "DCA1000HandlerDONE.hpp"
+//C standard libraries
 #include <iostream>
+#include <cstdlib>
+#include <string>
 #include <vector>
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
 
-/*
-g++ -o DCA1000ProcessorUNTESTED DCA1000ProcessorUNTESTED.cpp RadarConfigReaderDONE.cpp DCA1000HandlerDONE.cpp
-*/
+//JSON handling
+#include "JSONHandler.hpp"
+#include "SystemConfigReader.hpp"
+#include "CLIController.hpp"
+#include "DCA1000Commands.hpp"
+#include "DCA1000Handler.hpp"
 
-int main() {
-    // Read the configuration file
-    RadarConfigReader configReader("/home/cpsl/Documents/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs/radar_1.json");
-    std::string cfgFilePath = configReader.getRadarConfigPath();
+using json = nlohmann::json;
 
-    // Create an instance of DCA1000 handler
-    DCA1000 dca1000Handler(configReader);
+int main(int, char**){
 
+    std::string config_file = "/home/cpsl/Documents/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs/radar_1.json";
 
-    // Bind to the ethernet ports
-    if (!dca1000Handler.binding()) {
-        std::cerr << "Failed to bind to ethernet ports" << std::endl;
-        return 1;
-    }
+    SystemConfigReader config_reader = SystemConfigReader(config_file);
+
+    std::cout << std::endl << "Radar Config Path: " << config_reader.getRadarConfigPath() << std::endl;
+    std::cout << std::endl << "CLI Port: " << config_reader.getRadarCliPort() << std::endl;
+    
+    //setup the DCA1000
+    DCA1000Handler dca1000_handler(config_reader);
+    
+    float fpga_version = dca1000_handler.send_readFPGAVersion();
+
+    std::cout << "FPGA version: " << fpga_version << std::endl;
+
+    bool start = dca1000_handler.send_recordStart();
+    std::cout << "Started: " << start << std::endl;
+
+    //send a configuration to the radar board
+    CLIController cli_controller(config_file);
+    cli_controller.run();
+
 
     // Read the configuration file and extract relevant parameters
-    std::ifstream cfgFile(cfgFilePath);
+    std::ifstream cfgFile(config_reader.getRadarConfigPath());
     if (!cfgFile.is_open()) {
-        std::cerr << "Failed to open configuration file: " << cfgFilePath << std::endl;
+        std::cerr << "Failed to open configuration file: " << config_reader.getRadarConfigPath() << std::endl;
         return 1;
     }
 
@@ -94,13 +109,14 @@ int main() {
 
     // Receive packets and store them in the vector
     while (true) {
-        uint8_t buffer[1472];
-        ssize_t receivedBytes;
+        std::vector<uint8_t> buffer(1472);
 
-        if (!dca1000Handler.receiveResponse(buffer, sizeof(buffer), receivedBytes)) {
+        if (!dca1000_handler.receiveData(buffer)) {
             std::cerr << "Failed to receive packet" << std::endl;
             continue;
         }
+
+        std::cout << sizeof(buffer);
 
         // Extract sequence number and byte count from the packet
         uint32_t sequenceNum = le32toh(*(uint32_t*)&buffer[0]);
@@ -112,6 +128,7 @@ int main() {
                      static_cast<uint64_t>(buffer[9]);
 
         // Check if the sequence number is in order
+        std::cout << sequenceNum;
 
         if (sequenceNum == expectedSequenceNum) {
             for (int i = sequenceNumSize + byteCountSize; i < packetSize; i = i + numBytesPerSample) {
@@ -199,8 +216,3 @@ int main() {
     }
     return 0;
 }
-
-//question: what about packets with incomplete samples?
-//also converting data to big endian from little endian
-//how often are packets sent? Are packets always full?
-//TODO - make sure file writing is correct (Write antennas, then samples, then chirps)

@@ -18,23 +18,34 @@ DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
             std::cout << "System IP: " << DCA_systemIP << std::endl;
             std::cout << "cmd port: " << DCA_cmdPort << std::endl;
             std::cout << "data port: " << DCA_dataPort << std::endl;
+
+            //bind to the handler
+      //      init_sockets();
+              initialize();
       }
 
 /**
  * @brief Destroy the DCA1000Handler::DCA1000Handler object
  * 
  */
+
 DCA1000Handler::~DCA1000Handler() {
-    if (cmd_socket >= 0) {
-        send_recordStop();
-        close(cmd_socket);
-    }
-    if (data_socket >= 0){
-        close(data_socket);
-    }
+    //if (cmd_socket >= 0) {
+   //    close(cmd_socket);
+   // }
+   // if (data_socket >= 0){
+   //     close(data_socket);
+   // }
 }
 
 bool DCA1000Handler::initialize(){
+
+    //if (cmd_socket >= 0) {
+      //  close(cmd_socket);
+   // }
+   // if (data_socket >= 0) {
+     //   close(data_socket);
+    //}
 
     //initialize the addresses
     init_addresses();
@@ -44,35 +55,7 @@ bool DCA1000Handler::initialize(){
         return false;
     }
 
-    //send system connect
-    if(send_systemConnect() != true){
-        return false;
-    }
-
-    //send reset FPGA
-    if(send_resetFPGA() != true){
-        return false;
-    }
-
-    //send configure packet data
-    if(send_configPacketData(1472,25) != true){
-        return false;
-    }
-
-    //send config FPGA gen
-    if(send_configFPGAGen() != true){
-        return false;
-    }
-
-    //read the FPGA version
-    float fpga_version = send_readFPGAVersion();
-
-    if(fpga_version > 0){
-        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully";
-        return true;
-    } else{
-        return false;
-    }
+    return true;
 }
 
 /**
@@ -198,6 +181,63 @@ bool DCA1000Handler::receiveResponse(std::vector<uint8_t>& buffer) {
 /**
  * @brief 
  * 
+ * @param buffer 
+ * @return true 
+ * @return false 
+ */
+bool DCA1000Handler::receiveData(std::vector<uint8_t>& bufferdata) {
+    if (data_socket < 0) {
+        std::cerr << "Socket not bound" << std::endl;
+        return false;
+    }
+
+    struct sockaddr_in fromAddr;
+    socklen_t fromLen = sizeof(fromAddr);
+    ssize_t receivedBytes = recvfrom(data_socket, bufferdata.data(), bufferdata.size(), 0,
+                             (struct sockaddr*)&fromAddr, &fromLen);
+    if (receivedBytes < 0) {
+        std::cerr << "Failed to receive data" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief 
+ * 
+ * @return float 
+ */
+float DCA1000Handler::send_readFPGAVersion(){
+
+    //get the command
+    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
+                                    DCA1000Commands::READ_FPGA_VERSION);
+
+    //send the command
+    sendCommand(cmd);
+
+    //get the response
+    std::vector<uint8_t> rcv_data(8,0);
+    if (receiveResponse(rcv_data)){
+        
+        //get the status
+        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
+        status = status | static_cast<uint16_t>(rcv_data[4]);
+
+        //get version numbers
+        uint16_t major_version = (status & 0b01111111);
+        uint16_t minor_version = (status >> 7) & 0b01111111;
+
+        return static_cast<float>(major_version) + (static_cast<float>(minor_version)*1e-1);
+    }else{
+        return 0.0;
+    }
+}
+
+/**
+ * @brief 
+ * 
  * @return true 
  * @return false 
  */
@@ -284,34 +324,6 @@ bool DCA1000Handler::send_recordStop(){
     }
 }
 
-bool DCA1000Handler::send_systemConnect(){
-    
-    //get the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::SYSTEM_CONNECT);
-    
-    //send command
-    sendCommand(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (receiveResponse(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else{
-        return false;
-    }
-}
-
 /**
  * @brief 
  * 
@@ -360,111 +372,4 @@ bool DCA1000Handler::send_configPacketData(uint16_t packet_size, uint16_t delay_
     } else {
         return false;
     }
-}
-
-bool DCA1000Handler::send_configFPGAGen(){
-    std::vector<uint8_t> data(6,0);
-
-    //data logging mode - Raw Mode
-    data[0] = 0x01;
-
-    //LVDS mode - 4 lane
-    data[1] = 0x01;
-
-    //data transfer mode - LVDS capture
-    data[2] = 0x01;
-
-    //data capture mode
-    data[3] = 0x02;
-
-    //data format mode
-    data[4] = 0x03;
-
-    //timer - default to 30 seconds
-    data[5] = 30;
-
-    //generate the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::CONFIG_FPGA_GEN,
-                                        data);
-    
-    //send command
-    sendCommand(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (receiveResponse(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else {
-        return false;
-    }
-}
-
-/**
- * @brief 
- * 
- * @return float 
- */
-float DCA1000Handler::send_readFPGAVersion(){
-
-    //get the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                    DCA1000Commands::READ_FPGA_VERSION);
-
-    //send the command
-    sendCommand(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (receiveResponse(rcv_data)){
-        
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //get version numbers
-        uint16_t major_version = (status & 0b01111111);
-        uint16_t minor_version = (status >> 7) & 0b01111111;
-
-        return static_cast<float>(major_version) + (static_cast<float>(minor_version)*1e-1);
-    }else{
-        return 0.0;
-    }
-}
-
-/**
- * @brief 
- * 
- * @param buffer 
- * @return true 
- * @return false 
- */
-bool DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
-    if (data_socket < 0) {
-        std::cerr << "data socket not bound" << std::endl;
-        return false;
-    }
-
-    struct sockaddr_in fromAddr;
-    socklen_t fromLen = sizeof(fromAddr);
-    ssize_t receivedBytes = recvfrom(data_socket, buffer.data(), buffer.size(), 0,
-                             (struct sockaddr*)&fromAddr, &fromLen);
-    if (receivedBytes < 0) {
-        std::cerr << "Failed to receive data" << std::endl;
-        return false;
-    } else{
-        std::cout << "p";
-    }
-
-    return true;
 }

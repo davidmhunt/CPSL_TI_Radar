@@ -1,4 +1,4 @@
-#include"CLIController.hpp"
+#include "CLIController.hpp"
 
 using namespace std;
 using namespace boost::asio;
@@ -8,12 +8,6 @@ CLIController::CLIController(const string& jsonFilePath):
     cli_port(io_context, system_config_reader.getRadarCliPort()) 
 {
     cli_port.set_option(serial_port_base::baud_rate(115200));
-}
-
-CLIController::~CLIController()
-{
-    //TODO: Check if the serial port is running right now
-    sendStopCommand();
 }
 
 /**

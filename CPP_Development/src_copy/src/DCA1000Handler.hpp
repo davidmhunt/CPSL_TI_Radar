@@ -25,6 +25,7 @@ public:
     bool init_sockets();
     bool sendCommand(std::vector<uint8_t>& command);
     bool receiveResponse(std::vector<uint8_t>& buffer);
+    bool receiveData(std::vector<uint8_t>& bufferdata);
 
     //commands to the DCA1000
     bool send_resetFPGA(); //2nd command
@@ -32,14 +33,10 @@ public:
     bool send_recordStop();
     bool send_systemConnect(); //1st command
     bool send_configPacketData(uint16_t packet_size = 1472, uint16_t delay_us = 25);
-    bool send_configFPGAGen();
+    bool send_initFPGAPlayback();
     float send_readFPGAVersion(); //5th command
 
-    //receive data
-    bool get_next_udp_packets(std::vector<uint8_t>&buffer);
-
 private:
-    //connection information
     std::string DCA_fpgaIP;
     std::string DCA_systemIP;
     int DCA_cmdPort;
@@ -52,10 +49,6 @@ private:
     //addresses
     sockaddr_in cmd_address;
     sockaddr_in data_address;
-
-    //processing data packets
-    std::uint32_t sequence_number;
-    std::uint64_t byte_count;
 };
 
 #endif // DCA1000_H
