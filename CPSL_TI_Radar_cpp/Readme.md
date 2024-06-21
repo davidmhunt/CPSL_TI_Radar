@@ -9,3 +9,8 @@ cd build
 cmake ../
 cmake --build .
 ```
+
+Run the project
+```
+./CPSL_TI_Radar_CPP
+```

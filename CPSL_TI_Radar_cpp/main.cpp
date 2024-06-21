@@ -29,6 +29,6 @@ int main(int, char**){
     std::cout << "FPGA version: " << fpga_version << std::endl;
 
     //send a configuration to the radar board
-    // CLIController cli_controller(config_file);
-    // cli_controller.run();
+    CLIController cli_controller(config_file);
+    cli_controller.run();
 }

@@ -21,17 +21,18 @@ public:
     ~DCA1000Handler();
 
     bool init_sockets();
+    bool init_dca1000_fpga(); //TBD
     bool sendCommand(std::vector<uint8_t>& command);
     bool receiveResponse(std::vector<uint8_t>& buffer);
 
     //commands to the DCA1000
-    bool send_resetFPGA();
-    bool send_recordStart();
+    bool send_resetFPGA(); //2nd command
+    bool send_recordStart(); 
     bool send_recordStop();
-    bool send_systemConnect();
-    bool send_packetDataCmd();
+    bool send_systemConnect(); //1st command
+    bool send_configPacketData(uint16_t packet_size = 1472, uint16_t delay_us = 25);
     bool send_initFPGAPlayback();
-    float send_readFPGAVersion();
+    float send_readFPGAVersion(); //5th command
 
 private:
     std::string DCA_fpgaIP;

@@ -1,6 +1,10 @@
 #include "DCA1000Handler.hpp"
 
-
+/**
+ * @brief Construct a new DCA1000Handler::DCA1000Handler object
+ * 
+ * @param configReader 
+ */
 DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
     : DCA_fpgaIP(configReader.getDCAFpgaIP()),
       DCA_systemIP(configReader.getDCASystemIP()),
@@ -28,12 +32,22 @@ DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
             init_sockets();
       }
 
+/**
+ * @brief Destroy the DCA1000Handler::DCA1000Handler object
+ * 
+ */
 DCA1000Handler::~DCA1000Handler() {
     if (cmd_socket >= 0) {
         close(cmd_socket);
     }
 }
 
+/**
+ * @brief 
+ * 
+ * @return true 
+ * @return false 
+ */
 bool DCA1000Handler::init_sockets() {
 
     // Create socket
@@ -62,7 +76,13 @@ bool DCA1000Handler::init_sockets() {
     return true;
 }
 
-
+/**
+ * @brief 
+ * 
+ * @param command 
+ * @return true 
+ * @return false 
+ */
 bool DCA1000Handler::sendCommand(std::vector<uint8_t>& command) {
     if (cmd_socket < 0) {
         std::cerr << "Socket not bound" << std::endl;
@@ -85,6 +105,13 @@ bool DCA1000Handler::sendCommand(std::vector<uint8_t>& command) {
     return true;
 }
 
+/**
+ * @brief 
+ * 
+ * @param buffer 
+ * @return true 
+ * @return false 
+ */
 bool DCA1000Handler::receiveResponse(std::vector<uint8_t>& buffer) {
     if (cmd_socket < 0) {
         std::cerr << "Socket not bound" << std::endl;
@@ -103,6 +130,11 @@ bool DCA1000Handler::receiveResponse(std::vector<uint8_t>& buffer) {
     return true;
 }
 
+/**
+ * @brief 
+ * 
+ * @return float 
+ */
 float DCA1000Handler::send_readFPGAVersion(){
 
     //get the command
@@ -128,5 +160,83 @@ float DCA1000Handler::send_readFPGAVersion(){
     }else{
         return 0.0;
     }
+}
 
+/**
+ * @brief 
+ * 
+ * @return true 
+ * @return false 
+ */
+bool DCA1000Handler::send_resetFPGA(){
+
+    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
+                                        DCA1000Commands::RESET_FPGA);
+    
+    //send command
+    sendCommand(cmd);
+
+    //get the response
+    std::vector<uint8_t> rcv_data(8,0);
+    if (receiveResponse(rcv_data)){
+
+        //get the status
+        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
+        status = status | static_cast<uint16_t>(rcv_data[4]);
+
+        //confirm success
+        if (status == 0){
+            return true;
+        }else{
+            return false;
+        }
+    }
+}
+
+/**
+ * @brief 
+ * 
+ * @param packet_size 
+ * @param delay_us 
+ * @return true 
+ * @return false 
+ */
+bool DCA1000Handler::send_configPacketData(uint16_t packet_size, uint16_t delay_us){
+
+    //declare data vector
+    std::vector<uint8_t> data(6,0);
+
+    //define packet size
+    data[0] = static_cast<uint8_t>(packet_size & 0xFF);
+    data[1] = static_cast<uint8_t>((packet_size >> 8) & 0xFF);
+
+    //define delay
+    data[2] = static_cast<uint8_t>(delay_us & 0xFF);
+    data[3] = static_cast<uint8_t>((delay_us >> 8) & 0xFF);
+
+    // bytes 4 & 5 are future use
+
+    //generate the command
+    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
+                                        DCA1000Commands::CONFIG_PACKET_DATA,
+                                        data);
+    
+    //send command
+    sendCommand(cmd);
+
+    //get the response
+    std::vector<uint8_t> rcv_data(8,0);
+    if (receiveResponse(rcv_data)){
+
+        //get the status
+        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
+        status = status | static_cast<uint16_t>(rcv_data[4]);
+
+        //confirm success
+        if (status == 0){
+            return true;
+        }else{
+            return false;
+        }
+    }
 }
