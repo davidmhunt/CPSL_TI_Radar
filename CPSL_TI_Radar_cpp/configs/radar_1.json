@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_TI_Radar/configurations/DCA1000/custom_configs/short_range.cfg",
+            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_TI_Radar/configurations/DCA1000/custom_configs/ISAR_mocap.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {

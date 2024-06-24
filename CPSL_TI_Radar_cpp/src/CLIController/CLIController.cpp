@@ -13,7 +13,7 @@ CLIController::CLIController(const string& jsonFilePath):
 CLIController::~CLIController()
 {
     //TODO: Check if the serial port is running right now
-    sendStopCommand();
+    
 }
 
 /**

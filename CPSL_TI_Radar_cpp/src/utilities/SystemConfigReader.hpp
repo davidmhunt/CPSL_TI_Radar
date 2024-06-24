@@ -1,5 +1,5 @@
-#ifndef RADAR_CONFIG_READER_H
-#define RADAR_CONFIG_READER_H
+#ifndef SYSTEM_CONFIG_READER_H
+#define SYSTEM_CONFIG_READER_H
 
 #include <string>
 #include <iostream>

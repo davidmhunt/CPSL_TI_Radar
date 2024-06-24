@@ -10,8 +10,14 @@ DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
       DCA_systemIP(configReader.getDCASystemIP()),
       DCA_cmdPort(configReader.getDCACmdPort()),
       DCA_dataPort(configReader.getDCADataPort()),
-      cmd_socket(-1) ,
-      data_socket(-1)
+      cmd_socket(-1),
+      data_socket(-1),
+      dropped_packets(0),
+      received_packets(0),
+      sequence_number(0),
+      byte_count(0),
+      received_frames(0),
+      next_frame_byte_buffer_idx(0)
       {     
             //print key ports
             std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
@@ -26,7 +32,6 @@ DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
  */
 DCA1000Handler::~DCA1000Handler() {
     if (cmd_socket >= 0) {
-        send_recordStop();
         close(cmd_socket);
     }
     if (data_socket >= 0){
@@ -68,7 +73,7 @@ bool DCA1000Handler::initialize(){
     float fpga_version = send_readFPGAVersion();
 
     if(fpga_version > 0){
-        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully";
+        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully" << std::endl;
         return true;
     } else{
         return false;
@@ -117,6 +122,7 @@ bool DCA1000Handler::init_sockets() {
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
     setsockopt(cmd_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(data_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
     //bind to command socket
     if (bind(cmd_socket, (struct sockaddr*)&cmd_address, sizeof(cmd_address)) < 0) {
@@ -320,14 +326,18 @@ bool DCA1000Handler::send_systemConnect(){
  * @return true 
  * @return false 
  */
-bool DCA1000Handler::send_configPacketData(uint16_t packet_size, uint16_t delay_us){
+bool DCA1000Handler::send_configPacketData(size_t packet_size, uint16_t delay_us){
+
+    //set the udp_packet_size
+    udp_packet_size = packet_size;
 
     //declare data vector
     std::vector<uint8_t> data(6,0);
 
     //define packet size
-    data[0] = static_cast<uint8_t>(packet_size & 0xFF);
-    data[1] = static_cast<uint8_t>((packet_size >> 8) & 0xFF);
+    std::uint16_t pkt_size = static_cast<std::uint16_t>(packet_size);
+    data[0] = static_cast<uint8_t>(pkt_size & 0xFF);
+    data[1] = static_cast<uint8_t>((pkt_size >> 8) & 0xFF);
 
     //define delay
     data[2] = static_cast<uint8_t>(delay_us & 0xFF);
@@ -442,6 +452,86 @@ float DCA1000Handler::send_readFPGAVersion(){
     }
 }
 
+
+void DCA1000Handler::init_buffers(
+    size_t _bytes_per_frame,
+    size_t _samples_per_chirp,
+    size_t _chirps_per_frame)
+{
+    bytes_per_frame = _bytes_per_frame;
+    samples_per_chirp = _samples_per_chirp;
+    chirps_per_frame = _chirps_per_frame;
+
+    //configure the udp packet buffer
+    udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
+
+    //configure the frame byte buffer
+    frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+    next_frame_byte_buffer_idx = 0;
+
+    //reset the dropped packet counting
+    received_packets = 0;
+    dropped_packets = 0;
+    received_frames = 0;
+}
+
+bool DCA1000Handler::process_next_packet(){
+
+    if(get_next_udp_packets(udp_packet_buffer)){
+
+        //get the sequence number
+        sequence_number = get_packet_sequence_number(udp_packet_buffer);
+        
+        //determine bytes in the new packet
+        uint64_t new_byte_count = get_packet_byte_count(udp_packet_buffer);
+        size_t bytes_in_packet = new_byte_count - byte_count;
+        
+        if (sequence_number != received_packets + 1){
+            std::cout << "d" << std::endl;
+            dropped_packets += 1;
+
+            //TODO: Handle the dropped packets
+            //update the byte count and received packets
+            byte_count = new_byte_count;
+            received_packets = sequence_number;
+        }else{
+
+            //update the byte count and received packets
+            byte_count = new_byte_count;
+            received_packets = sequence_number;
+
+        }
+
+        //copy the bytes into the frame byte buffer
+        for (size_t i = 0; i < bytes_in_packet; i++)
+        {
+            frame_byte_buffer[next_frame_byte_buffer_idx] = udp_packet_buffer[i + 10];
+            
+            //increment the frame byte buffer index
+            next_frame_byte_buffer_idx += 1;
+            if(next_frame_byte_buffer_idx == bytes_per_frame){
+                next_frame_byte_buffer_idx = 0;
+
+                //TODO: handle the new frame availability
+                received_frames += 1;
+
+                print_status();
+            }
+        }
+        return true;
+    } else{
+        return false;
+    }
+}
+
+void DCA1000Handler::print_status(){
+    std::cout <<
+        "frame: " << received_frames << std::endl <<
+        "\tpackets: " << sequence_number << std::endl <<
+        "\tbytes: " << byte_count << std::endl <<
+        "\tdropped packets: " << dropped_packets << std::endl;
+}
+
 /**
  * @brief 
  * 
@@ -463,8 +553,71 @@ bool DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
         std::cerr << "Failed to receive data" << std::endl;
         return false;
     } else{
-        std::cout << "p";
+        return true;
+    }
+}
+
+bool DCA1000Handler::flush_data_buffer() {
+
+    std::vector<uint8_t> buffer(udp_packet_size,0);
+
+    if (data_socket < 0) {
+        std::cerr << "data socket not bound" << std::endl;
+        return false;
     }
 
+    struct sockaddr_in fromAddr;
+    socklen_t fromLen = sizeof(fromAddr);
+    ssize_t receivedBytes = 1;
+
+    while(receivedBytes > 0){
+        receivedBytes = recvfrom(data_socket, buffer.data(), buffer.size(), 0,
+                             (struct sockaddr*)&fromAddr, &fromLen);
+        if (receivedBytes < 0) {
+            std::cout << "No data buffer data to flush" << std::endl;
+            return true;
+        } else {
+            //get the sequence number
+            uint32_t packet_sequence_number = get_packet_sequence_number(udp_packet_buffer);
+            
+            //determine bytes in the new packet
+            uint64_t packet_byte_count = get_packet_byte_count(udp_packet_buffer);
+            if (packet_byte_count != 0){
+                std::cout << "Flushed packet" << 
+                std::endl << "\tpacket: " << packet_sequence_number << 
+                std::endl << "\tbytes: " << packet_byte_count << std::endl;
+            } else {
+                std::cout << "No packets to flush out" << std::endl;
+                return true;
+            }
+        }
+    }
     return true;
+}
+
+uint32_t DCA1000Handler::get_packet_sequence_number(std::vector<uint8_t>& buffer){
+    //get the sequence number
+    std::uint32_t packet_sequence_number = 
+        static_cast<uint32_t>(buffer[3]) << 24 |
+        static_cast<uint32_t>(buffer[2]) << 16 |
+        static_cast<uint32_t>(buffer[1]) << 8 |
+        static_cast<uint32_t>(buffer[0]);
+    packet_sequence_number = le32toh(packet_sequence_number);
+
+    return packet_sequence_number;
+}
+
+uint64_t DCA1000Handler::get_packet_byte_count(std::vector<uint8_t>& buffer){
+    
+    //get the byte count
+    uint64_t packet_byte_count = 
+            static_cast<uint64_t>(buffer[9]) << 40 |
+            static_cast<uint64_t>(buffer[8]) << 32 |
+            static_cast<uint64_t>(buffer[7]) << 24 |
+            static_cast<uint64_t>(buffer[6]) << 16 |
+            static_cast<uint64_t>(buffer[5]) << 8  |
+            static_cast<uint64_t>(buffer[4]);
+        packet_byte_count = le64toh(packet_byte_count);
+
+    return packet_byte_count;
 }
