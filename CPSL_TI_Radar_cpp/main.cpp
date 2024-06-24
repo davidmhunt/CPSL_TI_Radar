@@ -61,8 +61,6 @@ int main(int, char**){
     std::cout << "sending IWR stop command" << std::endl;
     cli_controller.sendStopCommand();
 
-    //flush the data buffer
-    while(dca1000_handler.process_next_packet()){};
 
     std::cout << "sending DCA1000 stop command" << std::endl;
     dca1000_handler.send_recordStop();
