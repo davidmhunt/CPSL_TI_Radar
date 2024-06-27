@@ -380,7 +380,7 @@ class ConfigManager:
                     "cfarFovCfg",
                     "calibData"
                 ]:
-                    raise InvalidConfiguration("Received unknown configuration command")
+                    raise InvalidConfiguration("Received unknown configuration command: {}".format(key))
 
     def _load_dfeDataOutputMode_from_cfg(self, params: list):
         self.radar_config["dfeDataOutputMode"] = {"modeType": params[1]}

@@ -1,7 +1,7 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/6843_lr_CFAR_7dB_3D.cfg",
+            "TI_Radar_config_path":"../configurations/IWR_Demos/athena/6843_athena.cfg",
             "export_JSON_config":false,
             "custom_CFAR":
                 {

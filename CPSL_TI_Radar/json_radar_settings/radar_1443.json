@@ -1,11 +1,11 @@
 {
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"../configurations/IWR_Demos/rad_nav_configs/1443_lr_3D.cfg",
+            "TI_Radar_config_path":"../configurations/IWR_Demos/athena/1443_athena.cfg",
             "export_JSON_config":false,
             "custom_CFAR":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "threshold_dB":7
                 }
         },
