@@ -53,7 +53,7 @@ int main(int, char**){
     cli_controller.sendStartCommand();
 
     //define a buffer
-    for (size_t i = 0; i < 10000; i++)
+    for (size_t i = 0; i < 3000; i++)
     {
         dca1000_handler.process_next_packet();
     }

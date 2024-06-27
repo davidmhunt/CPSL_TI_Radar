@@ -13,9 +13,9 @@ DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
       cmd_socket(-1),
       data_socket(-1),
       dropped_packets(0),
+      dropped_packet_events(0),
       received_packets(0),
-      sequence_number(0),
-      byte_count(0),
+      adc_data_byte_count(0),
       received_frames(0),
       next_frame_byte_buffer_idx(0)
       {     
@@ -348,8 +348,8 @@ bool DCA1000Handler::send_configPacketData(size_t packet_size, uint16_t delay_us
     //generate the command
     std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
                                         DCA1000Commands::CONFIG_PACKET_DATA,
-                                        data);
-    
+                                        data);    
+
     //send command
     sendCommand(cmd);
 
@@ -465,57 +465,76 @@ void DCA1000Handler::init_buffers(
     //configure the udp packet buffer
     udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
 
-    //configure the frame byte buffer
+    //configure the frame byte buffer (assembly)
     frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
     next_frame_byte_buffer_idx = 0;
 
+    //configure processing of completed frames
+    latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+    new_frame_available = false;
+
     //reset the dropped packet counting
     received_packets = 0;
+    adc_data_byte_count = 0;
     dropped_packets = 0;
     received_frames = 0;
 }
 
+/**
+ * @brief 
+ * 
+ * @return true 
+ * @return false 
+ */
 bool DCA1000Handler::process_next_packet(){
 
-    if(get_next_udp_packets(udp_packet_buffer)){
+    ssize_t received_bytes = get_next_udp_packets(udp_packet_buffer);
+    if(received_bytes > 0){
 
         //get the sequence number
-        sequence_number = get_packet_sequence_number(udp_packet_buffer);
-        
+        std::uint32_t packet_sequence_number = get_packet_sequence_number(udp_packet_buffer);
+
         //determine bytes in the new packet
-        uint64_t new_byte_count = get_packet_byte_count(udp_packet_buffer);
-        size_t bytes_in_packet = new_byte_count - byte_count;
+        std::uint64_t packet_byte_count = get_packet_byte_count(udp_packet_buffer);
+        std::uint64_t adc_data_bytes_in_packet = static_cast<std::uint64_t>(received_bytes) - 10;
         
-        if (sequence_number != received_packets + 1){
-            std::cout << "d" << std::endl;
-            dropped_packets += 1;
+        //check for and handle dropped packets
+        if (packet_sequence_number != received_packets + 1){
+            std::cout << "d-P: " << packet_sequence_number << std::endl;
 
-            //TODO: Handle the dropped packets
-            //update the byte count and received packets
-            byte_count = new_byte_count;
-            received_packets = sequence_number;
-        }else{
+            //determine the number of dropped packets
+            dropped_packets += (packet_sequence_number - received_packets + 1);
+            dropped_packet_events += 1;
 
-            //update the byte count and received packets
-            byte_count = new_byte_count;
-            received_packets = sequence_number;
+            zero_pad_frame_byte_buffer(packet_byte_count);
 
+            //update the received packet total
+            received_packets = packet_sequence_number;
+        } else{
+            received_packets += 1;
+        }
+
+        //check to make sure all bytes are accounted for
+        if (adc_data_byte_count != packet_byte_count){
+            std::cout << "d-B" << std::endl;
+            
+            zero_pad_frame_byte_buffer(packet_byte_count);
+
+        } else{
+            adc_data_byte_count += adc_data_bytes_in_packet;
         }
 
         //copy the bytes into the frame byte buffer
-        for (size_t i = 0; i < bytes_in_packet; i++)
+        for (size_t i = 0; i < adc_data_bytes_in_packet; i++)
         {
             frame_byte_buffer[next_frame_byte_buffer_idx] = udp_packet_buffer[i + 10];
             
             //increment the frame byte buffer index
             next_frame_byte_buffer_idx += 1;
             if(next_frame_byte_buffer_idx == bytes_per_frame){
-                next_frame_byte_buffer_idx = 0;
 
-                //TODO: handle the new frame availability
-                received_frames += 1;
-
-                print_status();
+                //save the completed frame byte buffer and reset it
+                save_frame_byte_buffer();
             }
         }
         return true;
@@ -524,12 +543,79 @@ bool DCA1000Handler::process_next_packet(){
     }
 }
 
+/**
+ * @brief 
+ * @note Assumes that the frame_byte_buffer is initialized with zeros for each new frame
+ * 
+ * @param packet_byte_count the byte count from the most recently received packets
+ * (i.e. the number of bytes that were supposed to have been received prior to the current
+ * packet)
+ */
+void DCA1000Handler::zero_pad_frame_byte_buffer(std::uint64_t packet_byte_count){
+
+    //determin the number of bytes to fill in
+    std::uint64_t bytes_to_fill = packet_byte_count - adc_data_byte_count;
+
+    //make sure we won't overflow the frame byte buffer
+    std::uint64_t bytes_remaining = bytes_per_frame - next_frame_byte_buffer_idx;
+
+    //room in the buffer
+    if(bytes_remaining > bytes_to_fill){
+        next_frame_byte_buffer_idx += bytes_to_fill;
+    }else
+    {
+        //reset the frame byte buffer
+        save_frame_byte_buffer();
+
+        //reset the index
+        if(bytes_remaining != bytes_to_fill){
+            (next_frame_byte_buffer_idx + bytes_to_fill) % bytes_per_frame;
+        }
+    }
+    
+    //update the received byte total
+    adc_data_byte_count += bytes_to_fill;
+
+}
+
+/**
+ * @brief saves the latest frame byte buffer into the 
+ * latest_frame_byte_buffer variable, resets the frame_byte_buffer
+ * and next_frame_byte_buffer_idx varialbes, and sets the
+ * new_frame_available variable to true
+ * 
+ * @param print_system_status on True, prints status
+ * 
+ */
+void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
+
+    //copy the frame byte buffer into the latest frame byte buffer
+    latest_frame_byte_buffer = frame_byte_buffer;
+
+    //reset the frame byte buffer
+    frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+
+    //rest the next frame byte buffer idex
+    next_frame_byte_buffer_idx = 0;
+
+    //specify that a new frame is available
+    new_frame_available = true;
+
+    //increment the frame tracking
+    received_frames += 1;
+
+    if(print_system_status){
+        print_status();
+    }
+}
+
 void DCA1000Handler::print_status(){
     std::cout <<
         "frame: " << received_frames << std::endl <<
-        "\tpackets: " << sequence_number << std::endl <<
-        "\tbytes: " << byte_count << std::endl <<
-        "\tdropped packets: " << dropped_packets << std::endl;
+        "\tpackets: " << received_packets << std::endl <<
+        "\tdata bytes: " << adc_data_byte_count << std::endl <<
+        "\tdropped packets: " << dropped_packets << std::endl <<
+        "\tdropped packet events: " << dropped_packet_events << std::endl;
 }
 
 /**
@@ -539,10 +625,10 @@ void DCA1000Handler::print_status(){
  * @return true 
  * @return false 
  */
-bool DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
+ssize_t DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
     if (data_socket < 0) {
         std::cerr << "data socket not bound" << std::endl;
-        return false;
+        return 0;
     }
 
     struct sockaddr_in fromAddr;
@@ -551,49 +637,12 @@ bool DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
                              (struct sockaddr*)&fromAddr, &fromLen);
     if (receivedBytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
-        return false;
+        return 0;
     } else{
-        return true;
+        return receivedBytes;
     }
 }
 
-bool DCA1000Handler::flush_data_buffer() {
-
-    std::vector<uint8_t> buffer(udp_packet_size,0);
-
-    if (data_socket < 0) {
-        std::cerr << "data socket not bound" << std::endl;
-        return false;
-    }
-
-    struct sockaddr_in fromAddr;
-    socklen_t fromLen = sizeof(fromAddr);
-    ssize_t receivedBytes = 1;
-
-    while(receivedBytes > 0){
-        receivedBytes = recvfrom(data_socket, buffer.data(), buffer.size(), 0,
-                             (struct sockaddr*)&fromAddr, &fromLen);
-        if (receivedBytes < 0) {
-            std::cout << "No data buffer data to flush" << std::endl;
-            return true;
-        } else {
-            //get the sequence number
-            uint32_t packet_sequence_number = get_packet_sequence_number(udp_packet_buffer);
-            
-            //determine bytes in the new packet
-            uint64_t packet_byte_count = get_packet_byte_count(udp_packet_buffer);
-            if (packet_byte_count != 0){
-                std::cout << "Flushed packet" << 
-                std::endl << "\tpacket: " << packet_sequence_number << 
-                std::endl << "\tbytes: " << packet_byte_count << std::endl;
-            } else {
-                std::cout << "No packets to flush out" << std::endl;
-                return true;
-            }
-        }
-    }
-    return true;
-}
 
 uint32_t DCA1000Handler::get_packet_sequence_number(std::vector<uint8_t>& buffer){
     //get the sequence number

@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <vector>
 #include <endian.h>
+#include <complex>
 
 #include "SystemConfigReader.hpp"
 #include "DCA1000Commands.hpp"
@@ -39,8 +40,7 @@ public:
     //receive data
     void init_buffers(size_t _bytes_per_frame, size_t _samples_per_chirp, size_t _chirps_per_frame);
     bool process_next_packet();
-    bool get_next_udp_packets(std::vector<uint8_t>&buffer);
-    bool flush_data_buffer();
+    ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
     void print_status();
 
 private:
@@ -62,21 +62,36 @@ private:
     std::vector<uint8_t> udp_packet_buffer;
     size_t udp_packet_size;
     std::uint32_t dropped_packets;
+    std::uint32_t dropped_packet_events;
     std::uint32_t received_packets;
-    std::uint32_t sequence_number;
-    std::uint64_t byte_count;
+    std::uint64_t adc_data_byte_count;
 
     //assembling frames
-    std::vector<uint8_t> frame_byte_buffer;
-    size_t received_frames;
-    size_t next_frame_byte_buffer_idx;
-    size_t bytes_per_frame;
+    std::vector<uint8_t> frame_byte_buffer; //for assembling new frame byte buffers
+    std::uint32_t received_frames;
+    std::uint64_t next_frame_byte_buffer_idx;
+    std::uint64_t bytes_per_frame;
     size_t samples_per_chirp;
     size_t chirps_per_frame;
+
+    //assembling the adc data cube
+    //NOTE: indexed by [Rx channel, sample, chirp]
+    std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> adc_data_cube;
+
+    //processing completed frames
+    std::vector<uint8_t> latest_frame_byte_buffer; //most recently capture complete frame byte buffer
+    bool new_frame_available;
 
     //unpacking packets
     uint32_t get_packet_sequence_number(std::vector<uint8_t>& buffer);
     uint64_t get_packet_byte_count(std::vector<uint8_t>& buffer);
+    
+    //processing frame byte buffer
+    void zero_pad_frame_byte_buffer(std::uint64_t packet_byte_count);
+    void save_frame_byte_buffer(bool print_system_status = true);
+
+    //generating an adc data cube
+
 };
 
 #endif // DCA1000_H
