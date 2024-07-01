@@ -16,6 +16,7 @@ class RadarConfigReader{
         size_t get_bytes_per_frame();
         size_t get_chirps_per_frame();
         size_t get_samples_per_chirp();
+        size_t get_num_rx_antennas();
 
     private:
         std::ifstream cfg_file;

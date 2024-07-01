@@ -38,7 +38,11 @@ public:
     float send_readFPGAVersion(); //5th command
 
     //receive data
-    void init_buffers(size_t _bytes_per_frame, size_t _samples_per_chirp, size_t _chirps_per_frame);
+    void init_buffers(
+        size_t _bytes_per_frame,
+        size_t _samples_per_chirp,
+        size_t _chirps_per_frame,
+        size_t num_rx_antennas);
     bool process_next_packet();
     ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
     void print_status();
@@ -73,9 +77,11 @@ private:
     std::uint64_t bytes_per_frame;
     size_t samples_per_chirp;
     size_t chirps_per_frame;
+    size_t num_rx_channels;
 
     //assembling the adc data cube
     //NOTE: indexed by [Rx channel, sample, chirp]
+
     std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> adc_data_cube;
 
     //processing completed frames
@@ -90,8 +96,15 @@ private:
     void zero_pad_frame_byte_buffer(std::uint64_t packet_byte_count);
     void save_frame_byte_buffer(bool print_system_status = true);
 
-    //generating an adc data cube
+    //getting the latest adc data cube
+    std::vector<std::int16_t> convert_from_bytes_to_ints(
+        std::vector<uint8_t>& in_vector);
+    std::vector<std::vector<std::int16_t>> reshape_to_2D(
+        std::vector<std::int16_t>& in_vector,
+        size_t num_rows);
+    void update_latest_adc_cube_1443(void);
 
+    std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> get_latest_adc_data_cube(void);
 };
 
 #endif // DCA1000_H

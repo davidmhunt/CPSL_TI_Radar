@@ -456,11 +456,13 @@ float DCA1000Handler::send_readFPGAVersion(){
 void DCA1000Handler::init_buffers(
     size_t _bytes_per_frame,
     size_t _samples_per_chirp,
-    size_t _chirps_per_frame)
+    size_t _chirps_per_frame,
+    size_t _num_rx_antennas)
 {
     bytes_per_frame = _bytes_per_frame;
     samples_per_chirp = _samples_per_chirp;
     chirps_per_frame = _chirps_per_frame;
+    num_rx_channels = _num_rx_antennas;
 
     //configure the udp packet buffer
     udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
@@ -478,6 +480,17 @@ void DCA1000Handler::init_buffers(
     adc_data_byte_count = 0;
     dropped_packets = 0;
     received_frames = 0;
+
+    //adc_cube buffer
+    //NOTE: indexed by [Rx channel, sample, chirp]
+    size_t rx_channels = 4;
+    adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>>(
+        num_rx_channels,std::vector<std::vector<std::complex<std::uint16_t>>>(
+            samples_per_chirp, std::vector<std::complex<std::uint16_t>>(
+                chirps_per_frame,std::complex<std::uint16_t>(0,0)
+            )
+        )
+    );
 }
 
 /**
@@ -545,6 +558,68 @@ bool DCA1000Handler::process_next_packet(){
 
 /**
  * @brief 
+ * 
+ * @param buffer 
+ * @return true 
+ * @return false 
+ */
+ssize_t DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
+    if (data_socket < 0) {
+        std::cerr << "data socket not bound" << std::endl;
+        return 0;
+    }
+
+    struct sockaddr_in fromAddr;
+    socklen_t fromLen = sizeof(fromAddr);
+    ssize_t receivedBytes = recvfrom(data_socket, buffer.data(), buffer.size(), 0,
+                             (struct sockaddr*)&fromAddr, &fromLen);
+    if (receivedBytes < 0) {
+        std::cerr << "Failed to receive data" << std::endl;
+        return 0;
+    } else{
+        return receivedBytes;
+    }
+}
+
+void DCA1000Handler::print_status(){
+    std::cout <<
+        "frame: " << received_frames << std::endl <<
+        "\tpackets: " << received_packets << std::endl <<
+        "\tdata bytes: " << adc_data_byte_count << std::endl <<
+        "\tdropped packets: " << dropped_packets << std::endl <<
+        "\tdropped packet events: " << dropped_packet_events << std::endl;
+}
+
+
+uint32_t DCA1000Handler::get_packet_sequence_number(std::vector<uint8_t>& buffer){
+    //get the sequence number
+    std::uint32_t packet_sequence_number = 
+        static_cast<uint32_t>(buffer[3]) << 24 |
+        static_cast<uint32_t>(buffer[2]) << 16 |
+        static_cast<uint32_t>(buffer[1]) << 8 |
+        static_cast<uint32_t>(buffer[0]);
+    packet_sequence_number = le32toh(packet_sequence_number);
+
+    return packet_sequence_number;
+}
+
+uint64_t DCA1000Handler::get_packet_byte_count(std::vector<uint8_t>& buffer){
+    
+    //get the byte count
+    uint64_t packet_byte_count = 
+            static_cast<uint64_t>(buffer[9]) << 40 |
+            static_cast<uint64_t>(buffer[8]) << 32 |
+            static_cast<uint64_t>(buffer[7]) << 24 |
+            static_cast<uint64_t>(buffer[6]) << 16 |
+            static_cast<uint64_t>(buffer[5]) << 8  |
+            static_cast<uint64_t>(buffer[4]);
+        packet_byte_count = le64toh(packet_byte_count);
+
+    return packet_byte_count;
+}
+
+/**
+ * @brief 
  * @note Assumes that the frame_byte_buffer is initialized with zeros for each new frame
  * 
  * @param packet_byte_count the byte count from the most recently received packets
@@ -604,69 +679,101 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
     //increment the frame tracking
     received_frames += 1;
 
+    update_latest_adc_cube_1443();
+
     if(print_system_status){
         print_status();
     }
 }
 
-void DCA1000Handler::print_status(){
-    std::cout <<
-        "frame: " << received_frames << std::endl <<
-        "\tpackets: " << received_packets << std::endl <<
-        "\tdata bytes: " << adc_data_byte_count << std::endl <<
-        "\tdropped packets: " << dropped_packets << std::endl <<
-        "\tdropped packet events: " << dropped_packet_events << std::endl;
+std::vector<std::int16_t> DCA1000Handler::convert_from_bytes_to_ints(
+    std::vector<uint8_t>& in_vector)
+{
+    std::vector<std::int16_t> out_vector(in_vector.size() / 2,0);
+    for (size_t i = 0; i < in_vector.size()/2; i++)
+    {
+        out_vector[i] = (
+            (latest_frame_byte_buffer[i * 2]) | 
+            (latest_frame_byte_buffer[i * 2 + 1] << 8)
+        );
+    }
+    return out_vector;
 }
 
 /**
- * @brief 
+ * @brief Re-shapes a 1D vector into 2D vector, filling in the cols first
  * 
- * @param buffer 
- * @return true 
- * @return false 
+ * @param in_vector 
+ * @param num_rows 
+ * @return std::vector<std::vector<std::int16_t>> 
  */
-ssize_t DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
-    if (data_socket < 0) {
-        std::cerr << "data socket not bound" << std::endl;
-        return 0;
+std::vector<std::vector<std::int16_t>> DCA1000Handler::reshape_to_2D(
+    std::vector<std::int16_t>& in_vector,
+    size_t num_rows)
+{
+    std::vector<std::vector<std::int16_t>> out_vector(
+        num_rows, std::vector<std::int16_t>(
+            in_vector.size() / num_rows,0
+        )
+    );
+
+    size_t in_vector_idx = 0;
+    size_t row_idx = 0;
+    size_t col_idx = 0;
+
+    while (in_vector_idx < in_vector.size())
+    {
+        out_vector[row_idx][col_idx] = in_vector[in_vector_idx];
+
+        row_idx += 1;
+
+        if(row_idx >= num_rows){
+            row_idx = 0;
+            col_idx += 1;
+        }
+
+        in_vector_idx += 1;
     }
-
-    struct sockaddr_in fromAddr;
-    socklen_t fromLen = sizeof(fromAddr);
-    ssize_t receivedBytes = recvfrom(data_socket, buffer.data(), buffer.size(), 0,
-                             (struct sockaddr*)&fromAddr, &fromLen);
-    if (receivedBytes < 0) {
-        std::cerr << "Failed to receive data" << std::endl;
-        return 0;
-    } else{
-        return receivedBytes;
-    }
-}
-
-
-uint32_t DCA1000Handler::get_packet_sequence_number(std::vector<uint8_t>& buffer){
-    //get the sequence number
-    std::uint32_t packet_sequence_number = 
-        static_cast<uint32_t>(buffer[3]) << 24 |
-        static_cast<uint32_t>(buffer[2]) << 16 |
-        static_cast<uint32_t>(buffer[1]) << 8 |
-        static_cast<uint32_t>(buffer[0]);
-    packet_sequence_number = le32toh(packet_sequence_number);
-
-    return packet_sequence_number;
-}
-
-uint64_t DCA1000Handler::get_packet_byte_count(std::vector<uint8_t>& buffer){
     
-    //get the byte count
-    uint64_t packet_byte_count = 
-            static_cast<uint64_t>(buffer[9]) << 40 |
-            static_cast<uint64_t>(buffer[8]) << 32 |
-            static_cast<uint64_t>(buffer[7]) << 24 |
-            static_cast<uint64_t>(buffer[6]) << 16 |
-            static_cast<uint64_t>(buffer[5]) << 8  |
-            static_cast<uint64_t>(buffer[4]);
-        packet_byte_count = le64toh(packet_byte_count);
+    return out_vector;
+}
 
-    return packet_byte_count;
+void DCA1000Handler::update_latest_adc_cube_1443(void)
+{   
+    std::vector<std::int16_t> adc_data_ints = convert_from_bytes_to_ints(latest_frame_byte_buffer);
+    
+    //reshape it into lvds lanes [Rx1-4 real, Rx1-4 complex]
+    std::vector<std::vector<std::int16_t>> adc_data_reshaped = reshape_to_2D(
+        adc_data_ints,num_rx_channels * 2
+    );
+
+    //update the adc data cube
+    size_t idx = 0;
+    
+    for (size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++)
+    {
+        for (size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++)
+        {   
+            size_t idx = (chirp_idx * samples_per_chirp + sample_idx);
+            //determine the index in the 2D reshaped buffer
+            for (size_t rx_idx; rx_idx < num_rx_channels; rx_idx++)
+            {
+                //set the real value
+                adc_data_cube[rx_idx][sample_idx][chirp_idx].real(
+                    adc_data_reshaped[idx][rx_idx]
+                );
+
+                //set the imaginary value
+                adc_data_cube[rx_idx][sample_idx][chirp_idx].imag(
+                    adc_data_reshaped[idx][rx_idx] + num_rx_channels
+                );
+            }
+            
+        }
+        
+    }
+}
+
+std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> DCA1000Handler::get_latest_adc_data_cube(void){
+    return adc_data_cube;
 }

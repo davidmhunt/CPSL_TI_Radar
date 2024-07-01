@@ -39,7 +39,8 @@ int main(int, char**){
     dca1000_handler.init_buffers(
         radar_config_reader.get_bytes_per_frame(),
         radar_config_reader.get_samples_per_chirp(),
-        radar_config_reader.get_chirps_per_frame()
+        radar_config_reader.get_chirps_per_frame(),
+        radar_config_reader.get_num_rx_antennas()
     );
 
     // //send a configuration to the radar board

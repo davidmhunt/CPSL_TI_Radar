@@ -44,6 +44,10 @@ size_t RadarConfigReader::get_samples_per_chirp(){
     return static_cast<size_t>(profileCfg_adc_samples);
 }
 
+size_t RadarConfigReader::get_num_rx_antennas(){
+    return static_cast<size_t>(rx_antennas);
+}
+
 void RadarConfigReader::process_cfg() {
     std::string line;
     while (std::getline(cfg_file, line)) {
