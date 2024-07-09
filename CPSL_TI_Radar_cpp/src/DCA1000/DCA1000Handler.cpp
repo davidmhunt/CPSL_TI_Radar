@@ -10,6 +10,7 @@ DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
       DCA_systemIP(configReader.getDCASystemIP()),
       DCA_cmdPort(configReader.getDCACmdPort()),
       DCA_dataPort(configReader.getDCADataPort()),
+      save_to_file(configReader.get_save_to_file()),
       cmd_socket(-1),
       data_socket(-1),
       dropped_packets(0),
@@ -37,9 +38,21 @@ DCA1000Handler::~DCA1000Handler() {
     if (data_socket >= 0){
         close(data_socket);
     }
+    if(save_to_file){
+        if(out_file.is_open()){
+            out_file.close();
+        }
+    }
 }
 
 bool DCA1000Handler::initialize(){
+
+    //initialize file streaming
+    if(save_to_file){
+        if(init_out_file() != true){
+            return false;
+        }
+    }
 
     //initialize the addresses
     init_addresses();
@@ -484,10 +497,10 @@ void DCA1000Handler::init_buffers(
     //adc_cube buffer
     //NOTE: indexed by [Rx channel, sample, chirp]
     size_t rx_channels = 4;
-    adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>>(
-        num_rx_channels,std::vector<std::vector<std::complex<std::uint16_t>>>(
-            samples_per_chirp, std::vector<std::complex<std::uint16_t>>(
-                chirps_per_frame,std::complex<std::uint16_t>(0,0)
+    adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
+        num_rx_channels,std::vector<std::vector<std::complex<std::int16_t>>>(
+            samples_per_chirp, std::vector<std::complex<std::int16_t>>(
+                chirps_per_frame,std::complex<std::int16_t>(0,0)
             )
         )
     );
@@ -684,6 +697,10 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
     if(print_system_status){
         print_status();
     }
+
+    if(save_to_file){
+        write_adc_data_cube_to_file();
+    }
 }
 
 std::vector<std::int16_t> DCA1000Handler::convert_from_bytes_to_ints(
@@ -696,6 +713,8 @@ std::vector<std::int16_t> DCA1000Handler::convert_from_bytes_to_ints(
             (latest_frame_byte_buffer[i * 2]) | 
             (latest_frame_byte_buffer[i * 2 + 1] << 8)
         );
+
+        //TODO: add in either le16toh() or be16toh() to preserve compatibility
     }
     return out_vector;
 }
@@ -774,6 +793,39 @@ void DCA1000Handler::update_latest_adc_cube_1443(void)
     }
 }
 
-std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> DCA1000Handler::get_latest_adc_data_cube(void){
+std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler::get_latest_adc_data_cube(void){
     return adc_data_cube;
+}
+
+bool DCA1000Handler::init_out_file(){
+
+    out_file = std::ofstream("adc_data.bin", 
+        std::ios::out | std::ofstream::binary | std::ios::trunc);
+
+    if(out_file.is_open() != true){
+        std::cout << "Failed to open or create adc_data.bin file" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+void DCA1000Handler::write_adc_data_cube_to_file(void){
+    
+    //make sure that the out_file is open
+    if(out_file.is_open()){
+        for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
+            for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
+                for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
+                    out_file.write(
+                        reinterpret_cast<const char*>(
+                            &adc_data_cube[rx_idx][sample_idx][chirp_idx]),
+                        sizeof(adc_data_cube[rx_idx][sample_idx][chirp_idx])
+                    );
+                }
+            }
+        }
+    }else{
+        std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
+    }
 }

@@ -48,6 +48,11 @@ int SystemConfigReader::getDCACmdPort() const
     return DCA_cmdPort;
 }
 
+bool SystemConfigReader::get_save_to_file() const 
+{
+    return save_to_file;
+}
+
 void SystemConfigReader::readJsonFile() 
 {
     std::ifstream file(jsonFilePath);
@@ -88,5 +93,10 @@ void SystemConfigReader::readJsonFile()
         if (DCA1000Config.contains("cmd_port")) {
             DCA_cmdPort = DCA1000Config["cmd_port"].get<int>();
         }
+    }  
+
+    //saving to a file
+    if (data.contains("Streamer") && data["Streamer"].contains("save_to_file")) {
+        save_to_file = data["Streamer"]["save_to_file"].get<bool>();
     }
 }

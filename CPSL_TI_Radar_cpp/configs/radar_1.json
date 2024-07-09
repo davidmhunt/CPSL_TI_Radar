@@ -29,43 +29,17 @@
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "verbose":true
+            "verbose":true,
+            "save_to_file":true
         },
     "Processor":
         {
             "verbose":true,
-            "enable_plotting":false,
-            "save_plots_as_gif":false,
             "SDK_version":"2.1",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",
                 "DetectedPointsProcessor":6000
-            },
-            "DCA1000_Listeners":{
-                "authkey":"DCA1000_client",
-                "ADCDataCube":{
-                    "addr":6001,
-                    "enabled":true
-                },
-                "NormRngAzResp":{
-                    "addr":6002,
-                    "enabled":true
-                },
-                "NormRngDopResp":{
-                    "addr":6003,
-                    "enabled":true
-                },
-                "RadCloudModel":{
-                    "addr":6004,
-                    "enabled":false
-                },
-                "PointCloud":{
-                    "addr":6005,
-                    "enabled":false
-                }
-            },
-            "AoA_Processor":"FFT"
-
+            }
         },
     "ROS/Listeners":
         {

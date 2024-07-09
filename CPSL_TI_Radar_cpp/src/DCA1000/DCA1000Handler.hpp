@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <sys/types.h>
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -79,10 +80,14 @@ private:
     size_t chirps_per_frame;
     size_t num_rx_channels;
 
+    //saving to a file
+    bool save_to_file;
+    std::ofstream out_file;
+    
     //assembling the adc data cube
     //NOTE: indexed by [Rx channel, sample, chirp]
 
-    std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> adc_data_cube;
+    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> adc_data_cube;
 
     //processing completed frames
     std::vector<uint8_t> latest_frame_byte_buffer; //most recently capture complete frame byte buffer
@@ -104,7 +109,11 @@ private:
         size_t num_rows);
     void update_latest_adc_cube_1443(void);
 
-    std::vector<std::vector<std::vector<std::complex<std::uint16_t>>>> get_latest_adc_data_cube(void);
+    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_latest_adc_data_cube(void);
+
+    //handling files
+    bool init_out_file();
+    void write_adc_data_cube_to_file();
 };
 
 #endif // DCA1000_H

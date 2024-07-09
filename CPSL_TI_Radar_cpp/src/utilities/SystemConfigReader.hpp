@@ -18,6 +18,7 @@ class SystemConfigReader {
         std::string getDCASystemIP() const;
         int getDCADataPort() const;
         int getDCACmdPort() const;
+        bool get_save_to_file() const;
 
     private:
         std::string jsonFilePath;
@@ -27,6 +28,7 @@ class SystemConfigReader {
         std::string DCA_systemIP;
         int DCA_dataPort;
         int DCA_cmdPort;
+        bool save_to_file;
 
         void readJsonFile();
 };
