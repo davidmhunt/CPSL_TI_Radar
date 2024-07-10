@@ -15,40 +15,24 @@
 #include <complex>
 
 #include "SystemConfigReader.hpp"
+#include "RadarConfigReader.hpp"
 #include "DCA1000Commands.hpp"
 
 
-class DCA1000Handler {
+class DCA1000Handler {\
+//variables
 public:
-    DCA1000Handler(const SystemConfigReader& configReader);
-    ~DCA1000Handler();
+    //initialization status
+    bool initialized;
 
-    bool initialize();
-    void init_addresses();
-    bool init_sockets();
-    bool sendCommand(std::vector<uint8_t>& command);
-    bool receiveResponse(std::vector<uint8_t>& buffer);
-
-    //commands to the DCA1000
-    bool send_resetFPGA(); //2nd command
-    bool send_recordStart(); 
-    bool send_recordStop();
-    bool send_systemConnect(); //1st command
-    bool send_configPacketData(size_t packet_size = 1472, uint16_t delay_us = 25);
-    bool send_configFPGAGen();
-    float send_readFPGAVersion(); //5th command
-
-    //receive data
-    void init_buffers(
-        size_t _bytes_per_frame,
-        size_t _samples_per_chirp,
-        size_t _chirps_per_frame,
-        size_t num_rx_antennas);
-    bool process_next_packet();
-    ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
-    void print_status();
-
+    bool new_frame_available;
 private:
+    //system configuration information
+    SystemConfigReader system_config_reader;
+
+    //radar configuration information
+    RadarConfigReader radar_config_reader;
+
     //connection information
     std::string DCA_fpgaIP;
     std::string DCA_systemIP;
@@ -91,8 +75,38 @@ private:
 
     //processing completed frames
     std::vector<uint8_t> latest_frame_byte_buffer; //most recently capture complete frame byte buffer
-    bool new_frame_available;
 
+//functions
+public:
+    DCA1000Handler( const SystemConfigReader& configReader,
+                    const RadarConfigReader& radarConfigReader);
+    ~DCA1000Handler();
+
+    bool initialize(const SystemConfigReader& configReader,
+                    const RadarConfigReader& radarConfigReader);
+    void load_config();
+    void init_addresses();
+    bool init_sockets();
+    bool configure_DCA1000();
+    bool sendCommand(std::vector<uint8_t>& command);
+    bool receiveResponse(std::vector<uint8_t>& buffer);
+
+    //commands to the DCA1000
+    bool send_resetFPGA(); //2nd command
+    bool send_recordStart(); 
+    bool send_recordStop();
+    bool send_systemConnect(); //1st command
+    bool send_configPacketData(size_t packet_size = 1472, uint16_t delay_us = 25);
+    bool send_configFPGAGen();
+    float send_readFPGAVersion(); //5th command
+
+    //receive data
+    void init_buffers();
+    bool process_next_packet();
+    ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
+    void print_status();
+
+private:
     //unpacking packets
     uint32_t get_packet_sequence_number(std::vector<uint8_t>& buffer);
     uint64_t get_packet_byte_count(std::vector<uint8_t>& buffer);

@@ -5,27 +5,27 @@
  * 
  * @param configReader 
  */
-DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
-    : DCA_fpgaIP(configReader.getDCAFpgaIP()),
-      DCA_systemIP(configReader.getDCASystemIP()),
-      DCA_cmdPort(configReader.getDCACmdPort()),
-      DCA_dataPort(configReader.getDCADataPort()),
-      save_to_file(configReader.get_save_to_file()),
-      cmd_socket(-1),
-      data_socket(-1),
-      dropped_packets(0),
-      dropped_packet_events(0),
-      received_packets(0),
-      adc_data_byte_count(0),
-      received_frames(0),
-      next_frame_byte_buffer_idx(0)
-      {     
-            //print key ports
-            std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
-            std::cout << "System IP: " << DCA_systemIP << std::endl;
-            std::cout << "cmd port: " << DCA_cmdPort << std::endl;
-            std::cout << "data port: " << DCA_dataPort << std::endl;
-      }
+DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
+                                const RadarConfigReader& radarConfigReader):
+    system_config_reader(),
+    radar_config_reader(),
+    initialized(false),
+    DCA_fpgaIP(""),
+    DCA_systemIP(""),
+    DCA_cmdPort(-1),
+    DCA_dataPort(-1),
+    save_to_file(false),
+    cmd_socket(-1),
+    data_socket(-1),
+    dropped_packets(0),
+    dropped_packet_events(0),
+    received_packets(0),
+    adc_data_byte_count(0),
+    received_frames(0),
+    next_frame_byte_buffer_idx(0)
+    {     
+        initialize(configReader,radarConfigReader);
+    }
 
 /**
  * @brief Destroy the DCA1000Handler::DCA1000Handler object
@@ -45,7 +45,27 @@ DCA1000Handler::~DCA1000Handler() {
     }
 }
 
-bool DCA1000Handler::initialize(){
+bool DCA1000Handler::initialize(
+    const SystemConfigReader& systemConfigReader,
+    const RadarConfigReader& radarConfigReader){
+
+    initialized = false;
+
+    //load the radar config reader
+    radar_config_reader = radarConfigReader;
+    if(radar_config_reader.initialized == false){
+        return false;
+    }else{
+        init_buffers();
+    }
+
+    //load the system configuration information
+    system_config_reader = systemConfigReader;
+    if(system_config_reader.initialized == false){
+        return false;
+    } else{
+        load_config();
+    }
 
     //initialize file streaming
     if(save_to_file){
@@ -62,35 +82,33 @@ bool DCA1000Handler::initialize(){
         return false;
     }
 
-    //send system connect
-    if(send_systemConnect() != true){
+    //set initialization status to true
+    initialized = true;
+
+    //configure the DCA1000
+    if(configure_DCA1000() != true){
+        initialized = false; //initializing the DCA1000 falied
         return false;
     }
+}
 
-    //send reset FPGA
-    if(send_resetFPGA() != true){
-        return false;
-    }
+/**
+ * @brief Load required information from the system_config_reader
+ * 
+ */
+void DCA1000Handler::load_config(){
 
-    //send configure packet data
-    if(send_configPacketData(1472,25) != true){
-        return false;
-    }
+    DCA_fpgaIP = system_config_reader.getDCAFpgaIP();
+    DCA_systemIP = system_config_reader.getDCASystemIP();
+    DCA_cmdPort = system_config_reader.getDCACmdPort();
+    DCA_dataPort = system_config_reader.getDCADataPort();
+    save_to_file = system_config_reader.get_save_to_file();
 
-    //send config FPGA gen
-    if(send_configFPGAGen() != true){
-        return false;
-    }
-
-    //read the FPGA version
-    float fpga_version = send_readFPGAVersion();
-
-    if(fpga_version > 0){
-        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully" << std::endl;
-        return true;
-    } else{
-        return false;
-    }
+    //print key ports
+    std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
+    std::cout << "System IP: " << DCA_systemIP << std::endl;
+    std::cout << "cmd port: " << DCA_cmdPort << std::endl;
+    std::cout << "data port: " << DCA_dataPort << std::endl;
 }
 
 /**
@@ -158,6 +176,50 @@ bool DCA1000Handler::init_sockets() {
     }
 
     return true;
+}
+
+/**
+ * @brief Send a series of commands to the DCA1000 to configure it
+ * 
+ * @return true - DCA1000 successfully configured
+ * @return false - DCA1000 not successfully configured
+ */
+bool DCA1000Handler::configure_DCA1000(){
+
+    if (initialized){
+        //send system connect
+        if(send_systemConnect() != true){
+            return false;
+        }
+
+        //send reset FPGA
+        if(send_resetFPGA() != true){
+            return false;
+        }
+
+        //send configure packet data
+        if(send_configPacketData(1472,25) != true){
+            return false;
+        }
+
+        //send config FPGA gen
+        if(send_configFPGAGen() != true){
+            return false;
+        }
+
+        //read the FPGA version
+        float fpga_version = send_readFPGAVersion();
+
+        if(fpga_version > 0){
+            std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully" << std::endl;
+            return true;
+        } else{
+            return false;
+        }
+    } else{
+        std::cerr << "attempted to configure DCA1000, but DCA1000 Handler wasn't initialized";
+        return false;
+    }
 }
 
 /**
@@ -466,44 +528,45 @@ float DCA1000Handler::send_readFPGAVersion(){
 }
 
 
-void DCA1000Handler::init_buffers(
-    size_t _bytes_per_frame,
-    size_t _samples_per_chirp,
-    size_t _chirps_per_frame,
-    size_t _num_rx_antennas)
+void DCA1000Handler::init_buffers()
 {
-    bytes_per_frame = _bytes_per_frame;
-    samples_per_chirp = _samples_per_chirp;
-    chirps_per_frame = _chirps_per_frame;
-    num_rx_channels = _num_rx_antennas;
+    if(radar_config_reader.initialized){
+        bytes_per_frame = radar_config_reader.get_bytes_per_frame();
+        samples_per_chirp = radar_config_reader.get_samples_per_chirp();
+        chirps_per_frame = radar_config_reader.get_chirps_per_frame();
+        num_rx_channels = radar_config_reader.get_num_rx_antennas();
 
-    //configure the udp packet buffer
-    udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
+        //configure the udp packet buffer
+        udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
 
-    //configure the frame byte buffer (assembly)
-    frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
-    next_frame_byte_buffer_idx = 0;
+        //configure the frame byte buffer (assembly)
+        frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+        next_frame_byte_buffer_idx = 0;
 
-    //configure processing of completed frames
-    latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
-    new_frame_available = false;
+        //configure processing of completed frames
+        latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+        new_frame_available = false;
 
-    //reset the dropped packet counting
-    received_packets = 0;
-    adc_data_byte_count = 0;
-    dropped_packets = 0;
-    received_frames = 0;
+        //reset the dropped packet counting
+        received_packets = 0;
+        adc_data_byte_count = 0;
+        dropped_packets = 0;
+        received_frames = 0;
 
-    //adc_cube buffer
-    //NOTE: indexed by [Rx channel, sample, chirp]
-    size_t rx_channels = 4;
-    adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
-        num_rx_channels,std::vector<std::vector<std::complex<std::int16_t>>>(
-            samples_per_chirp, std::vector<std::complex<std::int16_t>>(
-                chirps_per_frame,std::complex<std::int16_t>(0,0)
+        //adc_cube buffer
+        //NOTE: indexed by [Rx channel, sample, chirp]
+        size_t rx_channels = 4;
+        adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
+            num_rx_channels,std::vector<std::vector<std::complex<std::int16_t>>>(
+                samples_per_chirp, std::vector<std::complex<std::int16_t>>(
+                    chirps_per_frame,std::complex<std::int16_t>(0,0)
+                )
             )
-        )
-    );
+        );
+    }else{
+        std::cerr << "attempted to initialize DCA1000 Handler buffers,\
+        but radar_config_reader wasn't initialized";
+    }
 }
 
 /**

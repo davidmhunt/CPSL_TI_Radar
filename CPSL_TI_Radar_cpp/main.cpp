@@ -27,23 +27,15 @@ int main(int, char**){
     RadarConfigReader radar_config_reader(radar_config_path);
 
     //setup the DCA1000
-    DCA1000Handler dca1000_handler(config_reader);
+    DCA1000Handler dca1000_handler(config_reader,radar_config_reader);
 
     // //initialize the DCA1000
-    if(dca1000_handler.initialize() == false){
+    if(dca1000_handler.initialized == false){
         return false;
     }
 
-    //initialize the dca1000 buffers
-    dca1000_handler.init_buffers(
-        radar_config_reader.get_bytes_per_frame(),
-        radar_config_reader.get_samples_per_chirp(),
-        radar_config_reader.get_chirps_per_frame(),
-        radar_config_reader.get_num_rx_antennas()
-    );
-
     // //send a configuration to the radar board
-    CLIController cli_controller(config_file);
+    CLIController cli_controller(config_reader);
     cli_controller.run();
 
     //send record start command

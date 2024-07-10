@@ -40,7 +40,7 @@ CLIController & CLIController::operator=(const CLIController & rhs){
     if(this!= & rhs){
 
         //close the cli port if it is open
-        if(initialized &&
+        if(cli_port.get() != nullptr &&
             cli_port.use_count() == 1 && 
             cli_port -> is_open())
         {
@@ -64,7 +64,7 @@ CLIController & CLIController::operator=(const CLIController & rhs){
 CLIController::~CLIController()
 {
     //TODO: Check if the serial port is running right now
-    if(initialized && 
+    if(cli_port.get() != nullptr && 
         cli_port.use_count() == 1 &&
         cli_port -> is_open()){
         cli_port -> close();
@@ -76,7 +76,7 @@ bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
     system_config_reader = systemConfigReader;
 
     //check to make sure that the cli port isn't already open
-    if(initialized &&
+    if(cli_port.get() != nullptr &&
         cli_port.use_count() == 1 && 
         cli_port -> is_open())
     {

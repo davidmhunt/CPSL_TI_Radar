@@ -23,11 +23,12 @@ public:
     void sendStartCommand();
     void sendStopCommand();
 
+    bool initialized;
+    
 private:
 
     void sendCommand(const std::string& command);
 
-    bool initialized;
     std::shared_ptr<boost::asio::io_context> io_context;
     std::shared_ptr<boost::asio::serial_port> cli_port;
     SystemConfigReader system_config_reader;

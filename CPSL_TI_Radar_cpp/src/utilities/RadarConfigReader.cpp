@@ -1,23 +1,104 @@
 #include "RadarConfigReader.hpp"
-#include <iostream>
 
-RadarConfigReader::RadarConfigReader(const std::string& filename) {
-    cfg_file.open(filename);
-    if (!cfg_file.is_open()) {
+/**
+ * @brief default constructor
+*/
+RadarConfigReader::RadarConfigReader():
+    initialized(false)
+{}
+
+/**
+ * @brief Constructor with initialization
+ * 
+ * @param filename 
+ */
+RadarConfigReader::RadarConfigReader(const std::string& filename):
+    initialized(false)
+{
+    initialize(filename);
+}
+
+RadarConfigReader::RadarConfigReader(const RadarConfigReader & rhs):
+    initialized(rhs.initialized),
+    cfg_file(rhs.cfg_file),
+    rx_antennas(rhs.rx_antennas),
+    profileCfg_chirp_start_freq_GHz(rhs.profileCfg_chirp_start_freq_GHz),
+    profileCfg_idle_time_us(rhs.profileCfg_idle_time_us),
+    profileCfg_ramp_end_time_us(rhs.profileCfg_ramp_end_time_us),
+    profileCfg_adc_samples(rhs.profileCfg_adc_samples),
+    profileCfg_adc_sample_rate_ksps(rhs.profileCfg_adc_sample_rate_ksps),
+    chirpCfg_start_idx(rhs.chirpCfg_start_idx),
+    chirpCfg_end_idx(rhs.chirpCfg_end_idx),
+    frameCfg_chirp_start_idx(rhs.frameCfg_chirp_start_idx),
+    frameCfg_chirp_end_idx(rhs.frameCfg_chirp_end_idx),
+    frameCfG_num_loops(rhs.frameCfG_num_loops),
+    frameCfg_frame_period(rhs.frameCfg_frame_period)
+{}
+
+RadarConfigReader & RadarConfigReader::operator=(const RadarConfigReader & rhs){
+    if(this != & rhs){
+
+        //close the config file stream if it is open right now
+        if(cfg_file.get() != nullptr &&
+            cfg_file.use_count() == 1 &&
+            cfg_file -> is_open()){
+                cfg_file -> close();
+            }
+        
+        //assign all variables to the rhs radar config reader
+        initialized = rhs.initialized;
+        cfg_file = rhs.cfg_file;
+        rx_antennas = rhs.rx_antennas;
+        profileCfg_chirp_start_freq_GHz = rhs.profileCfg_chirp_start_freq_GHz;
+        profileCfg_idle_time_us = rhs.profileCfg_idle_time_us;
+        profileCfg_ramp_end_time_us = rhs.profileCfg_ramp_end_time_us;
+        profileCfg_adc_samples = rhs.profileCfg_adc_samples;
+        profileCfg_adc_sample_rate_ksps = rhs.profileCfg_adc_sample_rate_ksps;
+        chirpCfg_start_idx = rhs.chirpCfg_start_idx;
+        chirpCfg_end_idx = rhs.chirpCfg_end_idx;
+        frameCfg_chirp_start_idx = rhs.frameCfg_chirp_start_idx;
+        frameCfg_chirp_end_idx = rhs.frameCfg_chirp_end_idx;
+        frameCfG_num_loops = rhs.frameCfG_num_loops;
+        frameCfg_frame_period = rhs.frameCfg_frame_period;
+    }
+
+    return *this;
+}
+
+RadarConfigReader::~RadarConfigReader()
+{   
+    if (cfg_file.get() != nullptr &&
+        cfg_file.use_count() == 1 &&
+        cfg_file -> is_open()){
+            cfg_file -> close();
+        }
+}
+
+void RadarConfigReader::initialize(const std::string & filename){
+
+    //check to make sure that the file stream hasn't already been initialized
+    if(initialized &&
+        cfg_file.use_count() == 1 &&
+        cfg_file -> is_open())
+    {
+        cfg_file -> close();
+    }
+
+    cfg_file = std::make_shared<std::ifstream>();
+    cfg_file -> open(filename);
+    if (! cfg_file -> is_open()){
         std::cerr << "Error opening file: " << filename << std::endl;
-    }else{
+        initialized = false;
+    } else{
+
         //process the configuration
         process_cfg();
 
         //set the number of rx antennas
+        //TODO: remove the hardcoding when possible
         rx_antennas = 4;
-    }
-}
 
-RadarConfigReader::~RadarConfigReader()
-{
-    if (cfg_file.is_open()) {
-        cfg_file.close();
+        initialized = true;
     }
 }
 
@@ -49,21 +130,27 @@ size_t RadarConfigReader::get_num_rx_antennas(){
 }
 
 void RadarConfigReader::process_cfg() {
-    std::string line;
-    while (std::getline(cfg_file, line)) {
-        std::istringstream iss(line);
-        std::string key;
-        if (std::getline(iss, key, ' ')) {
-            if (key == "profileCfg") {
-                read_profile_cfg(get_vec_from_string(line));
-            }
-            if (key == "chirpCfg") {
-                read_chirp_cfg(get_vec_from_string(line));
-            }
-            if (key == "frameCfg") {
-                read_frame_cfg(get_vec_from_string(line));
+
+    if(initialized)
+    {
+        std::string line;
+        while (std::getline(*cfg_file, line)) {
+            std::istringstream iss(line);
+            std::string key;
+            if (std::getline(iss, key, ' ')) {
+                if (key == "profileCfg") {
+                    read_profile_cfg(get_vec_from_string(line));
+                }
+                if (key == "chirpCfg") {
+                    read_chirp_cfg(get_vec_from_string(line));
+                }
+                if (key == "frameCfg") {
+                    read_frame_cfg(get_vec_from_string(line));
+                }
             }
         }
+    }else{
+        std::cerr << "attempted to process radar config, but radar_config_reader wasn't initialized";
     }
 }
 
