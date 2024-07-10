@@ -9,7 +9,9 @@ using namespace boost::asio;
  */
 CLIController::CLIController():
     initialized(false),
-    system_config_reader() //will leave it uninitialized
+    system_config_reader(), //will leave it uninitialized
+    io_context(new boost::asio::io_context()),
+    cli_port(nullptr)
 {}
 
 /**
@@ -19,7 +21,9 @@ CLIController::CLIController():
  */
 CLIController::CLIController(const SystemConfigReader & systemConfigReader):
     initialized(false),
-    system_config_reader()
+    system_config_reader(),
+    io_context(new boost::asio::io_context()),
+    cli_port(nullptr)
 {    
     initialize(systemConfigReader);
 }
@@ -102,7 +106,7 @@ bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
  * except for the sensorStart command
  * 
  */
-void CLIController::run() {
+void CLIController::send_config_to_IWR() {
 
     if(initialized){
         //get the configuration file path
@@ -130,7 +134,7 @@ void CLIController::run() {
             }        
         }
     } else{
-        std::cerr << "attempted to run cli controller, but CLI controller isn't initialized";
+        std::cerr << "attempted to send commands to IWR, but CLI controller isn't initialized";
     }
 }
 
@@ -162,7 +166,7 @@ void CLIController::sendCommand(const string& command) {
     std::cout << "Sent command: " << command << endl; 
     
     //send the command over the serial port
-    write(cli_port, buffer(command + "\n"));
+    write(*cli_port, buffer(command + "\n"));
 
     //wait to receive confirmation that the command was sent
     boost::asio::streambuf response;
@@ -170,7 +174,7 @@ void CLIController::sendCommand(const string& command) {
     boost::asio::deadline_timer timeout(*io_context);
     timeout.expires_from_now(boost::posix_time::millisec(50));
 
-    async_read_until(cli_port, response, "Done", [&ec](const boost::system::error_code& e, size_t bytes_transferred) {
+    async_read_until(*cli_port, response, "Done", [&ec](const boost::system::error_code& e, size_t bytes_transferred) {
         ec = e;
     });
 

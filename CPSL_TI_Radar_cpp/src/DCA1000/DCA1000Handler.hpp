@@ -13,13 +13,14 @@
 #include <vector>
 #include <endian.h>
 #include <complex>
+#include <memory>
 
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
 #include "DCA1000Commands.hpp"
 
 
-class DCA1000Handler {\
+class DCA1000Handler {
 //variables
 public:
     //initialization status
@@ -40,8 +41,8 @@ private:
     int DCA_dataPort;
 
     //command and data sockets
-    int cmd_socket;
-    int data_socket;
+    std::shared_ptr<int> cmd_socket;
+    std::shared_ptr<int> data_socket;
 
     //addresses
     sockaddr_in cmd_address;
@@ -66,7 +67,7 @@ private:
 
     //saving to a file
     bool save_to_file;
-    std::ofstream out_file;
+    std::shared_ptr<std::ofstream> out_file;
     
     //assembling the adc data cube
     //NOTE: indexed by [Rx channel, sample, chirp]
@@ -78,8 +79,11 @@ private:
 
 //functions
 public:
+    DCA1000Handler();
     DCA1000Handler( const SystemConfigReader& configReader,
                     const RadarConfigReader& radarConfigReader);
+    DCA1000Handler(const DCA1000Handler & rhs);
+    DCA1000Handler & operator=(const DCA1000Handler & rhs);
     ~DCA1000Handler();
 
     bool initialize(const SystemConfigReader& configReader,

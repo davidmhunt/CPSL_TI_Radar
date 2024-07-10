@@ -13,7 +13,6 @@
 
 using json = nlohmann::json;
 
-
 int main(int, char**){
 
     std::string config_file = "../configs/radar_1.json";
@@ -36,7 +35,9 @@ int main(int, char**){
 
     // //send a configuration to the radar board
     CLIController cli_controller(config_reader);
-    cli_controller.run();
+    if(cli_controller.initialized){
+        cli_controller.send_config_to_IWR();
+    }
 
     //send record start command
     dca1000_handler.send_recordStart();

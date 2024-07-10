@@ -19,7 +19,7 @@ public:
 
     bool initialize(const SystemConfigReader & systemConfigReader);
 
-    void run();
+    void send_config_to_IWR();
     void sendStartCommand();
     void sendStopCommand();
 

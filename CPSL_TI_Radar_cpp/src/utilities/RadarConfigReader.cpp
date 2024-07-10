@@ -4,7 +4,8 @@
  * @brief default constructor
 */
 RadarConfigReader::RadarConfigReader():
-    initialized(false)
+    initialized(false),
+    cfg_file(nullptr)
 {}
 
 /**
@@ -13,7 +14,8 @@ RadarConfigReader::RadarConfigReader():
  * @param filename 
  */
 RadarConfigReader::RadarConfigReader(const std::string& filename):
-    initialized(false)
+    initialized(false),
+    cfg_file(nullptr)
 {
     initialize(filename);
 }
@@ -77,7 +79,7 @@ RadarConfigReader::~RadarConfigReader()
 void RadarConfigReader::initialize(const std::string & filename){
 
     //check to make sure that the file stream hasn't already been initialized
-    if(initialized &&
+    if(cfg_file.get() != nullptr &&
         cfg_file.use_count() == 1 &&
         cfg_file -> is_open())
     {
@@ -131,7 +133,8 @@ size_t RadarConfigReader::get_num_rx_antennas(){
 
 void RadarConfigReader::process_cfg() {
 
-    if(initialized)
+    if(cfg_file.get() != nullptr &&
+        cfg_file -> is_open())
     {
         std::string line;
         while (std::getline(*cfg_file, line)) {
@@ -150,7 +153,7 @@ void RadarConfigReader::process_cfg() {
             }
         }
     }else{
-        std::cerr << "attempted to process radar config, but radar_config_reader wasn't initialized";
+        std::cerr << "attempted to process radar config, but cfg_file isn't open" << std::endl;
     }
 }
 
