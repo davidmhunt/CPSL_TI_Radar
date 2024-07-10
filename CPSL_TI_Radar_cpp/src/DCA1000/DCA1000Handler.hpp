@@ -114,6 +114,7 @@ private:
     //handling files
     bool init_out_file();
     void write_adc_data_cube_to_file();
+    void write_vector_to_file(std::vector<std::int16_t> &vector);
 };
 
 #endif // DCA1000_H

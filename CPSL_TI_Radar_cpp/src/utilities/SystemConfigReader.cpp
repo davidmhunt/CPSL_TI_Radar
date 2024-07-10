@@ -3,20 +3,89 @@
 using json = nlohmann::json;
 
 /**
- * @brief Construct a new System Config Reader:: System Config Reader object
+ * @brief Default constructor
  * 
- * @param jsonFilePath The path to the system's JSON configuration file
  */
-SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
-    : jsonFilePath(jsonFilePath),
+SystemConfigReader::SystemConfigReader()
+    : json_file_path(""),
       radar_cliPort(""),
       DCA_fpgaIP(""),
       DCA_systemIP(""),
       DCA_dataPort(0),
-      DCA_cmdPort(0)
+      DCA_cmdPort(0),
+      save_to_file(false),
+      initialized(false)
+    {}
+
+/**
+ * @brief Constructor that automatically initializes when given a JSON config file path
+ * 
+ * @param jsonFilePath The path to the system's JSON configuration file
+ */
+SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
+    : json_file_path(jsonFilePath),
+      radar_cliPort(""),
+      DCA_fpgaIP(""),
+      DCA_systemIP(""),
+      DCA_dataPort(0),
+      DCA_cmdPort(0),
+      save_to_file(false)
 {
-    readJsonFile();
+    initialize(jsonFilePath);
 }
+
+/**
+ * @brief Copy constructor (does not initialize though)
+ * 
+ * @param rhs 
+ */
+SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
+    : json_file_path(rhs.json_file_path),
+      radar_cliPort(rhs.radar_cliPort),
+      DCA_fpgaIP(rhs.DCA_fpgaIP),
+      DCA_systemIP(rhs.DCA_systemIP),
+      DCA_dataPort(rhs.DCA_dataPort),
+      DCA_cmdPort(rhs.DCA_cmdPort),
+      save_to_file(rhs.save_to_file),
+      initialized(rhs.initialized)
+{}
+
+/**
+ * @brief Assignment operator
+ * 
+ * @param rhs 
+ * @return SystemConfigReader& 
+ */
+SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rhs){
+    if(this != &rhs){
+        json_file_path = rhs.json_file_path;
+        radar_ConfigPath = rhs.radar_ConfigPath;
+        radar_cliPort = rhs.radar_cliPort;
+        DCA_fpgaIP = rhs.DCA_fpgaIP;
+        DCA_systemIP = rhs.DCA_systemIP;
+        DCA_dataPort = rhs.DCA_dataPort;
+        DCA_cmdPort = rhs.DCA_cmdPort;
+        save_to_file = rhs.save_to_file;
+        initialized = rhs.initialized;
+    }
+
+    return *this;
+}
+
+/**
+ * @brief initialize the SystemConfigReader with a new json file
+ * 
+ * @param jsonFilePath path to a JSON config file
+ */
+void SystemConfigReader::initialize(const std::string & jsonFilePath){
+    
+    json_file_path = jsonFilePath;
+    //read the json file and initialize the SystemConfigReader
+    readJsonFile();
+
+    initialized = true;
+}
+
 
 std::string SystemConfigReader::getRadarConfigPath() const 
 {
@@ -55,12 +124,12 @@ bool SystemConfigReader::get_save_to_file() const
 
 void SystemConfigReader::readJsonFile() 
 {
-    std::ifstream file(jsonFilePath);
+    std::ifstream file(json_file_path);
     json data;
 
     //parse the JSON file
     if (!file.is_open()) {
-        std::cerr << "Failed to open JSON file: " << jsonFilePath << std::endl;
+        std::cerr << "Failed to open JSON file: " << json_file_path << std::endl;
         return;
     }
     else{

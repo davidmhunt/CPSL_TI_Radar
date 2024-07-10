@@ -10,7 +10,12 @@ using json = nlohmann::json;
 
 class SystemConfigReader {
     public:
+        SystemConfigReader();
         SystemConfigReader(const std::string& jsonFilePath);
+        SystemConfigReader(const SystemConfigReader & rhs);
+        SystemConfigReader & operator=(const SystemConfigReader & rhs);
+
+        void initialize(const std::string& jsonFilePath);
 
         std::string getRadarConfigPath() const;
         std::string getRadarCliPort() const;
@@ -20,8 +25,11 @@ class SystemConfigReader {
         int getDCACmdPort() const;
         bool get_save_to_file() const;
 
+        //variable to confirm that the class has been initialized
+        bool initialized;
+
     private:
-        std::string jsonFilePath;
+        std::string json_file_path;
         std::string radar_ConfigPath;
         std::string radar_cliPort;
         std::string DCA_fpgaIP;

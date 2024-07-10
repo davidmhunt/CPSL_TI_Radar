@@ -3,17 +3,98 @@
 using namespace std;
 using namespace boost::asio;
 
-CLIController::CLIController(const string& jsonFilePath):
-    system_config_reader(jsonFilePath),
-    cli_port(io_context, system_config_reader.getRadarCliPort()) 
-{
-    cli_port.set_option(serial_port_base::baud_rate(115200));
+/**
+ * @brief Default contructor (leaves un-initialized)
+ * 
+ */
+CLIController::CLIController():
+    initialized(false),
+    system_config_reader() //will leave it uninitialized
+{}
+
+/**
+ * @brief Contructor that initializes the cli_controller
+ * 
+ * @param systemConfigReader 
+ */
+CLIController::CLIController(const SystemConfigReader & systemConfigReader):
+    initialized(false),
+    system_config_reader()
+{    
+    initialize(systemConfigReader);
 }
 
+/**
+ * @brief Copy Contructor
+ * 
+ * @param rhs 
+ */
+CLIController::CLIController(const CLIController & rhs):
+    initialized(rhs.initialized),
+    io_context(rhs.io_context),
+    cli_port(rhs.cli_port),
+    system_config_reader(rhs.system_config_reader)
+{}
+
+CLIController & CLIController::operator=(const CLIController & rhs){
+    if(this!= & rhs){
+
+        //close the cli port if it is open
+        if(initialized &&
+            cli_port.use_count() == 1 && 
+            cli_port -> is_open())
+        {
+            cli_port -> close();
+        }
+
+        //copy the other variables over
+        initialized = rhs.initialized;
+        io_context = rhs.io_context;
+        cli_port = rhs.cli_port;
+        system_config_reader = rhs.system_config_reader;
+    }
+
+    return *this;
+}
+
+/**
+ * @brief Destroy the CLIController::CLIController object
+ * 
+ */
 CLIController::~CLIController()
 {
     //TODO: Check if the serial port is running right now
-    
+    if(initialized && 
+        cli_port.use_count() == 1 &&
+        cli_port -> is_open()){
+        cli_port -> close();
+    }
+}
+
+bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
+
+    system_config_reader = systemConfigReader;
+
+    //check to make sure that the cli port isn't already open
+    if(initialized &&
+        cli_port.use_count() == 1 && 
+        cli_port -> is_open())
+    {
+        cli_port -> close();
+    }
+
+    if(system_config_reader.initialized){
+        cli_port = std::make_shared<boost::asio::serial_port>(
+            *io_context,system_config_reader.getRadarCliPort());
+        cli_port -> set_option(serial_port_base::baud_rate(115200));
+        initialized = true;
+    } else{
+        initialized = false;
+        std::cerr << "attempted to initialize cli controller,\
+            but system_config_reader was not initialized";
+    }
+
+    return initialized;
 }
 
 /**
@@ -23,29 +104,33 @@ CLIController::~CLIController()
  */
 void CLIController::run() {
 
-    //get the configuration file path
-    string configFilePath = system_config_reader.getRadarConfigPath();
-    ifstream configFile(configFilePath);
+    if(initialized){
+        //get the configuration file path
+        string configFilePath = system_config_reader.getRadarConfigPath();
+        ifstream configFile(configFilePath);
 
-    //if the configuration file isn't found
-    if (!configFile) {
-        cerr << "Failed to open configuration file." << endl;
-        return;
-    }
-
-    //if the file is found, send it to the device
-    string command;
-    while (getline(configFile, command)) {
-
-        //skip comments
-        if (command.empty() || command[0] == '#' || command[0] == '%') {
-            continue;
+        //if the configuration file isn't found
+        if (!configFile) {
+            cerr << "Failed to open configuration file." << endl;
+            return;
         }
-        else if (command.find("sensorStart") == std::string::npos)
-        {
-            //send all commands except for the start command
-            CLIController::sendCommand(command);
-        }        
+
+        //if the file is found, send it to the device
+        string command;
+        while (getline(configFile, command)) {
+
+            //skip comments
+            if (command.empty() || command[0] == '#' || command[0] == '%') {
+                continue;
+            }
+            else if (command.find("sensorStart") == std::string::npos)
+            {
+                //send all commands except for the start command
+                CLIController::sendCommand(command);
+            }        
+        }
+    } else{
+        std::cerr << "attempted to run cli controller, but CLI controller isn't initialized";
     }
 }
 
@@ -82,7 +167,7 @@ void CLIController::sendCommand(const string& command) {
     //wait to receive confirmation that the command was sent
     boost::asio::streambuf response;
     boost::system::error_code ec;
-    boost::asio::deadline_timer timeout(io_context);
+    boost::asio::deadline_timer timeout(*io_context);
     timeout.expires_from_now(boost::posix_time::millisec(50));
 
     async_read_until(cli_port, response, "Done", [&ec](const boost::system::error_code& e, size_t bytes_transferred) {
@@ -91,12 +176,12 @@ void CLIController::sendCommand(const string& command) {
 
     timeout.async_wait([this](const boost::system::error_code& e) {
         if (!e) {
-            cli_port.cancel();
+            cli_port -> cancel();
         }
     });
 
-    io_context.run();
-    io_context.reset();
+    io_context -> run();
+    io_context -> reset();
 
     const char* raw_data = boost::asio::buffer_cast<const char*>(response.data());
     size_t raw_data_size = response.size();

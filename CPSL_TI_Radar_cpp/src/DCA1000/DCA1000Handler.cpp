@@ -700,6 +700,7 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
 
     if(save_to_file){
         write_adc_data_cube_to_file();
+        // write_vector_to_file(latest_frame_byte_buffer);
     }
 }
 
@@ -760,31 +761,29 @@ std::vector<std::vector<std::int16_t>> DCA1000Handler::reshape_to_2D(
 void DCA1000Handler::update_latest_adc_cube_1443(void)
 {   
     std::vector<std::int16_t> adc_data_ints = convert_from_bytes_to_ints(latest_frame_byte_buffer);
-    
+        
     //reshape it into lvds lanes [Rx1-4 real, Rx1-4 complex]
     std::vector<std::vector<std::int16_t>> adc_data_reshaped = reshape_to_2D(
         adc_data_ints,num_rx_channels * 2
     );
 
-    //update the adc data cube
-    size_t idx = 0;
-    
+    //update the adc data cube   
     for (size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++)
     {
         for (size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++)
         {   
             size_t idx = (chirp_idx * samples_per_chirp + sample_idx);
             //determine the index in the 2D reshaped buffer
-            for (size_t rx_idx; rx_idx < num_rx_channels; rx_idx++)
+            for (size_t rx_idx = 0; rx_idx < num_rx_channels; rx_idx++)
             {
                 //set the real value
                 adc_data_cube[rx_idx][sample_idx][chirp_idx].real(
-                    adc_data_reshaped[idx][rx_idx]
+                    adc_data_reshaped[rx_idx][idx]
                 );
 
                 //set the imaginary value
                 adc_data_cube[rx_idx][sample_idx][chirp_idx].imag(
-                    adc_data_reshaped[idx][rx_idx] + num_rx_channels
+                    adc_data_reshaped[rx_idx + num_rx_channels][idx]
                 );
             }
             
@@ -812,18 +811,51 @@ bool DCA1000Handler::init_out_file(){
 
 void DCA1000Handler::write_adc_data_cube_to_file(void){
     
+    //initialize real and complex values
+    std::int16_t real = 0;
+    std::int16_t imag = 0;
+
     //make sure that the out_file is open
     if(out_file.is_open()){
         for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
             for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
                 for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
+
+                    //write the real part
+                    real = adc_data_cube[rx_idx][sample_idx][chirp_idx].real();
                     out_file.write(
                         reinterpret_cast<const char*>(
-                            &adc_data_cube[rx_idx][sample_idx][chirp_idx]),
-                        sizeof(adc_data_cube[rx_idx][sample_idx][chirp_idx])
+                            &real),
+                        sizeof(real)
+                    );
+
+                    //write the imag part
+                    imag = adc_data_cube[rx_idx][sample_idx][chirp_idx].imag();
+                    out_file.write(
+                        reinterpret_cast<const char*>(
+                            &imag),
+                        sizeof(imag)
                     );
                 }
             }
+        }
+    }else{
+        std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
+    }
+}
+
+void DCA1000Handler::write_vector_to_file(std::vector<std::int16_t> &vector){
+    
+    //make sure that the out_file is open
+    if(out_file.is_open()){
+        for(size_t idx = 0; idx < vector.size(); idx++){
+
+            //write the real part
+            out_file.write(
+                reinterpret_cast<const char*>(
+                    &vector[idx]),
+                sizeof(vector[idx])
+            );
         }
     }else{
         std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
