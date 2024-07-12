@@ -13,7 +13,6 @@
 
 using json = nlohmann::json;
 
-
 int main(int, char**){
 
     std::string config_file = "../configs/radar_1.json";
@@ -26,26 +25,19 @@ int main(int, char**){
     const std::string radar_config_path = config_reader.getRadarConfigPath();
     RadarConfigReader radar_config_reader(radar_config_path);
 
-    std::cout << "Bytes per frame: " << radar_config_reader.get_bytes_per_frame() << std::endl;
     //setup the DCA1000
-    DCA1000Handler dca1000_handler(config_reader);
+    DCA1000Handler dca1000_handler(config_reader,radar_config_reader);
 
     // //initialize the DCA1000
-    if(dca1000_handler.initialize() == false){
+    if(dca1000_handler.initialized == false){
         return false;
     }
 
-    //initialize the dca1000 buffers
-    dca1000_handler.init_buffers(
-        radar_config_reader.get_bytes_per_frame(),
-        radar_config_reader.get_samples_per_chirp(),
-        radar_config_reader.get_chirps_per_frame(),
-        radar_config_reader.get_num_rx_antennas()
-    );
-
     // //send a configuration to the radar board
-    CLIController cli_controller(config_file);
-    cli_controller.run();
+    CLIController cli_controller(config_reader);
+    if(cli_controller.initialized){
+        cli_controller.send_config_to_IWR();
+    }
 
     //send record start command
     dca1000_handler.send_recordStart();
@@ -54,7 +46,7 @@ int main(int, char**){
     cli_controller.sendStartCommand();
 
     //define a buffer
-    for (size_t i = 0; i < 30000; i++)
+    for (size_t i = 0; i < 3000; i++)
     {
         dca1000_handler.process_next_packet();
     }

@@ -6,11 +6,18 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <memory>
 
 class RadarConfigReader{
     public:
+        RadarConfigReader();
         RadarConfigReader(const std::string& filename);
+        RadarConfigReader(const RadarConfigReader & rhs);
+        RadarConfigReader & operator=(const RadarConfigReader & rhs);
         ~RadarConfigReader();
+
+        //functions to initialize the radar config reader
+        void initialize(const std::string & filename);
 
         //functions to get specific variables
         size_t get_bytes_per_frame();
@@ -18,8 +25,13 @@ class RadarConfigReader{
         size_t get_samples_per_chirp();
         size_t get_num_rx_antennas();
 
+        //initialization status
+        bool initialized;
+    
     private:
-        std::ifstream cfg_file;
+
+        //reading the file
+        std::shared_ptr<std::ifstream> cfg_file;
 
         //functions to read the cfg file
         void process_cfg();

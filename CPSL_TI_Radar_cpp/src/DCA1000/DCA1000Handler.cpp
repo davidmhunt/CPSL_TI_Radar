@@ -1,51 +1,247 @@
 #include "DCA1000Handler.hpp"
 
 /**
- * @brief Construct a new DCA1000Handler::DCA1000Handler object
+ * @brief Default constructor (un-initialized)
+ */
+DCA1000Handler::DCA1000Handler():
+    initialized(false),
+    new_frame_available(false),
+    system_config_reader(),
+    radar_config_reader(),
+    DCA_fpgaIP(""),
+    DCA_systemIP(""),
+    DCA_cmdPort(-1),
+    DCA_dataPort(-1),
+    cmd_socket(new int(-1)),
+    data_socket(new int(-1)),
+    cmd_address(),
+    data_address(),
+    udp_packet_buffer(),
+    udp_packet_size(1472),
+    dropped_packets(0),
+    dropped_packet_events(0),
+    received_packets(0),
+    adc_data_byte_count(0),
+    frame_byte_buffer(),
+    received_frames(0),
+    next_frame_byte_buffer_idx(0),
+    bytes_per_frame(0),
+    samples_per_chirp(0),
+    chirps_per_frame(0),
+    num_rx_channels(4),
+    save_to_file(false),
+    out_file(nullptr),
+    adc_data_cube(),
+    latest_frame_byte_buffer()
+{}
+
+/**
+ * @brief Constructor (initializes handler)
  * 
  * @param configReader 
  */
-DCA1000Handler::DCA1000Handler(const SystemConfigReader& configReader)
-    : DCA_fpgaIP(configReader.getDCAFpgaIP()),
-      DCA_systemIP(configReader.getDCASystemIP()),
-      DCA_cmdPort(configReader.getDCACmdPort()),
-      DCA_dataPort(configReader.getDCADataPort()),
-      save_to_file(configReader.get_save_to_file()),
-      cmd_socket(-1),
-      data_socket(-1),
-      dropped_packets(0),
-      dropped_packet_events(0),
-      received_packets(0),
-      adc_data_byte_count(0),
-      received_frames(0),
-      next_frame_byte_buffer_idx(0)
-      {     
-            //print key ports
-            std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
-            std::cout << "System IP: " << DCA_systemIP << std::endl;
-            std::cout << "cmd port: " << DCA_cmdPort << std::endl;
-            std::cout << "data port: " << DCA_dataPort << std::endl;
-      }
+DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
+                                const RadarConfigReader& radarConfigReader):
+    initialized(false),
+    new_frame_available(false),
+    system_config_reader(),
+    radar_config_reader(),
+    DCA_fpgaIP(""),
+    DCA_systemIP(""),
+    DCA_cmdPort(-1),
+    DCA_dataPort(-1),
+    cmd_socket(new int(-1)),
+    data_socket(new int(-1)),
+    cmd_address(),
+    data_address(),
+    udp_packet_buffer(),
+    udp_packet_size(1472),
+    dropped_packets(0),
+    dropped_packet_events(0),
+    received_packets(0),
+    adc_data_byte_count(0),
+    frame_byte_buffer(),
+    received_frames(0),
+    next_frame_byte_buffer_idx(0),
+    bytes_per_frame(0),
+    samples_per_chirp(0),
+    chirps_per_frame(0),
+    num_rx_channels(4),
+    save_to_file(false),
+    out_file(nullptr),
+    adc_data_cube(),
+    latest_frame_byte_buffer()
+    {     
+        initialize(configReader,radarConfigReader);
+    }
+/**
+ * @brief Copy constructor
+ * 
+ * @param rhs 
+ */
+DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
+    initialized(rhs.initialized),
+    new_frame_available(rhs.new_frame_available),
+    system_config_reader(rhs.system_config_reader),
+    radar_config_reader(rhs.radar_config_reader),
+    DCA_fpgaIP(rhs.DCA_fpgaIP),
+    DCA_systemIP(rhs.DCA_systemIP),
+    DCA_cmdPort(rhs.DCA_cmdPort),
+    DCA_dataPort(rhs.DCA_dataPort),
+    cmd_socket(rhs.cmd_socket),
+    data_socket(rhs.data_socket),
+    cmd_address(rhs.cmd_address),
+    data_address(rhs.data_address),
+    udp_packet_buffer(rhs.udp_packet_buffer),
+    udp_packet_size(rhs.udp_packet_size),
+    dropped_packets(rhs.dropped_packets),
+    dropped_packet_events(rhs.dropped_packet_events),
+    received_packets(rhs.received_packets),
+    adc_data_byte_count(rhs.adc_data_byte_count),
+    frame_byte_buffer(rhs.frame_byte_buffer),
+    received_frames(rhs.received_frames),
+    next_frame_byte_buffer_idx(rhs.next_frame_byte_buffer_idx),
+    bytes_per_frame(rhs.bytes_per_frame),
+    samples_per_chirp(rhs.samples_per_chirp),
+    chirps_per_frame(rhs.chirps_per_frame),
+    num_rx_channels(rhs.num_rx_channels),
+    save_to_file(rhs.save_to_file),
+    out_file(rhs.out_file),
+    adc_data_cube(rhs.adc_data_cube),
+    latest_frame_byte_buffer(rhs.latest_frame_byte_buffer)
+{}
+
+DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
+    if(this != &rhs){
+
+        //check the sockets
+        int error_code;
+        socklen_t error_code_size = sizeof(error_code);
+
+        //check the command socket isn't bound currently
+        if (cmd_socket.get() != nullptr &&
+            cmd_socket.use_count() == 1 &&
+            *cmd_socket != -1){
+
+            //check to see if the socket is connected or bound
+            getsockopt(*cmd_socket,SOL_SOCKET,SO_ERROR,&error_code, &error_code_size);
+            if(error_code == 0){
+                close(*cmd_socket);
+            }
+        }
+
+        //check the data socket
+        if (data_socket.get() != nullptr &&
+            data_socket.use_count() == 1 &&
+            *data_socket != -1){
+
+            //check to see if the socket is connected/bound
+            getsockopt(*data_socket,SOL_SOCKET,SO_ERROR,&error_code, &error_code_size);
+            if(error_code == 0){
+                close(*data_socket);
+            }
+        }
+
+        //close the file streaming
+        if(save_to_file &&
+            out_file.get() != nullptr &&
+            out_file.use_count() == 1 &&
+            out_file -> is_open())
+        {
+            out_file -> close();
+        }
+
+        //assign the variables as normal now
+        initialized = rhs.initialized;
+        new_frame_available = rhs.new_frame_available;
+        system_config_reader = rhs.system_config_reader;
+        radar_config_reader = rhs.radar_config_reader;
+        DCA_fpgaIP = rhs.DCA_fpgaIP;
+        DCA_systemIP = rhs.DCA_systemIP;
+        DCA_cmdPort = rhs.DCA_cmdPort;
+        DCA_dataPort = rhs.DCA_dataPort;
+        cmd_socket = rhs.cmd_socket;
+        data_socket = rhs.data_socket;
+        cmd_address = rhs.cmd_address;
+        data_address = rhs.data_address;
+        udp_packet_buffer = rhs.udp_packet_buffer;
+        udp_packet_size = rhs.udp_packet_size;
+        dropped_packets = rhs.dropped_packets;
+        dropped_packet_events = rhs.dropped_packet_events;
+        received_packets = rhs.received_packets;
+        adc_data_byte_count = rhs.adc_data_byte_count;
+        frame_byte_buffer = rhs.frame_byte_buffer;
+        received_frames = rhs.received_frames;
+        next_frame_byte_buffer_idx = rhs.next_frame_byte_buffer_idx;
+        bytes_per_frame = rhs.bytes_per_frame;
+        samples_per_chirp = rhs.samples_per_chirp;
+        chirps_per_frame = rhs.chirps_per_frame;
+        num_rx_channels = rhs.num_rx_channels;
+        save_to_file = rhs.save_to_file;
+        out_file = rhs.out_file;
+        adc_data_cube = rhs.adc_data_cube;
+        latest_frame_byte_buffer = rhs.latest_frame_byte_buffer;
+    }
+
+    return *this;
+}
 
 /**
  * @brief Destroy the DCA1000Handler::DCA1000Handler object
  * 
  */
 DCA1000Handler::~DCA1000Handler() {
-    if (cmd_socket >= 0) {
-        close(cmd_socket);
-    }
-    if (data_socket >= 0){
-        close(data_socket);
-    }
-    if(save_to_file){
-        if(out_file.is_open()){
-            out_file.close();
+
+    int error_code;
+    socklen_t error_code_size = sizeof(error_code);
+
+    //check the command socket
+    if (cmd_socket.get() != nullptr &&
+        cmd_socket.use_count() == 1 &&
+        *cmd_socket != -1){
+
+        //check to see if the socket is connected or bound
+        getsockopt(*cmd_socket,SOL_SOCKET,SO_ERROR,&error_code, &error_code_size);
+        if(error_code == 0){
+            close(*cmd_socket);
         }
+    }
+
+    //check the data socket
+    if (data_socket.get() != nullptr &&
+        data_socket.use_count() == 1 &&
+        *data_socket != -1){
+
+        //check to see if the socket is connected/bound
+        getsockopt(*data_socket,SOL_SOCKET,SO_ERROR,&error_code, &error_code_size);
+        if(error_code == 0){
+            close(*data_socket);
+        }
+    }
+
+    //close the file streaming
+    if(save_to_file &&
+        out_file.get() != nullptr &&
+        out_file.use_count() == 1 &&
+        out_file -> is_open())
+    {
+        out_file -> close();
     }
 }
 
-bool DCA1000Handler::initialize(){
+bool DCA1000Handler::initialize(
+    const SystemConfigReader& systemConfigReader,
+    const RadarConfigReader& radarConfigReader){
+
+    initialized = false;
+
+    //load the system configuration information
+    system_config_reader = systemConfigReader;
+    if(system_config_reader.initialized == false){
+        return false;
+    } else{
+        load_config();
+    }
 
     //initialize file streaming
     if(save_to_file){
@@ -62,35 +258,43 @@ bool DCA1000Handler::initialize(){
         return false;
     }
 
-    //send system connect
-    if(send_systemConnect() != true){
+    //configure the DCA1000
+    if(configure_DCA1000() != true){
+        initialized = false; //initializing the DCA1000 falied
         return false;
     }
 
-    //send reset FPGA
-    if(send_resetFPGA() != true){
+    //load the radar config reader
+    radar_config_reader = radarConfigReader;
+    if(radar_config_reader.initialized == false){
         return false;
+    }else{
+        init_buffers();
     }
 
-    //send configure packet data
-    if(send_configPacketData(1472,25) != true){
-        return false;
-    }
+    //set initialization status to true
+    initialized = true;
+    
+    return true;
+}
 
-    //send config FPGA gen
-    if(send_configFPGAGen() != true){
-        return false;
-    }
+/**
+ * @brief Load required information from the system_config_reader
+ * 
+ */
+void DCA1000Handler::load_config(){
 
-    //read the FPGA version
-    float fpga_version = send_readFPGAVersion();
+    DCA_fpgaIP = system_config_reader.getDCAFpgaIP();
+    DCA_systemIP = system_config_reader.getDCASystemIP();
+    DCA_cmdPort = system_config_reader.getDCACmdPort();
+    DCA_dataPort = system_config_reader.getDCADataPort();
+    save_to_file = system_config_reader.get_save_to_file();
 
-    if(fpga_version > 0){
-        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully" << std::endl;
-        return true;
-    } else{
-        return false;
-    }
+    //print key ports
+    std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
+    std::cout << "System IP: " << DCA_systemIP << std::endl;
+    std::cout << "cmd port: " << DCA_cmdPort << std::endl;
+    std::cout << "data port: " << DCA_dataPort << std::endl;
 }
 
 /**
@@ -118,14 +322,14 @@ void DCA1000Handler::init_addresses() {
 bool DCA1000Handler::init_sockets() {
 
     // Create socket
-    cmd_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (cmd_socket < 0) {
+    cmd_socket = std::make_shared<int>(socket(AF_INET, SOCK_DGRAM, 0));
+    if (*cmd_socket < 0) {
         std::cerr << "Failed to create cmd socket" << std::endl;
         return false;
     }
 
-    data_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (data_socket < 0) {
+    data_socket = std::make_shared<int>(socket(AF_INET, SOCK_DGRAM, 0));
+    if (*data_socket < 0) {
         std::cerr << "Failed to create data socket" << std::endl;
         return false;
     }
@@ -134,30 +338,91 @@ bool DCA1000Handler::init_sockets() {
     struct timeval timeout;
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
-    setsockopt(cmd_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    setsockopt(data_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(*cmd_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(*data_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
     //bind to command socket
-    if (bind(cmd_socket, (struct sockaddr*)&cmd_address, sizeof(cmd_address)) < 0) {
+    if (bind(*cmd_socket, (struct sockaddr*)&cmd_address, sizeof(cmd_address)) < 0) {
         std::cerr << "Failed to bind socket" << std::endl;
-        close(cmd_socket);
-        cmd_socket = -1;
+        close(*cmd_socket);
+        *cmd_socket = -1;
         return false;
     } else{
         std::cout << "Bound to command socket" <<std::endl;
     }
 
     //bind to data socket
-    if (bind(data_socket, (struct sockaddr*)&data_address, sizeof(data_address)) < 0) {
+    if (bind(*data_socket, (struct sockaddr*)&data_address, sizeof(data_address)) < 0) {
         std::cerr << "Failed to bind socket" << std::endl;
-        close(data_socket);
-        data_socket = -1;
+        close(*data_socket);
+        *data_socket = -1;
         return false;
     } else{
         std::cout << "Bound to data socket" <<std::endl;
     }
-
     return true;
+}
+
+/**
+ * @brief Send a series of commands to the DCA1000 to configure it
+ * 
+ * @return true - DCA1000 successfully configured
+ * @return false - DCA1000 not successfully configured
+ */
+bool DCA1000Handler::configure_DCA1000(){
+
+    //check that the command socket is all good
+    int error_code;
+    socklen_t error_code_size = sizeof(error_code);
+
+    //check the command socket
+    if (cmd_socket.get() != nullptr &&
+        *cmd_socket != -1){
+
+        //check to see if the socket is connected or bound
+        getsockopt(*cmd_socket,SOL_SOCKET,SO_ERROR,&error_code, &error_code_size);
+        if(error_code != 0){
+            std::cerr << "attempted to configure DCA1000,\
+                        but cmd_socket isn't connected/bound" << std::endl;
+            return false;   
+        }
+    }else{
+        std::cerr << "attempted to configure DCA1000,\
+                    but cmd_socket is either null pointer\
+                    or not connected" << std::endl;
+        return false;
+    }
+    
+    //send system connect
+    if(send_systemConnect() != true){
+        return false;
+    }
+
+    //send reset FPGA
+    if(send_resetFPGA() != true){
+        return false;
+    }
+
+    //send configure packet data
+    udp_packet_size = 1472;
+    if(send_configPacketData(udp_packet_size,25) != true){
+        return false;
+    }
+
+    //send config FPGA gen
+    if(send_configFPGAGen() != true){
+        return false;
+    }
+
+    //read the FPGA version
+    float fpga_version = send_readFPGAVersion();
+
+    if(fpga_version > 0){
+        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully" << std::endl;
+        return true;
+    } else{
+        return false;
+    }
 }
 
 /**
@@ -168,7 +433,7 @@ bool DCA1000Handler::init_sockets() {
  * @return false 
  */
 bool DCA1000Handler::sendCommand(std::vector<uint8_t>& command) {
-    if (cmd_socket < 0) {
+    if (*cmd_socket < 0) {
         std::cerr << "Socket not bound" << std::endl;
         return false;
     }
@@ -179,7 +444,7 @@ bool DCA1000Handler::sendCommand(std::vector<uint8_t>& command) {
     fpgaAddr.sin_addr.s_addr = inet_addr(DCA_fpgaIP.c_str());
     fpgaAddr.sin_port = htons(DCA_cmdPort);
 
-    ssize_t sentBytes = sendto(cmd_socket, command.data(), command.size(), 0,
+    ssize_t sentBytes = sendto(*cmd_socket, command.data(), command.size(), 0,
                                (struct sockaddr*)&fpgaAddr, sizeof(fpgaAddr));
     if (sentBytes != static_cast<ssize_t>(command.size())) {
         std::cerr << "Failed to send command" << std::endl;
@@ -197,14 +462,14 @@ bool DCA1000Handler::sendCommand(std::vector<uint8_t>& command) {
  * @return false 
  */
 bool DCA1000Handler::receiveResponse(std::vector<uint8_t>& buffer) {
-    if (cmd_socket < 0) {
+    if (*cmd_socket < 0) {
         std::cerr << "Socket not bound" << std::endl;
         return false;
     }
 
     struct sockaddr_in fromAddr;
     socklen_t fromLen = sizeof(fromAddr);
-    ssize_t receivedBytes = recvfrom(cmd_socket, buffer.data(), buffer.size(), 0,
+    ssize_t receivedBytes = recvfrom(*cmd_socket, buffer.data(), buffer.size(), 0,
                              (struct sockaddr*)&fromAddr, &fromLen);
     if (receivedBytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
@@ -341,9 +606,6 @@ bool DCA1000Handler::send_systemConnect(){
  */
 bool DCA1000Handler::send_configPacketData(size_t packet_size, uint16_t delay_us){
 
-    //set the udp_packet_size
-    udp_packet_size = packet_size;
-
     //declare data vector
     std::vector<uint8_t> data(6,0);
 
@@ -466,44 +728,45 @@ float DCA1000Handler::send_readFPGAVersion(){
 }
 
 
-void DCA1000Handler::init_buffers(
-    size_t _bytes_per_frame,
-    size_t _samples_per_chirp,
-    size_t _chirps_per_frame,
-    size_t _num_rx_antennas)
+void DCA1000Handler::init_buffers()
 {
-    bytes_per_frame = _bytes_per_frame;
-    samples_per_chirp = _samples_per_chirp;
-    chirps_per_frame = _chirps_per_frame;
-    num_rx_channels = _num_rx_antennas;
+    if(radar_config_reader.initialized){
+        bytes_per_frame = radar_config_reader.get_bytes_per_frame();
+        samples_per_chirp = radar_config_reader.get_samples_per_chirp();
+        chirps_per_frame = radar_config_reader.get_chirps_per_frame();
+        num_rx_channels = radar_config_reader.get_num_rx_antennas();
 
-    //configure the udp packet buffer
-    udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
+        //configure the udp packet buffer
+        udp_packet_buffer = std::vector<uint8_t>(udp_packet_size,0);
 
-    //configure the frame byte buffer (assembly)
-    frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
-    next_frame_byte_buffer_idx = 0;
+        //configure the frame byte buffer (assembly)
+        frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+        next_frame_byte_buffer_idx = 0;
 
-    //configure processing of completed frames
-    latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
-    new_frame_available = false;
+        //configure processing of completed frames
+        latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame,0);
+        new_frame_available = false;
 
-    //reset the dropped packet counting
-    received_packets = 0;
-    adc_data_byte_count = 0;
-    dropped_packets = 0;
-    received_frames = 0;
+        //reset the dropped packet counting
+        received_packets = 0;
+        adc_data_byte_count = 0;
+        dropped_packets = 0;
+        received_frames = 0;
 
-    //adc_cube buffer
-    //NOTE: indexed by [Rx channel, sample, chirp]
-    size_t rx_channels = 4;
-    adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
-        num_rx_channels,std::vector<std::vector<std::complex<std::int16_t>>>(
-            samples_per_chirp, std::vector<std::complex<std::int16_t>>(
-                chirps_per_frame,std::complex<std::int16_t>(0,0)
+        //adc_cube buffer
+        //NOTE: indexed by [Rx channel, sample, chirp]
+        size_t rx_channels = 4;
+        adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
+            num_rx_channels,std::vector<std::vector<std::complex<std::int16_t>>>(
+                samples_per_chirp, std::vector<std::complex<std::int16_t>>(
+                    chirps_per_frame,std::complex<std::int16_t>(0,0)
+                )
             )
-        )
-    );
+        );
+    }else{
+        std::cerr << "attempted to initialize DCA1000 Handler buffers,\
+        but radar_config_reader wasn't initialized";
+    }
 }
 
 /**
@@ -577,14 +840,14 @@ bool DCA1000Handler::process_next_packet(){
  * @return false 
  */
 ssize_t DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
-    if (data_socket < 0) {
+    if (*data_socket < 0) {
         std::cerr << "data socket not bound" << std::endl;
         return 0;
     }
 
     struct sockaddr_in fromAddr;
     socklen_t fromLen = sizeof(fromAddr);
-    ssize_t receivedBytes = recvfrom(data_socket, buffer.data(), buffer.size(), 0,
+    ssize_t receivedBytes = recvfrom(*data_socket, buffer.data(), buffer.size(), 0,
                              (struct sockaddr*)&fromAddr, &fromLen);
     if (receivedBytes < 0) {
         std::cerr << "Failed to receive data" << std::endl;
@@ -700,6 +963,7 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
 
     if(save_to_file){
         write_adc_data_cube_to_file();
+        // write_vector_to_file(latest_frame_byte_buffer);
     }
 }
 
@@ -760,31 +1024,29 @@ std::vector<std::vector<std::int16_t>> DCA1000Handler::reshape_to_2D(
 void DCA1000Handler::update_latest_adc_cube_1443(void)
 {   
     std::vector<std::int16_t> adc_data_ints = convert_from_bytes_to_ints(latest_frame_byte_buffer);
-    
+        
     //reshape it into lvds lanes [Rx1-4 real, Rx1-4 complex]
     std::vector<std::vector<std::int16_t>> adc_data_reshaped = reshape_to_2D(
         adc_data_ints,num_rx_channels * 2
     );
 
-    //update the adc data cube
-    size_t idx = 0;
-    
+    //update the adc data cube   
     for (size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++)
     {
         for (size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++)
         {   
             size_t idx = (chirp_idx * samples_per_chirp + sample_idx);
             //determine the index in the 2D reshaped buffer
-            for (size_t rx_idx; rx_idx < num_rx_channels; rx_idx++)
+            for (size_t rx_idx = 0; rx_idx < num_rx_channels; rx_idx++)
             {
                 //set the real value
                 adc_data_cube[rx_idx][sample_idx][chirp_idx].real(
-                    adc_data_reshaped[idx][rx_idx]
+                    adc_data_reshaped[rx_idx][idx]
                 );
 
                 //set the imaginary value
                 adc_data_cube[rx_idx][sample_idx][chirp_idx].imag(
-                    adc_data_reshaped[idx][rx_idx] + num_rx_channels
+                    adc_data_reshaped[rx_idx + num_rx_channels][idx]
                 );
             }
             
@@ -799,10 +1061,10 @@ std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler
 
 bool DCA1000Handler::init_out_file(){
 
-    out_file = std::ofstream("adc_data.bin", 
+    out_file = std::make_shared<std::ofstream>("adc_data.bin", 
         std::ios::out | std::ofstream::binary | std::ios::trunc);
 
-    if(out_file.is_open() != true){
+    if(out_file -> is_open() != true){
         std::cout << "Failed to open or create adc_data.bin file" << std::endl;
         return false;
     }
@@ -812,18 +1074,51 @@ bool DCA1000Handler::init_out_file(){
 
 void DCA1000Handler::write_adc_data_cube_to_file(void){
     
+    //initialize real and complex values
+    std::int16_t real = 0;
+    std::int16_t imag = 0;
+
     //make sure that the out_file is open
-    if(out_file.is_open()){
+    if(out_file -> is_open()){
         for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
             for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
                 for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
-                    out_file.write(
+
+                    //write the real part
+                    real = adc_data_cube[rx_idx][sample_idx][chirp_idx].real();
+                    out_file -> write(
                         reinterpret_cast<const char*>(
-                            &adc_data_cube[rx_idx][sample_idx][chirp_idx]),
-                        sizeof(adc_data_cube[rx_idx][sample_idx][chirp_idx])
+                            &real),
+                        sizeof(real)
+                    );
+
+                    //write the imag part
+                    imag = adc_data_cube[rx_idx][sample_idx][chirp_idx].imag();
+                    out_file -> write(
+                        reinterpret_cast<const char*>(
+                            &imag),
+                        sizeof(imag)
                     );
                 }
             }
+        }
+    }else{
+        std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
+    }
+}
+
+void DCA1000Handler::write_vector_to_file(std::vector<std::int16_t> &vector){
+    
+    //make sure that the out_file is open
+    if(out_file -> is_open()){
+        for(size_t idx = 0; idx < vector.size(); idx++){
+
+            //write the real part
+            out_file -> write(
+                reinterpret_cast<const char*>(
+                    &vector[idx]),
+                sizeof(vector[idx])
+            );
         }
     }else{
         std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
