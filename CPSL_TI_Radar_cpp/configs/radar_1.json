@@ -30,7 +30,7 @@
                     "cmd_port":4096
                 },
             "verbose":true,
-            "save_to_file":true
+            "save_to_file":false
         },
     "Processor":
         {

@@ -14,6 +14,7 @@
 #include <endian.h>
 #include <complex>
 #include <memory>
+#include <mutex>
 
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
@@ -27,7 +28,13 @@ public:
     bool initialized;
 
     bool new_frame_available;
+
 private:
+
+    //mutexes
+    std::mutex new_frame_available_mutex;
+    std::mutex adc_data_cube_mutex;
+
     //system configuration information
     SystemConfigReader system_config_reader;
 
@@ -88,12 +95,6 @@ public:
 
     bool initialize(const SystemConfigReader& configReader,
                     const RadarConfigReader& radarConfigReader);
-    void load_config();
-    void init_addresses();
-    bool init_sockets();
-    bool configure_DCA1000();
-    bool sendCommand(std::vector<uint8_t>& command);
-    bool receiveResponse(std::vector<uint8_t>& buffer);
 
     //commands to the DCA1000
     bool send_resetFPGA(); //2nd command
@@ -104,13 +105,28 @@ public:
     bool send_configFPGAGen();
     float send_readFPGAVersion(); //5th command
 
-    //receive data
-    void init_buffers();
+    //processing/receiving packets
     bool process_next_packet();
+
+    //checking for new frame availability
+    bool check_new_frame_available();
+    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_latest_adc_cube();
+
+private:
+
+    //additional initialization steps
+    void load_config();
+    void init_addresses();
+    bool init_sockets();
+    bool configure_DCA1000();
+    bool sendCommand(std::vector<uint8_t>& command);
+    bool receiveResponse(std::vector<uint8_t>& buffer);    
+
+    //receiving data / initializing buffers
+    void init_buffers();
     ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
     void print_status();
 
-private:
     //unpacking packets
     uint32_t get_packet_sequence_number(std::vector<uint8_t>& buffer);
     uint64_t get_packet_byte_count(std::vector<uint8_t>& buffer);

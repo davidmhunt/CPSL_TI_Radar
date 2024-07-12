@@ -3,11 +3,16 @@
 add_subdirectory(utilities) #must be done first
 add_subdirectory(CLIController)
 add_subdirectory(DCA1000)
+add_subdirectory(Runners)
 
 #if new libraries are created in this folder, declare them here
 
-#link libraries
+#link libraries (if libraries are created in this folder)
 
 #link directories as needed
-target_include_directories(CLIController PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
-target_include_directories(DCA1000Handler PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
+target_include_directories(CLIController    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
+target_include_directories(DCA1000Handler   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
+target_include_directories(DCA1000Runner    PRIVATE 
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/utilities
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/CLIController
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/DCA1000)
