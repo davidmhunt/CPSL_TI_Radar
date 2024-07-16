@@ -8,6 +8,8 @@ include(CTest)
 enable_testing()
 
 #add subdirectories
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+add_subdirectory(include/json)
 add_subdirectory(src)
 
 #add the executables

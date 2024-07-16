@@ -8,5 +8,5 @@ find_package(Threads REQUIRED)
 add_library(CLIController CLIController.cpp)
 
 #link libraries
-target_link_libraries(CLIController PRIVATE Utilities
-                                    PRIVATE Threads::Threads)
+target_link_libraries(CLIController PUBLIC Utilities
+                                    PUBLIC Threads::Threads)

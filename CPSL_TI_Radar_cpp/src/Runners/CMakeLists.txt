@@ -6,8 +6,8 @@ find_package(Threads REQUIRED)
 add_library(DCA1000Runner DCA1000Runner.cpp)
 
 #link libraries
-target_link_libraries(DCA1000Runner     PRIVATE Utilities
-                                        PRIVATE CLIController
-                                        PRIVATE DCA1000Commands
-                                        PRIVATE DCA1000Handler
-                                        PRIVATE Threads::Threads)
+target_link_libraries(DCA1000Runner     PUBLIC Utilities
+                                        PUBLIC CLIController
+                                        PUBLIC DCA1000Commands
+                                        PUBLIC DCA1000Handler
+                                        PUBLIC Threads::Threads)

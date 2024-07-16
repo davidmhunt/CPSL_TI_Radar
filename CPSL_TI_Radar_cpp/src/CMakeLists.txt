@@ -10,9 +10,9 @@ add_subdirectory(Runners)
 #link libraries (if libraries are created in this folder)
 
 #link directories as needed
-target_include_directories(CLIController    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
-target_include_directories(DCA1000Handler   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
-target_include_directories(DCA1000Runner    PRIVATE 
+target_include_directories(CLIController    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
+target_include_directories(DCA1000Handler   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
+target_include_directories(DCA1000Runner    PUBLIC 
                                             ${CMAKE_CURRENT_SOURCE_DIR}/utilities
                                             ${CMAKE_CURRENT_SOURCE_DIR}/CLIController
                                             ${CMAKE_CURRENT_SOURCE_DIR}/DCA1000)
