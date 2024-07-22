@@ -90,7 +90,7 @@ To run the cpp code, perform the following:
 2. remake the project
 3. run the c++ code
 
-### Updating the .json config files
+### 1. Updating the .json config files
 
 The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration information. All of the configuration files can be found in the [configs](./configs/) folder. Here, the essential components of each configuration are as follows 
 
@@ -117,3 +117,25 @@ If using ROS nodes to connect to the Radar code, set this to true. Otherwise set
 
 Several sample .cfg files are located in the [configurations](../configurations/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation. 
 * To understand a particular configuration, there are a few helpful notebooks located in the [utilities_and_notebooks](../utilities/) folder including the [print_config](../utilities/print_config.ipynb) notebook which will decode the config and list the key parameters. 
+
+
+### 2. Remake the project
+
+To be safe, remake the project
+```
+cd CPSL_TI_Radar/CPSL_TI_Radar_cpp
+cd build
+cmake ../
+cmake --build .
+```
+
+This command will generate (2) executable files. The main one is from [main.cpp](./main.cpp) which will generate an executable called CPSL_TI_Radar_CPP.
+
+### 3. Run the project
+
+Finally, to run the project, perform the following command:
+```
+cd CPSL_TI_Radar/CPSL_TI_Radar_cpp
+cd build
+./CPSL_TI_Radar_CPP
+```
