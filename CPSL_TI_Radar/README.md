@@ -1,6 +1,6 @@
-# TI Radar Demo Visualizer
+# CPSL TI Radar Repository
 
-Add description of repository here
+This codebase is intended to work with the TI IWR radar boards for various TI mmWave SDK versions. While there is some left over code for interacting with the DCA1000 data capture board, this code has now been replaced with the code in [CPSL_TI_Radar_cpp](../CPSL_TI_Radar_cpp/).
 
 ## Installing Dependencies
 In order for the code to work properly, the following steps are required
@@ -55,14 +55,6 @@ poetry lock --no-update
 poetry install
 ```
 ## Preparing the Hardware
-
-There are two potential use cases using the CPSL_TI_Radar code. They are:
-1. Streaming data from the IWR1443 demo running on the device
-2. Streaming raw ADC data from the IWR1443 using the DCA1000
-
-Depending on your use case, complete the following steps:
-
-### Option 1: IWR1443 Demo (no DCA1000)
 
 TO stream samples directly from the TI IWR Radar, you must flash the correct firmware onto the TI radar. To accomplish this, complete the following steps:
 1. To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads)
