@@ -1,3 +1,6 @@
 [submodule "CPSL_TI_Radar_cpp/include/json"]
 	path = CPSL_TI_Radar_cpp/include/json
 	url = https://github.com/nlohmann/json.git
+[submodule "Firmware/DCA1000_Streaming/iwr_raw_rosnode"]
+	path = Firmware/DCA1000_Streaming/iwr_raw_rosnode
+	url = https://github.com/davidmhunt/iwr_raw_rosnode.git

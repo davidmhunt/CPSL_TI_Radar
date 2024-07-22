@@ -2,13 +2,7 @@
     "verbose":true,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/catkin_ws/src/CPSL_ROS_Sensors/CPSL_TI_Radar_ROS/radar_connect/include/CPSL_TI_Radar/configurations/DCA1000/custom_configs/ISAR_mocap_revised.cfg",
-            "export_JSON_config":true,
-            "custom_CFAR":
-                {
-                    "enabled":false,
-                    "threshold_dB":12
-                }
+            "TI_Radar_config_path":"/home/david/catkin_ws/src/CPSL_ROS_Sensors/CPSL_TI_Radar_ROS/radar_connect/include/CPSL_TI_Radar/configurations/DCA1000/custom_configs/ISAR_mocap_revised.cfg"
         },
     "CLI_Controller":
         {
@@ -33,11 +27,7 @@
         },
     "Processor":
         {
-            "SDK_version":"2.1",
-            "IWR_Demo_Listeners":{
-                "authkey":"TLV_client",
-                "DetectedPointsProcessor":6000
-            }
+            "SDK_version":"2.1"
         },
     "ROS/Listeners":
         {
