@@ -1,7 +1,8 @@
 {
+    "verbose":true,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_TI_Radar/configurations/DCA1000/custom_configs/ISAR_mocap.cfg",
+            "TI_Radar_config_path":"/home/david/catkin_ws/src/CPSL_ROS_Sensors/CPSL_TI_Radar_ROS/radar_connect/include/CPSL_TI_Radar/configurations/DCA1000/custom_configs/ISAR_mocap_revised.cfg",
             "export_JSON_config":true,
             "custom_CFAR":
                 {
@@ -11,8 +12,7 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM0",
-            "verbose":true
+            "CLI_port":"/dev/ttyACM0"
         },
     "Streamer":
         {
@@ -29,12 +29,10 @@
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "verbose":true,
             "save_to_file":false
         },
     "Processor":
         {
-            "verbose":true,
             "SDK_version":"2.1",
             "IWR_Demo_Listeners":{
                 "authkey":"TLV_client",

@@ -89,7 +89,7 @@ void RadarConfigReader::initialize(const std::string & filename){
     cfg_file = std::make_shared<std::ifstream>();
     cfg_file -> open(filename);
     if (! cfg_file -> is_open()){
-        std::cerr << "Error opening file: " << filename << std::endl;
+        std::cerr << "RadarConfigReader: error opening file: " << filename << std::endl;
         initialized = false;
     } else{
 

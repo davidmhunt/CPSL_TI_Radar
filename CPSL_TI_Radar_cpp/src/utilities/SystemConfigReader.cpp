@@ -7,14 +7,15 @@ using json = nlohmann::json;
  * 
  */
 SystemConfigReader::SystemConfigReader()
-    : json_file_path(""),
+    : initialized(false),
+      verbose(false),
+      json_file_path(""),
       radar_cliPort(""),
       DCA_fpgaIP(""),
       DCA_systemIP(""),
       DCA_dataPort(0),
       DCA_cmdPort(0),
-      save_to_file(false),
-      initialized(false)
+      save_to_file(false)
     {}
 
 /**
@@ -23,7 +24,8 @@ SystemConfigReader::SystemConfigReader()
  * @param jsonFilePath The path to the system's JSON configuration file
  */
 SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
-    : json_file_path(jsonFilePath),
+    : initialized(false),
+      verbose(false), json_file_path(jsonFilePath),
       radar_cliPort(""),
       DCA_fpgaIP(""),
       DCA_systemIP(""),
@@ -40,14 +42,15 @@ SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
  * @param rhs 
  */
 SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
-    : json_file_path(rhs.json_file_path),
+    : initialized(rhs.initialized),
+      verbose(rhs.verbose),
+      json_file_path(rhs.json_file_path),
       radar_cliPort(rhs.radar_cliPort),
       DCA_fpgaIP(rhs.DCA_fpgaIP),
       DCA_systemIP(rhs.DCA_systemIP),
       DCA_dataPort(rhs.DCA_dataPort),
       DCA_cmdPort(rhs.DCA_cmdPort),
-      save_to_file(rhs.save_to_file),
-      initialized(rhs.initialized)
+      save_to_file(rhs.save_to_file)
 {}
 
 /**
@@ -58,6 +61,8 @@ SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
  */
 SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rhs){
     if(this != &rhs){
+        initialized = rhs.initialized;
+        verbose = rhs.verbose;
         json_file_path = rhs.json_file_path;
         radar_ConfigPath = rhs.radar_ConfigPath;
         radar_cliPort = rhs.radar_cliPort;
@@ -66,7 +71,6 @@ SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rh
         DCA_dataPort = rhs.DCA_dataPort;
         DCA_cmdPort = rhs.DCA_cmdPort;
         save_to_file = rhs.save_to_file;
-        initialized = rhs.initialized;
     }
 
     return *this;
@@ -82,8 +86,6 @@ void SystemConfigReader::initialize(const std::string & jsonFilePath){
     json_file_path = jsonFilePath;
     //read the json file and initialize the SystemConfigReader
     readJsonFile();
-
-    initialized = true;
 }
 
 
@@ -122,6 +124,11 @@ bool SystemConfigReader::get_save_to_file() const
     return save_to_file;
 }
 
+bool SystemConfigReader::get_verbose() const
+{
+    return verbose;
+}
+
 void SystemConfigReader::readJsonFile() 
 {
     std::ifstream file(json_file_path);
@@ -129,22 +136,39 @@ void SystemConfigReader::readJsonFile()
 
     //parse the JSON file
     if (!file.is_open()) {
-        std::cerr << "Failed to open JSON file: " << json_file_path << std::endl;
+        std::cerr << "SystemConfigReader: failed to open JSON file: " << json_file_path << std::endl;
         return;
     }
     else{
         data = json::parse(file);
     }
 
+    //get the verbose status
+    if (data.contains("verbose")){
+        verbose = data["verbose"].get<bool>();
+    } else{
+        initialized = false;
+        std::cerr << "SystemConfigReader: Couldn't find verbose" << std::endl;
+        return;
+    }
+
     //get the configuration path
     if (data.contains("TI_Radar_Config_Management") && 
         data["TI_Radar_Config_Management"].contains("TI_Radar_config_path")) {
         radar_ConfigPath = data["TI_Radar_Config_Management"]["TI_Radar_config_path"].get<std::string>();
+    } else{
+        initialized = false;
+        std::cerr << "SystemConfigReader: Couldn't find TI_Radar_config_path" << std::endl;
+        return;
     }
 
     //get the radar CLI interface information
     if (data.contains("CLI_Controller") && data["CLI_Controller"].contains("CLI_port")) {
         radar_cliPort = data["CLI_Controller"]["CLI_port"].get<std::string>();
+    } else{
+        initialized = false;
+        std::cerr << "SystemConfigReader: Couldn't find CLI_port"<< std::endl;
+        return;
     }
 
     //get the DCA1000 interface information
@@ -152,20 +176,42 @@ void SystemConfigReader::readJsonFile()
         json& DCA1000Config = data["Streamer"]["DCA1000_streaming"];
         if (DCA1000Config.contains("FPGA_IP")) {
             DCA_fpgaIP = DCA1000Config["FPGA_IP"].get<std::string>();
+        } else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find FPGA_IP"<< std::endl;
+            return;
         }
         if (DCA1000Config.contains("system_IP")) {
             DCA_systemIP = DCA1000Config["system_IP"].get<std::string>();
+        } else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find system_IP"<< std::endl;
+            return;
         }
         if (DCA1000Config.contains("data_port")) {
             DCA_dataPort = DCA1000Config["data_port"].get<int>();
+        } else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find data_port"<< std::endl;
+            return;
         }
         if (DCA1000Config.contains("cmd_port")) {
             DCA_cmdPort = DCA1000Config["cmd_port"].get<int>();
+        } else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find cmd_port"<< std::endl;
+            return;
         }
     }  
 
     //saving to a file
     if (data.contains("Streamer") && data["Streamer"].contains("save_to_file")) {
         save_to_file = data["Streamer"]["save_to_file"].get<bool>();
+    }else{
+        initialized = false;
+        std::cerr << "SystemConfigReader: Couldn't find save_to_file"<< std::endl;
+        return;
     }
+
+    initialized = true;
 }

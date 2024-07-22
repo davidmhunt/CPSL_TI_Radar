@@ -917,12 +917,14 @@ ssize_t DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
 }
 
 void DCA1000Handler::print_status(){
-    std::cout <<
+    if(system_config_reader.get_verbose()){
+        std::cout <<
         "frame: " << received_frames << std::endl <<
         "\tpackets: " << received_packets << std::endl <<
         "\tdata bytes: " << adc_data_byte_count << std::endl <<
         "\tdropped packets: " << dropped_packets << std::endl <<
         "\tdropped packet events: " << dropped_packet_events << std::endl;
+    }
 }
 
 

@@ -24,9 +24,11 @@ class SystemConfigReader {
         int getDCADataPort() const;
         int getDCACmdPort() const;
         bool get_save_to_file() const;
+        bool get_verbose() const;
 
         //variable to confirm that the class has been initialized
         bool initialized;
+        bool verbose;
 
     private:
         std::string json_file_path;
