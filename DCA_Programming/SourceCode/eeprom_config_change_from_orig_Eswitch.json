@@ -14,11 +14,11 @@
             },
         "ethernetConfigUpdate": {
             "systemIPAddress": "192.168.1.100",
-            "DCA1000IPAddress": "192.168.1.181",
+            "DCA1000IPAddress": "192.168.1.180",
             "DCA1000MACAddress":
             "12.34.56.78.90.12",
-            "DCA1000ConfigPort": 4090,
-            "DCA1000DataPort": 4092
+            "DCA1000ConfigPort": 4096,
+            "DCA1000DataPort": 4098
             }
     }
 }
