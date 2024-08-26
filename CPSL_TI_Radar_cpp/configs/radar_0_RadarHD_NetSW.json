@@ -1,0 +1,36 @@
+{
+    "verbose":true,
+    "TI_Radar_Config_Management":
+        {
+            "TI_Radar_config_path":"/home/locobot/catkin_ws/src/CPSL_ROS_Sensors/CPSL_TI_Radar_ROS/radar_connect/include/CPSL_TI_Radar/configurations/DCA1000/custom_configs/RadarHD.cfg"
+        },
+    "CLI_Controller":
+        {
+            "CLI_port":"/dev/ttyACM0"
+        },
+    "Streamer":
+        {
+            "serial_streaming":
+                {
+                    "enabled":false,
+                    "data_port":"/dev/ttyACM1"
+                },
+            "DCA1000_streaming":
+                {
+                    "enabled":true,
+                    "FPGA_IP":"192.168.1.180",
+                    "system_IP":"192.168.1.100",
+                    "data_port":4098,
+                    "cmd_port":4096
+                },
+            "save_to_file":false
+        },
+    "Processor":
+        {
+            "SDK_version":"2.1"
+        },
+    "ROS/Listeners":
+        {
+            "enabled":true
+        }
+}
