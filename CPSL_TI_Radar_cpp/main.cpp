@@ -29,7 +29,7 @@ int main(int, char**){
     //handle sigint commands
     signal(SIGINT,signalHandler);
 
-    std::string config_file = "../configs/radar_1.json";
+    std::string config_file = "../configs/radar_0_IWR1843_demo.json";
 
     DCA1000Runner dca1000_runner(config_file);
     dca_global = &dca1000_runner;

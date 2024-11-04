@@ -82,6 +82,7 @@ On your machine, configure the TCP/IPv4 to have the following settings:
 1. To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads)
 2. Next, power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../CPSL_TI_Radar/readme_images/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/DCA1000_Streaming). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
+    * Note: For the IWR1843 (or any radar that can run the mmWave SDK boost, you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.)
 
 ## Running
 
@@ -97,6 +98,12 @@ The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration 
 
 #### TI_Radar_Config_management
 * TI_Radar_config_path: specifies the path to the IWR's .cfg file. Example files are located in the [configurations](../configurations/) folder. Be sure the choose the one corresponding to either the DCA1000, or the IWR Demo depending on your use case. 
+
+    * Note: If using the mmWave SDK demos (ex: SDK3.5) with the DCA1000 and IWR1843 boost boards, make sure that the lvdsStreamCfg is correctly set (see the mmWave sdk documentation). For example, a viable lbdsStreamCfg setting is featured below.
+
+    ```
+    lvdsStreamCfg -1 1 1 1
+    ```
 
 #### CLI_Controller
 * CLI_port: the address to the serial port used to program the IWR device. If you don't know the serial port, use the [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) notebook to determine them. Usually the CLI port is the smaller number.
