@@ -79,10 +79,25 @@ On your machine, configure the TCP/IPv4 to have the following settings:
 3. Subnet mask: 255.255.255.0
 
 ### 2.Flash the correct firmware onto the device
-1. To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads)
-2. Next, power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../CPSL_TI_Radar/readme_images/IWR_SOP_modes.png)
+To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads). Next, follow the instructions below corresponding to the board that you are using.
+
+#### [IWR1443] DCA Streaming
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../CPSL_TI_Radar/readme_images/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/DCA1000_Streaming). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
-    * Note: For the IWR1843 (or any radar that can run the mmWave SDK boost, you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.)
+
+#### [IWR1443] IWR Streaming
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../CPSL_TI_Radar/readme_images/IWR_SOP_modes.png)
+3. Use the Uniflash tool to install the mmWave SDK found as part of the [TI mmWave SDK 2.01.00.04](https://www.ti.com/tool/download/MMWAVE-SDK/02.01.00.04)
+
+#### [IWR1843] DCA Streaming and IWR Demos
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../CPSL_TI_Radar/readme_images/IWR1843_SOP_nodes.png)
+2. For the IWR1843 (or any radar that can run the mmWave SDK boost, you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.)
+
+    a.We developed this pipeline using mmWave 3.6. Using a different pipeline may require slight changes in the code.
+    b. NOTE: additional documentation on the demo firmware can be found in the index.html file located in (ti/mmwave_sdk_03_06_02_00-LTS/packages/ti/demo/xwr18xx/mmw/docs/doxygen/html)
+
+
+Once the correct firmware is flashed onto your board, power cycle the board and place it into functional mode.
 
 ## Running
 

@@ -4,6 +4,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
@@ -25,6 +26,8 @@ class SystemConfigReader {
         int getDCACmdPort() const;
         bool get_save_to_file() const;
         bool get_verbose() const;
+        int getSDKMajorVersion() const;
+        int getSDKMinorVersion() const;
 
         //variable to confirm that the class has been initialized
         bool initialized;
@@ -39,6 +42,9 @@ class SystemConfigReader {
         int DCA_dataPort;
         int DCA_cmdPort;
         bool save_to_file;
+        std::string sdk_version;
+        int sdk_major_version;
+        int sdk_minor_version;
 
         void readJsonFile();
 };

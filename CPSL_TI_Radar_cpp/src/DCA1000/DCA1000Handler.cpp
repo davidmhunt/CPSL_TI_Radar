@@ -1128,6 +1128,8 @@ void DCA1000Handler::update_latest_adc_cube_1443(void)
     }
 }
 
+void DCA1000Handler::update_latest_adc_cube_1843(void){}
+
 std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler::get_latest_adc_data_cube(void){
     return adc_data_cube;
 }

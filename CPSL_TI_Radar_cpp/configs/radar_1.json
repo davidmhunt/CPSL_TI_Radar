@@ -23,14 +23,7 @@
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "save_to_file":false
-        },
-    "Processor":
-        {
+            "save_to_file":false,
             "SDK_version":"2.1"
-        },
-    "ROS/Listeners":
-        {
-            "enabled":true
         }
 }

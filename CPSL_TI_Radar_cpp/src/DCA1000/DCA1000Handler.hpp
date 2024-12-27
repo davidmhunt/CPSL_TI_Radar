@@ -142,6 +142,7 @@ private:
         std::vector<std::int16_t>& in_vector,
         size_t num_rows);
     void update_latest_adc_cube_1443(void);
+    void update_latest_adc_cube_1843(void);
 
     std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_latest_adc_data_cube(void);
 

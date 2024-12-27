@@ -15,7 +15,10 @@ SystemConfigReader::SystemConfigReader()
       DCA_systemIP(""),
       DCA_dataPort(0),
       DCA_cmdPort(0),
-      save_to_file(false)
+      save_to_file(false),
+      sdk_version(""),
+      sdk_major_version(0),
+      sdk_minor_version(0)
     {}
 
 /**
@@ -31,7 +34,10 @@ SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
       DCA_systemIP(""),
       DCA_dataPort(0),
       DCA_cmdPort(0),
-      save_to_file(false)
+      save_to_file(false),
+      sdk_version(""),
+      sdk_major_version(0),
+      sdk_minor_version(0)
 {
     initialize(jsonFilePath);
 }
@@ -50,7 +56,10 @@ SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
       DCA_systemIP(rhs.DCA_systemIP),
       DCA_dataPort(rhs.DCA_dataPort),
       DCA_cmdPort(rhs.DCA_cmdPort),
-      save_to_file(rhs.save_to_file)
+      save_to_file(rhs.save_to_file),
+      sdk_version(rhs.sdk_version),
+      sdk_major_version(rhs.sdk_major_version),
+      sdk_minor_version(rhs.sdk_minor_version)
 {}
 
 /**
@@ -71,6 +80,9 @@ SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rh
         DCA_dataPort = rhs.DCA_dataPort;
         DCA_cmdPort = rhs.DCA_cmdPort;
         save_to_file = rhs.save_to_file;
+        sdk_version = rhs.sdk_version;
+        sdk_major_version = rhs.sdk_major_version;
+        sdk_minor_version = rhs.sdk_minor_version;
     }
 
     return *this;
@@ -129,6 +141,16 @@ bool SystemConfigReader::get_verbose() const
     return verbose;
 }
 
+int SystemConfigReader::getSDKMajorVersion() const
+{
+    return sdk_major_version;
+}
+
+int SystemConfigReader::getSDKMinorVersion() const
+{
+    return sdk_minor_version;
+}
+
 void SystemConfigReader::readJsonFile() 
 {
     std::ifstream file(json_file_path);
@@ -172,46 +194,66 @@ void SystemConfigReader::readJsonFile()
     }
 
     //get the DCA1000 interface information
-    if (data.contains("Streamer") && data["Streamer"].contains("DCA1000_streaming")) {
-        json& DCA1000Config = data["Streamer"]["DCA1000_streaming"];
-        if (DCA1000Config.contains("FPGA_IP")) {
-            DCA_fpgaIP = DCA1000Config["FPGA_IP"].get<std::string>();
-        } else{
-            initialized = false;
-            std::cerr << "SystemConfigReader: Couldn't find FPGA_IP"<< std::endl;
-            return;
+    if (data.contains("Streamer")) {
+        //dca1000 streaming
+        if (data["Streamer"].contains("DCA1000_streaming")){
+            json& DCA1000Config = data["Streamer"]["DCA1000_streaming"];
+            if (DCA1000Config.contains("FPGA_IP")) {
+                DCA_fpgaIP = DCA1000Config["FPGA_IP"].get<std::string>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find FPGA_IP"<< std::endl;
+                return;
+            }
+            if (DCA1000Config.contains("system_IP")) {
+                DCA_systemIP = DCA1000Config["system_IP"].get<std::string>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find system_IP"<< std::endl;
+                return;
+            }
+            if (DCA1000Config.contains("data_port")) {
+                DCA_dataPort = DCA1000Config["data_port"].get<int>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find data_port"<< std::endl;
+                return;
+            }
+            if (DCA1000Config.contains("cmd_port")) {
+                DCA_cmdPort = DCA1000Config["cmd_port"].get<int>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find cmd_port"<< std::endl;
+                return;
+            }
         }
-        if (DCA1000Config.contains("system_IP")) {
-            DCA_systemIP = DCA1000Config["system_IP"].get<std::string>();
-        } else{
-            initialized = false;
-            std::cerr << "SystemConfigReader: Couldn't find system_IP"<< std::endl;
-            return;
-        }
-        if (DCA1000Config.contains("data_port")) {
-            DCA_dataPort = DCA1000Config["data_port"].get<int>();
-        } else{
-            initialized = false;
-            std::cerr << "SystemConfigReader: Couldn't find data_port"<< std::endl;
-            return;
-        }
-        if (DCA1000Config.contains("cmd_port")) {
-            DCA_cmdPort = DCA1000Config["cmd_port"].get<int>();
-        } else{
-            initialized = false;
-            std::cerr << "SystemConfigReader: Couldn't find cmd_port"<< std::endl;
-            return;
-        }
-    }  
 
-    //saving to a file
-    if (data.contains("Streamer") && data["Streamer"].contains("save_to_file")) {
-        save_to_file = data["Streamer"]["save_to_file"].get<bool>();
+        //saving to a file
+        if (data["Streamer"].contains("save_to_file")) {
+            save_to_file = data["Streamer"]["save_to_file"].get<bool>();
+        }else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find save_to_file"<< std::endl;
+            return;
+        }
+
+        //SDK versioning
+        if (data["Streamer"].contains("SDK_version")) {
+            sdk_version = data["Streamer"]["SDK_version"].get<std::string>();
+
+            std::stringstream ss(sdk_version);
+            char dot;
+            ss >> sdk_major_version >> dot >> sdk_minor_version;
+        }else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find SDK_version"<< std::endl;
+            return;
+        }
     }else{
         initialized = false;
-        std::cerr << "SystemConfigReader: Couldn't find save_to_file"<< std::endl;
+        std::cerr << "SystemConfigReader: Couldn't find Streamer"<< std::endl;
         return;
-    }
+    }  
 
     initialized = true;
 }
