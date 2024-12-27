@@ -2,7 +2,17 @@
 
 using json = nlohmann::json;
 
-json JSONHandler::parse_JSON(std::string & file_name, bool print_JSON){
+/**
+ * @brief Parse a new JSON file using the nlohmann::json package
+ * 
+ * @param file_name the path to the .json file
+ * @param print_JSON on True, prints the contents of the JSON file
+ * @return json - a new json object
+ */
+json JSONHandler::parse_JSON(
+    std::string & file_name,
+    bool print_JSON)
+{
     std::ifstream f(file_name);
     json data;
 
@@ -22,6 +32,11 @@ json JSONHandler::parse_JSON(std::string & file_name, bool print_JSON){
     return data;
 }
 
+/**
+ * @brief Print the contents of a json file
+ * 
+ * @param file_name the path to a json file
+ */
 void JSONHandler::print_file(std::string & file_name){
     std::string line;
     std::ifstream f (file_name);

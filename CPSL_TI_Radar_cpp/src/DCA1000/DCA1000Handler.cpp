@@ -453,14 +453,31 @@ bool DCA1000Handler::send_configPacketData(size_t packet_size, uint16_t delay_us
     }
 }
 
+/**
+ * @brief Send the Configure FPGA Command
+ * 
+ * @return true 
+ * @return false 
+ */
 bool DCA1000Handler::send_configFPGAGen(){
     std::vector<uint8_t> data(6,0);
 
     //data logging mode - Raw Mode
     data[0] = 0x01;
 
-    //LVDS mode - 4 lane
-    data[1] = 0x01;
+    //LVDS mode - 4 lane (sdk 2.1/IWR1443)
+    if (system_config_reader.getSDKMajorVersion() == 2){
+        data[1] = 0x01;
+    } 
+    // 2 lane (sdk 3+/IWR6843,IWR1843)
+    else if (system_config_reader.getSDKMajorVersion() == 3)
+    {
+        data[1] = 0x02;
+    }
+    else{
+        std::cerr << "DCA1000Handler::send_config_FPGAGen(): invalid SDK major version" << std::endl;
+        return false;
+    }
 
     //data transfer mode - LVDS capture
     data[2] = 0x01;

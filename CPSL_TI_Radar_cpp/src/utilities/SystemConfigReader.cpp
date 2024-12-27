@@ -100,57 +100,115 @@ void SystemConfigReader::initialize(const std::string & jsonFilePath){
     readJsonFile();
 }
 
-
+/**
+ * @brief Get the path to the radar configuration
+ * 
+ * @return std::string 
+ */
 std::string SystemConfigReader::getRadarConfigPath() const 
 {
     return radar_ConfigPath;
 }
 
+/**
+ * @brief Get the Command Line Interface (CLI) port from the json config file
+ * 
+ * @return std::string 
+ */
 std::string SystemConfigReader::getRadarCliPort() const 
 {
     return radar_cliPort;
 }
 
+/**
+ * @brief Get the IP address of the DCA1000 FPGA from the json config file
+ * 
+ * @return std::string 
+ */
 std::string SystemConfigReader::getDCAFpgaIP() const 
 {
     return DCA_fpgaIP;
 }
 
+/**
+ * @brief Get the DCA1000 System IP address from the json configuration file
+ * 
+ * @return std::string 
+ */
 std::string SystemConfigReader::getDCASystemIP() const 
 {
     return DCA_systemIP;
 }
 
+/**
+ * @brief Get the DCA1000 Ethernet Port over which data is streamed
+ * 
+ * @return int 
+ */
 int SystemConfigReader::getDCADataPort() const 
 {
     return DCA_dataPort;
 }
 
+/**
+ * @brief Get the DCA1000 Ethernet Port over which commands are streamed
+ * 
+ * @return int 
+ */
 int SystemConfigReader::getDCACmdPort() const 
 {
     return DCA_cmdPort;
 }
 
+/**
+ * @brief Get the status of whether or not to save data to a 
+ * file from the json configuration file
+ * 
+ * @return true - save data from the IWR and DCA to a file
+ * @return false - don't save streamed data to a file
+ */
 bool SystemConfigReader::get_save_to_file() const 
 {
     return save_to_file;
 }
 
+/**
+ * @brief Get the verbose flag status from the json configuration file
+ * 
+ * @return true - display extra verbose data for debugging
+ * @return false - don't display extra verbose data for debugging
+ */
 bool SystemConfigReader::get_verbose() const
 {
     return verbose;
 }
 
+/**
+ * @brief Get the major version number of the SDK
+ * from the system configuration json file
+ * 
+ * @return int - the major sdk version 
+ */
 int SystemConfigReader::getSDKMajorVersion() const
 {
     return sdk_major_version;
 }
 
+/**
+ * @brief Get the minor version number of the SDK
+ * from the system configuration json file
+ * 
+ * @return int - the minor sdk version 
+ */
 int SystemConfigReader::getSDKMinorVersion() const
 {
     return sdk_minor_version;
 }
 
+/**
+ * @brief Decode the json configuration file (must already be loaded)
+ * 
+ */
 void SystemConfigReader::readJsonFile() 
 {
     std::ifstream file(json_file_path);

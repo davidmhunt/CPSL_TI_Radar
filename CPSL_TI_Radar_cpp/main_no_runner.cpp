@@ -36,28 +36,30 @@ int main(int, char**){
     
     SystemConfigReader config_reader(config_file);
 
-    std::cout << std::endl << "Radar Config Path: " << config_reader.getRadarConfigPath() << std::endl;
-    std::cout << std::endl << "CLI Port: " << config_reader.getRadarCliPort() << std::endl;
-    std::cout << std::endl << "SDK Major Version: " << config_reader.getSDKMajorVersion() << std::endl;
+    std::cout << "Radar Config Path: " << config_reader.getRadarConfigPath() << std::endl;
+    std::cout << "CLI Port: " << config_reader.getRadarCliPort() << std::endl;
+    std::cout << "SDK Major Version: " << config_reader.getSDKMajorVersion() << std::endl;
     
     const std::string radar_config_path = config_reader.getRadarConfigPath();
     RadarConfigReader radar_config_reader(radar_config_path);
 
-    // //setup the DCA1000
-    // DCA1000Handler dca1000_handler(config_reader,radar_config_reader);
-    // dca_global = &dca1000_handler;
+    //setup the DCA1000
+    DCA1000Handler dca1000_handler(config_reader,radar_config_reader);
+    dca_global = &dca1000_handler;
 
-    // // //initialize the DCA1000
-    // if(dca1000_handler.initialized == false){
-    //     return false;
-    // }
+    // //initialize the DCA1000
+    if(dca1000_handler.initialized == false){
+        return false;
+    } else{
+        std::cout << "DCA1000 Successfully initialized" <<std::endl;
+    }
 
-    // // //send a configuration to the radar board
-    // CLIController cli_controller(config_reader);
-    // cli_global = &cli_controller;
-    // if(cli_controller.initialized){
-    //     cli_controller.send_config_to_IWR();
-    // }
+    // //send a configuration to the radar board
+    CLIController cli_controller(config_reader);
+    cli_global = &cli_controller;
+    if(cli_controller.initialized){
+        cli_controller.send_config_to_IWR();
+    }
 
     // //send record start command
     // dca1000_handler.send_recordStart();

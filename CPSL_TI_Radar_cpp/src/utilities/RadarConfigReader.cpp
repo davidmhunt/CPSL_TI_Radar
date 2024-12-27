@@ -1,7 +1,7 @@
 #include "RadarConfigReader.hpp"
 
 /**
- * @brief default constructor
+ * @brief default constructor without initialization
 */
 RadarConfigReader::RadarConfigReader():
     initialized(false),
@@ -37,6 +37,12 @@ RadarConfigReader::RadarConfigReader(const RadarConfigReader & rhs):
     frameCfg_frame_period(rhs.frameCfg_frame_period)
 {}
 
+/**
+ * @brief Assignment operator
+ * 
+ * @param rhs 
+ * @return RadarConfigReader& 
+ */
 RadarConfigReader & RadarConfigReader::operator=(const RadarConfigReader & rhs){
     if(this != & rhs){
 
@@ -67,6 +73,10 @@ RadarConfigReader & RadarConfigReader::operator=(const RadarConfigReader & rhs){
     return *this;
 }
 
+/**
+ * @brief Destroy the Radar Config Reader:: Radar Config Reader object
+ * 
+ */
 RadarConfigReader::~RadarConfigReader()
 {   
     if (cfg_file.get() != nullptr &&
@@ -76,6 +86,11 @@ RadarConfigReader::~RadarConfigReader()
         }
 }
 
+/**
+ * @brief Initialize the radar configuration reader
+ * 
+ * @param filename path to a .cfg file used to configure a TI radar
+ */
 void RadarConfigReader::initialize(const std::string & filename){
 
     //check to make sure that the file stream hasn't already been initialized
@@ -104,6 +119,12 @@ void RadarConfigReader::initialize(const std::string & filename){
     }
 }
 
+/**
+ * @brief Get the number of bytes used to transmit a frame's
+ * worth of raw radar adc data
+ * 
+ * @return size_t the number of bytes in a given frame
+ */
 size_t RadarConfigReader::get_bytes_per_frame(){
     
     //number of bytes per sample (assuming complex samples)
@@ -119,10 +140,20 @@ size_t RadarConfigReader::get_bytes_per_frame(){
 
 }
 
+/**
+ * @brief Get the number of chirps per frame of radar data
+ * 
+ * @return size_t 
+ */
 size_t RadarConfigReader::get_chirps_per_frame(){
     return static_cast<size_t>(frameCfg_chirp_end_idx - frameCfg_chirp_start_idx + 1) * frameCfG_num_loops;
 }
 
+/**
+ * @brief Get the number of I-Q Samples in a given chirp
+ * 
+ * @return size_t 
+ */
 size_t RadarConfigReader::get_samples_per_chirp(){
     return static_cast<size_t>(profileCfg_adc_samples);
 }
@@ -131,6 +162,11 @@ size_t RadarConfigReader::get_num_rx_antennas(){
     return static_cast<size_t>(rx_antennas);
 }
 
+/**
+ * @brief Process a new cfg file (cfg_file path must already
+ * be defined)
+ * 
+ */
 void RadarConfigReader::process_cfg() {
 
     if(cfg_file.get() != nullptr &&
@@ -157,6 +193,13 @@ void RadarConfigReader::process_cfg() {
     }
 }
 
+/**
+ * @brief Get a vector of strings from a given string. String
+ * is separated using ' ' characters.
+ * 
+ * @param text a std::string object
+ * @return std::vector<std::string> the vector of strings
+ */
 std::vector<std::string> RadarConfigReader::get_vec_from_string(std::string text)
 {
     std::istringstream iss(text);
@@ -170,6 +213,11 @@ std::vector<std::string> RadarConfigReader::get_vec_from_string(std::string text
     return values;
 }
 
+/**
+ * @brief Decode the profile configuration from the profile cfg
+ * 
+ * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
+ */
 void RadarConfigReader::read_profile_cfg(std::vector<std::string> values){
     
     //set the profile config
@@ -180,6 +228,11 @@ void RadarConfigReader::read_profile_cfg(std::vector<std::string> values){
     profileCfg_adc_sample_rate_ksps = (std::stoi(values[11]));
 }
 
+/**
+ * @brief Decode the chirp configuration from the profile cfg
+ * 
+ * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
+ */
 void RadarConfigReader::read_chirp_cfg(std::vector<std::string> values){
     
     //set the chirp config
@@ -187,6 +240,11 @@ void RadarConfigReader::read_chirp_cfg(std::vector<std::string> values){
     chirpCfg_end_idx = (std::stoi(values[2]));
 }
 
+/**
+ * @brief Decode the frame configuration from the profile cfg
+ * 
+ * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
+ */
 void RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
     
     //set the profile config

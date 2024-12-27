@@ -114,12 +114,17 @@ The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration 
 #### TI_Radar_Config_management
 * TI_Radar_config_path: specifies the path to the IWR's .cfg file. Example files are located in the [configurations](../configurations/) folder. Be sure the choose the one corresponding to either the DCA1000, or the IWR Demo depending on your use case. 
 
-    * Note: If using the mmWave SDK demos (ex: SDK3.5) with the DCA1000 and IWR1843 boost boards, make sure that the lvdsStreamCfg is correctly set (see the mmWave sdk documentation). For example, a viable lbdsStreamCfg setting is featured below.
+    * Note: If using the mmWave SDK demos (ex: SDK3.5) with the DCA1000 and IWR1843 boost boards, make sure that the lvdsStreamCfg is correctly set (see the mmWave sdk documentation). For example, a viable lbdsStreamCfg setting is featured below. To just stream the ADC samples only, use the following command (disables SW streaming)
+
+    ```
+    lvdsStreamCfg -1 1 1 0 
+    ```
+
+    To stream all available data use this command instead (will require additional processing/streaming time to support this though)
 
     ```
     lvdsStreamCfg -1 1 1 1
     ```
-
 #### CLI_Controller
 * CLI_port: the address to the serial port used to program the IWR device. If you don't know the serial port, use the [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) notebook to determine them. Usually the CLI port is the smaller number.
 
