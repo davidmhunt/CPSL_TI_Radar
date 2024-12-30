@@ -125,6 +125,10 @@ The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration 
     ```
     lvdsStreamCfg -1 1 1 1
     ```
+
+    ### Notes:
+    1. Due to the uncertain interleaving behavior with IWR's operating with SDK3+, please use an even number of samples for configurations with only a single rx, and only use configurations with 1,2, or 4 receivers.
+
 #### CLI_Controller
 * CLI_port: the address to the serial port used to program the IWR device. If you don't know the serial port, use the [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) notebook to determine them. Usually the CLI port is the smaller number.
 

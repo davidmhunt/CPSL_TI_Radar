@@ -32,7 +32,8 @@ DCA1000Handler::DCA1000Handler():
     chirps_per_frame(0),
     num_rx_channels(4),
     save_to_file(false),
-    out_file(nullptr),
+    adc_cube_out_file(nullptr),
+    raw_lvds_out_file(nullptr),
     adc_data_cube(),
     latest_frame_byte_buffer()
 {}
@@ -72,7 +73,8 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
     chirps_per_frame(0),
     num_rx_channels(4),
     save_to_file(false),
-    out_file(nullptr),
+    adc_cube_out_file(nullptr),
+    raw_lvds_out_file(nullptr),
     adc_data_cube(),
     latest_frame_byte_buffer()
     {     
@@ -112,7 +114,8 @@ DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
     chirps_per_frame(rhs.chirps_per_frame),
     num_rx_channels(rhs.num_rx_channels),
     save_to_file(rhs.save_to_file),
-    out_file(rhs.out_file),
+    adc_cube_out_file(rhs.adc_cube_out_file),
+    raw_lvds_out_file(rhs.raw_lvds_out_file),
     adc_data_cube(rhs.adc_data_cube),
     latest_frame_byte_buffer(rhs.latest_frame_byte_buffer)
 {}
@@ -149,13 +152,22 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
         }
 
         //close the file streaming
-        if(save_to_file &&
-            out_file.get() != nullptr &&
-            out_file.use_count() == 1 &&
-            out_file -> is_open())
+        if (save_to_file)
         {
-            out_file -> close();
+            if (adc_cube_out_file.get() != nullptr &&
+                adc_cube_out_file.use_count() == 1 &&
+                adc_cube_out_file -> is_open())
+            {
+                adc_cube_out_file -> close();
+            }
+            if (raw_lvds_out_file.get() != nullptr &&
+                raw_lvds_out_file.use_count() == 1 &&
+                raw_lvds_out_file -> is_open())
+            {
+                raw_lvds_out_file -> close();
+            }
         }
+
 
         //assign the variables as normal now
         initialized = rhs.initialized;
@@ -185,7 +197,8 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
         chirps_per_frame = rhs.chirps_per_frame;
         num_rx_channels = rhs.num_rx_channels;
         save_to_file = rhs.save_to_file;
-        out_file = rhs.out_file;
+        adc_cube_out_file = rhs.adc_cube_out_file;
+        raw_lvds_out_file = rhs.raw_lvds_out_file;
         adc_data_cube = rhs.adc_data_cube;
         latest_frame_byte_buffer = rhs.latest_frame_byte_buffer;
     }
@@ -227,13 +240,21 @@ DCA1000Handler::~DCA1000Handler() {
     }
 
     //close the file streaming
-    if(save_to_file &&
-        out_file.get() != nullptr &&
-        out_file.use_count() == 1 &&
-        out_file -> is_open())
-    {
-        out_file -> close();
-    }
+        if (save_to_file)
+        {
+            if (adc_cube_out_file.get() != nullptr &&
+                adc_cube_out_file.use_count() == 1 &&
+                adc_cube_out_file -> is_open())
+            {
+                adc_cube_out_file -> close();
+            }
+            if (raw_lvds_out_file.get() != nullptr &&
+                raw_lvds_out_file.use_count() == 1 &&
+                raw_lvds_out_file -> is_open())
+            {
+                raw_lvds_out_file -> close();
+            }
+        }
 }
 
 bool DCA1000Handler::initialize(
@@ -482,10 +503,10 @@ bool DCA1000Handler::send_configFPGAGen(){
     //data transfer mode - LVDS capture
     data[2] = 0x01;
 
-    //data capture mode
+    //data capture mode - ethernet stream
     data[3] = 0x02;
 
-    //data format mode
+    //data format mode - 16 bit
     data[4] = 0x03;
 
     //timer - default to 30 seconds
@@ -605,6 +626,16 @@ bool DCA1000Handler::process_next_packet(){
 
                 //save the completed frame byte buffer and reset it
                 save_frame_byte_buffer();
+            }
+
+            //save the raw data if desired
+            if(save_to_file)
+            {
+                raw_lvds_out_file -> write(
+                        reinterpret_cast<const char*>(
+                            &udp_packet_buffer[i+10]),
+                        sizeof(udp_packet_buffer[i+10])
+                    );
             }
         }
         return true;
@@ -1045,7 +1076,20 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
     received_frames += 1;
 
     adc_data_cube_unique_lock.lock();
-    update_latest_adc_cube_1443();
+    if (system_config_reader.getSDKMajorVersion() == 2){
+        update_latest_adc_cube_interleaved();
+    } 
+    // 2 lane (sdk 3+/IWR6843,IWR1843)
+    else if (system_config_reader.getSDKMajorVersion() == 3)
+    {
+        // update_latest_adc_cube_interleaved();
+        update_latest_adc_cube_noninterleaved();
+    }
+    else{
+        std::cout << "DCA1000Handler::save_frame_byte_buffer(): invalid SDK major version" << std::endl;
+        return;
+    }
+    
     adc_data_cube_unique_lock.unlock();
 
     if(print_system_status){
@@ -1069,6 +1113,7 @@ std::vector<std::int16_t> DCA1000Handler::convert_from_bytes_to_ints(
         );
 
         //TODO: add in either le16toh() or be16toh() to preserve compatibility
+        out_vector[i] = le16toh(out_vector[i]);
     }
     return out_vector;
 }
@@ -1111,8 +1156,58 @@ std::vector<std::vector<std::int16_t>> DCA1000Handler::reshape_to_2D(
     return out_vector;
 }
 
-void DCA1000Handler::update_latest_adc_cube_1443(void)
+/**
+ * @brief Interleave data that was stored in a non-interleaved format
+ * 
+ * @param in_vector data stored in a 4xM array where the columns
+ * represent non-interleaved data in the pattern
+ * [Rx0-samp0-I, Rx0-samp1-I,Rx0-samp0-Q,Rx0-samp1-Q]
+ * @return std::vector<std::complex<std::int16_t>> interleaved data
+ * which can be indexed by [sample, rx, chirp]
+ * @note Assumes that there are an even number of samples per chirp 
+ * (or that at least 2 antennas are active)
+ */
+std::vector<std::complex<std::int16_t>> DCA1000Handler::interleave_data(
+        std::vector<std::vector<std::int16_t>>& in_vector)
+{
+    std::vector<std::complex<std::int16_t>> out_vector(
+        samples_per_chirp * chirps_per_frame * num_rx_channels,
+        std::complex<std::int16_t>(0,0)
+    );
+
+    size_t idx;
+    for (size_t i = 0; i < in_vector[0].size(); i++)
+    {
+        idx = i * 2;
+        //1st col - 1st real sample
+        out_vector[idx].real(
+            in_vector[0][i]
+        );
+        //2nd col - 2nd real sample
+        out_vector[idx+1].real(
+            in_vector[1][i]
+        );
+        //3rd col - 1st complex sample
+        out_vector[idx].imag(
+            in_vector[2][i]
+        );
+        //4th col - 2nd complex sample
+        out_vector[idx+1].imag(
+            in_vector[3][i]
+        );
+    }
+
+    return out_vector;
+}
+
+/**
+ * @brief Update the latest adc cube for a buffer generated by streaming
+ * data in the "interleaved" format (applies to IWR1443)
+ * 
+ */
+void DCA1000Handler::update_latest_adc_cube_interleaved(void)
 {   
+    //convert data from bytes to ints
     std::vector<std::int16_t> adc_data_ints = convert_from_bytes_to_ints(latest_frame_byte_buffer);
         
     //reshape it into lvds lanes [Rx1-4 real, Rx1-4 complex]
@@ -1140,12 +1235,54 @@ void DCA1000Handler::update_latest_adc_cube_1443(void)
                 );
             }
             
+        }   
+    }
+}
+
+/**
+ * @brief Update the latest adc cube for a buffer generated by streaming
+ * data in the "non-interleaved" format (applies to IWR183)
+ * 
+ */
+void DCA1000Handler::update_latest_adc_cube_noninterleaved(void){
+
+    //convert the byte data into integers
+    std::vector<std::int16_t> adc_data_ints = convert_from_bytes_to_ints(latest_frame_byte_buffer);
+
+    //reshape it into the lvds lanes [Rx0-samp0-I, Rx0-samp1-I,Rx0-samp0-Q,Rx0-samp1-Q]
+    std::vector<std::vector<std::int16_t>> adc_data_reshaped = 
+        reshape_to_2D(
+            adc_data_ints,4
+        );
+
+    std::vector<std::complex<std::int16_t>> interleaved_data = 
+        interleave_data(adc_data_reshaped);
+    
+
+    //update the adc data cube
+    size_t idx = 0;
+    for (size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++)
+    {
+        for (size_t rx_idx = 0; rx_idx < num_rx_channels; rx_idx++)
+        {   
+            for (size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++)
+            {
+                //set the real value
+                adc_data_cube[rx_idx][sample_idx][chirp_idx] = 
+                    interleaved_data[idx];
+
+                //set the imaginary value
+                adc_data_cube[rx_idx][sample_idx][chirp_idx] = 
+                    interleaved_data[idx];
+                
+                //update the idx counter
+                idx++;
+            }
+            
         }
         
     }
 }
-
-void DCA1000Handler::update_latest_adc_cube_1843(void){}
 
 std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler::get_latest_adc_data_cube(void){
     return adc_data_cube;
@@ -1153,11 +1290,19 @@ std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler
 
 bool DCA1000Handler::init_out_file(){
 
-    out_file = std::make_shared<std::ofstream>("adc_data.bin", 
+    adc_cube_out_file = std::make_shared<std::ofstream>("adc_data.bin", 
         std::ios::out | std::ofstream::binary | std::ios::trunc);
 
-    if(out_file -> is_open() != true){
+    if(adc_cube_out_file -> is_open() != true){
         std::cout << "Failed to open or create adc_data.bin file" << std::endl;
+        return false;
+    }
+
+    raw_lvds_out_file = std::make_shared<std::ofstream>("LVDS_Raw_0.bin", 
+        std::ios::out | std::ofstream::binary | std::ios::trunc);
+
+    if(raw_lvds_out_file -> is_open() != true){
+        std::cout << "Failed to open or create LVDS_Raw_0.bin file" << std::endl;
         return false;
     }
 
@@ -1170,15 +1315,15 @@ void DCA1000Handler::write_adc_data_cube_to_file(void){
     std::int16_t real = 0;
     std::int16_t imag = 0;
 
-    //make sure that the out_file is open
-    if(out_file -> is_open()){
+    //make sure that the adc_cube_out_file is open
+    if(adc_cube_out_file -> is_open()){
         for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
             for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
                 for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
 
                     //write the real part
                     real = adc_data_cube[rx_idx][sample_idx][chirp_idx].real();
-                    out_file -> write(
+                    adc_cube_out_file -> write(
                         reinterpret_cast<const char*>(
                             &real),
                         sizeof(real)
@@ -1186,7 +1331,7 @@ void DCA1000Handler::write_adc_data_cube_to_file(void){
 
                     //write the imag part
                     imag = adc_data_cube[rx_idx][sample_idx][chirp_idx].imag();
-                    out_file -> write(
+                    adc_cube_out_file -> write(
                         reinterpret_cast<const char*>(
                             &imag),
                         sizeof(imag)
@@ -1195,24 +1340,24 @@ void DCA1000Handler::write_adc_data_cube_to_file(void){
             }
         }
     }else{
-        std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
+        std::cerr << "adc_cube_out_file.bin is not open, failed to save ADC data" <<std::endl;
     }
 }
 
 void DCA1000Handler::write_vector_to_file(std::vector<std::int16_t> &vector){
     
-    //make sure that the out_file is open
-    if(out_file -> is_open()){
+    //make sure that the adc_cube_out_file is open
+    if(adc_cube_out_file -> is_open()){
         for(size_t idx = 0; idx < vector.size(); idx++){
 
             //write the real part
-            out_file -> write(
+            adc_cube_out_file -> write(
                 reinterpret_cast<const char*>(
                     &vector[idx]),
                 sizeof(vector[idx])
             );
         }
     }else{
-        std::cerr << "out_file.bin is not open, failed to save ADC data" <<std::endl;
+        std::cerr << "adc_cube_out_file.bin is not open, failed to save ADC data" <<std::endl;
     }
 }

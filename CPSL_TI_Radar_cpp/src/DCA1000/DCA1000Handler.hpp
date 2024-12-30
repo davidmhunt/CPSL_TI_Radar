@@ -74,7 +74,8 @@ private:
 
     //saving to a file
     bool save_to_file;
-    std::shared_ptr<std::ofstream> out_file;
+    std::shared_ptr<std::ofstream> adc_cube_out_file;
+    std::shared_ptr<std::ofstream> raw_lvds_out_file;
     
     //assembling the adc data cube
     //NOTE: indexed by [Rx channel, sample, chirp]
@@ -141,8 +142,11 @@ private:
     std::vector<std::vector<std::int16_t>> reshape_to_2D(
         std::vector<std::int16_t>& in_vector,
         size_t num_rows);
-    void update_latest_adc_cube_1443(void);
-    void update_latest_adc_cube_1843(void);
+    std::vector<std::complex<std::int16_t>> interleave_data(
+        std::vector<std::vector<std::int16_t>>& in_vector
+    );
+    void update_latest_adc_cube_interleaved(void);
+    void update_latest_adc_cube_noninterleaved(void);
 
     std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_latest_adc_data_cube(void);
 
