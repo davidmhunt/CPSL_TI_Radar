@@ -4,6 +4,7 @@
 #include <string>
 #include <csignal>
 
+
 //JSON handling
 #include "JSONHandler.hpp"
 #include "SystemConfigReader.hpp"
@@ -72,20 +73,20 @@ int main(int, char**){
     //send sensor start command
     cli_controller.sendStartCommand();
 
-    while(serial_streamer.get_next_serial_frame())
-    {}
+    //process the first frame
+    serial_streamer.process_next_message();
     
+    //define a buffer
+    for (size_t i = 0; i < 10; i++)
+    {
+        // dca1000_handler.process_next_packet();
+        if(!serial_streamer.process_next_message()){
+            break;
+        }
+    }
 
-    cli_controller.sendStartCommand();
-
-    // //define a buffer
-    // for (size_t i = 0; i < 3000; i++)
-    // {
-    //     dca1000_handler.process_next_packet();
-    // }
-
-    // std::cout << "sending IWR stop command" << std::endl;
-    // cli_controller.sendStopCommand();
+    std::cout << "sending IWR stop command" << std::endl;
+    cli_controller.sendStopCommand();
 
     // std::cout << "sending DCA1000 stop command" << std::endl;
     // dca1000_handler.send_recordStop();

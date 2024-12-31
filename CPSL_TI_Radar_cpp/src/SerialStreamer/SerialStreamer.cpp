@@ -14,7 +14,10 @@ SerialStreamer::SerialStreamer():
     io_context(new boost::asio::io_context()),
     data_port(nullptr),
     serial_stream(),
-    timeout(*io_context)
+    timeout(*io_context),
+    serial_message_data_buffer(),
+    header_data_bytes(32,0),
+    header_data(8,0)
 {}
 
 /**
@@ -28,7 +31,10 @@ SerialStreamer::SerialStreamer(const SystemConfigReader & systemConfigReader):
     io_context(new boost::asio::io_context()),
     data_port(nullptr),
     serial_stream(),
-    timeout(*io_context)
+    timeout(*io_context),
+    serial_message_data_buffer(),
+    header_data_bytes(32,0),
+    header_data(8,0)
 {    
     initialize(systemConfigReader);
 }
@@ -44,7 +50,10 @@ SerialStreamer::SerialStreamer(const SerialStreamer & rhs):
     data_port(rhs.data_port),
     system_config_reader(rhs.system_config_reader),
     serial_stream(), // `boost::asio::streambuf` does not support copying; initialize a fresh buffer
-    timeout(*rhs.io_context)
+    timeout(*rhs.io_context),
+    serial_message_data_buffer(rhs.serial_message_data_buffer),
+    header_data_bytes(rhs.header_data_bytes),
+    header_data(rhs.header_data)
 {}
 
 /**
@@ -69,6 +78,9 @@ SerialStreamer & SerialStreamer::operator=(const SerialStreamer & rhs){
         io_context = rhs.io_context;
         data_port = rhs.data_port;
         system_config_reader = rhs.system_config_reader;
+        serial_message_data_buffer = rhs.serial_message_data_buffer;
+        header_data_bytes = rhs.header_data_bytes;
+        header_data = rhs.header_data;
 
         // Streambuf cannot be copied; ensure it’s reinitialized
         serial_stream.consume(serial_stream.size()); // Clear buffer contents
@@ -118,12 +130,35 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
     return initialized;
 }
 
+bool SerialStreamer::process_next_message(void){
+
+    //get the next serial frame and load it into the serial_message_data_buffer
+    if (!get_next_serial_frame()){
+        return false;
+    }
+
+    //process the header
+    if (!process_message_header()){
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief Wait for the next complete message (indicated by 
+ * receiving a magic word) and save the read data into the 
+ * serial_message_data_buffer. Times out after 1s of waiting
+ * 
+ * @return true on successful data capture
+ * @return false on error or timeout during data capture
+ */
 bool SerialStreamer::get_next_serial_frame(void) {
     size_t bytes_transfered = 0;
     boost::system::error_code ec;
 
     // Set the timeout for the asynchronous read
-    timeout.expires_from_now(boost::posix_time::millisec(500));
+    timeout.expires_from_now(boost::posix_time::millisec(1000));
 
     // Start asynchronous read until the magic word is found
     async_read_until(*data_port, serial_stream, magic_word, 
@@ -148,19 +183,27 @@ bool SerialStreamer::get_next_serial_frame(void) {
     if (!ec) {
 
         //load data into the vector
-        serial_data_buffer = std::vector<uint8_t>(bytes_transfered);
+        serial_message_data_buffer = std::vector<uint8_t>(bytes_transfered);
         boost::asio::buffer_copy(
-            boost::asio::buffer(serial_data_buffer),
+            boost::asio::buffer(serial_message_data_buffer),
             serial_stream.data(),
             bytes_transfered
         );
 
-        // Successfully received data (old code)
-        // std::istream is(&serial_stream);
-        // serial_data_buffer = std::vector<uint8_t>(std::istreambuf_iterator<char>(is), {});
-
         // Print the received response
         std::cout << "SerialStreamer: Received " << bytes_transfered << " bytes" << std::endl;
+
+        if(system_config_reader.verbose){
+            
+            const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
+            size_t raw_data_size = serial_stream.size();
+            std::cout << "Raw data: ";
+            for (size_t i = 0; i < raw_data_size; ++i) {
+                // Print each byte in hex format (uppercase)
+                std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
+            }
+            std::cout << std::dec << std::endl;
+        }
 
         // Remove the received data from the buffer
         serial_stream.consume(bytes_transfered);
@@ -184,4 +227,50 @@ bool SerialStreamer::get_next_serial_frame(void) {
         std::cerr << "Error while reading response: " << ec.message() << std::endl;
         return false;
     }
+}
+
+bool SerialStreamer::process_message_header(void){
+
+    //confirm valid message (first received frame will not be)
+    if(serial_message_data_buffer.size() <= 32){
+        return false;
+    }
+
+    //get the header data bytes
+    header_data_bytes.assign(
+        serial_message_data_buffer.begin(),
+        serial_message_data_buffer.begin() + 32
+    );
+
+    //reinterpret the data into uint32 type
+    const uint32_t* data_ptr = reinterpret_cast<const uint32_t*>(header_data_bytes.data());
+
+    // Append the reinterpreted data to header_data
+    header_data.assign(data_ptr, data_ptr + 8);
+    
+    //convert from le32 to host format
+    for (size_t i = 0; i < header_data.size(); i++)
+    {
+        header_data[i] = le32toh(header_data[i]);
+    }
+
+    header_version = uint32ToHex(header_data[0]);
+    header_totalPacketLen = header_data[1];
+    header_platform = uint32ToHex(header_data[2]);
+    header_frameNumber = header_data[3];
+    header_timeCPUCycles = header_data[4];
+    header_numDetectedObj = header_data[5];
+    header_numTLVs = header_data[6];
+    header_subFrameNumber = header_data[7];
+
+    //TODO: Do checks to confirm header is operating successfully
+    return true;
+}
+
+std::string SerialStreamer::uint32ToHex(uint32_t value) {
+    std::stringstream ss;
+    ss << std::hex << std::uppercase << 
+        std::setw(8) << std::setfill('0') 
+        << value;
+    return ss.str();
 }
