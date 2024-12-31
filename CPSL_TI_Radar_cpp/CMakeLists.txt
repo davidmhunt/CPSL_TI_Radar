@@ -19,12 +19,14 @@ add_executable(MAIN_NO_RUNNER main_no_runner.cpp)
 #perform linking
 target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Utilities
                                         PRIVATE CLIController
+                                        PRIVATE SerialStreamer
                                         PRIVATE DCA1000Commands
                                         PRIVATE DCA1000Handler
                                         PRIVATE DCA1000Runner)
 
 target_link_libraries(MAIN_NO_RUNNER PRIVATE Utilities
                                         PRIVATE CLIController
+                                        PRIVATE SerialStreamer
                                         PRIVATE DCA1000Commands
                                         PRIVATE DCA1000Handler
                                         PRIVATE DCA1000Runner)

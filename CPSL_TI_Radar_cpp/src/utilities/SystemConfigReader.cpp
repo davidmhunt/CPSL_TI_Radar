@@ -11,6 +11,9 @@ SystemConfigReader::SystemConfigReader()
       verbose(false),
       json_file_path(""),
       radar_cliPort(""),
+      radar_dataPort(""),
+      serial_streaming_enabled(false),
+      dca1000_streaming_enabled(false),
       DCA_fpgaIP(""),
       DCA_systemIP(""),
       DCA_dataPort(0),
@@ -30,6 +33,9 @@ SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
     : initialized(false),
       verbose(false), json_file_path(jsonFilePath),
       radar_cliPort(""),
+      radar_dataPort(""),
+      serial_streaming_enabled(false),
+      dca1000_streaming_enabled(false),
       DCA_fpgaIP(""),
       DCA_systemIP(""),
       DCA_dataPort(0),
@@ -52,6 +58,9 @@ SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
       verbose(rhs.verbose),
       json_file_path(rhs.json_file_path),
       radar_cliPort(rhs.radar_cliPort),
+      radar_dataPort(rhs.radar_dataPort),
+      serial_streaming_enabled(rhs.serial_streaming_enabled),
+      dca1000_streaming_enabled(rhs.dca1000_streaming_enabled),
       DCA_fpgaIP(rhs.DCA_fpgaIP),
       DCA_systemIP(rhs.DCA_systemIP),
       DCA_dataPort(rhs.DCA_dataPort),
@@ -75,6 +84,9 @@ SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rh
         json_file_path = rhs.json_file_path;
         radar_ConfigPath = rhs.radar_ConfigPath;
         radar_cliPort = rhs.radar_cliPort;
+        radar_dataPort = rhs.radar_dataPort;
+        serial_streaming_enabled = rhs.serial_streaming_enabled,
+        dca1000_streaming_enabled = rhs.dca1000_streaming_enabled,
         DCA_fpgaIP = rhs.DCA_fpgaIP;
         DCA_systemIP = rhs.DCA_systemIP;
         DCA_dataPort = rhs.DCA_dataPort;
@@ -118,6 +130,16 @@ std::string SystemConfigReader::getRadarConfigPath() const
 std::string SystemConfigReader::getRadarCliPort() const 
 {
     return radar_cliPort;
+}
+
+/**
+ * @brief Get the Command Line Interface (CLI) port from the json config file
+ * 
+ * @return std::string 
+ */
+std::string SystemConfigReader::getRadarDataPort() const 
+{
+    return radar_dataPort;
 }
 
 /**
@@ -256,6 +278,13 @@ void SystemConfigReader::readJsonFile()
         //dca1000 streaming
         if (data["Streamer"].contains("DCA1000_streaming")){
             json& DCA1000Config = data["Streamer"]["DCA1000_streaming"];
+            if (DCA1000Config.contains("enabled")) {
+                dca1000_streaming_enabled = DCA1000Config["enabled"].get<bool>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find dca1000_streaming:enabled"<< std::endl;
+                return;
+            }
             if (DCA1000Config.contains("FPGA_IP")) {
                 DCA_fpgaIP = DCA1000Config["FPGA_IP"].get<std::string>();
             } else{
@@ -284,6 +313,34 @@ void SystemConfigReader::readJsonFile()
                 std::cerr << "SystemConfigReader: Couldn't find cmd_port"<< std::endl;
                 return;
             }
+        }else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find DCA1000_streaming"<< std::endl;
+            return;
+        }
+
+        //serial streaming
+        if (data["Streamer"].contains("serial_streaming")){
+            //get the serial data streaming interface status
+            if (data["Streamer"]["serial_streaming"].contains("enabled")) {
+                serial_streaming_enabled = data["Streamer"]["serial_streaming"]["enabled"].get<bool>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find serial_streaming enabled"<< std::endl;
+                return;
+            }
+            //get the radar data streaming data port
+            if (data["Streamer"]["serial_streaming"].contains("data_port")) {
+                radar_dataPort = data["Streamer"]["serial_streaming"]["data_port"].get<std::string>();
+            } else{
+                initialized = false;
+                std::cerr << "SystemConfigReader: Couldn't find serial_streaming data_port"<< std::endl;
+                return;
+            }
+        }else{
+            initialized = false;
+            std::cerr << "SystemConfigReader: Couldn't find serial_streaming"<< std::endl;
+            return;
         }
 
         //saving to a file

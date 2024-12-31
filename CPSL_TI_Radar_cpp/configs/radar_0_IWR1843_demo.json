@@ -12,12 +12,12 @@
         {
             "serial_streaming":
                 {
-                    "enabled":false,
+                    "enabled":true,
                     "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "FPGA_IP":"192.168.33.180",
                     "system_IP":"192.168.33.30",
                     "data_port":4098,

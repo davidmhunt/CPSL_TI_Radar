@@ -11,6 +11,7 @@
 #include "CLIController.hpp"
 #include "DCA1000Commands.hpp"
 #include "DCA1000Handler.hpp"
+#include "SerialStreamer.hpp"
 
 using json = nlohmann::json;
 
@@ -35,6 +36,9 @@ int main(int, char**){
     std::string config_file = "../configs/radar_0_IWR1843_demo.json";
     
     SystemConfigReader config_reader(config_file);
+    if(! config_reader.initialized){
+        return 0;
+    }
 
     std::cout << "Radar Config Path: " << config_reader.getRadarConfigPath() << std::endl;
     std::cout << "CLI Port: " << config_reader.getRadarCliPort() << std::endl;
@@ -44,19 +48,20 @@ int main(int, char**){
     RadarConfigReader radar_config_reader(radar_config_path);
 
     //setup the DCA1000
-    DCA1000Handler dca1000_handler(config_reader,radar_config_reader);
-    dca_global = &dca1000_handler;
+    // DCA1000Handler dca1000_handler(config_reader,radar_config_reader);
+    // dca_global = &dca1000_handler;
 
-    // //initialize the DCA1000
-    if(dca1000_handler.initialized == false){
-        return false;
-    } else{
-        std::cout << "DCA1000 Successfully initialized" <<std::endl;
-    }
+    // // //initialize the DCA1000
+    // if(dca1000_handler.initialized == false){
+    //     return false;
+    // } else{
+    //     std::cout << "DCA1000 Successfully initialized" <<std::endl;
+    // }
+
+    SerialStreamer serial_streamer(config_reader);
 
     // //send a configuration to the radar board
     CLIController cli_controller(config_reader);
-    cli_global = &cli_controller;
     if(cli_controller.initialized){
         cli_controller.send_config_to_IWR();
     }
@@ -64,8 +69,14 @@ int main(int, char**){
     // //send record start command
     // dca1000_handler.send_recordStart();
 
-    // //send sensor start command
-    // cli_controller.sendStartCommand();
+    //send sensor start command
+    cli_controller.sendStartCommand();
+
+    while(serial_streamer.get_next_serial_frame())
+    {}
+    
+
+    cli_controller.sendStartCommand();
 
     // //define a buffer
     // for (size_t i = 0; i < 3000; i++)

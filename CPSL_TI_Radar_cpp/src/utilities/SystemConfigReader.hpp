@@ -20,6 +20,7 @@ class SystemConfigReader {
 
         std::string getRadarConfigPath() const;
         std::string getRadarCliPort() const;
+        std::string getRadarDataPort() const;
         std::string getDCAFpgaIP() const;
         std::string getDCASystemIP() const;
         int getDCADataPort() const;
@@ -37,6 +38,9 @@ class SystemConfigReader {
         std::string json_file_path;
         std::string radar_ConfigPath;
         std::string radar_cliPort;
+        std::string radar_dataPort;
+        bool serial_streaming_enabled;
+        bool dca1000_streaming_enabled;
         std::string DCA_fpgaIP;
         std::string DCA_systemIP;
         int DCA_dataPort;
