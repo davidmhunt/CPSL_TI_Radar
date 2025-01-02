@@ -24,10 +24,9 @@ target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Utilities
                                         PRIVATE DCA1000Handler
                                         PRIVATE DCA1000Runner)
 
-target_link_libraries(MAIN_NO_RUNNER PRIVATE Utilities
+target_link_libraries(MAIN_NO_RUNNER    PRIVATE Utilities
                                         PRIVATE CLIController
                                         PRIVATE SerialStreamer
-                                        PRIVATE DCA1000Commands
                                         PRIVATE DCA1000Handler
                                         PRIVATE DCA1000Runner)
 
@@ -44,6 +43,7 @@ target_include_directories(MAIN_NO_RUNNER PRIVATE
                         ${PROJECT_SOURCE_DIR}/src
                         ${PROJECT_SOURCE_DIR}/src/utilities
                         ${PROJECT_SOURCE_DIR}/src/CLIController
+                        ${PROJECT_SOURCE_DIR}/src/SerialStreamer
                         ${PROJECT_SOURCE_DIR}/src/DCA1000
                         ${PROJECT_SOURCE_DIR}/src/Runners)
 

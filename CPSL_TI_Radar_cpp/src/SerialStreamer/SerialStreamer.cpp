@@ -17,7 +17,17 @@ SerialStreamer::SerialStreamer():
     timeout(*io_context),
     serial_message_data_buffer(),
     header_data_bytes(32,0),
-    header_data(8,0)
+    header_data(8,0),
+    header_version(""),
+    header_totalPacketLen(0),
+    header_platform(""),
+    header_frameNumber(0),
+    header_timeCPUCycles(0),
+    header_numDetectedObj(0),
+    header_numTLVs(0),
+    header_subFrameNumber(0),
+    tlv_detected_points_processor(),
+    VALID_DETECTED_POINTS()
 {}
 
 /**
@@ -34,7 +44,17 @@ SerialStreamer::SerialStreamer(const SystemConfigReader & systemConfigReader):
     timeout(*io_context),
     serial_message_data_buffer(),
     header_data_bytes(32,0),
-    header_data(8,0)
+    header_data(8,0),
+    header_version(""),
+    header_totalPacketLen(0),
+    header_platform(""),
+    header_frameNumber(0),
+    header_timeCPUCycles(0),
+    header_numDetectedObj(0),
+    header_numTLVs(0),
+    header_subFrameNumber(0),
+    tlv_detected_points_processor(),
+    VALID_DETECTED_POINTS()
 {    
     initialize(systemConfigReader);
 }
@@ -53,7 +73,17 @@ SerialStreamer::SerialStreamer(const SerialStreamer & rhs):
     timeout(*rhs.io_context),
     serial_message_data_buffer(rhs.serial_message_data_buffer),
     header_data_bytes(rhs.header_data_bytes),
-    header_data(rhs.header_data)
+    header_data(rhs.header_data),
+    header_version(rhs.header_version),
+    header_totalPacketLen(rhs.header_totalPacketLen),
+    header_platform(rhs.header_platform),
+    header_frameNumber(rhs.header_frameNumber),
+    header_timeCPUCycles(rhs.header_timeCPUCycles),
+    header_numDetectedObj(rhs.header_numDetectedObj),
+    header_numTLVs(rhs.header_numTLVs),
+    header_subFrameNumber(rhs.header_subFrameNumber),
+    tlv_detected_points_processor(rhs.tlv_detected_points_processor),
+    VALID_DETECTED_POINTS(rhs.VALID_DETECTED_POINTS)
 {}
 
 /**
@@ -142,6 +172,8 @@ bool SerialStreamer::process_next_message(void){
         return false;
     }
 
+    process_TLV_messages();
+
     return true;
 }
 
@@ -162,9 +194,14 @@ bool SerialStreamer::get_next_serial_frame(void) {
 
     // Start asynchronous read until the magic word is found
     async_read_until(*data_port, serial_stream, magic_word, 
-        [&ec, &bytes_transfered](const boost::system::error_code& e, size_t transfered) {
+        [this,&ec, &bytes_transfered](const boost::system::error_code& e, size_t transfered) {
             ec = e;
             bytes_transfered = transfered;
+
+            if(!e){
+                boost::system::error_code cancel_ec;
+                this->timeout.cancel(cancel_ec);
+            }
         }
     );
 
@@ -190,20 +227,20 @@ bool SerialStreamer::get_next_serial_frame(void) {
             bytes_transfered
         );
 
-        // Print the received response
-        std::cout << "SerialStreamer: Received " << bytes_transfered << " bytes" << std::endl;
+        // // Print the received response
+        // std::cout << "SerialStreamer: Received " << bytes_transfered << " bytes" << std::endl;
 
-        if(system_config_reader.verbose){
+        // // if(system_config_reader.verbose){
             
-            const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
-            size_t raw_data_size = serial_stream.size();
-            std::cout << "Raw data: ";
-            for (size_t i = 0; i < raw_data_size; ++i) {
-                // Print each byte in hex format (uppercase)
-                std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
-            }
-            std::cout << std::dec << std::endl;
-        }
+        //     const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
+        //     size_t raw_data_size = serial_stream.size();
+        //     std::cout << "Raw data: ";
+        //     for (size_t i = 0; i < raw_data_size; ++i) {
+        //         // Print each byte in hex format (uppercase)
+        //         std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
+        //     }
+        //     std::cout << std::dec << std::endl;
+        // }
 
         // Remove the received data from the buffer
         serial_stream.consume(bytes_transfered);
@@ -212,15 +249,15 @@ bool SerialStreamer::get_next_serial_frame(void) {
     } else if (ec == boost::asio::error::operation_aborted) {
         // Timeout occurred
         std::cout << "SerialStreamer: Timeout while waiting for response" << std::endl;
-        const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
-        size_t raw_data_size = serial_stream.size();
+        // const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
+        // size_t raw_data_size = serial_stream.size();
         
-        std::cout << "Raw data: ";
-        for (size_t i = 0; i < raw_data_size; ++i) {
-            // Print each byte in hex format (uppercase)
-            std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
-        }
-        std::cout << std::dec << std::endl;
+        // std::cout << "Raw data: ";
+        // for (size_t i = 0; i < raw_data_size; ++i) {
+        //     // Print each byte in hex format (uppercase)
+        //     std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
+        // }
+        // std::cout << std::dec << std::endl;
         return false;
     } else {
         // Other errors
@@ -263,10 +300,146 @@ bool SerialStreamer::process_message_header(void){
     header_numTLVs = header_data[6];
     header_subFrameNumber = header_data[7];
 
-    //TODO: Do checks to confirm header is operating successfully
-    return true;
+    if(system_config_reader.get_verbose()){
+        print_status();
+    }
+
+    //check to ensure the message is valid
+    return check_valid_message();
 }
 
+void SerialStreamer::print_status(void){
+
+    std::cout <<
+    "frame: " << header_frameNumber << std::endl <<
+    "\tversion: " << header_version << std::endl <<
+    "\ttotal Packet length: " << header_totalPacketLen << " bytes" << std::endl <<
+    "\tplatform: " << header_platform << std::endl <<
+    "\ttime (CPU cycles): " << header_timeCPUCycles << std::endl <<
+    "\tDetected Objects: " <<header_numDetectedObj << std::endl <<
+    "\tNumber of TLVs: " << header_numTLVs <<std::endl <<
+    "\tSubframe number: " << header_subFrameNumber << std::endl;
+}
+
+bool SerialStreamer::check_valid_message(void){
+    if(static_cast<size_t>(header_totalPacketLen) == 
+        serial_message_data_buffer.size()){
+            return true;
+        }
+    else{
+        std::cout << "serialStreamer: invalid message" << std::endl;
+        return false;
+    }
+}
+
+/**
+ * @brief Process all of the TLV messages 
+ * @note Assumes that the serial data has already been loaded into the
+ *  serial_message_data_buffer and that the header has been processed
+ *  by calling the process_message_header() function
+ * 
+ */
+void SerialStreamer::process_TLV_messages(void){
+
+    //start processing after the header
+    size_t tlv_start_byte_idx = 32;
+    uint32_t TLV_type;
+    size_t TLV_len;
+
+    //helper variables for processing tlv packets
+    size_t start_idx;
+    size_t end_idx;
+
+    for (size_t i = 0; i < header_numTLVs; i++)
+    {
+        //get the next TLV type and length
+        TLV_type = get_TLV_type(tlv_start_byte_idx);
+        TLV_len = get_TLV_len(tlv_start_byte_idx);
+
+        //create the tlv_data_vector
+        start_idx = tlv_start_byte_idx + 8;
+        end_idx = start_idx + TLV_len;
+        std::vector<uint8_t> tlv_data(
+            serial_message_data_buffer.begin() + start_idx,
+            serial_message_data_buffer.begin() + end_idx
+        );
+
+        process_TLV(tlv_data,TLV_type);
+
+        //increment the start byte index to process next tlv packet
+        tlv_start_byte_idx += TLV_len + 8;
+    }
+    
+
+}
+
+void SerialStreamer::process_TLV(
+    std::vector<uint8_t>  & tlv_data,
+    uint32_t tlv_type){
+
+        switch (tlv_type)
+        {
+        case tlv_codes.DETECTED_POINTS:
+
+            tlv_detected_points_processor.process(
+                tlv_data
+            );
+
+            VALID_DETECTED_POINTS = tlv_detected_points_processor.valid_data;
+
+            break;
+        
+        default:
+            break;
+        }
+
+}
+
+/**
+ * @brief Get the TLV type of a given TLV packet
+ * 
+ * @param tlv_start_byte_idx the index of the first byte for the given TLV
+ *  packet in the serial_message_data_buffer
+ * @return uint32_t the uint32_t value corresponding to the TLV type
+ *  (see TLVProcessing for decoding the TLV type)
+ */
+uint32_t SerialStreamer::get_TLV_type(size_t tlv_start_byte_idx){
+
+    size_t i = tlv_start_byte_idx;
+    uint32_t value = (static_cast<uint32_t>(serial_message_data_buffer[i]) << 0) |
+        (static_cast<uint32_t>(serial_message_data_buffer[i + 1]) << 8) |
+        (static_cast<uint32_t>(serial_message_data_buffer[i + 2]) << 16) |
+        (static_cast<uint32_t>(serial_message_data_buffer[i + 3]) << 24);
+
+    return le32toh(value);
+}
+
+/**
+ * @brief Get the length in bytes of a TLV packet (excludes the 
+ *  bytes for the TLV type and TLV length data)
+ * 
+ * @param tlv_start_byte_idx the index of the first byte for the given TLV
+ *  packet in the serial_message_data_buffer
+ * @return size_t the length (in bytes) of a TLV packet (excludes the 
+ *  bytes for the TLV type and TLV length data)
+ */
+size_t SerialStreamer::get_TLV_len(size_t tlv_start_byte_idx){
+
+    size_t i = tlv_start_byte_idx + 4;
+    uint32_t value = (static_cast<uint32_t>(serial_message_data_buffer[i]) << 0) |
+        (static_cast<uint32_t>(serial_message_data_buffer[i + 1]) << 8) |
+        (static_cast<uint32_t>(serial_message_data_buffer[i + 2]) << 16) |
+        (static_cast<uint32_t>(serial_message_data_buffer[i + 3]) << 24);
+
+    return static_cast<size_t>(le32toh(value));
+}
+
+/**
+ * @brief Convert a uint32_t into a string of its hexidecimal representation
+ * 
+ * @param value the uint32_t value to get a hex representation of
+ * @return std::string 
+ */
 std::string SerialStreamer::uint32ToHex(uint32_t value) {
     std::stringstream ss;
     ss << std::hex << std::uppercase << 

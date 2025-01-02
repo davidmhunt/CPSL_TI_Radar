@@ -12,7 +12,7 @@ add_subdirectory(Runners)
 
 #link directories as needed
 target_include_directories(CLIController    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
-target_include_directories(SerialStreamer    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
+target_include_directories(SerialStreamer   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
 target_include_directories(DCA1000Handler   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/utilities)
 target_include_directories(DCA1000Runner    PUBLIC 
                                             ${CMAKE_CURRENT_SOURCE_DIR}/utilities

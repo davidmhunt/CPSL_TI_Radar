@@ -172,7 +172,7 @@ void CLIController::sendCommand(const string& command) {
     boost::asio::streambuf response;
     boost::system::error_code ec;
     boost::asio::deadline_timer timeout(*io_context);
-    timeout.expires_from_now(boost::posix_time::millisec(50));
+    timeout.expires_from_now(boost::posix_time::millisec(100));
 
     async_read_until(*cli_port, response, "Done", [&ec](const boost::system::error_code& e, size_t bytes_transferred) {
         ec = e;

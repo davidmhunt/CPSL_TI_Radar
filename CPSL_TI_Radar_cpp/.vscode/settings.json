@@ -4,5 +4,35 @@
     ],
     "python.analysis.extraPaths": [
         "/opt/ros/jazzy/lib/python3.12/site-packages"
-    ]
+    ],
+    "files.associations": {
+        "*.tcc": "cpp",
+        "optional": "cpp",
+        "ratio": "cpp",
+        "system_error": "cpp",
+        "array": "cpp",
+        "functional": "cpp",
+        "regex": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "variant": "cpp",
+        "charconv": "cpp",
+        "chrono": "cpp",
+        "format": "cpp",
+        "__bit_reference": "cpp",
+        "__functional_base": "cpp",
+        "__node_handle": "cpp",
+        "algorithm": "cpp",
+        "bitset": "cpp",
+        "deque": "cpp",
+        "__memory": "cpp",
+        "filesystem": "cpp",
+        "iterator": "cpp",
+        "limits": "cpp",
+        "locale": "cpp",
+        "memory": "cpp",
+        "random": "cpp",
+        "vector": "cpp"
+    }
 }

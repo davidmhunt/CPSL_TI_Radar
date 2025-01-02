@@ -10,7 +10,6 @@
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
 #include "CLIController.hpp"
-#include "DCA1000Commands.hpp"
 #include "DCA1000Handler.hpp"
 #include "SerialStreamer.hpp"
 
@@ -77,11 +76,11 @@ int main(int, char**){
     serial_streamer.process_next_message();
     
     //define a buffer
-    for (size_t i = 0; i < 10; i++)
+    for (size_t i = 0; i < 20; i++)
     {
         // dca1000_handler.process_next_packet();
         if(!serial_streamer.process_next_message()){
-            break;
+            // break;
         }
     }
 
