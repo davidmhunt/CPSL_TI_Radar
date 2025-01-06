@@ -30,6 +30,9 @@ class SystemConfigReader {
         int getSDKMajorVersion() const;
         int getSDKMinorVersion() const;
 
+        bool get_serial_streaming_enabled() const;
+        bool get_dca1000_streaming_enabled() const;
+
         //variable to confirm that the class has been initialized
         bool initialized;
         bool verbose;

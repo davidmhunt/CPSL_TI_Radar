@@ -227,6 +227,28 @@ int SystemConfigReader::getSDKMinorVersion() const
     return sdk_minor_version;
 }
 
+
+/**
+ * @brief Get the status of whether or not
+ * serial streaming is enabled
+ * 
+ * @return bool - serial_streaming_enabled status
+ */
+bool SystemConfigReader::get_serial_streaming_enabled() const
+{
+    return serial_streaming_enabled;
+}
+
+/**
+ * @brief Get the status of whether or not
+ * DCA1000 streaming is enabled
+ * 
+ * @return bool - dca1000_streaming_enabled status
+ */
+bool SystemConfigReader::get_dca1000_streaming_enabled() const
+{
+    return dca1000_streaming_enabled;
+}
 /**
  * @brief Decode the json configuration file (must already be loaded)
  * 

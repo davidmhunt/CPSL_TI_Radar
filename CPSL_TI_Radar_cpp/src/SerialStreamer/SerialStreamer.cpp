@@ -10,6 +10,9 @@ using namespace boost::asio;
  */
 SerialStreamer::SerialStreamer():
     initialized(false),
+    new_frame_available(false),
+    new_frame_available_mutex(),
+    tlv_processing_mutex(),
     system_config_reader(), //will leave it uninitialized
     io_context(new boost::asio::io_context()),
     data_port(nullptr),
@@ -37,6 +40,9 @@ SerialStreamer::SerialStreamer():
  */
 SerialStreamer::SerialStreamer(const SystemConfigReader & systemConfigReader):
     initialized(false),
+    new_frame_available(false),
+    new_frame_available_mutex(),
+    tlv_processing_mutex(),
     system_config_reader(),
     io_context(new boost::asio::io_context()),
     data_port(nullptr),
@@ -66,6 +72,9 @@ SerialStreamer::SerialStreamer(const SystemConfigReader & systemConfigReader):
  */
 SerialStreamer::SerialStreamer(const SerialStreamer & rhs):
     initialized(rhs.initialized),
+    new_frame_available(rhs.new_frame_available),
+    new_frame_available_mutex(),
+    tlv_processing_mutex(),
     io_context(rhs.io_context),
     data_port(rhs.data_port),
     system_config_reader(rhs.system_config_reader),
@@ -105,6 +114,8 @@ SerialStreamer & SerialStreamer::operator=(const SerialStreamer & rhs){
 
         // Copy other members
         initialized = rhs.initialized;
+        new_frame_available = rhs.new_frame_available;
+        //don't re-assign the mutex operators
         io_context = rhs.io_context;
         data_port = rhs.data_port;
         system_config_reader = rhs.system_config_reader;
@@ -160,7 +171,28 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
     return initialized;
 }
 
+/**
+ * @brief Process the next message of TLV data
+ * @note new_frame_data flag must be checked to see if the new
+ *  TLV frame data was actually valid
+ * 
+ * @return true new TLV frame data received successfully
+ *  (check new_frame_available flag to see if data was valid though)
+ * @return false new TLV frame data was not successfully received
+ *  (usually due to a timeout) 
+ */
 bool SerialStreamer::process_next_message(void){
+
+    //define unique locks for thread safety
+    std::unique_lock<std::mutex> new_frame_available_unique_lock(
+        new_frame_available_mutex,
+        std::defer_lock
+    );
+
+    std::unique_lock<std::mutex> tlv_processing_unique_lock(
+        tlv_processing_mutex,
+        std::defer_lock
+    );
 
     //get the next serial frame and load it into the serial_message_data_buffer
     if (!get_next_serial_frame()){
@@ -169,12 +201,73 @@ bool SerialStreamer::process_next_message(void){
 
     //process the header
     if (!process_message_header()){
-        return false;
+        return true;
     }
 
+
+    //process all new TLVs
+    tlv_processing_unique_lock.lock();
     process_TLV_messages();
+    tlv_processing_unique_lock.unlock();
+
+    //denote a new frame is available
+    new_frame_available_unique_lock.lock();
+    new_frame_available = true;
+    new_frame_available_unique_lock.unlock();
 
     return true;
+}
+
+/**
+ * @brief Determine if a new frame's worth of TLV data
+ *  is now available in a thread safe manner
+ * 
+ * @return true - a new frame is available
+ * @return false - a new frame is not available
+ */
+bool SerialStreamer::check_new_frame_available(void){
+
+    //create unique locks to access data in a thread safe manner
+    std::unique_lock<std::mutex> new_frame_available_unique_lock(
+        new_frame_available_mutex,
+        std::defer_lock
+    );
+
+    bool status;
+
+    //get the status in a thread safe way
+    new_frame_available_unique_lock.lock();
+    status = new_frame_available;
+    new_frame_available_unique_lock.unlock();
+
+    return status;
+}
+
+std::vector<std::vector<float>> SerialStreamer::tlv_get_latest_detected_points(void){
+
+    //create the mutexes/locks to access data in a thread safe manner
+    std::unique_lock<std::mutex> new_frame_available_unique_lock(
+        new_frame_available_mutex,
+        std::defer_lock
+    );
+
+    std::unique_lock<std::mutex> tlv_processing_unique_lock(
+        tlv_processing_mutex,
+        std::defer_lock
+    );
+
+    //access the latest detected points
+    std::vector<std::vector<float>> latest_detected_points;
+    tlv_processing_unique_lock.lock();
+    latest_detected_points = tlv_detected_points_processor.detected_points;
+    tlv_processing_unique_lock.unlock();
+
+    //reset the new_frame_available flage
+    new_frame_available_unique_lock.lock();
+    new_frame_available = false;
+    new_frame_available_unique_lock.unlock();
+
+    return latest_detected_points;
 }
 
 /**
@@ -266,6 +359,15 @@ bool SerialStreamer::get_next_serial_frame(void) {
     }
 }
 
+/**
+ * @brief Decode the latest frame message's header
+ * @note Assumes that latest frame data bytes have
+ * already been loaded in via the
+ * get_next_serial_frame function
+ * 
+ * @return true on header successfully decoded
+ * @return false on header error
+ */
 bool SerialStreamer::process_message_header(void){
 
     //confirm valid message (first received frame will not be)
@@ -321,6 +423,17 @@ void SerialStreamer::print_status(void){
     "\tSubframe number: " << header_subFrameNumber << std::endl;
 }
 
+/**
+ * @brief Check's to make sure that the message and its header
+ * are valid
+ * @note Assumes that latest frame data bytes have
+ * already been loaded in via the
+ * get_next_serial_frame function and that the header
+ * has been processed using the process_message_header
+ * 
+ * @return true on message is valid
+ * @return false message is invalid
+ */
 bool SerialStreamer::check_valid_message(void){
     if(static_cast<size_t>(header_totalPacketLen) == 
         serial_message_data_buffer.size()){

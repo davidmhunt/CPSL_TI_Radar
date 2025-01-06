@@ -34,7 +34,18 @@ public:
     bool initialized;
     const std::string magic_word = "\x02\x01\x04\x03\x06\x05\x08\x07";
 
+    bool new_frame_available;
+
+    //checking for and accessing latest data
+    bool check_new_frame_available();
+    std::vector<std::vector<float>> tlv_get_latest_detected_points(void);
+
 private:
+
+    //mutexes
+    std::mutex new_frame_available_mutex;
+    std::mutex tlv_processing_mutex;
+
     //private class variables here
     SystemConfigReader system_config_reader;
     std::shared_ptr<boost::asio::io_context> io_context;

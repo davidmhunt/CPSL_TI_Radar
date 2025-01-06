@@ -17,12 +17,7 @@ add_executable(CPSL_TI_Radar_CPP main.cpp)
 add_executable(MAIN_NO_RUNNER main_no_runner.cpp)
 
 #perform linking
-target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Utilities
-                                        PRIVATE CLIController
-                                        PRIVATE SerialStreamer
-                                        PRIVATE DCA1000Commands
-                                        PRIVATE DCA1000Handler
-                                        PRIVATE DCA1000Runner)
+target_link_libraries(CPSL_TI_Radar_CPP   PRIVATE Runner)
 
 target_link_libraries(MAIN_NO_RUNNER    PRIVATE Utilities
                                         PRIVATE CLIController
@@ -32,12 +27,8 @@ target_link_libraries(MAIN_NO_RUNNER    PRIVATE Utilities
 
 #include directories
 target_include_directories(CPSL_TI_Radar_CPP PRIVATE
-                        ${PROJECT_BINARY_DIR}
-                        ${PROJECT_SOURCE_DIR}/src
-                        ${PROJECT_SOURCE_DIR}/src/utilities
-                        ${PROJECT_SOURCE_DIR}/src/CLIController
-                        ${PROJECT_SOURCE_DIR}/src/DCA1000
                         ${PROJECT_SOURCE_DIR}/src/Runners)
+
 target_include_directories(MAIN_NO_RUNNER PRIVATE
                         ${PROJECT_BINARY_DIR}
                         ${PROJECT_SOURCE_DIR}/src

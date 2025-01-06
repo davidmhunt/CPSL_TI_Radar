@@ -5,23 +5,20 @@
 #include <csignal>
 
 //JSON handling
-#include "JSONHandler.hpp"
-#include "SystemConfigReader.hpp"
-#include "RadarConfigReader.hpp"
-#include "CLIController.hpp"
-#include "DCA1000Commands.hpp"
-#include "DCA1000Handler.hpp"
-#include "DCA1000Runner.hpp"
+#include "Runner.hpp"
 
 using json = nlohmann::json;
 
-DCA1000Runner* dca_global = nullptr;
+Runner* runner_global = nullptr;
+
 
 void signalHandler(int signum){
     std::cout << "Interrupt signal (" << signum << ") received.\n";
-    if (dca_global && dca_global->initialized) {
-        dca_global->stop();
+    if (runner_global && runner_global->initialized) {
+        runner_global->stop();
     }
+
+    exit(0);
 }
 
 int main(int, char**){
@@ -31,23 +28,26 @@ int main(int, char**){
 
     std::string config_file = "../configs/radar_0_IWR1843_demo.json";
 
-    DCA1000Runner dca1000_runner(config_file);
-    dca_global = &dca1000_runner;
+    // DCA1000Runner dca1000_runner(config_file);
+    Runner runner(config_file);
+    runner_global = &runner;
 
-    if(dca1000_runner.initialized){
+    if(runner.initialized){
         int frame_count = 0;
         int timeout_ms = 2000;
 
-        dca1000_runner.start();
+        runner.start();
 
         while(true){
-            if(dca1000_runner.get_next_frame(timeout_ms).size() == 0){
+            if(
+                (runner.get_next_adc_cube(timeout_ms).size() == 0)
+                && (runner.get_next_tlv_detected_points(timeout_ms).size() == 0)){
                 break;
             }else{
                 frame_count += 1;
             }
         }
 
-        dca1000_runner.stop();
+        runner.stop();
     }
 }

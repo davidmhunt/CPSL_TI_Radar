@@ -19,3 +19,8 @@ target_include_directories(DCA1000Runner    PUBLIC
                                             ${CMAKE_CURRENT_SOURCE_DIR}/CLIController
                                             ${CMAKE_CURRENT_SOURCE_DIR}/SerialStreamer
                                             ${CMAKE_CURRENT_SOURCE_DIR}/DCA1000)
+target_include_directories(Runner           PUBLIC 
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/utilities
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/CLIController
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/SerialStreamer
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/DCA1000)
