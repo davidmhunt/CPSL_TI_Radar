@@ -197,7 +197,7 @@ void Runner::stop(){
         {
             dca1000_handler.send_recordStop();
         }
-        cli_controller.sendStartCommand();
+        cli_controller.sendStopCommand();
     }
 
     //set running_dca1000 value to false
