@@ -1,0 +1,26 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/${PROJECT_NAME}Targets.cmake")
+
+# Export include directories for downstream users
+set(${PROJECT_NAME}_INCLUDE_DIRS "@CMAKE_INSTALL_PREFIX@/include/${PROJECT_NAME}")
+set(${PROJECT_NAME}_LIBRARY_DIRS "@CMAKE_INSTALL_PREFIX@/lib")
+
+# Helper function to define an imported library if not already defined
+function(add_imported_library TARGET_NAME)
+  if(NOT TARGET ${PROJECT_NAME}::${TARGET_NAME})
+    add_library(${PROJECT_NAME}::${TARGET_NAME} UNKNOWN IMPORTED)
+    set_target_properties(${PROJECT_NAME}::${TARGET_NAME} PROPERTIES
+      IMPORTED_LOCATION "${${PROJECT_NAME}_LIBRARY_DIRS}/lib${TARGET_NAME}.a"
+      INTERFACE_INCLUDE_DIRECTORIES "${${PROJECT_NAME}_INCLUDE_DIRS}"
+    )
+  endif()
+endfunction()
+
+# Add imported libraries for all targets
+add_imported_library(Utilities)
+add_imported_library(CLIController)
+add_imported_library(SerialStreamer)
+add_imported_library(DCA1000Handler)
+add_imported_library(DCA1000Runner)
+add_imported_library(Runner)
