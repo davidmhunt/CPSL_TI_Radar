@@ -329,3 +329,15 @@ std::vector<std::vector<float>> Runner::get_next_tlv_detected_points(
         return ret_vector;
     }
 }
+
+bool Runner::get_serial_streaming_enabled(void){
+    return system_config_reader.get_serial_streaming_enabled();
+}
+
+bool Runner::get_dca1000_streaming_enabled(void){
+    return system_config_reader.get_dca1000_streaming_enabled();
+}
+
+std::string Runner::get_radar_config_path(void) const{
+    return system_config_reader.getRadarConfigPath();
+}

@@ -44,8 +44,8 @@ std::vector<uint8_t> DCA1000Commands::construct_command(
 
     //set the header
     uint16_t header = HEADER;
-    command[0] = static_cast<uint8_t>(HEADER & 0xFF);
-    command[1] = static_cast<uint8_t>((HEADER >> 8) & 0xFF);
+    command[0] = static_cast<uint8_t>(header & 0xFF);
+    command[1] = static_cast<uint8_t>((header >> 8) & 0xFF);
 
     // add the message code
     command[2] = static_cast<uint8_t>(command_code & 0xFF);

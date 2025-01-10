@@ -75,6 +75,11 @@ public:
         int timeout_ms = 100
     );
 
+    //get information for downstream tasks
+    bool get_serial_streaming_enabled(void);
+    bool get_dca1000_streaming_enabled(void);
+    std::string get_radar_config_path(void) const;
+
 private:
     void run_dca1000();
     void run_serial();
