@@ -366,21 +366,22 @@ class ConfigManager:
             case "analogMonitor":
                 self._load_analogMonitor_from_cfg(str_split)
             case _:
-                if key not in [
-                    "sensorStop",
-                    "flushCfg",
-                    "sensorStart",
-                    "setProfileCfg",
-                    "testFmkCfg",
-                    "extendedMaxVelocity",
-                    "bpmCfg",
-                    "lvdsStreamCfg",
-                    "aoaFovCfg",
-                    "cfarFovCfg",
-                    "cfarFovCfg",
-                    "calibData"
-                ]:
-                    raise InvalidConfiguration("Received unknown configuration command: {}".format(key))
+                pass
+                # if key not in [
+                #     "sensorStop",
+                #     "flushCfg",
+                #     "sensorStart",
+                #     "setProfileCfg",
+                #     "testFmkCfg",
+                #     "extendedMaxVelocity",
+                #     "bpmCfg",
+                #     "lvdsStreamCfg",
+                #     "aoaFovCfg",
+                #     "cfarFovCfg",
+                #     "cfarFovCfg",
+                #     "calibData"
+                # ]:
+                #     raise InvalidConfiguration("Received unknown configuration command: {}".format(key))
 
     def _load_dfeDataOutputMode_from_cfg(self, params: list):
         self.radar_config["dfeDataOutputMode"] = {"modeType": params[1]}

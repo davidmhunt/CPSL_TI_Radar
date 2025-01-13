@@ -2,7 +2,7 @@
     "verbose":true,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_TI_Radar/configurations/DCA1000/IWR1843_configs/IWR1843_demo.cfg"
+            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg"
         },
     "CLI_Controller":
         {
@@ -12,18 +12,18 @@
         {
             "serial_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":false,
+                    "enabled":true,
                     "FPGA_IP":"192.168.33.180",
                     "system_IP":"192.168.33.30",
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "save_to_file":false,
+            "save_to_file":true,
             "SDK_version":"3.6"
         }
 }
