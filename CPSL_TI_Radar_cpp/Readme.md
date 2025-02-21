@@ -90,7 +90,7 @@ To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool 
 3. Use the Uniflash tool to install the mmWave SDK found as part of the [TI mmWave SDK 2.01.00.04](https://www.ti.com/tool/download/MMWAVE-SDK/02.01.00.04)
 
 #### [IWR1843] DCA Streaming and IWR Demos
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../CPSL_TI_Radar/readme_images/IWR1843_SOP_nodes.png)
+1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../CPSL_TI_Radar/readme_images/IWR1843_SOP_nodes.png)
 2. For the IWR1843 (or any radar that can run the mmWave SDK boost, you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.)
 
     a.We developed this pipeline using mmWave 3.6. Using a different pipeline may require slight changes in the code.
