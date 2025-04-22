@@ -117,7 +117,7 @@ The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration 
     * Note: If using the mmWave SDK demos (ex: SDK3.5) with the DCA1000 and IWR1843 boost boards, make sure that the lvdsStreamCfg is correctly set (see the mmWave sdk documentation). For example, a viable lbdsStreamCfg setting is featured below. To just stream the ADC samples only, use the following command (disables SW streaming)
 
     ```
-    lvdsStreamCfg -1 1 1 0 
+    lvdsStreamCfg -1 0 1 0 
     ```
 
     To stream all available data use this command instead (will require additional processing/streaming time to support this though)

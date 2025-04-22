@@ -925,7 +925,6 @@ void DCA1000Handler::init_buffers()
 
         //adc_cube buffer
         //NOTE: indexed by [Rx channel, sample, chirp]
-        size_t rx_channels = 4;
         adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
             num_rx_channels,std::vector<std::vector<std::complex<std::int16_t>>>(
                 samples_per_chirp, std::vector<std::complex<std::int16_t>>(
@@ -1027,10 +1026,10 @@ void DCA1000Handler::zero_pad_frame_byte_buffer(std::uint64_t packet_byte_count)
         //reset the frame byte buffer
         save_frame_byte_buffer();
 
-        //reset the index
-        if(bytes_remaining != bytes_to_fill){
-            (next_frame_byte_buffer_idx + bytes_to_fill) % bytes_per_frame;
-        }
+        // //reset the index
+        // if(bytes_remaining != bytes_to_fill){
+        //     (next_frame_byte_buffer_idx + bytes_to_fill) % bytes_per_frame;
+        // }
     }
     
     //update the received byte total
@@ -1119,7 +1118,7 @@ std::vector<std::int16_t> DCA1000Handler::convert_from_bytes_to_ints(
 }
 
 /**
- * @brief Re-shapes a 1D vector into 2D vector, filling in the cols first
+ * @brief Re-shapes a 1D vector into 2D vector, filling in the rows first
  * 
  * @param in_vector 
  * @param num_rows 
@@ -1317,9 +1316,9 @@ void DCA1000Handler::write_adc_data_cube_to_file(void){
 
     //make sure that the adc_cube_out_file is open
     if(adc_cube_out_file -> is_open()){
-        for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
-            for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
-                for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
+        for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
+            for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
+                for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
 
                     //write the real part
                     real = adc_data_cube[rx_idx][sample_idx][chirp_idx].real();
