@@ -1111,7 +1111,6 @@ std::vector<std::int16_t> DCA1000Handler::convert_from_bytes_to_ints(
             (in_vector[i * 2 + 1] << 8)
         );
 
-        //TODO: add in either le16toh() or be16toh() to preserve compatibility
         out_vector[i] = le16toh(out_vector[i]);
     }
     return out_vector;
@@ -1179,19 +1178,19 @@ std::vector<std::complex<std::int16_t>> DCA1000Handler::interleave_data(
     {
         idx = i * 2;
         //1st col - 1st real sample
-        out_vector[idx].real(
+        out_vector[idx].imag(
             in_vector[0][i]
         );
         //2nd col - 2nd real sample
-        out_vector[idx+1].real(
+        out_vector[idx+1].imag(
             in_vector[1][i]
         );
         //3rd col - 1st complex sample
-        out_vector[idx].imag(
+        out_vector[idx].real(
             in_vector[2][i]
         );
         //4th col - 2nd complex sample
-        out_vector[idx+1].imag(
+        out_vector[idx+1].real(
             in_vector[3][i]
         );
     }
