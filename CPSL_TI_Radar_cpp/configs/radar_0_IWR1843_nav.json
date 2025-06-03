@@ -1,8 +1,8 @@
 {
-    "verbose":true,
+    "verbose":false,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/david/Documents/CPSL_TI_Radar/configurations/nav_configs/1843_vel_nav.cfg"
+            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/1843_vel_nav.cfg"
         },
     "CLI_Controller":
         {
@@ -12,12 +12,12 @@
         {
             "serial_streaming":
                 {
-                    "enabled":false,
+                    "enabled":true,
                     "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":true,
+                    "enabled":false,
                     "FPGA_IP":"192.168.33.180",
                     "system_IP":"192.168.33.30",
                     "data_port":4098,
