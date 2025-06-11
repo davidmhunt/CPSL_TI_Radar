@@ -1,8 +1,8 @@
 {
-    "verbose":true,
+    "verbose":false,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/1843_RadSAR.cfg"
+            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/1843_RadSAR_lr.cfg"
         },
     "CLI_Controller":
         {
@@ -12,7 +12,7 @@
         {
             "serial_streaming":
                 {
-                    "enabled":false,
+                    "enabled":true,
                     "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
