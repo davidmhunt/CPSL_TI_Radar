@@ -23,7 +23,7 @@
                     "data_port":4098,
                     "cmd_port":4096
                 },
-            "save_to_file":true,
+            "save_to_file":false,
             "SDK_version":"3.6"
         }
 }

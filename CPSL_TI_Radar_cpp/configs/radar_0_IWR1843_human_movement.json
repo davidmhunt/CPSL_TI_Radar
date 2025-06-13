@@ -2,7 +2,7 @@
     "verbose":false,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/1843_vel_sr.cfg"
+            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/human_movement/1843_human_movement.cfg"
         },
     "CLI_Controller":
         {
@@ -17,7 +17,7 @@
                 },
             "DCA1000_streaming":
                 {
-                    "enabled":false,
+                    "enabled":true,
                     "FPGA_IP":"192.168.33.180",
                     "system_IP":"192.168.33.30",
                     "data_port":4098,
