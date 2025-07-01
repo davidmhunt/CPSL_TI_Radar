@@ -36,7 +36,7 @@ sudo apt install libboost-all-dev
 ```
 
 #### 3. Install CMake
-1. Finally, confirm that CMake is installed. To do this, run the following command:
+1. Next, confirm that CMake is installed. To do this, run the following command:
 ```
 cmake --version
 ```
@@ -45,6 +45,14 @@ cmake --version
 sudo apt update
 sudo apt install cmake
 ```
+
+#### 4. Allow access to serial ports
+1. Finally, to ensure that your system has access to the serial ports to connect to the radar, run the following command
+```
+sudo usermod -a -G dialout $USER
+```
+2. To allow the command to take effect, simply reboot or log out and then log back in on your system
+
 ## Building CPSL_TI_Radar_cpp
 
 To download, build, and install the CPSL_TI_Radar c++ code, perform the following instructions:
