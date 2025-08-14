@@ -205,7 +205,27 @@ void Runner::stop(){
     running_serial = false;
 }
 
+/**
+ * @brief Helper function to set thread priority
+ */
+void Runner::set_thread_priority() {
+    pthread_t thread_id = pthread_self(); // Get the current thread ID
+    struct sched_param param;
+    param.sched_priority = 80; // Set a higher priority (value between 1 and 99)
+    int policy = SCHED_RR;     // Use round-robin scheduling policy
+
+    int result = pthread_setschedparam(thread_id, policy, &param);
+    if (result != 0) {
+        std::cout << "Failed to set thread priority: " << strerror(errno) << std::endl;
+    } else {
+        std::cout << "Thread priority successfully raised." << std::endl;
+    }
+}
+
 void Runner::run_dca1000(){
+
+    //set thread priority
+    set_thread_priority();
 
     std::unique_lock<std::mutex> stop_called_unique_lock(
         stop_called_mutex,

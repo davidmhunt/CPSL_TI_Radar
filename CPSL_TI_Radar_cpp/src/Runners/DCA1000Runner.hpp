@@ -1,7 +1,7 @@
 #ifndef DCA1000RUNNER
 #define DCA1000RUNNER
 
-//C standard libraries
+// C standard libraries
 #include <iostream>
 #include <cstdlib>
 #include <string>
@@ -9,8 +9,9 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <pthread.h> // Include pthread for thread priority adjustments
 
-//CPSLI_TI_RADAR_CPP classes
+// CPSLI_TI_RADAR_CPP classes
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
 #include "CLIController.hpp"
@@ -22,7 +23,7 @@
  */
 class DCA1000Runner {
 
-//variables
+// Variables
 public:
     bool initialized;
     bool running;
@@ -34,32 +35,29 @@ private:
     DCA1000Handler dca1000_handler;
     CLIController cli_controller;
 
-    //mutexes
+    // Mutexes
     std::mutex stop_called_mutex;
     std::mutex running_mutex;
 
-    //threads
+    // Threads
     std::thread run_thread;
 
-//functions
+    // Helper function to set thread priority
+    void set_thread_priority();
+
 public:
     DCA1000Runner();
     DCA1000Runner(const std::string & json_config_file_path);
-    //NOTE: NOT INCLUDING COPY CONSTRUCTOR TO PREVENT WEIRD BEHAVIOR
-    // DCA1000Runner(const DCA1000Runner & rhs);
-
-    //NOTE: NOT INCLUDING ASSIGNMENT OPERATOR TO PREVENT WEIRD BEHAVIOR
-    //DCA1000Runner & operator=(const DCA1000Runner & rhs);
     ~DCA1000Runner();
 
-    //initialization
+    // Initialization
     void initialize(const std::string & json_config_file_path);
 
-    //stop running
+    // Stop running
     void start();
     void stop();
 
-    //wait for and get the next frame
+    // Wait for and get the next frame
     std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_next_frame(
         int timeout_ms = 100
     );

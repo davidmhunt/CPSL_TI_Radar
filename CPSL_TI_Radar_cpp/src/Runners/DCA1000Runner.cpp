@@ -139,7 +139,29 @@ void DCA1000Runner::stop(){
     running = false;
 }
 
-void DCA1000Runner::run(){
+/**
+ * @brief Helper function to set thread priority
+ */
+void DCA1000Runner::set_thread_priority() {
+    pthread_t thread_id = pthread_self(); // Get the current thread ID
+    struct sched_param param;
+    param.sched_priority = 10; // Set a higher priority (value between 1 and 99)
+    int policy = SCHED_RR;     // Use round-robin scheduling policy
+
+    int result = pthread_setschedparam(thread_id, policy, &param);
+    if (result != 0) {
+        std::cout << "Failed to set thread priority: " << strerror(errno) << std::endl;
+    } else {
+        std::cout << "Thread priority successfully raised." << std::endl;
+    }
+}
+
+/**
+ * @brief Run function for processing packets
+ */
+void DCA1000Runner::run() {
+    // Set thread priority
+    set_thread_priority();
 
     std::unique_lock<std::mutex> stop_called_unique_lock(
         stop_called_mutex,
@@ -151,16 +173,16 @@ void DCA1000Runner::run(){
         std::defer_lock
     );
 
-    while(true){
-        //check to make sure that stop hasn't been called in a thread safe way
+    while (true) {
+        // Check to make sure that stop hasn't been called in a thread-safe way
         stop_called_unique_lock.lock();
-        if(stop_called){
+        if (stop_called) {
             break;
         }
         stop_called_unique_lock.unlock();
 
-        if(!dca1000_handler.process_next_packet()){
-            //exit if the processing the next packet fails
+        if (!dca1000_handler.process_next_packet()) {
+            // Exit if processing the next packet fails
             break;
         }
     }

@@ -1,0 +1,29 @@
+{
+    "verbose":false,
+    "TI_Radar_Config_Management":
+        {
+            "TI_Radar_config_path":"/home/cpsl/Documents/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/6843_RadVel_ods_10Hz.cfg"
+        },
+    "CLI_Controller":
+        {
+            "CLI_port":"/dev/ttyUSB0"
+        },
+    "Streamer":
+        {
+            "serial_streaming":
+                {
+                    "enabled":false,
+                    "data_port":"/dev/ttyUSB1"
+                },
+            "DCA1000_streaming":
+                {
+                    "enabled":true,
+                    "FPGA_IP":"192.168.33.180",
+                    "system_IP":"192.168.33.30",
+                    "data_port":4098,
+                    "cmd_port":4096
+                },
+            "save_to_file":false,
+            "SDK_version":"3.6"
+        }
+}

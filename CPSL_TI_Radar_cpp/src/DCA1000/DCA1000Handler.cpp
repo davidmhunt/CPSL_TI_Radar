@@ -824,7 +824,7 @@ bool DCA1000Handler::configure_DCA1000(){
 
     //send configure packet data
     udp_packet_size = 1472;
-    if(send_configPacketData(udp_packet_size,25) != true){
+    if(send_configPacketData(udp_packet_size,100) != true){ //previously 25
         return false;
     }
 

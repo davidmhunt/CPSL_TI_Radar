@@ -9,6 +9,8 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <pthread.h> // Include pthread for thread priority adjustments
+
 
 //CPSLI_TI_RADAR_CPP classes
 #include "SystemConfigReader.hpp"
@@ -83,6 +85,9 @@ public:
 private:
     void run_dca1000();
     void run_serial();
+
+    // Helper function to set thread priority
+    void set_thread_priority();
 };
 
 #endif
