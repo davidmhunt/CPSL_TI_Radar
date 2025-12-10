@@ -75,6 +75,7 @@ Here, the ethernetConfig key defines the current network configuration being use
 * Multiple DCA1000 Tips
     * **Ethernet Port & USB Ethernet**: In this case, you need to make sure that the Ethernet Port and the USB Ethernet ports have different static system IP-addresses. However, since the netmask is 255.255.255.0, you need to make sure that the two ports have different XX values where the system IP address is defined as 192.168.XX.YY.
     * **Network Switches**: If using a network switch, you want to make sure that the DCA1000s use the same system IP address but different DCA1000 IP addresses. As such, the system IP address should be the same for both boards, but the DCA1000 IP address, Config Port, and Data Port should be different.
+    * **MAC Addresses**: If you are connecting multiple DCA1000s to your platform, ensure that each DCA1000 has a unique MAC address. This is particularly important for ethernet switches.
 
 3. **Check Connection**: A helpful command to check that everythign is setup correctly is the fpga_version command. This can be done using the following terminal commands (replase config.json with the configuration file you defined in the previous step):
 ```

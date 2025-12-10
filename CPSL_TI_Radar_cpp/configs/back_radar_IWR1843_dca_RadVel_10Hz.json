@@ -6,20 +6,20 @@
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM1"
+            "CLI_port":"/dev/ttyACM2"
         },
     "Streamer":
         {
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyACM2"
+                    "data_port":"/dev/ttyACM3"
                 },
             "DCA1000_streaming":
                 {
                     "enabled":true,
-                    "FPGA_IP":"192.168.33.181",
-                    "system_IP":"192.168.33.30",
+                    "FPGA_IP":"192.168.1.182",
+                    "system_IP":"192.168.1.57",
                     "data_port":4090,
                     "cmd_port":4088
                 },
