@@ -2,18 +2,18 @@
     "verbose":false,
     "TI_Radar_Config_Management":
         {
-            "TI_Radar_config_path":"/home/cpsl/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/1843_RaGNNarok_UAV_10m.cfg"
+            "TI_Radar_config_path":"/home/cpsl/CPSL_ROS2_Sensors/src/CPSL_TI_Radar_ROS2/src/ti_radar_connect/include/CPSL_TI_Radar/configurations/nav_configs/1843_RaGNNarok_UAV_5m.cfg"
         },
     "CLI_Controller":
         {
-            "CLI_port":"/dev/ttyACM2"
+            "CLI_port":"/dev/ttyACM0"
         },
     "Streamer":
         {
             "serial_streaming":
                 {
                     "enabled":true,
-                    "data_port":"/dev/ttyACM3"
+                    "data_port":"/dev/ttyACM1"
                 },
             "DCA1000_streaming":
                 {
