@@ -36,6 +36,7 @@ class RadarConfigReader{
         //functions to read the cfg file
         void process_cfg();
         std::vector<std::string> get_vec_from_string(std::string text);
+        void read_channel_cfg(std::vector<std::string> values);
         void read_profile_cfg(std::vector<std::string> values);
         void read_chirp_cfg(std::vector<std::string> values);
         void read_frame_cfg(std::vector<std::string> values);

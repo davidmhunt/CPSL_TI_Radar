@@ -532,17 +532,15 @@ bool DCA1000Handler::send_configFPGAGen(){
     //data logging mode - Raw Mode
     data[0] = 0x01;
 
-    //LVDS mode - 4 lane (sdk 2.1/IWR1443)
-    if (system_config_reader.getSDKMajorVersion() == 2){
-        data[1] = 0x01;
-    } 
-    // 2 lane (sdk 3+/IWR6843,IWR1843)
-    else if (system_config_reader.getSDKMajorVersion() == 3)
-    {
-        data[1] = 0x02;
-    }
-    else{
-        std::cerr << "DCA1000Handler::send_config_FPGAGen(): invalid SDK major version" << std::endl;
+    //LVDS mode — 4 lane for IWR1443, 2 lane for IWR1843/IWR6843
+    if (system_config_reader.getBoardType() == "IWR1443") {
+        data[1] = 0x01; // 4-lane
+    } else if (system_config_reader.getBoardType() == "IWR1843" ||
+               system_config_reader.getBoardType() == "IWR6843") {
+        data[1] = 0x02; // 2-lane
+    } else {
+        std::cerr << "DCA1000Handler::send_configFPGAGen(): unrecognized board_type \""
+                  << system_config_reader.getBoardType() << "\"" << std::endl;
         return false;
     }
 
@@ -1178,17 +1176,14 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
     received_frames += 1;
 
     adc_data_cube_unique_lock.lock();
-    if (system_config_reader.getSDKMajorVersion() == 2){
+    if (system_config_reader.getBoardType() == "IWR1443") {
         update_latest_adc_cube_interleaved();
-    } 
-    // 2 lane (sdk 3+/IWR6843,IWR1843)
-    else if (system_config_reader.getSDKMajorVersion() == 3)
-    {
-        // update_latest_adc_cube_interleaved();
+    } else if (system_config_reader.getBoardType() == "IWR1843" ||
+               system_config_reader.getBoardType() == "IWR6843") {
         update_latest_adc_cube_noninterleaved();
-    }
-    else{
-        std::cout << "DCA1000Handler::save_frame_byte_buffer(): invalid SDK major version" << std::endl;
+    } else {
+        std::cout << "DCA1000Handler::save_frame_byte_buffer(): unrecognized board_type \""
+                  << system_config_reader.getBoardType() << "\"" << std::endl;
         return;
     }
     

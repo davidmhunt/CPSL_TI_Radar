@@ -13,9 +13,9 @@ The root causes, ranked by severity:
 
 The kernel drops incoming UDP datagrams when the socket receive buffer fills up. No `SO_RCVBUF` is currently set, so the default (~128 KB on Linux) is used. At high ADC rates (e.g., 10 Msps × 4 Rx = 40 MB/s of ADC data + UDP overhead), bursts of packets easily overflow this before userspace can drain them.
 
-- [ ] Add `setsockopt(*data_socket, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size))` with a 64 MB request immediately after socket creation.
-- [ ] Log the actual granted buffer size via `getsockopt` (the kernel silently doubles the value, so the granted size will appear as 128 MB if `rmem_max` allows it).
-- [ ] Update `CLAUDE.md` with the required sysctl: `sudo sysctl -w net.core.rmem_max=134217728` and how to make it permanent.
+- [x] Add `setsockopt(*data_socket, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size))` with a 64 MB request immediately after socket creation.
+- [x] Log the actual granted buffer size via `getsockopt` (the kernel silently doubles the value, so the granted size will appear as 128 MB if `rmem_max` allows it).
+- [x] Update `CLAUDE.md` with the required sysctl: `sudo sysctl -w net.core.rmem_max=134217728` and how to make it permanent.
 
 >**COMMENT:** Also add this to the readme.md file inside of the CPSL_TI_Radar_cpp folder
 
@@ -33,26 +33,26 @@ New architecture:
     pop from ring buffer → sequence check → frame assemble → cube convert → file write
 ```
 
-- [ ] Add a lock-free circular ring buffer using `std::atomic` head/tail and a `std::array<std::array<uint8_t, 1472>, 512>` slot array (~750 KB). No heap allocation during streaming.
-- [ ] Spawn a dedicated RX thread inside `DCA1000Handler::init_sockets()` (or at `send_recordStart()` time). Set it to `SCHED_RR` priority 99 (highest allowable).
+- [x] Add a lock-free circular ring buffer using `std::atomic` head/tail and a `std::array<std::array<uint8_t, 1472>, 512>` slot array (~750 KB). No heap allocation during streaming.
+- [x] Spawn a dedicated RX thread inside `DCA1000Handler::init_sockets()` (or at `send_recordStart()` time). Set it to `SCHED_RR` priority 99 (highest allowable).
 >**COMMENT:** in the readme.md file, specify any os commands that may be needed to enable setting the thread priority like this
-- [ ] Move all assembly/conversion/file-write logic out of `process_next_packet()` into a new `process_from_ring_buffer()` method called from the existing worker thread.
-- [ ] On ring full, increment an `rx_overrun_count` counter and drop the packet (do not block the RX thread). Log overruns in `print_status()`.
+- [x] Move all assembly/conversion/file-write logic out of `process_next_packet()` into a new `process_from_ring_buffer()` method called from the existing worker thread.
+- [x] On ring full, increment an `rx_overrun_count` counter and drop the packet (do not block the RX thread). Log overruns in `print_status()`.
 
 ### 1c — Fix byte-by-byte file I/O in the hot path
 **File:** `DCA1000Handler.cpp:619–639` — raw LVDS write inside the per-byte copy loop
 
 Each byte of the ADC payload is currently written with a separate `write()` call (~1462 syscalls/packet).
 
-- [ ] Replace the per-byte write with a single `raw_lvds_out_file->write(reinterpret_cast<const char*>(udp_packet_buffer.data() + 10), adc_data_bytes_in_packet)` after the frame assembly loop.
-- [ ] This write moves to the worker thread as part of 1b — the RX thread never touches the file handle.
+- [x] Replace the per-byte write with a single `raw_lvds_out_file->write(reinterpret_cast<const char*>(udp_packet_buffer.data() + 10), adc_data_bytes_in_packet)` after the frame assembly loop.
+- [x] This write moves to the worker thread as part of 1b — the RX thread never touches the file handle.
 
 ### 1d — Shorten socket timeout
 **File:** `DCA1000Handler.cpp:757–761`
 
 The current 2-second `SO_RCVTIMEO` causes the RX thread to block for 2 seconds when the DCA1000 stops sending. ~~Reduce to 200ms.~~
 
-- [ ] Change to `timeout.tv_sec = 0; timeout.tv_usec = 500000` (500 ms) for the data socket only, to safely handle long frame periods while still exiting promptly.
+- [x] Change to `timeout.tv_sec = 0; timeout.tv_usec = 500000` (500 ms) for the data socket only, to safely handle long frame periods while still exiting promptly.
 
 ---
 
@@ -89,7 +89,7 @@ After implementing 1a–1d:
 
 Current: `dropped_packets += (packet_sequence_number - received_packets + 1)` — off by one, overcounts drops by 1 per event. Correct formula: `(packet_sequence_number - received_packets - 1)`.
 
-- [ ] Change `+ 1` to `- 1`.
+- [x] Change `+ 1` to `- 1`. *(done as part of Phase 1 implementation)*
 
 ### 2c — Replace `SDK_version` with `board_type` in JSON config
 **Background:** `SDK_version` already exists in the JSON schema and already drives both LVDS lane selection (`send_configFPGAGen`) and ADC cube interleaving (`save_frame_byte_buffer`). The field works but the semantics are indirect — the actual meaningful distinction is board type, not SDK string.
