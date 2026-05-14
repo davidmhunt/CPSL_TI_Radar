@@ -99,14 +99,40 @@ Two config files are always required:
 
 DCA1000 network defaults: FPGA IP `192.168.33.180`, system IP `192.168.33.30`, cmd port `4096`, data port `4098`. Host must have a static IP of `192.168.33.30/24` on the DCA1000 interface.
 
-### Known Packet Drop Issue
+### DCA1000 RX Architecture (Phase 1 fixes applied)
 
-At high ADC sampling rates, packet drops occur due to:
-1. **No explicit `SO_RCVBUF`** — kernel default (~128 KB) is insufficient; packets queue in the NIC and are dropped.
-2. **Single-threaded RX loop** — `process_next_packet()` does RX + assembly + optional file I/O sequentially with no dedicated consumer thread.
-3. **Blocking `recvfrom` with 2 s timeout** — no parallel buffering while processing.
+`DCA1000Handler` now uses a dedicated RX thread decoupled from frame assembly:
 
-The `dropped_packets` and `dropped_packet_events` counters in `DCA1000Handler` track cumulative drops and are printed at the end of each run.
+- **RX thread** (SCHED_RR 99): runs `recvfrom` in a tight loop, pushes raw 1472-byte packets into a 512-slot lock-free ring buffer.
+- **Worker thread** (existing Runner thread): pops from the ring, does sequence checking, frame assembly, ADC cube conversion, and file I/O.
+- **SO_RCVBUF**: 64 MB requested on the data socket (kernel doubles; actual granted size printed at startup).
+- **Data socket timeout**: 500 ms (RX thread exits promptly when DCA1000 stops streaming).
+- **Ring overruns** (`rx_overrun_count`): printed in `print_status()` — non-zero only if the worker thread falls far behind.
+
+The `dropped_packets`, `dropped_packet_events`, and `rx_overrun_count` counters are printed per frame when `verbose: true` in the JSON config.
+
+## System Prerequisites (DCA1000 High-Rate Streaming)
+
+The kernel UDP receive buffer cap must be raised before the 64 MB `SO_RCVBUF` request takes effect:
+
+```bash
+sudo sysctl -w net.core.rmem_max=134217728
+```
+
+To make permanent (Ubuntu/Debian):
+```bash
+echo 'net.core.rmem_max=134217728' | sudo tee /etc/sysctl.d/99-radar.conf
+sudo sysctl -p /etc/sysctl.d/99-radar.conf
+```
+
+The RX thread uses SCHED_RR priority 99. Without root, grant the capability to the binary:
+```bash
+sudo setcap 'cap_sys_nice=eip' ./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP
+```
+Or add to `/etc/security/limits.conf` (then log out/in):
+```
+<username>  -  rtprio  99
+```
 
 ## Hardware Notes
 

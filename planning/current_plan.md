@@ -17,6 +17,8 @@ The kernel drops incoming UDP datagrams when the socket receive buffer fills up.
 - [ ] Log the actual granted buffer size via `getsockopt` (the kernel silently doubles the value, so the granted size will appear as 128 MB if `rmem_max` allows it).
 - [ ] Update `CLAUDE.md` with the required sysctl: `sudo sysctl -w net.core.rmem_max=134217728` and how to make it permanent.
 
+>**COMMENT:** Also add this to the readme.md file inside of the CPSL_TI_Radar_cpp folder
+
 ### 1b — Decouple RX from frame assembly (producer/consumer ring buffer)
 **File:** `CPSL_TI_Radar_cpp/src/DCA1000/DCA1000Handler.cpp` — `process_next_packet()` and `get_next_udp_packets()`
 
@@ -33,6 +35,7 @@ New architecture:
 
 - [ ] Add a lock-free circular ring buffer using `std::atomic` head/tail and a `std::array<std::array<uint8_t, 1472>, 512>` slot array (~750 KB). No heap allocation during streaming.
 - [ ] Spawn a dedicated RX thread inside `DCA1000Handler::init_sockets()` (or at `send_recordStart()` time). Set it to `SCHED_RR` priority 99 (highest allowable).
+>**COMMENT:** in the readme.md file, specify any os commands that may be needed to enable setting the thread priority like this
 - [ ] Move all assembly/conversion/file-write logic out of `process_next_packet()` into a new `process_from_ring_buffer()` method called from the existing worker thread.
 - [ ] On ring full, increment an `rx_overrun_count` counter and drop the packet (do not block the RX thread). Log overruns in `print_status()`.
 

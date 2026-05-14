@@ -6,6 +6,14 @@
 DCA1000Handler::DCA1000Handler():
     initialized(false),
     new_frame_available(false),
+    rx_ring(),
+    rx_ring_head(0),
+    rx_ring_tail(0),
+    rx_overrun_count(0),
+    rx_thread_running(false),
+    rx_thread(),
+    rx_ring_cv(),
+    rx_ring_cv_mutex(),
     new_frame_available_mutex(),
     adc_data_cube_mutex(),
     system_config_reader(),
@@ -47,6 +55,14 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
                                 const RadarConfigReader& radarConfigReader):
     initialized(false),
     new_frame_available(false),
+    rx_ring(),
+    rx_ring_head(0),
+    rx_ring_tail(0),
+    rx_overrun_count(0),
+    rx_thread_running(false),
+    rx_thread(),
+    rx_ring_cv(),
+    rx_ring_cv_mutex(),
     new_frame_available_mutex(),
     adc_data_cube_mutex(),
     system_config_reader(),
@@ -88,6 +104,14 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
 DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
     initialized(rhs.initialized),
     new_frame_available(rhs.new_frame_available),
+    rx_ring(),
+    rx_ring_head(0),
+    rx_ring_tail(0),
+    rx_overrun_count(0),
+    rx_thread_running(false),
+    rx_thread(),
+    rx_ring_cv(),
+    rx_ring_cv_mutex(),
     new_frame_available_mutex(), //mutexes aren't copyable
     adc_data_cube_mutex(), //mutexes aren't copyable
     system_config_reader(rhs.system_config_reader),
@@ -211,6 +235,12 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
  * 
  */
 DCA1000Handler::~DCA1000Handler() {
+
+    // Stop RX thread if running
+    if (rx_thread_running.load()) {
+        rx_thread_running.store(false);
+        if (rx_thread.joinable()) rx_thread.join();
+    }
 
     int error_code;
     socklen_t error_code_size = sizeof(error_code);
@@ -340,11 +370,11 @@ bool DCA1000Handler::send_resetFPGA(){
 }
 
 bool DCA1000Handler::send_recordStart(){
-    
+
     //get the command
     std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
                                         DCA1000Commands::RECORD_START);
-    
+
     //send command
     sendCommand(cmd);
 
@@ -358,6 +388,18 @@ bool DCA1000Handler::send_recordStart(){
 
         //confirm success
         if (status == 0){
+            // Reset ring buffer state and start dedicated RX thread
+            rx_ring_head.store(0, std::memory_order_relaxed);
+            rx_ring_tail.store(0, std::memory_order_relaxed);
+            rx_overrun_count.store(0, std::memory_order_relaxed);
+            rx_thread_running.store(true, std::memory_order_relaxed);
+            rx_thread = std::thread(&DCA1000Handler::rx_thread_func, this);
+            struct sched_param sp;
+            sp.sched_priority = 99;
+            if (pthread_setschedparam(rx_thread.native_handle(), SCHED_RR, &sp) != 0) {
+                std::cerr << "[DCA1000] Warning: could not set RX thread to SCHED_RR 99 "
+                          << "(run as root or grant cap_sys_nice)" << std::endl;
+            }
             return true;
         }else{
             return false;
@@ -368,11 +410,15 @@ bool DCA1000Handler::send_recordStart(){
 }
 
 bool DCA1000Handler::send_recordStop(){
-    
+
+    // Stop RX thread before telling DCA1000 to stop (avoids recvfrom blocking on exit)
+    rx_thread_running.store(false, std::memory_order_relaxed);
+    if (rx_thread.joinable()) rx_thread.join();
+
     //get the command
     std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
                                         DCA1000Commands::RECORD_STOP);
-    
+
     //send command
     sendCommand(cmd);
 
@@ -579,7 +625,27 @@ float DCA1000Handler::send_readFPGAVersion(){
  */
 bool DCA1000Handler::process_next_packet(){
 
-    ssize_t received_bytes = get_next_udp_packets(udp_packet_buffer);
+    // Wait for the RX thread to push a packet, or time out after 500 ms
+    {
+        std::unique_lock<std::mutex> lock(rx_ring_cv_mutex);
+        rx_ring_cv.wait_for(lock, std::chrono::milliseconds(500), [this]{
+            return rx_ring_head.load(std::memory_order_acquire) !=
+                   rx_ring_tail.load(std::memory_order_relaxed);
+        });
+    }
+
+    // Check if ring has a packet
+    int tail = rx_ring_tail.load(std::memory_order_relaxed);
+    int head = rx_ring_head.load(std::memory_order_acquire);
+    if (tail == head) return false; // timeout with empty ring
+
+    // Pop packet from ring into udp_packet_buffer
+    RxSlot& slot = rx_ring[tail];
+    ssize_t received_bytes = static_cast<ssize_t>(slot.bytes_received);
+    std::copy(slot.data.begin(), slot.data.begin() + received_bytes,
+              udp_packet_buffer.begin());
+    rx_ring_tail.store((tail + 1) % RX_RING_SIZE, std::memory_order_release);
+
     if(received_bytes > 0){
 
         //get the sequence number
@@ -588,13 +654,13 @@ bool DCA1000Handler::process_next_packet(){
         //determine bytes in the new packet
         std::uint64_t packet_byte_count = get_packet_byte_count(udp_packet_buffer);
         std::uint64_t adc_data_bytes_in_packet = static_cast<std::uint64_t>(received_bytes) - 10;
-        
+
         //check for and handle dropped packets
         if (packet_sequence_number != received_packets + 1){
             std::cout << "d-P: " << packet_sequence_number << std::endl;
 
             //determine the number of dropped packets
-            dropped_packets += (packet_sequence_number - received_packets + 1);
+            dropped_packets += (packet_sequence_number - received_packets - 1);
             dropped_packet_events += 1;
 
             zero_pad_frame_byte_buffer(packet_byte_count);
@@ -608,7 +674,7 @@ bool DCA1000Handler::process_next_packet(){
         //check to make sure all bytes are accounted for
         if (adc_data_byte_count != packet_byte_count){
             std::cout << "d-B" << std::endl;
-            
+
             zero_pad_frame_byte_buffer(packet_byte_count);
 
         } else{
@@ -619,7 +685,7 @@ bool DCA1000Handler::process_next_packet(){
         for (size_t i = 0; i < adc_data_bytes_in_packet; i++)
         {
             frame_byte_buffer[next_frame_byte_buffer_idx] = udp_packet_buffer[i + 10];
-            
+
             //increment the frame byte buffer index
             next_frame_byte_buffer_idx += 1;
             if(next_frame_byte_buffer_idx == bytes_per_frame){
@@ -627,17 +693,17 @@ bool DCA1000Handler::process_next_packet(){
                 //save the completed frame byte buffer and reset it
                 save_frame_byte_buffer();
             }
-
-            //save the raw data if desired
-            if(save_to_file)
-            {
-                raw_lvds_out_file -> write(
-                        reinterpret_cast<const char*>(
-                            &udp_packet_buffer[i+10]),
-                        sizeof(udp_packet_buffer[i+10])
-                    );
-            }
         }
+
+        // Write entire ADC payload in one syscall instead of byte-by-byte
+        if(save_to_file)
+        {
+            raw_lvds_out_file->write(
+                reinterpret_cast<const char*>(udp_packet_buffer.data() + 10),
+                static_cast<std::streamsize>(adc_data_bytes_in_packet)
+            );
+        }
+
         return true;
     } else{
         return false;
@@ -753,12 +819,25 @@ bool DCA1000Handler::init_sockets() {
         return false;
     }
 
-    // Set socket timeout
-    struct timeval timeout;
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
-    setsockopt(*cmd_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    setsockopt(*data_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    // Set cmd socket timeout (2 s — command/response latency)
+    struct timeval cmd_timeout;
+    cmd_timeout.tv_sec = 2;
+    cmd_timeout.tv_usec = 0;
+    setsockopt(*cmd_socket, SOL_SOCKET, SO_RCVTIMEO, &cmd_timeout, sizeof(cmd_timeout));
+
+    // Set data socket timeout (500 ms — exits promptly when DCA1000 stops streaming)
+    struct timeval data_timeout;
+    data_timeout.tv_sec = 0;
+    data_timeout.tv_usec = 500000;
+    setsockopt(*data_socket, SOL_SOCKET, SO_RCVTIMEO, &data_timeout, sizeof(data_timeout));
+
+    // Request 64 MB receive buffer for data socket to absorb bursts at high ADC rates
+    int rcvbuf = 64 * 1024 * 1024;
+    setsockopt(*data_socket, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    int actual_rcvbuf = 0;
+    socklen_t optlen = sizeof(actual_rcvbuf);
+    getsockopt(*data_socket, SOL_SOCKET, SO_RCVBUF, &actual_rcvbuf, &optlen);
+    std::cout << "[DCA1000] SO_RCVBUF granted: " << actual_rcvbuf << " bytes" << std::endl;
 
     //bind to command socket
     if (bind(*cmd_socket, (struct sockaddr*)&cmd_address, sizeof(cmd_address)) < 0) {
@@ -938,12 +1017,35 @@ void DCA1000Handler::init_buffers()
     }
 }
 
+void DCA1000Handler::rx_thread_func() {
+    while (rx_thread_running.load(std::memory_order_relaxed)) {
+        int cur_head = rx_ring_head.load(std::memory_order_relaxed);
+        int next_head = (cur_head + 1) % RX_RING_SIZE;
+
+        if (next_head == rx_ring_tail.load(std::memory_order_acquire)) {
+            // Ring full: drain the socket to prevent kernel buffer overflow, count overrun
+            rx_overrun_count.fetch_add(1, std::memory_order_relaxed);
+            uint8_t discard[1472];
+            recvfrom(*data_socket, discard, sizeof(discard), 0, nullptr, nullptr);
+            continue;
+        }
+
+        RxSlot& slot = rx_ring[cur_head];
+        ssize_t n = recvfrom(*data_socket, slot.data.data(), slot.data.size(), 0,
+                             nullptr, nullptr);
+        if (n <= 0) continue; // timeout or error — loop and check rx_thread_running
+        slot.bytes_received = static_cast<int>(n);
+        rx_ring_head.store(next_head, std::memory_order_release);
+        rx_ring_cv.notify_one();
+    }
+}
+
 /**
- * @brief 
- * 
- * @param buffer 
- * @return true 
- * @return false 
+ * @brief
+ *
+ * @param buffer
+ * @return true
+ * @return false
  */
 ssize_t DCA1000Handler::get_next_udp_packets(std::vector<uint8_t>& buffer) {
     if (*data_socket < 0) {
@@ -970,7 +1072,8 @@ void DCA1000Handler::print_status(){
         "\tpackets: " << received_packets << std::endl <<
         "\tdata bytes: " << adc_data_byte_count << std::endl <<
         "\tdropped packets: " << dropped_packets << std::endl <<
-        "\tdropped packet events: " << dropped_packet_events << std::endl;
+        "\tdropped packet events: " << dropped_packet_events << std::endl <<
+        "\trx_overrun_count: " << rx_overrun_count.load() << std::endl;
     }
 }
 

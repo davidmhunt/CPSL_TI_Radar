@@ -11,10 +11,18 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <vector>
+#include <array>
 #include <endian.h>
 #include <complex>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#include <thread>
+#include <condition_variable>
+#include <chrono>
+#include <algorithm>
+#include <pthread.h>
+#include <sched.h>
 
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
@@ -30,6 +38,21 @@ public:
     bool new_frame_available;
 
 private:
+
+    // Ring buffer for decoupled RX thread
+    static constexpr int RX_RING_SIZE = 512;
+    struct RxSlot {
+        std::array<uint8_t, 1472> data;
+        int bytes_received;
+    };
+    std::array<RxSlot, RX_RING_SIZE> rx_ring;
+    std::atomic<int> rx_ring_head;  // written by RX thread
+    std::atomic<int> rx_ring_tail;  // read by worker thread
+    std::atomic<uint32_t> rx_overrun_count;
+    std::atomic<bool> rx_thread_running;
+    std::thread rx_thread;
+    std::condition_variable rx_ring_cv;
+    std::mutex rx_ring_cv_mutex;
 
     //mutexes
     std::mutex new_frame_available_mutex;
@@ -126,6 +149,7 @@ private:
     //receiving data / initializing buffers
     void init_buffers();
     ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
+    void rx_thread_func();
     void print_status();
 
     //unpacking packets

@@ -53,6 +53,29 @@ sudo usermod -a -G dialout $USER
 ```
 2. To allow the command to take effect, simply reboot or log out and then log back in on your system
 
+#### 5. System settings for high-rate DCA1000 streaming
+
+At high ADC sampling rates, the default Linux UDP receive buffer (~128 KB) is too small and causes packet drops. Raise the system-wide cap with:
+```bash
+sudo sysctl -w net.core.rmem_max=134217728
+```
+
+To make this permanent across reboots:
+```bash
+echo 'net.core.rmem_max=134217728' | sudo tee /etc/sysctl.d/99-radar.conf
+sudo sysctl -p /etc/sysctl.d/99-radar.conf
+```
+
+The DCA1000 RX thread runs at real-time priority (SCHED_RR 99). To allow this without running as root, either grant the executable the capability after building:
+```bash
+sudo setcap 'cap_sys_nice=eip' ./build/CPSL_TI_Radar_CPP
+```
+
+Or add the following to `/etc/security/limits.conf` (replace `<username>` with your username), then log out and back in:
+```
+<username>  -  rtprio  99
+```
+
 ## Building CPSL_TI_Radar_cpp
 
 To download, build, and install the CPSL_TI_Radar c++ code, perform the following instructions:
