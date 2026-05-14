@@ -27,7 +27,8 @@ int main(int, char**){
     signal(SIGINT,signalHandler);
 
     // std::string config_file = "../configs/radar_0_IWR1843_demo.json";
-    std::string config_file = "../configs/radar_0_IWR1843_nav_dca_RadSAR_lr.json";
+    // std::string config_file = "../configs/radar_0_IWR1843_nav_dca_RadSAR_lr.json";
+    std::string config_file = "../configs/front_radar_IWR1843_stress_test.json";
 
     // DCA1000Runner dca1000_runner(config_file);
     Runner runner(config_file);
