@@ -23,7 +23,7 @@ Default DCA1000 network configuration:
 
 ## Radar Configurations
 
-Sample `.cfg` files for each supported board are in [`configurations/`](./configurations/). Use the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/) to generate additional configurations.
+Sample `.cfg` files for each supported board are in [`CPSL_TI_Radar_cpp/config/radar/`](./CPSL_TI_Radar_cpp/config/radar/). Use the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/) to generate additional configurations.
 
 Supported boards:
 

@@ -289,6 +289,12 @@ void SystemConfigReader::readJsonFile()
     if (data.contains("TI_Radar_Config_Management") && 
         data["TI_Radar_Config_Management"].contains("TI_Radar_config_path")) {
         radar_ConfigPath = data["TI_Radar_Config_Management"]["TI_Radar_config_path"].get<std::string>();
+        // If relative, resolve relative to the JSON file's directory so configs are portable.
+        if (!radar_ConfigPath.empty() && radar_ConfigPath[0] != '/') {
+            size_t pos = json_file_path.find_last_of("/\\");
+            std::string json_dir = (pos == std::string::npos) ? "." : json_file_path.substr(0, pos);
+            radar_ConfigPath = json_dir + "/" + radar_ConfigPath;
+        }
     } else{
         initialized = false;
         std::cerr << "SystemConfigReader: Couldn't find TI_Radar_config_path" << std::endl;

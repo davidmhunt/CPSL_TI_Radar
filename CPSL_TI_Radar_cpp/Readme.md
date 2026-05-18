@@ -159,11 +159,11 @@ To run the cpp code, perform the following:
 
 ### 1. Updating the .json config files
 
-The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration information. All of the configuration files can be found in the [configs](./configs/) folder. Here, the essential components of each configuration are as follows 
+The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration information. All of the configuration files can be found in the [config/system](./config/system/) folder. Here, the essential components of each configuration are as follows 
 
 
 #### TI_Radar_Config_management
-* TI_Radar_config_path: specifies the path to the IWR's .cfg file. Example files are located in the [configurations](../configurations/) folder. Be sure the choose the one corresponding to either the DCA1000, or the IWR Demo depending on your use case. 
+* TI_Radar_config_path: specifies the path to the IWR's .cfg file. Example files are located in the [config/radar](./config/radar/) folder. Be sure the choose the one corresponding to either the DCA1000, or the IWR Demo depending on your use case. Paths can be **relative** (resolved relative to the JSON file's location) or absolute. All included JSON configs use relative paths of the form `../radar/<subdir>/<file>.cfg`, so they work on any machine without editing. 
 
     * Note: If using the mmWave SDK demos (ex: SDK3.5) with the DCA1000 and IWR1843 boost boards, make sure that the lvdsStreamCfg is correctly set (see the mmWave sdk documentation). For example, a viable lbdsStreamCfg setting is featured below. To just stream the ADC samples only, use the following command (disables SW streaming)
 
@@ -205,7 +205,7 @@ If using ROS nodes to connect to the Radar code, set this to true. Otherwise set
 
 ### 2. Radar .cfg file
 
-Several sample .cfg files are located in the [configurations](../configurations/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation. 
+Several sample .cfg files are located in the [config/radar](./config/radar/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation. 
 * To understand a particular configuration, there are a few helpful notebooks located in the [utilities_and_notebooks](../utilities/) folder including the [print_config](../utilities/print_config.ipynb) notebook which will decode the config and list the key parameters. 
 
 

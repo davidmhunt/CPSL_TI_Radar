@@ -97,8 +97,8 @@ The assembled cube is indexed `[Rx channel][sample][chirp]` as `complex<int16_t>
 
 Two config files are always required:
 
-1. **JSON system config** (`CPSL_TI_Radar_cpp/configs/*.json` or `CPSL_TI_Radar/json_radar_settings/*.json`) — specifies serial ports, DCA1000 IP/ports, streaming mode, save-to-file, and the path to the radar .cfg file.
-2. **Radar .cfg file** (`configurations/`) — TI mmWave SDK chirp configuration. Must include `lvdsStreamCfg -1 0 1 0` (ADC only) or `lvdsStreamCfg -1 1 1 1` (all data) when using DCA1000.
+1. **JSON system config** (`CPSL_TI_Radar_cpp/config/system/*.json` or `CPSL_TI_Radar/json_radar_settings/*.json`) — specifies serial ports, DCA1000 IP/ports, streaming mode, save-to-file, and the path to the radar .cfg file. The `TI_Radar_config_path` field accepts relative paths (resolved relative to the JSON file's location) or absolute paths.
+2. **Radar .cfg file** (`CPSL_TI_Radar_cpp/config/radar/`) — TI mmWave SDK chirp configuration. Must include `lvdsStreamCfg -1 0 1 0` (ADC only) or `lvdsStreamCfg -1 1 1 1` (all data) when using DCA1000.
 
 DCA1000 network defaults: FPGA IP `192.168.33.180`, system IP `192.168.33.30`, cmd port `4096`, data port `4098`. Host must have a static IP of `192.168.33.30/24` on the DCA1000 interface.
 
