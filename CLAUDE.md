@@ -56,12 +56,15 @@ main.cpp
         ├── SystemConfigReader   (parses JSON config)
         ├── RadarConfigReader    (parses IWR .cfg, computes bytes_per_frame)
         ├── CLIController        (serial → IWR, sends .cfg commands)
-        ├── DCA1000Handler       (UDP sockets, packet RX, ADC cube assembly)
-        │     └── DCA1000Commands (FPGA command protocol)
+        ├── DCA1000Handler       (thin coordinator — public API unchanged)
+        │     ├── DCA1000Socket      (UDP socket, RX thread SCHED_RR 99, ring buffer)
+        │     ├── FrameAssembler     (sequence check, frame assembly, drop stats)
+        │     ├── ADCCubeConverter   (interleaved / non-interleaved ADC conversion)
+        │     └── DCA1000Commands    (FPGA command protocol)
         └── SerialStreamer        (serial TLV stream → detected points)
 ```
 
-`Runner` spawns two threads (`run_dca1000`, `run_serial`) with `SCHED_RR` priority 10. `DCA1000Handler::process_next_packet()` is the hot loop — called continuously from the DCA1000 thread. Frames are signaled via `new_frame_available` flag (mutex-protected); consumers poll via `get_next_adc_cube(timeout_ms)`.
+`Runner` spawns two threads (`run_dca1000`, `run_serial`) with `SCHED_RR` priority 10. `DCA1000Socket` runs a dedicated SCHED_RR 99 RX thread that pushes packets into a 512-slot lock-free ring buffer. `DCA1000Handler::process_next_packet()` pops from the ring, delegates assembly to `FrameAssembler`, and conversion to `ADCCubeConverter`. Frames are signaled via `new_frame_available` flag (mutex-protected); consumers poll via `get_next_adc_cube(timeout_ms)`.
 
 ### Python Component Graph
 

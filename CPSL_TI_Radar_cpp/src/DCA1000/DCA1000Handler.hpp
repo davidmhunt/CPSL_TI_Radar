@@ -6,27 +6,17 @@
 #include <sys/types.h>
 #include <iostream>
 #include <fstream>
-#include <cstring>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 #include <vector>
-#include <array>
-#include <endian.h>
 #include <complex>
 #include <memory>
 #include <mutex>
-#include <atomic>
-#include <thread>
-#include <condition_variable>
-#include <chrono>
-#include <algorithm>
-#include <pthread.h>
-#include <sched.h>
 
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
 #include "DCA1000Commands.hpp"
+#include "ADCCubeConverter.hpp"
+#include "FrameAssembler.hpp"
+#include "DCA1000Socket.hpp"
 
 
 class DCA1000Handler {
@@ -38,21 +28,6 @@ public:
     bool new_frame_available;
 
 private:
-
-    // Ring buffer for decoupled RX thread
-    static constexpr int RX_RING_SIZE = 512;
-    struct RxSlot {
-        std::array<uint8_t, 1472> data;
-        int bytes_received;
-    };
-    std::array<RxSlot, RX_RING_SIZE> rx_ring;
-    std::atomic<int> rx_ring_head;  // written by RX thread
-    std::atomic<int> rx_ring_tail;  // read by worker thread
-    std::atomic<uint32_t> rx_overrun_count;
-    std::atomic<bool> rx_thread_running;
-    std::thread rx_thread;
-    std::condition_variable rx_ring_cv;
-    std::mutex rx_ring_cv_mutex;
 
     //mutexes
     std::mutex new_frame_available_mutex;
@@ -70,26 +45,15 @@ private:
     int DCA_cmdPort;
     int DCA_dataPort;
 
-    //command and data sockets
-    std::shared_ptr<int> cmd_socket;
-    std::shared_ptr<int> data_socket;
-
-    //addresses
-    sockaddr_in cmd_address;
-    sockaddr_in data_address;
+    //UDP socket management + dedicated RX thread + ring buffer
+    DCA1000Socket socket_;
 
     //processing udp data packets
     std::vector<uint8_t> udp_packet_buffer;
     size_t udp_packet_size;
-    std::uint32_t dropped_packets;
-    std::uint32_t dropped_packet_events;
-    std::uint32_t received_packets;
-    std::uint64_t adc_data_byte_count;
 
-    //assembling frames
-    std::vector<uint8_t> frame_byte_buffer; //for assembling new frame byte buffers
+    //frame tracking (packet/drop stats are owned by assembler_)
     std::uint32_t received_frames;
-    std::uint64_t next_frame_byte_buffer_idx;
     std::uint64_t bytes_per_frame;
     size_t samples_per_chirp;
     size_t chirps_per_frame;
@@ -102,11 +66,16 @@ private:
     
     //assembling the adc data cube
     //NOTE: indexed by [Rx channel, sample, chirp]
-
     std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> adc_data_cube;
 
+    //ADC cube conversion (interleaved / non-interleaved)
+    ADCCubeConverter converter_;
+
+    //frame assembly (sequence checking, drop detection, frame buffering)
+    FrameAssembler assembler_;
+
     //processing completed frames
-    std::vector<uint8_t> latest_frame_byte_buffer; //most recently capture complete frame byte buffer
+    std::vector<uint8_t> latest_frame_byte_buffer; //most recently captured complete frame byte buffer
 
 //functions
 public:
@@ -140,39 +109,15 @@ private:
 
     //additional initialization steps
     void load_config();
-    void init_addresses();
     bool init_sockets();
     bool configure_DCA1000();
-    bool sendCommand(std::vector<uint8_t>& command);
-    bool receiveResponse(std::vector<uint8_t>& buffer);    
 
     //receiving data / initializing buffers
     void init_buffers();
-    ssize_t get_next_udp_packets(std::vector<uint8_t>&buffer);
-    void rx_thread_func();
     void print_status();
 
-    //unpacking packets
-    uint32_t get_packet_sequence_number(std::vector<uint8_t>& buffer);
-    uint64_t get_packet_byte_count(std::vector<uint8_t>& buffer);
-    
     //processing frame byte buffer
-    void zero_pad_frame_byte_buffer(std::uint64_t packet_byte_count);
     void save_frame_byte_buffer(bool print_system_status = true);
-
-    //getting the latest adc data cube
-    std::vector<std::int16_t> convert_from_bytes_to_ints(
-        std::vector<uint8_t>& in_vector);
-    std::vector<std::vector<std::int16_t>> reshape_to_2D(
-        std::vector<std::int16_t>& in_vector,
-        size_t num_rows);
-    std::vector<std::complex<std::int16_t>> interleave_data(
-        std::vector<std::vector<std::int16_t>>& in_vector
-    );
-    void update_latest_adc_cube_interleaved(void);
-    void update_latest_adc_cube_noninterleaved(void);
-
-    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_latest_adc_data_cube(void);
 
     //handling files
     bool init_out_file();

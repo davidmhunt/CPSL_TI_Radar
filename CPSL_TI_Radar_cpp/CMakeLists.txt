@@ -30,8 +30,8 @@ target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Runner)
 target_link_libraries(MAIN_NO_RUNNER PRIVATE Utilities
                                         PRIVATE CLIController
                                         PRIVATE SerialStreamer
-                                        PRIVATE DCA1000Handler
-                                        PRIVATE DCA1000Runner)
+                                        PRIVATE DCA1000Handler)
+                                        # PRIVATE DCA1000Runner)  # Archived
 
 # Include directories - library directories were already exported and don't need to be added
                  
@@ -42,7 +42,8 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
 )
 
 # Install libraries
-install(TARGETS nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler DCA1000Runner Runner TLVProcessing DCA1000Commands
+install(TARGETS nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing DCA1000Commands
+        # DCA1000Runner removed — archived to archived_code/cpp/
         EXPORT export_${PROJECT_NAME}
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib

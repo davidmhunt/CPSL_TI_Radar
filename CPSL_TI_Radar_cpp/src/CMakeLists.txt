@@ -32,18 +32,18 @@ target_include_directories(DCA1000Handler PUBLIC
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}/utilities>
 )
 
-target_include_directories(DCA1000Runner PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Runners>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/Runners>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utilities>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/utilities>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/CLIController>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/CLIController>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SerialStreamer>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/SerialStreamer>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/DCA1000>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/DCA1000>
-)
+# target_include_directories(DCA1000Runner PUBLIC  # Archived: superseded by Runner
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Runners>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}/Runners>
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utilities>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}/utilities>
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/CLIController>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}/CLIController>
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SerialStreamer>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}/SerialStreamer>
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/DCA1000>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}/DCA1000>
+# )
 
 target_include_directories(Runner PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Runners>
