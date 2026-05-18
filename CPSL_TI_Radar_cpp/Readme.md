@@ -113,15 +113,15 @@ On your machine, configure the TCP/IPv4 to have the following settings:
 To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads). Next, follow the instructions below corresponding to the board that you are using.
 
 #### [IWR1443] DCA Streaming
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../CPSL_TI_Radar/readme_images/IWR_SOP_modes.png)
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../readme_images/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/DCA1000_Streaming). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
 
 #### [IWR1443] IWR Streaming
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../CPSL_TI_Radar/readme_images/IWR_SOP_modes.png)
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../readme_images/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the mmWave SDK found as part of the [TI mmWave SDK 2.01.00.04](https://www.ti.com/tool/download/MMWAVE-SDK/02.01.00.04)
 
 #### [IWR1843] DCA Streaming and IWR Demos
-1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../CPSL_TI_Radar/readme_images/IWR1843_SOP_nodes.png)
+1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../readme_images/IWR1843_SOP_nodes.png)
 2. For the IWR1843 (or any radar that can run the mmWave SDK boost, you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.)
 
     a.We developed this pipeline using mmWave 3.6. Using a different pipeline may require slight changes in the code.
@@ -130,12 +130,32 @@ To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool 
 
 Once the correct firmware is flashed onto your board, power cycle the board and place it into functional mode.
 
+## Architecture
+
+The C++ code is organized as follows:
+
+```
+main.cpp
+  └── Runner
+        ├── SystemConfigReader   — parses JSON system config
+        ├── RadarConfigReader    — parses IWR .cfg, computes bytes_per_frame
+        ├── CLIController        — sends .cfg commands over serial to the IWR
+        ├── DCA1000Handler       — thin coordinator; owns the three classes below
+        │     ├── DCA1000Socket      — UDP socket lifecycle, SCHED_RR 99 RX thread,
+        │     │                        lock-free ring buffer for decoupled packet reception
+        │     ├── FrameAssembler     — sequence checking, drop detection, frame assembly
+        │     └── ADCCubeConverter   — interleaved (IWR1443) and non-interleaved
+        │                              (IWR1843/IWR6843) ADC cube conversion
+        └── SerialStreamer        — serial TLV stream → detected points
+```
+
+`Runner` spawns two threads (`run_dca1000`, `run_serial`). The `DCA1000Socket` RX thread runs at real-time priority (SCHED_RR 99) and pushes raw packets into a 512-slot ring buffer; the worker thread pops packets, assembles frames via `FrameAssembler`, and converts to the ADC cube via `ADCCubeConverter`. Frames are signaled via `new_frame_available` (mutex-protected); consumers call `get_next_adc_cube(timeout_ms)`.
+
 ## Running
 
 To run the cpp code, perform the following:
 1. update the .json config file
-2. remake the project
-3. run the c++ code
+2. run the c++ code
 
 ### 1. Updating the .json config files
 
@@ -168,6 +188,14 @@ This part of the JSON file determines where the data is coming from. Only one of
 * serial_streaming: use this when streaming directly from the IWR demo application
 * DCA1000_streaming: use this when streaming from the DCA1000
 * save_to_file: when set to True, this will save the raw ADC data cube information for each frame to a .bin file which can be utilized at a later
+* board_type: specifies the radar board. Valid values: `"IWR1843"`, `"IWR6843"`, `"IWR1443"`. Controls the number of LVDS lanes used by the DCA1000 and the ADC cube interleaving format.
+
+| `board_type` | LVDS lanes | ADC format |
+|---|---|---|
+| `"IWR1843"` | 2-lane | non-interleaved (SDK 3+) |
+| `"IWR6843"` | 2-lane | non-interleaved (SDK 3+) |
+| `"IWR1443"` | 4-lane | interleaved (SDK 2) |
+
 #### Processor: 
 This part is currently not utilized when streaming DCA1000 data
 
@@ -181,23 +209,18 @@ Several sample .cfg files are located in the [configurations](../configurations/
 * To understand a particular configuration, there are a few helpful notebooks located in the [utilities_and_notebooks](../utilities/) folder including the [print_config](../utilities/print_config.ipynb) notebook which will decode the config and list the key parameters. 
 
 
-### 2. Remake the project
+### 2. Run the project
 
-To be safe, remake the project
-```
-cd CPSL_TI_Radar/CPSL_TI_Radar_cpp
-cd build
-cmake ../
-cmake --build .
-```
+Run the executable from the build directory. The config file path can be passed as an optional argument:
 
-This command will generate (2) executable files. The main one is from [main.cpp](./main.cpp) which will generate an executable called CPSL_TI_Radar_CPP.
+```bash
+cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 
-### 3. Run the project
-
-Finally, to run the project, perform the following command:
-```
-cd CPSL_TI_Radar/CPSL_TI_Radar_cpp
-cd build
+# use the default config (hardcoded in main.cpp)
 ./CPSL_TI_Radar_CPP
+
+# use a specific config file
+./CPSL_TI_Radar_CPP path/to/config.json
 ```
+
+The executable prints the config path at startup so you can confirm which file is loaded. A rebuild is only needed after changes to source code — switching configs does not require recompiling.

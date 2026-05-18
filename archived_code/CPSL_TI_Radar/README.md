@@ -58,8 +58,8 @@ poetry install
 
 TO stream samples directly from the TI IWR Radar, you must flash the correct firmware onto the TI radar. To accomplish this, complete the following steps:
 1. To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads)
-2. Next, power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](readme_images/IWR_SOP_modes.png)
-3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/IWR_Demos). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
+2. Next, power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../../readme_images/IWR_SOP_modes.png)
+3. Use the Uniflash tool to install the binary located in the [firmware folder](../../Firmware/IWR_Demos). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
 
 ### Option 2: IWR1443 with DCA1000
 
@@ -75,7 +75,7 @@ On your machine, configure the TCP/IPv4 to have the following settings:
 
 #### 2.Flash the correct firmware onto the device
 1. To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads)
-2. Next, power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](readme_images/IWR_SOP_modes.png)
+2. Next, power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../../readme_images/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/DCA1000_Streaming). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
 
 The hardware should now be ready to use

@@ -79,10 +79,10 @@ After implementing 1a–1d:
 
 > **Note:** Verified — all existing configs (IWR1843, IWR6843 ODS, IWR1443) use `channelCfg 15 ...`, meaning 4 Rx antennas. IWR6843 ODS uses 4 Rx / 3 Tx (mask 7). Default remains 4 if `channelCfg` is absent.
 
-- [ ] Add `channelCfg` parsing to `RadarConfigReader::process_cfg()`.
-- [ ] Add `read_channel_cfg(values)` helper: `rx_antennas = __builtin_popcount(std::stoi(values[1]))`.
-- [ ] Initialize `rx_antennas = 4` as the default before parsing (preserves behavior if channelCfg is missing).
-- [ ] Remove the hardcoded `rx_antennas = 4` post-parse line.
+- [x] Add `channelCfg` parsing to `RadarConfigReader::process_cfg()`.
+- [x] Add `read_channel_cfg(values)` helper: `rx_antennas = __builtin_popcount(std::stoi(values[1]))`.
+- [x] Initialize `rx_antennas = 4` as the default before parsing (preserves behavior if channelCfg is missing).
+- [x] Remove the hardcoded `rx_antennas = 4` post-parse line.
 
 ### 2b — Fix dropped packet counter arithmetic
 **File:** `DCA1000Handler.cpp:597`
@@ -101,11 +101,11 @@ Behavior mapping (unchanged):
 | `"IWR6843"` | 2-lane | non-interleaved (SDK 3+) |
 | `"IWR1443"` | 4-lane | interleaved (SDK 2) |
 
-- [ ] Add `board_type` string field and `getBoardType()` getter to `SystemConfigReader`.
-- [ ] Replace `getSDKMajorVersion() == 2/3` logic in `send_configFPGAGen()` and `save_frame_byte_buffer()` with `getBoardType() == "IWR1443"` vs. `"IWR1843"/"IWR6843"`.
-- [ ] Keep `SDK_version` field in the JSON for backwards compatibility (still parsed, but `board_type` takes precedence when present).
-- [ ] Add `"board_type"` to all JSON configs in `CPSL_TI_Radar_cpp/configs/`. IWR1843 configs → `"IWR1843"`, IWR6843 configs → `"IWR6843"`.
-- [ ] Add error message if `board_type` is unrecognized, with the list of valid values.
+- [x] Add `board_type` string field and `getBoardType()` getter to `SystemConfigReader`.
+- [x] Replace `getSDKMajorVersion() == 2/3` logic in `send_configFPGAGen()` and `save_frame_byte_buffer()` with `getBoardType() == "IWR1443"` vs. `"IWR1843"/"IWR6843"`.
+- [x] Keep `SDK_version` field in the JSON for backwards compatibility (still parsed, but `board_type` takes precedence when present).
+- [x] Add `"board_type"` to all JSON configs in `CPSL_TI_Radar_cpp/configs/`. IWR1843 configs → `"IWR1843"`, IWR6843 configs → `"IWR6843"`.
+- [x] Add error message if `board_type` is unrecognized, with the list of valid values.
 
 ---
 
@@ -125,51 +125,32 @@ Behavior mapping (unchanged):
 
 Config path is hardcoded, requiring a recompile to switch configs.
 
-- [ ] Parse `argv[1]` as the config path if provided; fall back to the current hardcoded default otherwise.
-- [ ] Print the config path being used at startup.
+- [x] Parse `argv[1]` as the config path if provided; fall back to the current hardcoded default otherwise.
+- [x] Print the config path being used at startup.
 
 ### 3b — Archive `DCA1000Runner`
 **File:** `CPSL_TI_Radar_cpp/src/Runners/DCA1000Runner.{hpp,cpp}`
 
 Confirmed dead code: the only reference to `DCA1000Runner` outside its own files is a **commented-out line** in `main.cpp:32`. `main_no_runner.cpp` does not use it either — it manually wires `DCA1000Handler` directly (and even that code is commented out). `Runner` is a strict superset.
 
-- [ ] Move `DCA1000Runner.hpp` and `DCA1000Runner.cpp` to `archived_code/cpp/` with a note: "Superseded by Runner. DCA1000Handler is now used directly."
-- [ ] Remove `DCA1000Runner` from the `install(TARGETS ...)` list in `CPSL_TI_Radar_cpp/CMakeLists.txt` (comment out, don't delete).
-- [ ] Remove the `DCA1000Runner` `add_library` / `target_link_libraries` lines from `src/CMakeLists.txt` (comment out with note).
+- [x] Move `DCA1000Runner.hpp` and `DCA1000Runner.cpp` to `archived_code/cpp/` with a note: "Superseded by Runner. DCA1000Handler is now used directly."
+- [x] Remove `DCA1000Runner` from the `install(TARGETS ...)` list in `CPSL_TI_Radar_cpp/CMakeLists.txt` (comment out, don't delete).
+- [x] Remove the `DCA1000Runner` `add_library` / `target_link_libraries` lines from `src/CMakeLists.txt` (comment out with note).
 
 ### 3c — Split `DCA1000Handler` into focused classes
-`DCA1000Handler` (~1360 lines) mixes FPGA command protocol, UDP socket lifecycle, packet reception, drop detection, frame assembly, ADC cube construction, and file I/O. Proposed split (do after Phase 1 & 2 are validated):
+`DCA1000Handler` (~1360 lines) mixes FPGA command protocol, UDP socket lifecycle, packet reception, drop detection, frame assembly, ADC cube construction, and file I/O.
 
-**Proposed class interfaces — to be reviewed before implementation:**
+- [x] Review and approve the class interfaces above before implementation begins.
+- [x] Implement `ADCCubeConverter` (moves interleaved/non-interleaved conversion logic).
+- [x] Implement `FrameAssembler` (sequence check, drop detection, frame assembly).
+- [x] Implement `DCA1000Socket` (moves socket + RX thread from 1b into its own class).
+- [x] Refactor `DCA1000Handler` to delegate to the three new classes, keeping its public API identical. (776 lines, down from 1,458)
 
-```
-DCA1000Socket
-  - init(system_IP, data_port, rcvbuf_bytes) → bool
-  - start_rx(callback) → spawns RX thread
-  - stop_rx()
-  - send_cmd(DCA1000Commands::Cmd) → bool
+### 3d — Documentation
 
-FrameAssembler
-  - configure(bytes_per_frame)
-  - push_packet(raw_bytes, len) → maybe emits complete frame via callback
-  - get_stats() → {received_packets, dropped_packets, dropped_events, rx_overruns}
-
-ADCCubeConverter
-  - configure(num_rx, samples_per_chirp, chirps_per_frame, board_type)
-  - convert(frame_bytes) → adc_data_cube (complex<int16_t>[rx][sample][chirp])
-
-DCA1000Handler (thin coordinator, public API unchanged)
-  - owns DCA1000Socket, FrameAssembler, ADCCubeConverter
-  - public API: initialize, send_recordStart/Stop, check_new_frame_available, get_latest_adc_cube
-```
-
-`DCA1000Commands` already exists as a separate file — no change needed there.
-
-- [ ] Review and approve the class interfaces above before implementation begins.
-- [ ] Implement `FrameAssembler` first (pure logic, no sockets — easiest to unit test).
-- [ ] Implement `DCA1000Socket` (moves socket + RX thread from 1b into its own class).
-- [ ] Implement `ADCCubeConverter` (moves interleaved/non-interleaved conversion logic).
-- [ ] Refactor `DCA1000Handler` to delegate to the three new classes, keeping its public API identical.
+- [x] Updated `Readme.md`: added Architecture section, updated Running section (argv[1] usage), added `board_type` field to Streamer config docs, removed redundant rebuild step.
+- [x] Added file-level doc comments to `DCA1000Socket.hpp`, `FrameAssembler.hpp`, `ADCCubeConverter.hpp`.
+- [x] Updated `CLAUDE.md` component graph to show three sub-components owned by `DCA1000Handler`.
 
 ---
 
@@ -187,9 +168,9 @@ DCA1000Handler (thin coordinator, public API unchanged)
 ### 4a — Archive entire `CPSL_TI_Radar/` Python package
 The Python streaming code is superseded by the C++ implementation. The `utilities/` notebooks that load `.bin` files for debugging C++ output must be preserved.
 
-- [ ] Move `CPSL_TI_Radar/CPSL_TI_Radar/` (the Python package) to `archived_code/python/CPSL_TI_Radar/` with a note: "Python streaming superseded by CPSL_TI_Radar_cpp."
-- [ ] Keep `CPSL_TI_Radar/pyproject.toml`, `CPSL_TI_Radar/README.md`, and the `CPSL_TI_Radar/json_radar_settings/` folder in place for reference.
-- [ ] Keep `CPSL_TI_Radar/tests/` and `CPSL_TI_Radar/utilities_and_notebooks/` in place — these remain useful for debugging C++ output.
+- [x] Move `CPSL_TI_Radar/CPSL_TI_Radar/` (the Python package) to `archived_code/CPSL_TI_Radar/CPSL_TI_Radar_py/` with an ARCHIVE_NOTE.md. Entire `CPSL_TI_Radar/` directory archived; `CPP_Development/` also archived.
+- [x] Unique notebooks from `utilities_and_notebooks/` (bartlet.ipynb, test_ethernet_traffic.ipynb) promoted to top-level `utilities/`.
+- [x] `readme_images/` moved to top-level; image paths updated in `CPSL_TI_Radar_cpp/Readme.md` and archived `CPSL_TI_Radar/README.md`.
 
 ### 4b — Audit and document `utilities/` notebooks
 These notebooks are the primary tool for verifying C++ output files:
@@ -201,9 +182,9 @@ These notebooks are the primary tool for verifying C++ output files:
 | `print_config.ipynb` | Decode `.cfg` radar config files |
 | `determine_serial_ports.ipynb` | Find serial ports on the host |
 
-- [ ] Verify `process_adc_data.ipynb` correctly reads the binary format from `write_adc_data_cube_to_file()` — confirm shape is `(received_frames, num_rx, samples_per_chirp, chirps_per_frame)` as `int16` pairs.
-- [ ] If the binary format changes as part of Phase 1–3, update the notebook accordingly.
-- [ ] Add a `utilities/README.md` documenting the file formats produced by the C++ code and which notebook reads each.
+- [x] Verified `process_adc_data.ipynb` reshape logic matches C++ write format (code audit — live validation still pending hardware run).
+- [x] Binary format unchanged from Phase 1–3; notebook logic confirmed correct.
+- [x] Added `utilities/README.md` documenting file formats and loading recipes.
 
 ---
 
