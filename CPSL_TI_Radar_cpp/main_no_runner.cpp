@@ -33,7 +33,10 @@ int main(int, char**){
     //handle sigint commands
     signal(SIGINT,signalHandler);
 
-    std::string config_file = "../configs/radar_0_IWR1843_demo.json";
+#ifndef DEFAULT_CONFIG_PATH
+#define DEFAULT_CONFIG_PATH "../config/system/radar_0_IWR1843_demo.json"
+#endif
+    std::string config_file = DEFAULT_CONFIG_PATH;
     
     SystemConfigReader config_reader(config_file);
     if(! config_reader.initialized){

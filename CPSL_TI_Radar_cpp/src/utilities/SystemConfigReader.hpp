@@ -29,6 +29,7 @@ class SystemConfigReader {
         bool get_verbose() const;
         int getSDKMajorVersion() const;
         int getSDKMinorVersion() const;
+        std::string getBoardType() const;
 
         bool get_serial_streaming_enabled() const;
         bool get_dca1000_streaming_enabled() const;
@@ -52,6 +53,7 @@ class SystemConfigReader {
         std::string sdk_version;
         int sdk_major_version;
         int sdk_minor_version;
+        std::string board_type;
 
         void readJsonFile();
 };

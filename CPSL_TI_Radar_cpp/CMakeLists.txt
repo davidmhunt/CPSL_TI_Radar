@@ -25,13 +25,19 @@ add_subdirectory(src)
 add_executable(CPSL_TI_Radar_CPP main.cpp)
 add_executable(MAIN_NO_RUNNER main_no_runner.cpp)
 
+# Bake in the absolute path to the default config at build time so the binary
+# works from any working directory, not just build/.
+target_compile_definitions(CPSL_TI_Radar_CPP PRIVATE
+    DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/system/front_radar_IWR1843_stress_test.json"
+)
+
 # Perform linking
 target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Runner)
 target_link_libraries(MAIN_NO_RUNNER PRIVATE Utilities
                                         PRIVATE CLIController
                                         PRIVATE SerialStreamer
-                                        PRIVATE DCA1000Handler
-                                        PRIVATE DCA1000Runner)
+                                        PRIVATE DCA1000Handler)
+                                        # PRIVATE DCA1000Runner)  # Archived
 
 # Include directories - library directories were already exported and don't need to be added
                  
@@ -42,7 +48,8 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
 )
 
 # Install libraries
-install(TARGETS nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler DCA1000Runner Runner TLVProcessing DCA1000Commands
+install(TARGETS nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing DCA1000Commands
+        # DCA1000Runner removed — archived to archived_code/cpp/
         EXPORT export_${PROJECT_NAME}
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib

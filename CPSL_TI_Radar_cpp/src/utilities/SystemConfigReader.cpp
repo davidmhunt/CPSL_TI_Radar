@@ -21,7 +21,8 @@ SystemConfigReader::SystemConfigReader()
       save_to_file(false),
       sdk_version(""),
       sdk_major_version(0),
-      sdk_minor_version(0)
+      sdk_minor_version(0),
+      board_type("")
     {}
 
 /**
@@ -43,7 +44,8 @@ SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
       save_to_file(false),
       sdk_version(""),
       sdk_major_version(0),
-      sdk_minor_version(0)
+      sdk_minor_version(0),
+      board_type("")
 {
     initialize(jsonFilePath);
 }
@@ -68,7 +70,8 @@ SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
       save_to_file(rhs.save_to_file),
       sdk_version(rhs.sdk_version),
       sdk_major_version(rhs.sdk_major_version),
-      sdk_minor_version(rhs.sdk_minor_version)
+      sdk_minor_version(rhs.sdk_minor_version),
+      board_type(rhs.board_type)
 {}
 
 /**
@@ -95,6 +98,7 @@ SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rh
         sdk_version = rhs.sdk_version;
         sdk_major_version = rhs.sdk_major_version;
         sdk_minor_version = rhs.sdk_minor_version;
+        board_type = rhs.board_type;
     }
 
     return *this;
@@ -227,6 +231,11 @@ int SystemConfigReader::getSDKMinorVersion() const
     return sdk_minor_version;
 }
 
+std::string SystemConfigReader::getBoardType() const
+{
+    return board_type;
+}
+
 
 /**
  * @brief Get the status of whether or not
@@ -280,6 +289,12 @@ void SystemConfigReader::readJsonFile()
     if (data.contains("TI_Radar_Config_Management") && 
         data["TI_Radar_Config_Management"].contains("TI_Radar_config_path")) {
         radar_ConfigPath = data["TI_Radar_Config_Management"]["TI_Radar_config_path"].get<std::string>();
+        // If relative, resolve relative to the JSON file's directory so configs are portable.
+        if (!radar_ConfigPath.empty() && radar_ConfigPath[0] != '/') {
+            size_t pos = json_file_path.find_last_of("/\\");
+            std::string json_dir = (pos == std::string::npos) ? "." : json_file_path.substr(0, pos);
+            radar_ConfigPath = json_dir + "/" + radar_ConfigPath;
+        }
     } else{
         initialized = false;
         std::cerr << "SystemConfigReader: Couldn't find TI_Radar_config_path" << std::endl;
@@ -374,18 +389,45 @@ void SystemConfigReader::readJsonFile()
             return;
         }
 
-        //SDK versioning
-        if (data["Streamer"].contains("SDK_version")) {
+        // Board type: prefer explicit board_type field; accept SDK_version as legacy fallback
+        if (data["Streamer"].contains("board_type")) {
+            board_type = data["Streamer"]["board_type"].get<std::string>();
+            if (board_type != "IWR1843" && board_type != "IWR6843" && board_type != "IWR1443") {
+                initialized = false;
+                std::cerr << "SystemConfigReader: unrecognized board_type \""
+                          << board_type << "\". Valid values: IWR1843, IWR6843, IWR1443" << std::endl;
+                return;
+            }
+            // Also parse SDK_version if present (kept for any legacy callers)
+            if (data["Streamer"].contains("SDK_version")) {
+                sdk_version = data["Streamer"]["SDK_version"].get<std::string>();
+                std::stringstream ss(sdk_version);
+                char dot;
+                ss >> sdk_major_version >> dot >> sdk_minor_version;
+            }
+        } else if (data["Streamer"].contains("SDK_version")) {
+            // Legacy fallback: derive board_type from SDK major version
             sdk_version = data["Streamer"]["SDK_version"].get<std::string>();
-
             std::stringstream ss(sdk_version);
             char dot;
             ss >> sdk_major_version >> dot >> sdk_minor_version;
-        }else{
+            if (sdk_major_version == 2) {
+                board_type = "IWR1443";
+            } else if (sdk_major_version == 3) {
+                board_type = "IWR1843";
+            } else {
+                initialized = false;
+                std::cerr << "SystemConfigReader: unrecognized SDK_version \""
+                          << sdk_version << "\". Add a board_type field instead." << std::endl;
+                return;
+            }
+        } else {
             initialized = false;
-            std::cerr << "SystemConfigReader: Couldn't find SDK_version"<< std::endl;
+            std::cerr << "SystemConfigReader: JSON must contain board_type "
+                      << "(or legacy SDK_version)" << std::endl;
             return;
         }
+        std::cout << "[SystemConfig] board_type: " << board_type << std::endl;
     }else{
         initialized = false;
         std::cerr << "SystemConfigReader: Couldn't find Streamer"<< std::endl;

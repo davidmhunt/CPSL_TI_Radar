@@ -21,13 +21,21 @@ void signalHandler(int signum){
     exit(0);
 }
 
-int main(int, char**){
+int main(int argc, char* argv[]){
 
     //handle sigint commands
     signal(SIGINT,signalHandler);
 
-    // std::string config_file = "../configs/radar_0_IWR1843_demo.json";
-    std::string config_file = "../configs/radar_0_IWR1843_nav_dca_RadSAR_lr.json";
+    // std::string config_file = "../config/system/radar_0_IWR1843_demo.json";
+    // std::string config_file = "../config/system/radar_0_IWR1843_nav_dca_RadSAR_lr.json";
+#ifndef DEFAULT_CONFIG_PATH
+#define DEFAULT_CONFIG_PATH "../config/system/front_radar_IWR1843_stress_test.json"
+#endif
+    std::string config_file = DEFAULT_CONFIG_PATH;
+    if (argc > 1) {
+        config_file = argv[1];
+    }
+    std::cout << "Using config: " << config_file << std::endl;
 
     // DCA1000Runner dca1000_runner(config_file);
     Runner runner(config_file);

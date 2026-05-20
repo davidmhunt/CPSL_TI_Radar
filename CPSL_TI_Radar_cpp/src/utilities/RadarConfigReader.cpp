@@ -108,12 +108,13 @@ void RadarConfigReader::initialize(const std::string & filename){
         initialized = false;
     } else{
 
+        //default before parsing — preserved if channelCfg is absent from the .cfg
+        rx_antennas = 4;
+
         //process the configuration
         process_cfg();
 
-        //set the number of rx antennas
-        //TODO: remove the hardcoding when possible
-        rx_antennas = 4;
+        std::cout << "[RadarConfig] rx_antennas: " << rx_antennas << std::endl;
 
         initialized = true;
     }
@@ -177,6 +178,9 @@ void RadarConfigReader::process_cfg() {
             std::istringstream iss(line);
             std::string key;
             if (std::getline(iss, key, ' ')) {
+                if (key == "channelCfg") {
+                    read_channel_cfg(get_vec_from_string(line));
+                }
                 if (key == "profileCfg") {
                     read_profile_cfg(get_vec_from_string(line));
                 }
@@ -242,14 +246,25 @@ void RadarConfigReader::read_chirp_cfg(std::vector<std::string> values){
 
 /**
  * @brief Decode the frame configuration from the profile cfg
- * 
+ *
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
 void RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
-    
+
     //set the profile config
     frameCfg_chirp_start_idx = (std::stoi(values[1]));
     frameCfg_chirp_end_idx = (std::stoi(values[2]));
     frameCfG_num_loops = (std::stoi(values[3]));
-    frameCfg_frame_period = std::stof(values[5]);   
+    frameCfg_frame_period = std::stof(values[5]);
+}
+
+/**
+ * @brief Decode the channel configuration. Sets rx_antennas by counting
+ * set bits in the Rx channel bitmask (values[1]).
+ * Format: channelCfg <rxMask> <txMask> <cascading>
+ *
+ * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
+ */
+void RadarConfigReader::read_channel_cfg(std::vector<std::string> values){
+    rx_antennas = static_cast<int16_t>(__builtin_popcount(std::stoi(values[1])));
 }
