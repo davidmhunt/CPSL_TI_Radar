@@ -1,43 +1,37 @@
 # Bench validation (runbook)
 
-Use this to check that a board streams correctly with the current driver build: no dropped packets, the right frame rate, a clean exit. The IWR1843 with a DCA1000 is the worked example. The pass thresholds come from the core-04 baseline in [`../RESULTS.md`](../RESULTS.md). One 60 s run takes about 2 minutes once the board is wired.
+Use this to check that a board streams correctly with the current driver build: no dropped packets, the right frame rate, a clean exit. The IWR1843 with a DCA1000 is the worked example. The pass thresholds come from the core-04 baseline in [`../RESULTS.md`](../RESULTS.md).
 
-Run every command from the repository root. The driver runs against real hardware, so only one person at a time may hold the board and the DCA1000.
+Run every command from the repository root. Only one person at a time may hold the board and the DCA1000.
 
 ## 1. Prerequisites
 
-1. Build the driver, run `--validate` and apply the host settings by following [`rebuild_driver.md`](rebuild_driver.md). Do this after every rebuild: `cap_sys_nice` is lost each time.
-2. The host needs `rmem_max` of at least 128 MB, the DCA1000 NIC at `192.168.33.30/24`, and your user in `dialout`. Check with `uv run tools/setup/host_setup.py --nic <dca-nic>`; it must show nothing MISSING. The harness repeats the `rmem_max` and `cap_sys_nice` checks and refuses to run without them.
-3. `CPSL_TI_Radar_cpp/build` must be a Release build. The harness refuses anything else.
-4. About 600 MB of disk per 60 s DCA run for this config (`adc_data.bin` and `LVDS_Raw_0.bin`, 300 MB each). Raw captures land in `tools/bench/runs/` (git-ignored).
+1. Build the driver (Release; the harness refuses other builds) and apply the host settings by following [`rebuild_driver.md`](rebuild_driver.md). Repeat after every rebuild.
+2. Check the host with `uv run tools/setup/host_setup.py --nic <dca-nic>`: nothing may show MISSING. It needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
+3. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
 
 ## 2. Hardware setup (IWR1843 + DCA1000)
 
-1. Power the board off. Set the SOP jumpers to **functional mode** using [`readme_images/IWR1843_SOP_nodes.png`](../../readme_images/IWR1843_SOP_nodes.png). The board reads them only at power-up. Flashing mode is a different setting of the same jumpers.
-2. Connect the board to the host by USB. Two ports appear: `ls /dev/ttyACM*` shows `/dev/ttyACM0` (CLI) and `/dev/ttyACM1` (data), the paths in the config below. Other port names mean you must edit `cli.port` in the config (see section 4).
-3. For raw ADC, connect the DCA1000 to the board's LVDS connector and by Ethernet to the host NIC, then power both. The DCA1000 answers at `192.168.33.180`; `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` checks it.
-4. Power-cycle the board before every run if the firmware was just flashed or the last run crashed.
+1. Power the board off. Set the S1 switch to **functional mode**: SOP2 = 0, SOP1 = 0, SOP0 = 1 (SOP mode 4); flashing mode is 101. The board reads the switch only at power-up. See [`readme_images/IWR1843_SOP_nodes.png`](../../readme_images/IWR1843_SOP_nodes.png), which labels the ON side of S1.
+2. Connect the board by USB. `ls /dev/ttyACM*` should show `/dev/ttyACM0` (CLI) and `/dev/ttyACM1` (data), the ports in the config below; otherwise edit `cli.port` and `serial_stream.port`.
+3. For raw ADC, connect the DCA1000 to the LVDS connector and by Ethernet to the host NIC, then power both. `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` checks that it answers at `192.168.33.180`.
+4. Power-cycle the board before a run if the firmware was just flashed or the last run crashed.
 
 ## 3. Firmware
 
-The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. Flashing and building are not covered here: see [`../firmware.md`](../firmware.md) and `firmware_dev/projects/README.md`. For the cascade, `planning/CASCADE_HARDWARE_SETUP.md` Steps 2 to 4.
+The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. For flashing and building see [`../firmware.md`](../firmware.md) and `firmware_dev/projects/README.md`. For the cascade, `planning/CASCADE_HARDWARE_SETUP.md` Steps 2 to 4.
 
 ## 4. Choose a config
 
-A system config (schema v2) names the board, the radar `.cfg`, the ports and the data path. Pick one from the table in section 9, or copy one and edit it. The worked example is
-`CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json`, which streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000, with `numFrames 0` so the radar runs until stopped.
+Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
-Requirements for a bench config:
-
-- `runtime.log_level` must be `"debug"`. The harness reads frame counts from the driver's debug output and rejects the config otherwise.
-- The radar `.cfg` should have `frameCfg ... numFrames 0`. Otherwise the radar stops early and the harness warns.
-- Check it without hardware first:
+A bench config needs `runtime.log_level` set to `"debug"` (the harness reads frame counts from the debug output and rejects the config otherwise) and a radar `.cfg` with `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json --validate
 ```
 
-It must print `OK:` and exit 0. Read the `frame:` and `bytes/frame:` lines; they are the expected values the harness compares against. On the IWR1843, `--validate` lists `calibData` as skipped; the flashed firmware rejects it, which is known and harmless.
+It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the values the harness compares against. On the IWR1843 `calibData` is listed as skipped: the flashed firmware rejects it, which is harmless.
 
 ## 5. Run the harness
 
@@ -46,10 +40,7 @@ uv run tools/bench/bench_run.py CPSL_TI_Radar_cpp/config/system/front_radar_IWR1
     --seconds 60 --rep 1 --tag validation_iwr1843_dca_release --out-dir docs/results/validation
 ```
 
-- The harness starts the driver, samples CPU once per second, sends SIGINT after `--seconds`, and prints a JSON summary. Use `--rep 1..3` for three repeats, and a new `--tag` for a different board or build.
-- `--stop-mode natural` waits for the driver to exit on its own (pull the DCA1000 Ethernet cable to end a capture); use it to check the `.bin` flush, see `--help`.
-- `--allow-non-release` and `--allow-missing-prereq` override the preflight. A run that used either is not a valid validation; the sidecar records the override.
-- Output files are never overwritten. `tools/bench/runs/<basename>/driver_stdout.log` is the full driver log.
+The harness starts the driver, samples CPU once per second, sends SIGINT after `--seconds`, and prints a JSON summary. Use `--rep 1..3` for repeats and a new `--tag` per board or build. Files are never overwritten; the full driver log is `tools/bench/runs/<basename>/driver_stdout.log`. A run that used `--allow-non-release` or `--allow-missing-prereq` is not a valid validation. For other options (`--stop-mode natural`) see `--help`.
 
 ## 6. Read the results
 
@@ -67,7 +58,7 @@ jq '{status: .result.status, exit: .result.stop.exit_code, bin: .result.bin_size
 
 ## 7. Pass or fail
 
-Thresholds are the core-04 IWR1843 baseline (3 reps of 60 s each, `docs/results/baseline/`), rounded. Every row must pass.
+Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results/baseline/`, summarized in `../RESULTS.md`), rounded by the Author. Every row must pass. Rows marked (guide) are loose limits from only three reps, not guarantees.
 
 | Check | DCA1000 raw-ADC | Serial TLV | Baseline value |
 |---|---|---|---|
@@ -75,14 +66,14 @@ Thresholds are the core-04 IWR1843 baseline (3 reps of 60 s each, `docs/results/
 | Driver exit code (`stop.exit_code`; nonzero marks the run failed) | 0 | 0 | 0 |
 | Seconds recorded | equals `--seconds` | same | 60 |
 | Frames per second mean (`dca_fps_mean` / `tlv_fps_mean`) | 10.0 +/- 0.1 (`expected.expected_fps`) | same | 10.0, 10.0, 10.017 / 9.983, 10.0, 10.0 |
-| Per-second min / max | 9 to 11 | 9 to 10 | 9 / 11 (DCA), 9 / 10 (TLV) |
+| Per-second min / max (guide) | 9 to 11 | 9 to 10 | 9 / 11 (DCA), 9 / 10 (TLV) |
 | Dropped packets (`dca_dropped_packets_total`) | 0 | n/a | 0 |
 | Rx overruns (`dca_rx_overrun_count_final`) | 0 | n/a | 0 |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
 | `adc_data.bin` size (`bin_size_check.verdict`) | SIGINT stop: `short_sigint_tail` (<= 896 B short, known bug, core-11). Natural stop: `exact` | n/a | 896 B short x3 |
-| CPU % mean | below 15 | below 3 | 9.1 to 10.5 / 0.5 to 0.6 |
+| CPU % mean (guide) | below 15 | below 3 | 9.1 to 10.5 / 0.5 to 0.6 |
 
-For other frame rates, scale the first rows by `expected_fps` from the sidecar; the baseline only covers 10 Hz. The CPU and per-second min/max limits are loose guides from three reps, not guarantees. The baseline ran without `cap_sys_nice`, so DCA numbers are without real-time priority.
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The baseline ran without `cap_sys_nice`, so its DCA numbers are without real-time priority.
 
 A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a fail: record it and see section 10.
 
@@ -90,7 +81,7 @@ A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a
 
 1. Keep the CSV and JSON in `docs/results/validation/` (or `baseline/` for a new reference) and commit them; `tools/bench/runs/` is not tracked.
 2. Add a row to `docs/RESULTS.md` under a heading for the board, following the baseline tables: fps mean/min/max, dropped packets, `rx_overrun_count`, CPU, the sidecar basename, and the driver sha256 and commit. Record failures and caveats too.
-3. Delete the multi-hundred-MB `adc_data.bin` and `LVDS_Raw_0.bin` from `tools/bench/runs/<basename>/` when you no longer need them.
+3. Delete the large `adc_data.bin` and `LVDS_Raw_0.bin` in `tools/bench/runs/<basename>/` when done.
 
 ## 9. Per-board differences
 
@@ -104,9 +95,9 @@ A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a
 | Serial baud (data) | 921600 | n/a | 921600 | 3125000 |
 | Known limits | `calibData` rejected by the flashed firmware; I/Q order not confirmed | serial TLV (`sdk2`) unconfirmed; bench-unproven; `radar_1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (D4); never run through `bench_run.py` |
 
-All config paths are under `CPSL_TI_Radar_cpp/config/system/`. Ports in the shipped configs are the lab's; edit `cli.port` and `serial_stream.port` for yours. Only the IWR1843 has baseline numbers. For the other boards, run the same procedure, treat the pass table as a guide, and record the first good run as that board's reference.
+Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
-Cascade notes: use the by-id ports and the J6 jumper (bottom two pins to flash, top two to run) from `planning/CASCADE_HARDWARE_SETUP.md`. The cascade config ships with `log_level: "info"`; the harness needs a copy with `"debug"`. The expected rate is the config's 50 ms period (20 Hz) with serial TLV frames and no missed frames. The harness has not been run on this board, so these steps are untested.
+Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from `planning/CASCADE_HARDWARE_SETUP.md`. Its config ships with `log_level: "info"`, so use a copy with `"debug"`. Expect 20 Hz (50 ms period) and no missed TLV frames.
 
 ## 10. Troubleshooting
 
@@ -118,4 +109,3 @@ Cascade notes: use the by-id ports and the J6 jumper (bottom two pins to flash, 
 | Dropped packets or overruns | `rmem_max` below 128 MB, no `cap_sys_nice`, or a slow NIC. Re-run `host_setup.py`; confirm `granted_so_rcvbuf_bytes` in the sidecar is 134217728. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |
 | `exit=-6` after a USB unplug | Known crash on a lost radar port (core-11). Reconnect, power-cycle, rerun. |
-| Cascade rejects the cfg | It accepts one cfg per power-up. Turn 12 V off and on. |
