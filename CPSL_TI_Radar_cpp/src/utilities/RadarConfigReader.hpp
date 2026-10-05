@@ -39,6 +39,9 @@ class RadarConfigReader{
 
         //initialization status
         bool initialized;
+
+        //why the last initialize() failed (empty when it succeeded or the file was missing)
+        const std::string& get_error() const { return error; }
     
     private:
 
@@ -46,12 +49,13 @@ class RadarConfigReader{
         std::shared_ptr<std::ifstream> cfg_file;
 
         //functions to read the cfg file
-        void process_cfg();
+        bool process_cfg();
+        std::string error;
         std::vector<std::string> get_vec_from_string(std::string text);
         void read_channel_cfg(std::vector<std::string> values);
         void read_profile_cfg(std::vector<std::string> values);
         void read_chirp_cfg(std::vector<std::string> values);
-        void read_frame_cfg(std::vector<std::string> values);
+        bool read_frame_cfg(std::vector<std::string> values);
 
         //cfg dialect (board descriptor cfg_dialect)
         std::vector<uint32_t> rx_mask_fields{1};

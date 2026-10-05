@@ -1,5 +1,7 @@
 #include "RadarConfigReader.hpp"
 
+#include <algorithm>
+
 /**
  * @brief default constructor without initialization
 */
@@ -134,7 +136,12 @@ void RadarConfigReader::initialize(const std::string & filename,
         rx_antennas = 4;
 
         //process the configuration
-        process_cfg();
+        error.clear();
+        if (!process_cfg()) {
+            std::cerr << "RadarConfigReader: " << filename << ": " << error << std::endl;
+            initialized = false;
+            return;
+        }
 
         std::cout << "[RadarConfig] rx_antennas: " << rx_antennas << std::endl;
 
@@ -199,7 +206,7 @@ float RadarConfigReader::get_frame_period_ms(){
  * be defined)
  * 
  */
-void RadarConfigReader::process_cfg() {
+bool RadarConfigReader::process_cfg() {
 
     if(cfg_file.get() != nullptr &&
         cfg_file -> is_open())
@@ -219,13 +226,15 @@ void RadarConfigReader::process_cfg() {
                     read_chirp_cfg(get_vec_from_string(line));
                 }
                 if (key == "frameCfg") {
-                    read_frame_cfg(get_vec_from_string(line));
+                    if (!read_frame_cfg(get_vec_from_string(line))) return false;
                 }
             }
         }
     }else{
-        std::cerr << "attempted to process radar config, but cfg_file isn't open" << std::endl;
+        error = "cfg file isn't open";
+        return false;
     }
+    return true;
 }
 
 /**
@@ -280,7 +289,15 @@ void RadarConfigReader::read_chirp_cfg(std::vector<std::string> values){
  *
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
-void RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
+bool RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
+
+    //fields 1-3 and the dialect's period field must exist
+    const size_t needed = std::max<size_t>(4, static_cast<size_t>(frame_period_field) + 1);
+    if (values.size() < needed) {
+        error = "frameCfg has " + std::to_string(values.size() - 1) + " fields, needs at least " +
+                std::to_string(needed - 1) + " (frame period in field " + std::to_string(frame_period_field) + ")";
+        return false;
+    }
 
     //set the profile config
     frameCfg_chirp_start_idx = (std::stoi(values[1]));
@@ -292,6 +309,7 @@ void RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
     //<numAdcSamples> before it:
     //frameCfg <start> <end> <loops> <frames> <adcSamples> <periodMs> <trigger> <delay> <...>
     frameCfg_frame_period = std::stof(values[frame_period_field]);
+    return true;
 }
 
 /**

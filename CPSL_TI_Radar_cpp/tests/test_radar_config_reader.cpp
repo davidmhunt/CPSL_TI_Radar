@@ -115,6 +115,19 @@ TEST_CASE(non_numeric_field_throws) {
     CHECK_THROWS(RadarConfigReader r(cfg("bad_number.cfg")), std::invalid_argument);
 }
 
+TEST_CASE(short_framecfg_is_an_error_not_ub) {
+    // core-10 review S4: the period field (5 here) is past the end of the line
+    RadarConfigReader r(cfg("short_framecfg.cfg"));
+    CHECK(!r.initialized);
+    CHECK(r.get_error().find("frameCfg") != std::string::npos);
+    CHECK(r.get_error().find("field 5") != std::string::npos);
+    // field 6 (cascade dialect) exists on a full single-chip line
+    RadarConfigReader c(cfg("iwr1843.cfg"), kSingleRxFields, 6);
+    CHECK(c.initialized);
+    RadarConfigReader d(cfg("short_framecfg.cfg"), kSingleRxFields, 4);
+    CHECK(d.initialized);  // field 4 exists (numFrames)
+}
+
 TEST_CASE(copy_and_assignment_preserve_values) {
     RadarConfigReader a(cfg("awr2243_cascade.cfg"), kCascadeRxFields, 6);
     RadarConfigReader b(a);
