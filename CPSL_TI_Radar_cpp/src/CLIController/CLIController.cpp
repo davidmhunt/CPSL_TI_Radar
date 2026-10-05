@@ -120,25 +120,30 @@ bool CLIController::send_config_to_IWR() {
             return false;
         }
 
-        //if the file is found, send it to the device
-        bool all_done = true;
-        string command;
-        while (getline(configFile, command)) {
+        //read the cfg, then let the board descriptor decide what is sent:
+        //comments (cli.skip_prefixes) and the start command are dropped, and
+        //cfg_dialect.skip_commands (e.g. calibData on the IWR1843) are skipped
+        std::vector<std::string> lines;
+        string line;
+        while (getline(configFile, line)) {
+            lines.push_back(line);
+        }
+        const cpsl::radar::CfgCommandPlan plan =
+            cpsl::radar::filter_cfg_commands(lines, system_config_reader.getBoard());
 
-            //strip trailing whitespace / CR from Windows-style cfg files
-            command.erase(command.find_last_not_of(" \t\r") + 1);
-
-            //skip comments
-            if (command.empty() || command[0] == '#' || command[0] == '%') {
-                continue;
+        if(system_config_reader.get_verbose()){
+            for (const string& skipped : plan.skipped) {
+                cout << "Skipped command (board " << system_config_reader.getBoard().name
+                     << " skip_commands): " << skipped << endl;
             }
-            else if (command.find("sensorStart") == std::string::npos)
-            {
-                //send all commands except for the start command
-                if(!CLIController::sendCommand(command)){
-                    all_done = false;
-                }
-            }        
+        }
+
+        //skipped commands are never sent, so they do not count as unacknowledged
+        bool all_done = true;
+        for (const string& command : plan.send) {
+            if(!CLIController::sendCommand(command)){
+                all_done = false;
+            }
         }
         return all_done;
     } else{
@@ -153,7 +158,7 @@ bool CLIController::send_config_to_IWR() {
  */
 bool CLIController::sendStartCommand()
 {
-    return CLIController::sendCommand("sensorStart");
+    return CLIController::sendCommand(system_config_reader.getBoard().cli.start_cmd);
 }
 
 /**
@@ -162,7 +167,7 @@ bool CLIController::sendStartCommand()
  */
 bool CLIController::sendStopCommand()
 {
-    return CLIController::sendCommand("sensorStop");
+    return CLIController::sendCommand(system_config_reader.getBoard().cli.stop_cmd);
 }
 
 /**
@@ -217,16 +222,17 @@ bool CLIController::sendCommand(const string& command) {
     //send the command over the serial port
     write(*cli_port, buffer(command + "\n"));
 
-    //wait to receive confirmation that the command was sent
+    //wait to receive confirmation (cli.ack) that the command was accepted
+    const cpsl::radar::BoardDescriptor::Cli& cli = system_config_reader.getBoard().cli;
     boost::asio::streambuf response;
     boost::system::error_code ec = read_until_with_timeout(
-        response, "Done", system_config_reader.getRadarCliTimeoutMs());
+        response, cli.ack, system_config_reader.getRadarCliTimeoutMs());
 
-    //the board prints its prompt after "Done" and drops input while it does
+    //the board prints its prompt after the ack and drops input while it does
     //(the AM273x cascade demo loses the first characters of the next command),
     //so wait for the prompt before returning. Boards without it just time out.
     if (!ec) {
-        read_until_with_timeout(response, "mmwDemo:/>", 500);
+        read_until_with_timeout(response, cli.prompt, static_cast<int>(cli.prompt_wait_ms));
     }
 
     const char* raw_data = boost::asio::buffer_cast<const char*>(response.data());
@@ -243,8 +249,8 @@ bool CLIController::sendCommand(const string& command) {
         cerr << "Error while reading response: " << ec.message() << "\n" << endl;
         return false;
     } else {
-        if (resp.find("Done") == string::npos) {
-            cout << "Received partial response. 'Done' message not found." << "\n" << endl;
+        if (resp.find(cli.ack) == string::npos) {
+            cout << "Received partial response. '" << cli.ack << "' message not found." << "\n" << endl;
             return false;
         }
     }

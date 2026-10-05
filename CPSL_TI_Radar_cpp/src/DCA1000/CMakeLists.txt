@@ -17,6 +17,7 @@ foreach(lib DCA1000Commands ADCCubeConverter FrameAssembler DCA1000Socket DCA100
 endforeach()
 
 #link libraries
+target_link_libraries(ADCCubeConverter  PUBLIC BoardDescriptor)  #LvdsLayout / IqOrder
 target_link_libraries(DCA1000Socket     PUBLIC Threads::Threads)
 
 target_link_libraries(DCA1000Handler    PUBLIC Utilities

@@ -374,17 +374,14 @@ bool DCA1000Handler::send_configFPGAGen(){
     //data logging mode - Raw Mode
     data[0] = 0x01;
 
-    //LVDS mode — 4 lane for IWR1443, 2 lane for IWR1843/IWR6843
-    if (system_config_reader.getBoardType() == "IWR1443") {
-        data[1] = 0x01; // 4-lane
-    } else if (system_config_reader.getBoardType() == "IWR1843" ||
-               system_config_reader.getBoardType() == "IWR6843") {
-        data[1] = 0x02; // 2-lane
-    } else {
-        std::cerr << "DCA1000Handler::send_configFPGAGen(): unrecognized board_type \""
-                  << system_config_reader.getBoardType() << "\"" << std::endl;
+    //LVDS mode from the board descriptor (lvds.lanes): 0x01 = 4-lane, 0x02 = 2-lane
+    const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
+    if (!board.lvds.supported) {
+        std::cerr << "DCA1000Handler::send_configFPGAGen(): board " << board.name
+                  << " has no LVDS capture support (lvds.supported false)" << std::endl;
         return false;
     }
+    data[1] = board.lvds.lanes == 4 ? 0x01 : 0x02;
 
     //data transfer mode - LVDS capture
     data[2] = 0x01;
@@ -395,8 +392,8 @@ bool DCA1000Handler::send_configFPGAGen(){
     //data format mode - 16 bit
     data[4] = 0x03;
 
-    //timer - default to 30 seconds
-    data[5] = 30;
+    //timer (dca1000.fpga_timer_s; 30 s on every shipped board)
+    data[5] = static_cast<uint8_t>(board.dca1000.fpga_timer_s);
 
     //generate the command
     std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
@@ -588,9 +585,11 @@ bool DCA1000Handler::configure_DCA1000(){
         return false;
     }
 
-    //send configure packet data
-    udp_packet_size = 1472;
-    if(send_configPacketData(udp_packet_size,100) != true){ //previously 25
+    //send configure packet data (dca1000.packet_bytes / packet_delay_us; 1472 B / 100 us)
+    const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
+    udp_packet_size = board.dca1000.packet_bytes;
+    if(send_configPacketData(udp_packet_size,
+                             static_cast<uint16_t>(board.dca1000.packet_delay_us)) != true){
         return false;
     }
 
@@ -634,7 +633,8 @@ void DCA1000Handler::init_buffers()
 
         assembler_.configure(bytes_per_frame);
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
-                             system_config_reader.getBoardType());
+                             system_config_reader.getBoard().lvds.layout,
+                             system_config_reader.getBoard().lvds.iq_order);
     }else{
         std::cerr << "attempted to initialize DCA1000 Handler buffers,\
         but radar_config_reader wasn't initialized";

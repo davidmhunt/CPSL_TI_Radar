@@ -7,17 +7,28 @@
 #include <sstream>
 #include <vector>
 #include <memory>
+#include <cstdint>
 
 class RadarConfigReader{
     public:
         RadarConfigReader();
         RadarConfigReader(const std::string& filename);
+        RadarConfigReader(const std::string& filename,
+                          const std::vector<uint32_t>& rx_mask_fields,
+                          uint32_t frame_period_field);
         RadarConfigReader(const RadarConfigReader & rhs);
         RadarConfigReader & operator=(const RadarConfigReader & rhs);
         ~RadarConfigReader();
 
         //functions to initialize the radar config reader
+        //rx_mask_fields / frame_period_field: the board descriptor's cfg_dialect
+        //(channelCfg fields whose set bits are summed into the Rx count, frameCfg
+        //field holding the period; the command word is field 0). The one-argument
+        //form uses the single-chip default {1} / 5.
         void initialize(const std::string & filename);
+        void initialize(const std::string & filename,
+                        const std::vector<uint32_t> & rx_mask_fields,
+                        uint32_t frame_period_field);
 
         //functions to get specific variables
         size_t get_bytes_per_frame();
@@ -41,6 +52,10 @@ class RadarConfigReader{
         void read_profile_cfg(std::vector<std::string> values);
         void read_chirp_cfg(std::vector<std::string> values);
         void read_frame_cfg(std::vector<std::string> values);
+
+        //cfg dialect (board descriptor cfg_dialect)
+        std::vector<uint32_t> rx_mask_fields{1};
+        uint32_t frame_period_field = 5;
 
         //number of antennas
         int16_t rx_antennas;

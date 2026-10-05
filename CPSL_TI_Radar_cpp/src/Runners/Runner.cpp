@@ -62,9 +62,12 @@ void Runner::initialize(const std::string & json_config_file_path){
     //initialize the system config reader
     system_config_reader = SystemConfigReader(json_config_file_path);
 
-    //initialize the radar config reader
+    //initialize the radar config reader (field layout from the board's cfg dialect)
     if(system_config_reader.initialized){
-        radar_config_reader.initialize(system_config_reader.getRadarConfigPath());
+        const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
+        radar_config_reader.initialize(system_config_reader.getRadarConfigPath(),
+                                       board.cfg_dialect.rx_mask_fields,
+                                       board.cfg_dialect.frame_period_field);
     } else{
         return;
     }
@@ -91,11 +94,12 @@ void Runner::initialize(const std::string & json_config_file_path){
     if (cli_controller.initialized){
         bool config_sent = cli_controller.send_config_to_IWR();
 
-        if (!config_sent && system_config_reader.getBoardType() == "AWR2243_CASCADE"){
-            //the cascade demo can't be reconfigured once it has been started (TI known
+        const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
+        if (!config_sent && board.lifecycle.config_once_per_boot){
+            //e.g. the cascade demo can't be reconfigured once it has been started (TI known
             //issue), so a rejected command almost always means the board needs a power-cycle
-            std::cerr << "Runner: the AWR2243 cascade did not acknowledge every config command. "
-                      << "The cascade demo can only be configured once per boot: "
+            std::cerr << "Runner: the " << board.name << " did not acknowledge every config command. "
+                      << "Its demo can only be configured once per boot: "
                       << "power-cycle the EVM and try again." << std::endl;
             initialized = false;
             return;
@@ -214,9 +218,9 @@ void Runner::stop(){
         }
         cli_controller.sendStopCommand();
 
-        if (system_config_reader.getBoardType() == "AWR2243_CASCADE"){
-            std::cout << "Runner: power-cycle the AWR2243 cascade EVM before configuring it again"
-                      << std::endl;
+        if (system_config_reader.getBoard().lifecycle.config_once_per_boot){
+            std::cout << "Runner: power-cycle the " << system_config_reader.getBoard().name
+                      << " EVM before configuring it again" << std::endl;
         }
     }
 

@@ -14,8 +14,14 @@ struct Expected {
     float period_ms;
 };
 
-static void check_cfg(const Expected& e) {
-    RadarConfigReader r(cfg(e.file));
+// cfg dialects from the board descriptors (cfg_dialect.rx_mask_fields /
+// frame_period_field): single-chip SDK demos, and the AWR2243 cascade
+static const std::vector<uint32_t> kSingleRxFields{1};
+static const std::vector<uint32_t> kCascadeRxFields{1, 4};
+
+static void check_cfg(const Expected& e, const std::vector<uint32_t>& rx_fields = kSingleRxFields,
+                      uint32_t period_field = 5) {
+    RadarConfigReader r(cfg(e.file), rx_fields, period_field);
     CHECK(r.initialized);
     CHECK_EQ(r.get_num_rx_antennas(), e.rx);
     CHECK_EQ(r.get_samples_per_chirp(), e.samples);
@@ -41,10 +47,23 @@ TEST_CASE(iwr6843_cfg) {
 }
 
 TEST_CASE(cascade_cfg_numAdcSamples_variant) {
-    // channelCfg has master+slave rx masks (4+4); frameCfg has 9 fields so the
-    // period is read from field 6 (field 5 is numAdcSamples=192).
+    // cascade dialect: channelCfg master+slave rx masks (fields 1 and 4: 4+4);
+    // frameCfg period in field 6 (field 5 is numAdcSamples=192).
     // chirps = (7-0+1) * 32 = 256
-    check_cfg({"awr2243_cascade.cfg", 8, 192, 256, 4 * 8 * 192 * 256, 50.0f});
+    check_cfg({"awr2243_cascade.cfg", 8, 192, 256, 4 * 8 * 192 * 256, 50.0f}, kCascadeRxFields, 6);
+}
+
+TEST_CASE(dialect_comes_from_the_caller_not_the_field_count) {
+    // The v1 reader guessed the cascade layout from the line lengths. Now the
+    // board descriptor decides: read as a single-chip cfg, the same file gives
+    // the master mask only and field 5 (numAdcSamples) as the period.
+    RadarConfigReader r(cfg("awr2243_cascade.cfg"));
+    CHECK(r.initialized);
+    CHECK_EQ(r.get_num_rx_antennas(), static_cast<size_t>(4));
+    CHECK_NEAR(r.get_frame_period_ms(), 192.0, 1e-4);
+    // a listed rx-mask field past the end of the line is not counted
+    RadarConfigReader s(cfg("iwr1843.cfg"), kCascadeRxFields, 5);
+    CHECK_EQ(s.get_num_rx_antennas(), static_cast<size_t>(4));
 }
 
 TEST_CASE(single_rx_channel_mask) {
@@ -97,7 +116,7 @@ TEST_CASE(non_numeric_field_throws) {
 }
 
 TEST_CASE(copy_and_assignment_preserve_values) {
-    RadarConfigReader a(cfg("awr2243_cascade.cfg"));
+    RadarConfigReader a(cfg("awr2243_cascade.cfg"), kCascadeRxFields, 6);
     RadarConfigReader b(a);
     CHECK(b.initialized);
     CHECK_EQ(b.get_bytes_per_frame(), a.get_bytes_per_frame());

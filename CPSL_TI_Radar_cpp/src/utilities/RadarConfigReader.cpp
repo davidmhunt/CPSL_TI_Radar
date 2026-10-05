@@ -20,9 +20,20 @@ RadarConfigReader::RadarConfigReader(const std::string& filename):
     initialize(filename);
 }
 
+RadarConfigReader::RadarConfigReader(const std::string& filename,
+                                     const std::vector<uint32_t>& rx_mask_fields_in,
+                                     uint32_t frame_period_field_in):
+    initialized(false),
+    cfg_file(nullptr)
+{
+    initialize(filename, rx_mask_fields_in, frame_period_field_in);
+}
+
 RadarConfigReader::RadarConfigReader(const RadarConfigReader & rhs):
     initialized(rhs.initialized),
     cfg_file(rhs.cfg_file),
+    rx_mask_fields(rhs.rx_mask_fields),
+    frame_period_field(rhs.frame_period_field),
     rx_antennas(rhs.rx_antennas),
     profileCfg_chirp_start_freq_GHz(rhs.profileCfg_chirp_start_freq_GHz),
     profileCfg_idle_time_us(rhs.profileCfg_idle_time_us),
@@ -56,6 +67,8 @@ RadarConfigReader & RadarConfigReader::operator=(const RadarConfigReader & rhs){
         //assign all variables to the rhs radar config reader
         initialized = rhs.initialized;
         cfg_file = rhs.cfg_file;
+        rx_mask_fields = rhs.rx_mask_fields;
+        frame_period_field = rhs.frame_period_field;
         rx_antennas = rhs.rx_antennas;
         profileCfg_chirp_start_freq_GHz = rhs.profileCfg_chirp_start_freq_GHz;
         profileCfg_idle_time_us = rhs.profileCfg_idle_time_us;
@@ -92,6 +105,15 @@ RadarConfigReader::~RadarConfigReader()
  * @param filename path to a .cfg file used to configure a TI radar
  */
 void RadarConfigReader::initialize(const std::string & filename){
+    initialize(filename, std::vector<uint32_t>{1}, 5);
+}
+
+void RadarConfigReader::initialize(const std::string & filename,
+                                   const std::vector<uint32_t> & rx_mask_fields_in,
+                                   uint32_t frame_period_field_in){
+
+    rx_mask_fields = rx_mask_fields_in;
+    frame_period_field = frame_period_field_in;
 
     //check to make sure that the file stream hasn't already been initialized
     if(cfg_file.get() != nullptr &&
@@ -265,27 +287,29 @@ void RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
     frameCfg_chirp_end_idx = (std::stoi(values[2]));
     frameCfG_num_loops = (std::stoi(values[3]));
 
-    //the AWR2243 cascade (mmWave MCU+ SDK) inserts <numAdcSamples> before the period:
+    //the period's field comes from the board's cfg dialect: 5 on the single-chip
+    //SDK demos, 6 on the AWR2243 cascade (mmWave MCU+ SDK), which inserts
+    //<numAdcSamples> before it:
     //frameCfg <start> <end> <loops> <frames> <adcSamples> <periodMs> <trigger> <delay> <...>
-    if (values.size() >= 10) {
-        frameCfg_frame_period = std::stof(values[6]);
-    } else {
-        frameCfg_frame_period = std::stof(values[5]);
-    }
+    frameCfg_frame_period = std::stof(values[frame_period_field]);
 }
 
 /**
  * @brief Decode the channel configuration. Sets rx_antennas by counting
- * set bits in the Rx channel bitmask(s).
- * Format: channelCfg <rxMask> <txMask> <cascading>
+ * set bits in the Rx channel bitmask fields named by the board's cfg dialect.
+ * Format: channelCfg <rxMask> <txMask> <cascading>                      (fields [1])
  * Cascade format: channelCfg <rxMaskMaster> <txMaskMaster> <cascading> <rxMaskSlave> <txMaskSlave>
+ *                                                                       (fields [1, 4])
+ * A listed field past the end of the line is not counted.
  *
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
 void RadarConfigReader::read_channel_cfg(std::vector<std::string> values){
-    int rx = __builtin_popcount(std::stoi(values[1]));
-    if (values.size() >= 6) {
-        rx += __builtin_popcount(std::stoi(values[4]));
+    int rx = 0;
+    for (uint32_t field : rx_mask_fields) {
+        if (field < values.size()) {
+            rx += __builtin_popcount(std::stoi(values[field]));
+        }
     }
     rx_antennas = static_cast<int16_t>(rx);
 }

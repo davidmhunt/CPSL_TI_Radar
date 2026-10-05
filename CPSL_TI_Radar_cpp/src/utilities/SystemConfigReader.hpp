@@ -14,7 +14,7 @@
 // get_error() holds the message (also printed to stderr).
 //
 // Paths ("radar_cfg", a "board" path, "output.dir") are relative to the JSON
-// file's directory unless absolute. A plain board name such as "IWR1843" is
+// file's directory unless absolute. A plain board name (e.g. IWR1843) is
 // looked up as <boards dir>/<name>.json, where the boards dir is
 // $CPSL_TI_RADAR_BOARDS_DIR if set, otherwise <JSON dir>/../boards (the
 // layout of CPSL_TI_Radar_cpp/config/).
@@ -49,8 +49,6 @@ class SystemConfigReader {
         // board descriptor, with board_overrides already applied
         const cpsl::radar::BoardDescriptor& getBoard() const { return board; }
         const std::string& getBoardPath() const { return board_path; }
-        // transitional: the descriptor's name (callers move to getBoard() in the next step)
-        std::string getBoardType() const { return board.name; }
         // cross_check_radar_cfg notes (a check that could not be made; not fatal)
         const std::vector<std::string>& getCfgCheckNotes() const { return cfg_notes; }
 

@@ -11,7 +11,8 @@
 // cross_check_radar_cfg() checks a TI radar .cfg against a descriptor for the
 // streams a run enables (design §1 "Cross-checks against the radar cfg").
 //
-// Not wired into Runner or main yet (core-10 does that).
+// The driver reads it through SystemConfigReader (system config "board" +
+// "board_overrides"); every board-specific behaviour comes from these fields.
 
 #include <cstdint>
 #include <istream>

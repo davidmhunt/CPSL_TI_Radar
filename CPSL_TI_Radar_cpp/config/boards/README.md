@@ -6,8 +6,10 @@ Loading is strict: an unknown key, a wrong type, an unknown enum string, or a `l
 mismatch is an error, and so is a key repeated in one object. `name` must equal the file name. `dca1000` is required when
 `lvds.supported` is true and not allowed when it is false.
 
-Status: added in core-09 and **not read by the driver yet**. Today's runtime still uses the
-system config's `board_type`. core-10 switches the driver over to these files.
+The driver loads the file named by the system config's `"board"` (schema v2), merges the
+config's `board_overrides` over it, and takes every board-specific behaviour from it: CLI
+handshake, cfg field layout, UART baud/timeout, DCA1000 lane count and packet settings, ADC
+layout and I/Q order, and the once-per-boot rule.
 
 | File | SDK | LVDS (DCA1000) | Serial TLV |
 |------|-----|----------------|------------|

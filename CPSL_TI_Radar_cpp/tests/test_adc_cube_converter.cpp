@@ -5,6 +5,13 @@
 #include "test_harness.hpp"
 #include "ADCCubeConverter.hpp"
 
+using cpsl::radar::IqOrder;
+using cpsl::radar::LvdsLayout;
+
+// the shipped descriptors' (lvds.layout, lvds.iq_order)
+#define IWR1443_LVDS LvdsLayout::lane_per_rx, IqOrder::i_first
+#define IWR18_68_LVDS LvdsLayout::two_lane_iq_pairs, IqOrder::q_first
+
 typedef std::vector<uint8_t> Bytes;
 typedef std::complex<std::int16_t> Cx;
 
@@ -73,40 +80,40 @@ static void check_cube(const ADCCubeConverter::ADCCube& cube, size_t rx, size_t 
 
 TEST_CASE(iwr1443_interleaved_four_rx) {
     ADCCubeConverter conv;
-    conv.configure(4, 8, 3, "IWR1443");
+    conv.configure(4, 8, 3, IWR1443_LVDS);
     check_cube(conv.convert(interleaved_stream(4, 8, 3)), 4, 8, 3);
 }
 
 TEST_CASE(iwr1443_interleaved_two_rx) {
     ADCCubeConverter conv;
-    conv.configure(2, 5, 4, "IWR1443");  // odd sample count is fine when interleaved
+    conv.configure(2, 5, 4, IWR1443_LVDS);  // odd sample count is fine when interleaved
     check_cube(conv.convert(interleaved_stream(2, 5, 4)), 2, 5, 4);
 }
 
 TEST_CASE(iwr1843_noninterleaved_four_rx) {
     ADCCubeConverter conv;
-    conv.configure(4, 8, 3, "IWR1843");
+    conv.configure(4, 8, 3, IWR18_68_LVDS);
     check_cube(conv.convert(noninterleaved_stream(4, 8, 3)), 4, 8, 3);
 }
 
 TEST_CASE(iwr6843_uses_noninterleaved_path) {
     ADCCubeConverter conv;
-    conv.configure(4, 6, 5, "IWR6843");
+    conv.configure(4, 6, 5, IWR18_68_LVDS);
     check_cube(conv.convert(noninterleaved_stream(4, 6, 5)), 4, 6, 5);
 }
 
 TEST_CASE(noninterleaved_single_rx_and_two_rx) {
     ADCCubeConverter one;
-    one.configure(1, 4, 2, "IWR1843");
+    one.configure(1, 4, 2, IWR18_68_LVDS);
     check_cube(one.convert(noninterleaved_stream(1, 4, 2)), 1, 4, 2);
     ADCCubeConverter two;
-    two.configure(2, 4, 3, "IWR6843");
+    two.configure(2, 4, 3, IWR18_68_LVDS);
     check_cube(two.convert(noninterleaved_stream(2, 4, 3)), 2, 4, 3);
 }
 
 TEST_CASE(int16_extremes_and_sign_survive) {
     ADCCubeConverter conv;
-    conv.configure(1, 2, 1, "IWR1843");
+    conv.configure(1, 2, 1, IWR18_68_LVDS);
     // one pair: Im0 Im1 Re0 Re1
     Bytes b;
     put_i16(b, -32768);
@@ -120,7 +127,7 @@ TEST_CASE(int16_extremes_and_sign_survive) {
 
 TEST_CASE(wire_order_is_little_endian) {
     ADCCubeConverter conv;
-    conv.configure(1, 1, 1, "IWR1443");
+    conv.configure(1, 1, 1, IWR1443_LVDS);
     // interleaved, 1 rx: [re, im]; re = 0x0102, im = 0x0304 sent low byte first
     Bytes b{0x02, 0x01, 0x04, 0x03};
     auto cube = conv.convert(b);
@@ -129,39 +136,51 @@ TEST_CASE(wire_order_is_little_endian) {
 
 TEST_CASE(consecutive_frames_fully_overwrite_the_cube) {
     ADCCubeConverter conv;
-    conv.configure(4, 4, 2, "IWR1843");
+    conv.configure(4, 4, 2, IWR18_68_LVDS);
     check_cube(conv.convert(noninterleaved_stream(4, 4, 2, 0)), 4, 4, 2, 0);
     check_cube(conv.convert(noninterleaved_stream(4, 4, 2, 7)), 4, 4, 2, 7);
 }
 
-TEST_CASE(unrecognized_board_returns_zero_cube) {
-    // The cascade has no raw-ADC path yet; convert() logs an error and
-    // returns the (zeroed) cube without throwing.
-    const char* boards[] = {"AWR2243_CASCADE", "", "IWR9999"};
-    for (const char* name : boards) {
+TEST_CASE(iq_order_swaps_components_on_both_layouts) {
+    // The opposite iq_order of each shipped layout reads the same bytes with
+    // real and imaginary exchanged (core-17 may flip a descriptor to this).
+    {
         ADCCubeConverter conv;
-        conv.configure(2, 4, 2, name);
-        auto cube = conv.convert(noninterleaved_stream(2, 4, 2));
-        CHECK_EQ(cube.size(), static_cast<size_t>(2));
-        bool all_zero = true;
-        for (auto& rx : cube)
-            for (auto& s : rx)
-                for (auto& v : s)
-                    if (v != Cx(0, 0)) all_zero = false;
-        CHECK(all_zero);
+        conv.configure(4, 8, 3, LvdsLayout::two_lane_iq_pairs, IqOrder::i_first);
+        auto cube = conv.convert(noninterleaved_stream(4, 8, 3));
+        bool swapped = true;
+        for (size_t r = 0; r < 4; r++)
+            for (size_t s = 0; s < 8; s++)
+                for (size_t c = 0; c < 3; c++) {
+                    Cx want = value(r, s, c);
+                    if (cube[r][s][c] != Cx(want.imag(), want.real())) swapped = false;
+                }
+        CHECK(swapped);
+    }
+    {
+        ADCCubeConverter conv;
+        conv.configure(2, 5, 4, LvdsLayout::lane_per_rx, IqOrder::q_first);
+        auto cube = conv.convert(interleaved_stream(2, 5, 4));
+        bool swapped = true;
+        for (size_t r = 0; r < 2; r++)
+            for (size_t s = 0; s < 5; s++)
+                for (size_t c = 0; c < 4; c++) {
+                    Cx want = value(r, s, c);
+                    if (cube[r][s][c] != Cx(want.imag(), want.real())) swapped = false;
+                }
+        CHECK(swapped);
     }
 }
 
 TEST_CASE(configure_sizes_cube_before_first_frame) {
+    // an empty frame on the 2-lane path returns the zeroed, fully sized cube
     ADCCubeConverter conv;
-    conv.configure(3, 7, 2, "IWR1843");
-    // convert() of an unrecognized board just returns the zeroed cube
-    ADCCubeConverter bad;
-    bad.configure(3, 7, 2, "none");
-    auto cube = bad.convert(Bytes());
+    conv.configure(3, 8, 2, IWR18_68_LVDS);
+    auto cube = conv.convert(Bytes());
     CHECK_EQ(cube.size(), static_cast<size_t>(3));
-    CHECK_EQ(cube[0].size(), static_cast<size_t>(7));
+    CHECK_EQ(cube[0].size(), static_cast<size_t>(8));
     CHECK_EQ(cube[0][0].size(), static_cast<size_t>(2));
+    CHECK(cube[2][7][1] == Cx(0, 0));
 }
 
 TEST_MAIN()

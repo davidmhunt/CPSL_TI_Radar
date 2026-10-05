@@ -52,7 +52,8 @@ public:
     const char* id() const override { return "a"; }
     const char* label() const override { return "today ADCCubeConverter"; }
     void configure(const FrameShape& s) override {
-        conv_.configure(s.rx, s.samples, s.chirps, "IWR1843");
+        conv_.configure(s.rx, s.samples, s.chirps, cpsl::radar::LvdsLayout::two_lane_iq_pairs,
+                        cpsl::radar::IqOrder::q_first);  // IWR1843 descriptor
         out_ = NestedCube(s.rx, std::vector<std::vector<Sample>>(s.samples, std::vector<Sample>(s.chirps)));
     }
     void convert(const std::vector<uint8_t>& b) override { out_ = conv_.convert(b); }
