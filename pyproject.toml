@@ -21,4 +21,4 @@ testpaths = ["tests"]
 # ROS 2 (sourced in the shell) puts its pytest plugins on PYTHONPATH; launch_testing
 # needs deps this venv lacks, so keep those plugins out of the project test run.
 addopts = ["-p", "no:launch_testing", "-p", "no:launch_ros"]
-norecursedirs = ["archived_code", "firmware_dev", "Firmware", ".friday", "build", ".venv"]
+norecursedirs = ["firmware_dev", "Firmware", ".friday", "build", ".venv"]
