@@ -9,10 +9,13 @@ Firmware role's source of project facts
 | Path | What | Repo / branch |
 |------|------|---------------|
 | `firmware_dev/` | Firmware sources, Docker build env, download/build/flash scripts | submodule `CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`; opt-in (`update = none`) — fetch with `git submodule update --init --checkout firmware_dev` |
+| `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.env`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `docs/`, `build/`), copied from `_template/`. **Usage guide: [`firmware_dev/projects/README.md`](../firmware_dev/projects/README.md)** | ″ |
+| `firmware_dev/fw` | Dispatcher: `list`, `new <p>`, `build <p>`, `flash <p> <port> [image]`, `help`; runs compose as the host UID, so `projects/*/build/` is user-owned | ″ |
+| `firmware_dev/tools/` | Cross-project scripts (`cascade_serial_check.py`, `md_to_pdf.py`) | ″ |
 | `firmware_dev/firmware/cascade/src/demo/` | AM273x + AWR2243 2-chip cascade DDM demo (projectspecs, chirp configs, TI docs) | ″ |
 | `firmware_dev/firmware/legacy/src/` | Single-chip mmWave SDK 3.x demos (IWR1843/IWR6843) | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
-| `firmware_dev/build/{cascade,legacy}/` | Build outputs (gitignored) | ″ |
+| `firmware_dev/build/{cascade,legacy}/` | Old-flow build outputs (gitignored; root-owned from pre-`fw` container runs: remove with `docker compose run --rm firmware-env rm -rf /build_context/build` once firmware-02 has its baseline) | ″ |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/`) | this repo — to be reorganized into the v2.0 shipped-firmware directory |
 
 ## Toolchain (in the Docker image, under `/opt/ti/`)
@@ -24,7 +27,7 @@ Firmware role's source of project facts
 | SysConfig | 1.22.0 |
 | TI Arm Clang | 2.1.1.LTS (AM273x R5F / MSS) |
 | TI C6000 | 8.3.12 (AM273x C66x / DSS) |
-| TI ARM CGT | 20.2.7.LTS (legacy single-chip) |
+| TI ARM CGT | 20.2.7.LTS (installed but unused: the SDK 3.6 make flow uses its bundled 16.9.6.LTS + C6000 8.3.3) |
 | Radar Toolbox | 4.00.00.05 (also supplies cascade prebuilt libraries) |
 | Code Composer Studio | 12.8.1, headless only |
 
@@ -34,13 +37,16 @@ Cascade versions follow `firmware/cascade/src/demo/src/awr2243/*.projectspec`.
 
 | Task | Command |
 |------|---------|
+| List / create projects | `./fw list` · `./fw new <project>` (guide: `projects/README.md`) |
+| Build a project | `./fw build <project>` → `projects/<project>/build/` (`CCS_CONFIG`, `FW_*` passed through; build.sh gets the commit as `FW_COMMIT`) |
+| Flash a project | `./fw flash <project> <port> [image]` — `flash.sh` exits 0 flashed, 1 failed, 2 bad args, 3 manual steps printed (no headless flasher) |
 | Fetch installers | `./downloads/download.sh` |
 | Build image | `docker compose build` (image `cpsl-ti-radar-firmware-dev:latest`) |
 | Build cascade | `docker compose run --rm firmware-env /build_context/build_cascade.sh` (`CCS_CONFIG=Debug` for debug) |
 | Build legacy | `docker compose run --rm firmware-env /build_context/build_legacy.sh` |
 | Flash cascade | `docker compose run --rm flash /build_context/scripts/flash_cascade.sh <CLI port> [prebuilt]` — success only on `All commands from config file are executed !!!` |
-| Bring-up check | `docker compose run --rm flash python3 /build_context/scripts/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
-| Python helpers | `uv run python scripts/md_to_pdf.py <file.md>` |
+| Bring-up check | `docker compose run --rm flash python3 /build_context/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
+| Python helpers | `uv run python tools/md_to_pdf.py <file.md>` |
 
 ## Boards (single-user: claim in `status.md` before use)
 
@@ -56,6 +62,15 @@ Cascade versions follow `firmware/cascade/src/demo/src/awr2243/*.projectspec`.
 - **New-board flash failures** may mean the QSPI Quad Enable bit is unset —
   see "Possible Flashing Issues" in the cascade user guide (rebuild
   `sbl_uart_uniflash` with "Quad Enable Type" = 6).
+- Containers run fine as the host UID (`--user $(id -u):$(id -g)`, `HOME=/tmp/fwhome`):
+  both the CCS headless cascade build and the SDK 3.6 make flow were verified unprivileged
+  (firmware-01). The SDK 3.6 demo makefiles include everything via
+  `$(MMWAVE_SDK_INSTALL_PATH)`, so a demo builds from a copy outside `/opt/ti`; TI's
+  `setenv.sh` must be sourced from its own folder (it sources `./checkenv.sh`).
+- The SDK 3.6 make flow uses the SDK-bundled `ti-cgt-arm_16.9.6.LTS` and
+  `ti-cgt-c6000_8.3.3`, not the image's `ti-cgt-arm_20.2.7.LTS` (unused, kept).
+- The submodule's `.git` points outside the bind mount, so `git` does not work inside the
+  container; `fw` passes the commit in as `FW_COMMIT`.
 - The `flash` compose service bind-mounts `/dev` so ports that
   re-enumerate after a power-cycle stay visible.
 
