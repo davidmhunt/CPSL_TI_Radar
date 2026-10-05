@@ -91,11 +91,27 @@ git submodule update --init --recursive
 
 2. Next build and make the project
 ```
-cd CPSL_TI_Radar/CPSL_TI_Radar_cpp
-cd build
-cmake ../
-cmake --build .
+cd CPSL_TI_Radar
+cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
+cmake --build CPSL_TI_Radar_cpp/build -j
 ```
+
+3. (Optional) Install the libraries and headers, e.g. into a local prefix:
+```
+cmake --install CPSL_TI_Radar_cpp/build --prefix ~/cpsl_install
+```
+
+### Using the driver from another CMake project
+
+The install provides one CMake package, `CPSL_TI_Radar`, exporting one target, `CPSL_TI_Radar::driver`. Linking it brings in all driver libraries, their include directories and their dependencies (Threads, Boost, nlohmann_json):
+```cmake
+cmake_minimum_required(VERSION 3.11)
+project(consumer CXX)
+find_package(CPSL_TI_Radar REQUIRED)
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE CPSL_TI_Radar::driver)
+```
+Configure it with `-DCMAKE_PREFIX_PATH=<install prefix>`. Headers are installed under `<prefix>/include/CPSL_TI_Radar_CPP/<subdir>/` and are reached through the target, so `#include "Runner.hpp"` works without extra include paths.
 
 ## Running tests
 

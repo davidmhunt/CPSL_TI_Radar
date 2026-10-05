@@ -17,6 +17,21 @@ One executable: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial).
 `include/json` (nlohmann/json) is a
 submodule and must be present.
 
+CMake structure: each library's `src/<dir>/CMakeLists.txt` declares its own
+`target_include_directories` (PUBLIC, build and install interfaces) and calls
+`find_package` for what it uses (Threads, Boost), so a target gets the headers
+of everything it links and no central include list exists. Tests list only
+`LIBS` in `add_driver_test`. `src/CMakeLists.txt` also defines the interface
+target `driver` (links `Runner`), exported with the install as
+`CPSL_TI_Radar::driver`. New libraries (and a future `bench/`) get their own
+subdirectory, are added in `src/CMakeLists.txt`, and need no other include
+wiring. Downstream use:
+
+```cmake
+find_package(CPSL_TI_Radar REQUIRED)   # -DCMAKE_PREFIX_PATH=<install prefix>
+target_link_libraries(my_app PRIVATE CPSL_TI_Radar::driver)
+```
+
 ## Component graph
 
 ```

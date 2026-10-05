@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.11.0)
 project(CPSL_TI_Radar_CPP VERSION 0.1.0)
 
+# Name of the installed CMake package and export namespace:
+# find_package(CPSL_TI_Radar) provides CPSL_TI_Radar::driver
+set(PKG_NAME CPSL_TI_Radar)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -38,8 +42,6 @@ target_compile_definitions(CPSL_TI_Radar_CPP PRIVATE
 # Perform linking
 target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Runner)
 
-# Include directories - library directories were already exported and don't need to be added
-                 
 # Install header files
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
         DESTINATION include/${PROJECT_NAME}
@@ -47,38 +49,38 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
 )
 
 # Install libraries
-install(TARGETS nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing DCA1000Commands
-        EXPORT export_${PROJECT_NAME}
+install(TARGETS nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing DCA1000Commands driver
+        EXPORT export_${PKG_NAME}
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin
 )
 
 # Export the installed libraries and headers for downstream use
-install(EXPORT export_${PROJECT_NAME}
-        FILE ${PROJECT_NAME}Targets.cmake
-        NAMESPACE ${PROJECT_NAME}::
-        DESTINATION lib/cmake/${PROJECT_NAME}
+install(EXPORT export_${PKG_NAME}
+        FILE ${PKG_NAME}Targets.cmake
+        NAMESPACE ${PKG_NAME}::
+        DESTINATION lib/cmake/${PKG_NAME}
 )
 
 # Generate and install the package configuration file
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-  ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/${PKG_NAME}ConfigVersion.cmake
   VERSION ${PROJECT_VERSION}
   COMPATIBILITY SameMajorVersion
 )
 
 configure_package_config_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
-  INSTALL_DESTINATION lib/cmake/${PROJECT_NAME}
+  ${CMAKE_CURRENT_BINARY_DIR}/${PKG_NAME}Config.cmake
+  INSTALL_DESTINATION lib/cmake/${PKG_NAME}
 )
 
 install(FILES
-  ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
-  ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
-  DESTINATION lib/cmake/${PROJECT_NAME}
+  ${CMAKE_CURRENT_BINARY_DIR}/${PKG_NAME}Config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/${PKG_NAME}ConfigVersion.cmake
+  DESTINATION lib/cmake/${PKG_NAME}
 )
 
 # Set CPACK variables
