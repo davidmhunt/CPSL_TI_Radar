@@ -219,3 +219,46 @@ def test_baseline_configs_run_forever_and_match_stress():
         "1843_stress_test_baseline_numframes0.cfg")
     demo = base / "radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg"
     assert lib.frame_cfg_num_frames(demo.read_text()) == 0
+
+
+# ---- iq_check ----
+import struct as _struct  # noqa: E402
+import math as _math  # noqa: E402
+import iq_check  # noqa: E402
+
+
+def _write_tone_bin(path, bin_k, swapped, chirps=8):
+    """Synthetic frame in the .bin layout: x[n] = exp(+j 2 pi k n / N) (+ small phase per chirp)."""
+    cfg = lib.expected_from_radar_cfg(STRESS_CFG.read_text())
+    n, rx = cfg["adc_samples"], cfg["rx_antennas"]
+    words = []
+    for c in range(cfg["chirps_per_frame"]):
+        for _ in range(rx):
+            for i in range(n):
+                ph = 2 * _math.pi * bin_k * i / n + 0.3 * c
+                re, im = 2000 * _math.cos(ph), 2000 * _math.sin(ph)
+                if swapped:  # file holds what a wrong converter would have produced
+                    re, im = im, re
+                words += [int(round(re)), int(round(im))]
+    path.write_bytes(_struct.pack(f"<{len(words)}h", *words))
+
+
+@pytest.mark.parametrize("swapped,expect", [(False, "current order OK"), (True, "SWAPPED")])
+def test_iq_check_verdicts(tmp_path, swapped, expect):
+    res = iq_check.cfg_params(STRESS_CFG.read_text())["range_resolution_m"]
+    assert 0.25 < res < 0.28
+    dist = 11 * res
+    f = tmp_path / "adc_data.bin"
+    _write_tone_bin(f, 11, swapped)
+    r = iq_check.run(f, STRESS_CFG.read_text(), dist)
+    assert r["verdict"].startswith(expect), r
+    assert {r["peak_current"], r["peak_swapped"]} == {11, 250 - 11}
+
+
+def test_iq_check_inconclusive_and_short_file(tmp_path):
+    f = tmp_path / "adc_data.bin"
+    _write_tone_bin(f, 40, False)
+    assert iq_check.run(f, STRESS_CFG.read_text(), 11 * 0.2638)["verdict"] == "inconclusive"
+    f.write_bytes(b"\0" * 100)
+    with pytest.raises(SystemExit):
+        iq_check.run(f, STRESS_CFG.read_text(), 3.0)
