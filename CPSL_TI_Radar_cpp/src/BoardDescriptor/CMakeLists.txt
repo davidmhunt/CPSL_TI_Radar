@@ -1,5 +1,5 @@
-#board descriptor loader and radar-cfg cross-checks (design §1); not linked
-#into the driver yet (core-10 wires it in)
+#board descriptor loader, radar-cfg cross-checks and cfg command filter
+#(design §1); linked by Utilities (SystemConfigReader)
 add_library(BoardDescriptor BoardDescriptor.cpp)
 
 target_include_directories(BoardDescriptor PUBLIC

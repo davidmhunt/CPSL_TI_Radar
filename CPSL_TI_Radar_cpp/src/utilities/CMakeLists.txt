@@ -10,4 +10,5 @@ target_include_directories(Utilities PUBLIC
 
 #link libraries as needed
 target_link_libraries(Utilities PUBLIC nlohmann_json::nlohmann_json
+                                PUBLIC BoardDescriptor
                                 PUBLIC Boost::boost)

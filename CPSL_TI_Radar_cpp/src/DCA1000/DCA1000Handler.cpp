@@ -21,7 +21,8 @@ DCA1000Handler::DCA1000Handler():
     samples_per_chirp(0),
     chirps_per_frame(0),
     num_rx_channels(4),
-    save_to_file(false),
+    save_adc_frames(false),
+    save_raw_lvds(false),
     adc_cube_out_file(nullptr),
     raw_lvds_out_file(nullptr),
     adc_data_cube(),
@@ -52,7 +53,8 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
     samples_per_chirp(0),
     chirps_per_frame(0),
     num_rx_channels(4),
-    save_to_file(false),
+    save_adc_frames(false),
+    save_raw_lvds(false),
     adc_cube_out_file(nullptr),
     raw_lvds_out_file(nullptr),
     adc_data_cube(),
@@ -83,7 +85,8 @@ DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
     samples_per_chirp(rhs.samples_per_chirp),
     chirps_per_frame(rhs.chirps_per_frame),
     num_rx_channels(rhs.num_rx_channels),
-    save_to_file(rhs.save_to_file),
+    save_adc_frames(rhs.save_adc_frames),
+    save_raw_lvds(rhs.save_raw_lvds),
     adc_cube_out_file(rhs.adc_cube_out_file),
     raw_lvds_out_file(rhs.raw_lvds_out_file),
     adc_data_cube(rhs.adc_data_cube),
@@ -93,14 +96,12 @@ DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
 DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
     if(this != &rhs){
         //close file streams if we're the sole owner
-        if (save_to_file) {
-            if (adc_cube_out_file && adc_cube_out_file.use_count() == 1 &&
-                adc_cube_out_file->is_open())
-                adc_cube_out_file->close();
-            if (raw_lvds_out_file && raw_lvds_out_file.use_count() == 1 &&
-                raw_lvds_out_file->is_open())
-                raw_lvds_out_file->close();
-        }
+        if (adc_cube_out_file && adc_cube_out_file.use_count() == 1 &&
+            adc_cube_out_file->is_open())
+            adc_cube_out_file->close();
+        if (raw_lvds_out_file && raw_lvds_out_file.use_count() == 1 &&
+            raw_lvds_out_file->is_open())
+            raw_lvds_out_file->close();
 
         initialized          = rhs.initialized;
         new_frame_available  = rhs.new_frame_available;
@@ -118,7 +119,8 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
         samples_per_chirp    = rhs.samples_per_chirp;
         chirps_per_frame     = rhs.chirps_per_frame;
         num_rx_channels      = rhs.num_rx_channels;
-        save_to_file         = rhs.save_to_file;
+        save_adc_frames      = rhs.save_adc_frames;
+        save_raw_lvds        = rhs.save_raw_lvds;
         adc_cube_out_file    = rhs.adc_cube_out_file;
         raw_lvds_out_file    = rhs.raw_lvds_out_file;
         adc_data_cube        = rhs.adc_data_cube;
@@ -134,14 +136,12 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
 DCA1000Handler::~DCA1000Handler() {
     // socket_ destructor handles RX thread join and socket close
 
-    if (save_to_file) {
-        if (adc_cube_out_file && adc_cube_out_file.use_count() == 1 &&
-            adc_cube_out_file->is_open())
-            adc_cube_out_file->close();
-        if (raw_lvds_out_file && raw_lvds_out_file.use_count() == 1 &&
-            raw_lvds_out_file->is_open())
-            raw_lvds_out_file->close();
-    }
+    if (adc_cube_out_file && adc_cube_out_file.use_count() == 1 &&
+        adc_cube_out_file->is_open())
+        adc_cube_out_file->close();
+    if (raw_lvds_out_file && raw_lvds_out_file.use_count() == 1 &&
+        raw_lvds_out_file->is_open())
+        raw_lvds_out_file->close();
 }
 
 bool DCA1000Handler::initialize(
@@ -159,7 +159,7 @@ bool DCA1000Handler::initialize(
     }
 
     //initialize file streaming
-    if(save_to_file){
+    if(save_adc_frames || save_raw_lvds){
         if(init_out_file() != true){
             return false;
         }
@@ -477,7 +477,7 @@ bool DCA1000Handler::process_next_packet(){
     }
 
     // Write entire ADC payload to raw LVDS file in one syscall
-    if (save_to_file && received_bytes > 10) {
+    if (save_raw_lvds && received_bytes > 10) {
         raw_lvds_out_file->write(
             reinterpret_cast<const char*>(pkt_buf + 10),
             static_cast<std::streamsize>(received_bytes - 10)
@@ -550,7 +550,8 @@ void DCA1000Handler::load_config(){
     DCA_systemIP = system_config_reader.getDCASystemIP();
     DCA_cmdPort = system_config_reader.getDCACmdPort();
     DCA_dataPort = system_config_reader.getDCADataPort();
-    save_to_file = system_config_reader.get_save_to_file();
+    save_adc_frames = system_config_reader.get_save_adc_frames();
+    save_raw_lvds = system_config_reader.get_save_raw_lvds();
 
     //print key ports
     std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
@@ -560,7 +561,8 @@ void DCA1000Handler::load_config(){
 }
 
 bool DCA1000Handler::init_sockets() {
-    return socket_.init(DCA_fpgaIP, DCA_systemIP, DCA_cmdPort, DCA_dataPort);
+    return socket_.init(DCA_fpgaIP, DCA_systemIP, DCA_cmdPort, DCA_dataPort,
+                        system_config_reader.getDCARcvbufBytes());
 }
 
 /**
@@ -689,7 +691,7 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
         print_status();
     }
 
-    if(save_to_file){
+    if(save_adc_frames){
         write_adc_data_cube_to_file();
     }
 }
@@ -697,20 +699,27 @@ void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
 
 bool DCA1000Handler::init_out_file(){
 
-    adc_cube_out_file = std::make_shared<std::ofstream>("adc_data.bin", 
-        std::ios::out | std::ofstream::binary | std::ios::trunc);
+    //files go to output.dir (current directory when unset)
+    if(save_adc_frames){
+        const std::string path = system_config_reader.get_output_path("adc_data.bin");
+        adc_cube_out_file = std::make_shared<std::ofstream>(path,
+            std::ios::out | std::ofstream::binary | std::ios::trunc);
 
-    if(adc_cube_out_file -> is_open() != true){
-        std::cout << "Failed to open or create adc_data.bin file" << std::endl;
-        return false;
+        if(adc_cube_out_file -> is_open() != true){
+            std::cout << "Failed to open or create " << path << std::endl;
+            return false;
+        }
     }
 
-    raw_lvds_out_file = std::make_shared<std::ofstream>("LVDS_Raw_0.bin", 
-        std::ios::out | std::ofstream::binary | std::ios::trunc);
+    if(save_raw_lvds){
+        const std::string path = system_config_reader.get_output_path("LVDS_Raw_0.bin");
+        raw_lvds_out_file = std::make_shared<std::ofstream>(path,
+            std::ios::out | std::ofstream::binary | std::ios::trunc);
 
-    if(raw_lvds_out_file -> is_open() != true){
-        std::cout << "Failed to open or create LVDS_Raw_0.bin file" << std::endl;
-        return false;
+        if(raw_lvds_out_file -> is_open() != true){
+            std::cout << "Failed to open or create " << path << std::endl;
+            return false;
+        }
     }
 
     return true;

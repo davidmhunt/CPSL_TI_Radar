@@ -58,8 +58,9 @@ private:
     size_t chirps_per_frame;
     size_t num_rx_channels;
 
-    //saving to a file
-    bool save_to_file;
+    //saving to files (output.save_adc_frames / output.save_raw_lvds)
+    bool save_adc_frames;
+    bool save_raw_lvds;
     std::shared_ptr<std::ofstream> adc_cube_out_file;
     std::shared_ptr<std::ofstream> raw_lvds_out_file;
     

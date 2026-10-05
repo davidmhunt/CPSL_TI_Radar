@@ -20,7 +20,7 @@ function(add_driver_test name)
 endfunction()
 
 add_driver_test(test_radar_config_reader   LIBS Utilities)
-add_driver_test(test_system_config_reader  LIBS Utilities)
+add_driver_test(test_system_config_v2     LIBS Utilities)
 add_driver_test(test_dca1000_commands      LIBS DCA1000Commands)
 add_driver_test(test_frame_assembler       LIBS FrameAssembler)
 add_driver_test(test_adc_cube_converter    LIBS ADCCubeConverter)
