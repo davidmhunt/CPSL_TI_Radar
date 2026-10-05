@@ -14,7 +14,7 @@ See **[`CPSL_TI_Radar_cpp/Readme.md`](./CPSL_TI_Radar_cpp/Readme.md)** for:
 
 ## Repository Layout
 
-- [`CPSL_TI_Radar_cpp/`](./CPSL_TI_Radar_cpp/) — the C++ driver, radar `.cfg` files and system JSON configs
+- [`CPSL_TI_Radar_cpp/`](./CPSL_TI_Radar_cpp/) — the C++ driver, radar `.cfg` files, system JSON configs and board descriptors (`config/boards/`)
 - [`tools/radar_viewer/`](./tools/radar_viewer/) — live point-cloud viewer for the AWR2243 cascade (seed of the v2.0 GUI)
 - [`utilities/`](./utilities/) — analysis notebooks (see below)
 - [`DCA_Programming/`](./DCA_Programming/) — DCA1000 FPGA reprogramming

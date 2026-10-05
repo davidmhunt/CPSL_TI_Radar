@@ -23,14 +23,24 @@ CMake structure: each library's `src/<dir>/CMakeLists.txt` declares its own
 of everything it links and no central include list exists. Tests list only
 `LIBS` in `add_driver_test`. `src/CMakeLists.txt` also defines the interface
 target `driver` (links `Runner`), exported with the install as
-`CPSL_TI_Radar::driver`. New libraries (and a future `bench/`) get their own
-subdirectory, are added in `src/CMakeLists.txt`, and need no other include
-wiring. Downstream use:
+`CPSL_TI_Radar::driver`. New libraries get their own subdirectory, are added
+in `src/CMakeLists.txt`, and need no other include wiring. `src/BoardDescriptor/`
+(board descriptor loader, see Configuration) is built and unit-tested but not
+yet linked into `driver`. Downstream use:
 
 ```cmake
 find_package(CPSL_TI_Radar REQUIRED)   # -DCMAKE_PREFIX_PATH=<install prefix>
 target_link_libraries(my_app PRIVATE CPSL_TI_Radar::driver)
 ```
+
+**Replay benchmark.** `bench/bench_pipeline` (top-level `bench/`, built with
+the tests) replays synthetic DCA1000 packets, with injected drops, duplicates
+and reordering, through `FrameAssembler` and an ADC converter. It reports
+frames/s, ns per ADC byte and heap allocations per frame for three converter
+variants: today's `ADCCubeConverter`, and two bench-local kernels (nested with a
+reused buffer, and flat `[chirp][rx][sample]`) kept as data for design D5. The
+default `ctest` run skips it; `ctest -L bench` runs it. Build with
+`-DCMAKE_BUILD_TYPE=Release` for comparable numbers.
 
 ## Component graph
 
@@ -88,7 +98,7 @@ channel, use an even number of ADC samples.
 
 ## Configuration
 
-Two files are always required:
+Two files are always required today:
 
 1. **JSON system config** (`CPSL_TI_Radar_cpp/config/system/*.json`):
    serial ports, DCA1000 IP/ports, streaming mode, save-to-file, and
@@ -96,6 +106,15 @@ Two files are always required:
 2. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): TI chirp config.
    DCA1000 streaming needs `lvdsStreamCfg -1 0 1 0` (ADC only) or
    `lvdsStreamCfg -1 1 1 1` (all data).
+
+A third file, the **board descriptor** (`CPSL_TI_Radar_cpp/config/boards/<board>.json`:
+`IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), holds a board's CLI handshake,
+cfg dialect, UART TLV format, LVDS layout and DCA1000 settings (design §1). It is
+loaded strictly by `cpsl::radar::BoardDescriptor::load` (`src/BoardDescriptor/`), and
+`cross_check_radar_cfg` checks a radar .cfg against it (16-bit complex ADC,
+`adcbufCfg` interleave vs `lvds.layout`, `lvdsStreamCfg` ADC streaming). The runtime
+does not read it yet: core-10 replaces `board_type` with it. Field sources are in
+`config/boards/README.md`.
 
 DCA1000 network defaults: FPGA `192.168.33.180`, host `192.168.33.30/24`,
 command port 4096, data port 4098.

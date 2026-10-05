@@ -125,6 +125,18 @@ ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 
 Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding). To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
 
+`test_board_descriptor` covers the board descriptor files in [`config/boards/`](./config/boards/) (see "Board descriptors" below).
+
+### Replay benchmark (`ctest -L bench`)
+
+`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) today's `ADCCubeConverter`, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/nav_configs/1843_stress_test.cfg` unless you pass `--cfg`. The plain `ctest` run skips the benchmark; run it explicitly from a Release build:
+
+```bash
+cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release -j
+ctest --test-dir build-release -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
+```
+
 ## Preparing your hardware
 
 To stream samples from the DCA1000, the following steps must be completed
@@ -239,6 +251,9 @@ This part of the JSON file determines where the data is coming from. Only one of
 | `"IWR6843"` | 2-lane | non-interleaved (SDK 3+) |
 | `"IWR1443"` | 4-lane | interleaved (SDK 2) |
 | `"AWR2243_CASCADE"` | not supported yet (serial only) | — |
+
+##### Board descriptors
+[`config/boards/`](./config/boards/) holds one descriptor per board: `IWR1443.json`, `IWR1843.json`, `IWR6843.json` and `AWR2243_CASCADE.json`. Each one gives the board's CLI handshake, cfg dialect, UART TLV format, LVDS layout and DCA1000 settings, and [`config/boards/README.md`](./config/boards/README.md) cites the source of every value. The driver does not read these files yet; `board_type` above still selects the board. A later v2 change replaces `board_type` with them.
 
 ##### AWR2243 cascade notes
 * Use [`radar_0_AWR2243_cascade_serial.json`](./config/system/radar_0_AWR2243_cascade_serial.json) with
