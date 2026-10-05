@@ -12,10 +12,10 @@ Firmware role's source of project facts
 | `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.env`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `docs/`, `build/`), copied from `_template/`. **Usage guide: [`firmware_dev/projects/README.md`](../firmware_dev/projects/README.md)** | ″ |
 | `firmware_dev/fw` | Dispatcher: `list`, `new <p>`, `build <p>`, `flash <p> <port> [image]`, `help`; runs compose as the host UID, so `projects/*/build/` is user-owned | ″ |
 | `firmware_dev/tools/` | Cross-project scripts (`cascade_serial_check.py`, `md_to_pdf.py`) | ″ |
-| `firmware_dev/firmware/cascade/src/demo/` | AM273x + AWR2243 2-chip cascade DDM demo (projectspecs, chirp configs, TI docs) | ″ |
+| `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/`, `prebuilt_binaries/` SBL images + demo.cfg) | ″ |
 | `firmware_dev/firmware/legacy/src/` | Single-chip mmWave SDK 3.x demos (IWR1843/IWR6843) | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
-| `firmware_dev/build/{cascade,legacy}/` | Old-flow build outputs (gitignored; root-owned from pre-`fw` container runs: remove with `docker compose run --rm firmware-env rm -rf /build_context/build` once firmware-02 has its baseline) | ″ |
+| `firmware_dev/build/{cascade,legacy}/` | Old-flow build outputs (gitignored; root-owned from pre-`fw` container runs; the cascade baseline is no longer needed, firmware-05 removes the folder with `docker compose run --rm firmware-env rm -rf /build_context/build`) | ″ |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/`) | this repo — to be reorganized into the v2.0 shipped-firmware directory |
 
 ## Toolchain (in the Docker image, under `/opt/ti/`)
@@ -31,7 +31,7 @@ Firmware role's source of project facts
 | Radar Toolbox | 4.00.00.05 (also supplies cascade prebuilt libraries) |
 | Code Composer Studio | 12.8.1, headless only |
 
-Cascade versions follow `firmware/cascade/src/demo/src/awr2243/*.projectspec`.
+Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.projectspec`.
 
 ## Commands (run from `firmware_dev/`)
 
@@ -42,9 +42,9 @@ Cascade versions follow `firmware/cascade/src/demo/src/awr2243/*.projectspec`.
 | Flash a project | `./fw flash <project> <port> [image]` — `flash.sh` exits 0 flashed, 1 failed, 2 bad args, 3 manual steps printed (no headless flasher) |
 | Fetch installers | `./downloads/download.sh` |
 | Build image | `docker compose build` (image `cpsl-ti-radar-firmware-dev:latest`) |
-| Build cascade | `docker compose run --rm firmware-env /build_context/build_cascade.sh` (`CCS_CONFIG=Debug` for debug) |
+| Build cascade | `./fw build awr2243_cascade_ddm` → `projects/awr2243_cascade_ddm/build/am273x_cascade.appimage` (`CCS_CONFIG=Debug` for debug) |
 | Build legacy | `docker compose run --rm firmware-env /build_context/build_legacy.sh` |
-| Flash cascade | `docker compose run --rm flash /build_context/scripts/flash_cascade.sh <CLI port> [prebuilt]` — success only on `All commands from config file are executed !!!` |
+| Flash cascade | `./fw flash awr2243_cascade_ddm <CLI port> [image\|prebuilt]` — success only on `All commands from config file are executed !!!` |
 | Bring-up check | `docker compose run --rm flash python3 /build_context/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
 | Python helpers | `uv run python tools/md_to_pdf.py <file.md>` |
 
@@ -76,8 +76,9 @@ Cascade versions follow `firmware/cascade/src/demo/src/awr2243/*.projectspec`.
 
 ## Open v2.0 items
 
-- `firmware_dev` still tracks TI prebuilt `.aer5f`/`.ae66` libraries and a
-  TI prebuilt `.appimage`; the build falls back to the Radar Toolbox copy,
-  so these are candidates to drop (confirm libcli first).
+- Cascade TI binaries: `.gitignore` still has exceptions for `.aer5f`/`.ae66`/`.appimage`
+  under `projects/awr2243_cascade_ddm/`, but none are tracked (the build takes the libraries
+  from the Radar Toolbox); `prebuilt_binaries/` keeps TI's two SBL `.tiimage` files for
+  `flash.sh`. Dropping/relicensing them is still open.
 - Shipped-firmware directory + publish script with a provenance manifest.
 - Licensing check on any TI binaries shipped publicly (user decision).
