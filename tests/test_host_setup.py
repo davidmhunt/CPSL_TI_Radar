@@ -237,12 +237,33 @@ def test_nic_fix_is_additive_on_named_profile_only():
     c = nic(h, "--nic", "enp3s0")
     assert c.status == "MISSING"
     assert [s.display() for s in c.fix_cmds] == [
-        "nmcli connection modify id 'Wired connection 1' +ipv4.addresses 192.168.33.30/24",
-        "nmcli connection up id 'Wired connection 1'"]
+        f"nmcli connection modify uuid {W1} +ipv4.addresses 192.168.33.30/24  # 'Wired connection 1'",
+        f"nmcli connection up uuid {W1}  # 'Wired connection 1'"]
     for s in c.fix_cmds:
         assert "sudo" not in s.argv and "ipv4.addresses" not in s.argv and "-ipv4.addresses" not in s.argv
-        assert s.argv[s.argv.index("id") + 1] == "Wired connection 1"
-        assert "Wired connection 2" not in s.display() and "uuid" not in s.argv
+        assert s.argv[s.argv.index("uuid") + 1] == W1 and "id" not in s.argv
+        assert W2 not in s.display() and "Wired connection 1" not in s.argv  # name is display-only
+
+
+def test_nic_duplicate_profile_name_targets_only_enp3s0_uuid():
+    """A second 'Wired connection 1' bound to another NIC: commands use enp3s0's uuid only."""
+    h = bench_host()
+    strip_dca_addr(h)
+    lst = ("nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE", "connection", "show")
+    h.cmds[lst] = (0, h.cmds[lst][1].replace("Wired connection 2:", "Wired connection 1:"))
+    h.cmds[nmcli_con(W2)] = (0, fx(f"nmcli_con_{W2}.txt").replace("connection.id:Wired connection 2",
+                                                                   "connection.id:Wired connection 1"))
+    c = nic(h, "--nic", "enp3s0")
+    assert c.status == "MISSING" and len(c.fix_cmds) == 2
+    for s in c.fix_cmds:
+        assert s.argv[3:5] == ["uuid", W1] and W2 not in s.argv
+    assert any(n.startswith("WARN: 2 NetworkManager profiles are named 'Wired connection 1'") and W2 in n
+               for n in c.notes)
+    # configured host with the duplicate: still flagged (WARN), nothing to run
+    h = bench_host()
+    h.cmds[lst] = (0, h.cmds[lst][1].replace("Wired connection 2:", "Wired connection 1:"))
+    c = nic(h, "--nic", "enp3s0")
+    assert c.status == "WARN" and not c.fix_cmds and any(W2 in n for n in c.notes)
 
 
 def test_nic_profile_with_awkward_name_is_quoted():
@@ -253,8 +274,9 @@ def test_nic_profile_with_awkward_name_is_quoted():
     h.cmds[nmcli_con(W1)] = (0, h.cmds[nmcli_con(W1)][1].replace("connection.id:Wired connection 1",
                                                                   r"connection.id:Lab\:DCA it's"))
     c = nic(h, "--nic", "enp3s0")
-    assert c.fix_cmds[0].argv[4] == "Lab:DCA it's"
-    assert shlex.split(c.fix_cmds[0].display())[4] == "Lab:DCA it's"
+    assert c.fix_cmds[0].argv[4] == W1
+    assert c.fix_cmds[0].display().endswith('  # "Lab:DCA it\'s"')
+    assert shlex.split(c.fix_cmds[0].display(), comments=True) == c.fix_cmds[0].argv
 
 
 def test_nic_link_down_profile_missing_address_only_modifies():
@@ -271,7 +293,7 @@ def test_nic_inactive_profile_found_by_interface_name_and_ambiguity():
     lst = ("nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE", "connection", "show")
     h.cmds[lst] = (0, fx("nmcli_con_list.txt").replace(f"{W1}:802-3-ethernet:enp3s0", f"{W1}:802-3-ethernet:"))
     c = nic(h, "--nic", "enp3s0")  # Wired connection 2 is bound to enx306893aba600, not picked
-    assert [s.display() for s in c.fix_cmds] == ["nmcli connection up id 'Wired connection 1'"]
+    assert [s.display() for s in c.fix_cmds] == [f"nmcli connection up uuid {W1}  # 'Wired connection 1'"]
     h.cmds[nmcli_con(W2)] = (0, fx(f"nmcli_con_{W2}.txt").replace("enx306893aba600", "enp3s0"))
     c = nic(h, "--nic", "enp3s0")
     assert c.status == "MISSING" and not c.fix_cmds and "several NetworkManager profiles" in c.detail
@@ -408,8 +430,8 @@ EOF
 sudo sysctl -p /etc/sysctl.d/99-radar.conf
 
 # dca-nic
-nmcli connection modify id 'Wired connection 1' +ipv4.addresses 192.168.33.30/24
-nmcli connection up id 'Wired connection 1'
+nmcli connection modify uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8 +ipv4.addresses 192.168.33.30/24  # 'Wired connection 1'
+nmcli connection up uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8  # 'Wired connection 1'
 
 # dialout
 sudo usermod -aG dialout cpsl
@@ -511,3 +533,26 @@ def test_preflight_runtime_only():
     assert [(c.name, c.status) for c in checks] == [
         ("sysctl", "OK"), ("realtime", "MISSING"), ("build-type", "OK")]
     assert [c.name for c in hs.preflight(DRIVER, need_realtime=False, host=h)] == ["sysctl", "build-type"]
+
+
+def test_unreadable_owned_files_are_never_rewritten():
+    h = bench_host(boards=2)
+    h.files["/proc/sys/net/core/rmem_max"] = "212992\n"
+    h.dirs.update({"/etc/sysctl.d/99-radar.conf", "/etc/udev/rules.d/99-radar.rules"})  # exist, read -> None
+    c = hs.check_sysctl(h)
+    assert c.status == "MISSING" and not c.fix_cmds and "unreadable" in c.detail
+    u = hs.check_udev(h, enabled=True)
+    assert u.status == "MISSING" and not u.fix_cmds and "unreadable" in u.detail
+    assert any('SYMLINK+="radar/R2101050-cli"' in n for n in u.notes)
+
+
+def test_rerun_line_quotes_nic_and_user_comes_from_passwd():
+    h = bench_host()
+    h.dirs.discard("/sys/class/net/enp3s0/device")
+    h.files["/sys/class/net/en$(x)/type"] = "1\n"
+    h.dirs.add("/sys/class/net/en$(x)/device")
+    c = nic(h)
+    assert "uv run tools/setup/host_setup.py --nic 'en$(x)'" in c.manual
+    import os
+    import pwd
+    assert hs.Host().user() == pwd.getpwuid(os.getuid()).pw_name

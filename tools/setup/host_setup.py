@@ -70,11 +70,12 @@ class Step:
 
     argv: list
     stdin: str | None = None
+    comment: str | None = None  # display-only, e.g. the NM profile name behind a uuid
 
     def display(self) -> str:
         cmd = shlex.join(self.argv)
         if self.stdin is None:
-            return cmd
+            return cmd + (f"  # {self.comment}" if self.comment else "")
         body = self.stdin if self.stdin.endswith("\n") else self.stdin + "\n"
         return f"{cmd} > /dev/null <<'EOF'\n{body}EOF"
 
@@ -132,8 +133,8 @@ class Host:
         return p.returncode, p.stdout
 
     def user(self) -> str:
-        import getpass
-        return getpass.getuser()
+        import pwd  # not getpass: it trusts $LOGNAME/$USER, and this name reaches usermod
+        return pwd.getpwuid(os.getuid()).pw_name
 
     def euid(self) -> int:
         return os.geteuid()
@@ -311,7 +312,13 @@ def check_sysctl(host: Host, target: int = RMEM_TARGET, require_persistent: bool
     if p_ok:  # persistent but not loaded (e.g. file added since boot)
         return Check("sysctl", MISSING, detail,
                      fix_cmds=[Step(["sudo", "sysctl", "-w", f"{RMEM_KEY}={target}"])])
-    content = _dropin_content(host.read(SYSCTL_DROPIN), target)
+    existing = host.read(SYSCTL_DROPIN)
+    if existing is None and host.exists(SYSCTL_DROPIN):
+        return Check("sysctl", MISSING, detail + f"; {SYSCTL_DROPIN} exists but is unreadable",
+                     manual=[f"sudo cat {SYSCTL_DROPIN}"],
+                     notes=["refusing to rewrite a file whose contents cannot be read; "
+                            f"add {RMEM_KEY}={target} to it by hand"])
+    content = _dropin_content(existing, target)
     files_after = _sysctl_files(host, assume=SYSCTL_DROPIN)
     after, after_src = _effective(host, files_after, RMEM_KEY, {SYSCTL_DROPIN: content})
     notes = []
@@ -336,11 +343,18 @@ def ethernet_candidates(host: Host) -> list:
 
 
 def _nm_profile_for(host: Host, nic: str):
-    """(profile dict | None, active: bool, problem str | None)."""
+    """(profile dict | None, active: bool, problem str | None, same-name rows)."""
     rc, out = host.run(["nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE", "connection", "show"])
     if rc != 0:
-        return None, False, "could not list NetworkManager profiles"
+        return None, False, "could not list NetworkManager profiles", []
     rows = parse_nmcli_con_list(out)
+
+    def found(prof, is_active):
+        if prof is None:
+            return None, is_active, "could not read the NetworkManager profile", []
+        dups = [r for r in rows if r["name"] == prof.get("connection.id")
+                and r["uuid"] != prof.get("connection.uuid")]
+        return prof, is_active, None, dups
 
     def details(uuid):
         rc, o = host.run(["nmcli", "-t", "-f",
@@ -350,7 +364,7 @@ def _nm_profile_for(host: Host, nic: str):
 
     active = [r for r in rows if r["device"] == nic]
     if active:
-        return details(active[0]["uuid"]), True, None
+        return found(details(active[0]["uuid"]), True)
     bound = []
     for r in rows:
         if r["type"] == "802-3-ethernet":
@@ -358,11 +372,11 @@ def _nm_profile_for(host: Host, nic: str):
             if d and d.get("connection.interface-name") == nic:
                 bound.append(d)
     if len(bound) == 1:
-        return bound[0], False, None
+        return found(bound[0], False)
     if not bound:
-        return None, False, f"no NetworkManager profile is bound to {nic}"
+        return None, False, f"no NetworkManager profile is bound to {nic}", []
     names = ", ".join(repr(b.get("connection.id")) for b in bound)
-    return None, False, f"several NetworkManager profiles are bound to {nic} ({names}); not guessing"
+    return None, False, f"several NetworkManager profiles are bound to {nic} ({names}); not guessing", []
 
 
 def check_dca_nic(host: Host, nic: str | None, confirm=None, ping: bool = False) -> Check:
@@ -395,8 +409,9 @@ def check_dca_nic(host: Host, nic: str | None, confirm=None, ping: bool = False)
         if c.fix_cmds:
             c.manual = [s.display() for s in c.fix_cmds] + c.manual
             c.fix_cmds = []
-        c.notes.append(f"the DCA NIC is never picked automatically: re-run with --nic {nic}")
-        c.manual.append(f"uv run tools/setup/host_setup.py --nic {nic}")
+        q = shlex.quote(nic)
+        c.notes.append(f"the DCA NIC is never picked automatically: re-run with --nic {q}")
+        c.manual.append(f"uv run tools/setup/host_setup.py --nic {q}")
     return c
 
 
@@ -426,7 +441,7 @@ def _check_nic(host: Host, nic: str, addrs: dict) -> Check:
                      manual=[shlex.join(["sudo", "ip", "addr", "add", DCA_HOST_CIDR, "dev", nic])],
                      notes=notes + ["`ip addr add` is NOT persistent: it is lost on reboot or link "
                                     "reset; configure it in netplan/ifupdown to keep it"])
-    prof, active, problem = _nm_profile_for(host, nic)
+    prof, active, problem, dups = _nm_profile_for(host, nic)
     if prof is None:
         manual = []
         if problem and problem.startswith("no NetworkManager profile"):
@@ -434,22 +449,29 @@ def _check_nic(host: Host, nic: str, addrs: dict) -> Check:
                                   "con-name", "radar-dca", "ipv4.method", "manual",
                                   "ipv4.addresses", DCA_HOST_CIDR])]
         return Check("dca-nic", MISSING, f"{nic}: {problem}", manual=manual, notes=notes)
-    name = prof.get("connection.id", "")
+    name, uuid = prof.get("connection.id", ""), prof.get("connection.uuid", "")
+    if dups:
+        notes.append(f"WARN: {len(dups) + 1} NetworkManager profiles are named {name!r} ("
+                     + ", ".join(f"{r['uuid']} on {r['device'] or 'no device'}" for r in dups)
+                     + f"); commands address only {uuid} ({nic}'s profile) by uuid")
     paddrs = [a.strip() for a in prof.get("ipv4.addresses", "").split(",") if a.strip()]
     persistent = DCA_HOST_CIDR in paddrs
     method = prof.get("ipv4.method", "")
     detail = (f"{nic}: profile {name!r} ({'active' if active else 'inactive'}, ipv4.method {method}, "
               f"addresses {', '.join(paddrs) or 'none'}); runtime {', '.join(have) or 'no IPv4'}; {link}")
-    # Additive only (+ipv4.addresses), on this one profile, addressed by id.
-    mod = Step(["nmcli", "connection", "modify", "id", name, "+ipv4.addresses", DCA_HOST_CIDR])
-    up = Step(["nmcli", "connection", "up", "id", name])
+    # Additive only (+ipv4.addresses), on this one profile, addressed by uuid: NM allows
+    # duplicate names, so `id <name>` could select another NIC's profile.
+    label = repr(name)
+    mod = Step(["nmcli", "connection", "modify", "uuid", uuid, "+ipv4.addresses", DCA_HOST_CIDR],
+               comment=label)
+    up = Step(["nmcli", "connection", "up", "uuid", uuid], comment=label)
     polkit = ("nmcli runs without sudo; if NetworkManager's polkit policy refuses, "
               "run the same command with sudo")
     if persistent and runtime:
-        return Check("dca-nic", OK, detail, notes=notes)
+        return Check("dca-nic", WARN if dups else OK, detail, notes=notes)
     if method in ("disabled", "ignore"):
         return Check("dca-nic", MISSING, detail + f"; IPv4 is {method} on this profile",
-                     manual=[shlex.join(["nmcli", "connection", "modify", "id", name,
+                     manual=[shlex.join(["nmcli", "connection", "modify", "uuid", uuid,
                                          "ipv4.method", "manual", "+ipv4.addresses", DCA_HOST_CIDR])],
                      notes=notes + ["changing ipv4.method is left to you (it changes how "
                                     "this profile gets its other addresses)"])
@@ -615,6 +637,12 @@ def check_udev(host: Host, enabled: bool) -> Check | None:
     want = [render_udev_rule(s, ifn, role) for s in sorted(good)
             for ifn, role in sorted(XDS110_IFACES.items())]
     existing = host.read(UDEV_RULES)
+    if existing is None and host.exists(UDEV_RULES):
+        return Check("udev", MISSING, f"{UDEV_RULES} exists but is unreadable",
+                     manual=[f"sudo cat {UDEV_RULES}"],
+                     notes=notes + ["refusing to rewrite a file whose contents cannot be read; "
+                                    "add these rules by hand:"] + [render_udev_rule(s, i, r)
+                                    for s in sorted(good) for i, r in sorted(XDS110_IFACES.items())])
     have = [ln.strip() for ln in (existing or "").splitlines()]
     mapping = "; ".join(f"{s}: cli {good[s]['00']}, data {good[s]['03']}" for s in sorted(good))
     if all(w in have for w in want):
