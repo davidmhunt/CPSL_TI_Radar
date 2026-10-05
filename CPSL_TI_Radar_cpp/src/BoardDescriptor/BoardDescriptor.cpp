@@ -5,6 +5,7 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <utility>
 
 using nlohmann::json;
 
@@ -317,6 +318,68 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     return true;
 }
 
+bool parse_json_strict(std::istream& in, const std::string& source, json& out, std::string& error) {
+    // One frame per open object/array. Arrays count their elements so the
+    // path names the element index; objects remember the keys seen so far.
+    struct Frame {
+        bool array = false;
+        long index = -1;
+        std::string key;
+        std::set<std::string> keys;
+    };
+    std::vector<Frame> frames;
+    std::string duplicate;  // first duplicate found, as a JSON path
+
+    auto path = [&frames]() {
+        std::string p;
+        for (const Frame& f : frames) p += "/" + (f.array ? std::to_string(f.index) : f.key);
+        return p;
+    };
+    auto element = [&frames]() {
+        if (!frames.empty() && frames.back().array) frames.back().index++;
+    };
+
+    json::parser_callback_t cb = [&](int /*depth*/, json::parse_event_t ev, json& parsed) {
+        switch (ev) {
+            case json::parse_event_t::object_start:
+            case json::parse_event_t::array_start:
+                element();
+                frames.push_back(Frame{});
+                frames.back().array = ev == json::parse_event_t::array_start;
+                break;
+            case json::parse_event_t::object_end:
+            case json::parse_event_t::array_end:
+                if (!frames.empty()) frames.pop_back();
+                break;
+            case json::parse_event_t::key:
+                if (!frames.empty()) {
+                    Frame& f = frames.back();
+                    f.key = parsed.get<std::string>();
+                    if (!f.keys.insert(f.key).second && duplicate.empty()) duplicate = path();
+                }
+                break;
+            case json::parse_event_t::value:
+                element();
+                break;
+        }
+        return true;
+    };
+
+    json j = json::parse(in, cb, /*allow_exceptions=*/false);
+    if (j.is_discarded()) {
+        error = source + ": not valid JSON";
+        return false;
+    }
+    if (!duplicate.empty()) {
+        std::string::size_type slash = duplicate.find_last_of('/');
+        error = source + ": " + duplicate + ": duplicate key \"" + duplicate.substr(slash + 1) +
+                "\" (each key may appear once per object)";
+        return false;
+    }
+    out = std::move(j);
+    return true;
+}
+
 bool BoardDescriptor::load(const std::string& path, BoardDescriptor& out, std::string& error,
                            const json* overrides) {
     std::ifstream f(path);
@@ -324,11 +387,8 @@ bool BoardDescriptor::load(const std::string& path, BoardDescriptor& out, std::s
         error = path + ": cannot open board descriptor";
         return false;
     }
-    json j = json::parse(f, nullptr, /*allow_exceptions=*/false);
-    if (j.is_discarded()) {
-        error = path + ": not valid JSON";
-        return false;
-    }
+    json j;
+    if (!parse_json_strict(f, path, j, error)) return false;
     if (overrides != nullptr) {
         if (!overrides->is_object()) {
             error = path + ": board_overrides must be an object";

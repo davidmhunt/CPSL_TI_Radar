@@ -8,6 +8,8 @@
 #include "BoardDescriptor.hpp"
 
 #include <fstream>
+#include <iterator>
+#include <sstream>
 #include <string>
 
 using cpsl::radar::BoardDescriptor;
@@ -306,6 +308,64 @@ TEST_CASE(rejects_bad_names_files_and_json) {
     }
     CHECK(!BoardDescriptor::load(bad, d, err));
     CHECK(has(err, "not valid JSON"));
+}
+
+// ---------------------------------------------------------------------------
+// Duplicate JSON keys (core-09 review F2): nlohmann keeps the last value, so
+// the loader must reject them instead of silently using one.
+// ---------------------------------------------------------------------------
+
+static std::string load_text(const std::string& name, const std::string& text) {
+    std::string path = std::string(TEST_TMP_DIR) + "/" + name;
+    {
+        std::ofstream f(path);
+        f << text;
+    }
+    BoardDescriptor d;
+    std::string err;
+    if (BoardDescriptor::load(path, d, err)) return "";
+    std::cout << "    rejected as expected: " << err << std::endl;
+    return err;
+}
+
+// The shipped IWR1843 text with `needle` replaced by `repl` (first occurrence).
+static std::string iwr1843_with(const std::string& needle, const std::string& repl) {
+    std::ifstream f(kBoards + "/IWR1843.json");
+    std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    std::string::size_type at = s.find(needle);
+    CHECK(at != std::string::npos);
+    if (at != std::string::npos) s.replace(at, needle.size(), repl);
+    return s;
+}
+
+TEST_CASE(rejects_duplicate_key_top_level) {
+    std::string e = load_text("IWR1843.json", iwr1843_with("\"sdk\": \"mmwave_sdk_3\",",
+                                                           "\"sdk\": \"mmwave_sdk_3\", \"sdk\": \"mmwave_sdk_2\","));
+    CHECK(has(e, "IWR1843.json: /sdk: duplicate key \"sdk\""));
+}
+
+TEST_CASE(rejects_duplicate_key_nested) {
+    std::string e = load_text("IWR1843.json", iwr1843_with("\"baud\": 115200,", "\"baud\": 115200, \"baud\": 9600,"));
+    CHECK(has(e, "/cli/baud: duplicate key \"baud\""));
+}
+
+TEST_CASE(rejects_duplicate_key_inside_array_element) {
+    // the path names the array index; also check through parse_json_strict directly
+    std::istringstream in("{\"a\": [1, {\"x\": 1}, {\"y\": 2, \"y\": 3}]}");
+    json j;
+    std::string err;
+    CHECK(!cpsl::radar::parse_json_strict(in, "mem", j, err));
+    CHECK_EQ(err, std::string("mem: /a/2/y: duplicate key \"y\" (each key may appear once per object)"));
+}
+
+TEST_CASE(same_key_in_different_objects_is_fine) {
+    std::istringstream in("{\"a\": {\"k\": 1}, \"b\": {\"k\": 2}, \"c\": [{\"k\": 3}, {\"k\": 4}]}");
+    json j;
+    std::string err;
+    CHECK(cpsl::radar::parse_json_strict(in, "mem", j, err));
+    CHECK_EQ(j["c"][1]["k"].get<int>(), 4);
+    // and all four shipped boards still load
+    for (const char* b : {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}) must_load(b);
 }
 
 TEST_MAIN()

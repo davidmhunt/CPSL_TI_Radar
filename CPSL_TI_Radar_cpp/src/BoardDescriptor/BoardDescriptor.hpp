@@ -14,6 +14,7 @@
 // Not wired into Runner or main yet (core-10 does that).
 
 #include <cstdint>
+#include <istream>
 #include <string>
 #include <vector>
 
@@ -102,6 +103,12 @@ struct BoardDescriptor {
     static bool from_json(const nlohmann::json& j, const std::string& expected_name,
                           const std::string& source, BoardDescriptor& out, std::string& error);
 };
+
+// Parse JSON without exceptions, rejecting duplicate object keys (nlohmann
+// would otherwise keep the last one silently). On failure returns false and
+// sets `error` to "<source>: not valid JSON" or
+// "<source>: <json path>: duplicate key \"<k>\"".
+bool parse_json_strict(std::istream& in, const std::string& source, nlohmann::json& out, std::string& error);
 
 // Which streams a run enables (from the system config).
 struct StreamSelection {

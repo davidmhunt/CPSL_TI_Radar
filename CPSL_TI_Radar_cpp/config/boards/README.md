@@ -3,7 +3,7 @@
 One JSON file per board, read by `BoardDescriptor::load` (`src/BoardDescriptor/`).
 The schema is in [`docs/design/driver_v2_design.md`](../../../docs/design/driver_v2_design.md) §1.
 Loading is strict: an unknown key, a wrong type, an unknown enum string, or a `lanes`/`layout`
-mismatch is an error. `name` must equal the file name. `dca1000` is required when
+mismatch is an error, and so is a key repeated in one object. `name` must equal the file name. `dca1000` is required when
 `lvds.supported` is true and not allowed when it is false.
 
 Status: added in core-09 and **not read by the driver yet**. Today's runtime still uses the
@@ -34,7 +34,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `cfg_dialect.rx_mask_fields` | `[1]`; cascade `[1, 4]` | `RadarConfigReader.cpp:285-289` (slave mask when `channelCfg` has 6 or more fields) |
 | `cfg_dialect.frame_period_field` | 5; cascade 6 | `RadarConfigReader.cpp:261-276` (field-count guess) |
 | `data_uart.baud` | 921600; cascade 3,125,000 | `SystemConfigReader.cpp:17` default; cascade JSON `:15` |
-| `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. The cascade value follows the tracked JSON. Design §1's table lists no override for it. |
+| `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. Design §1's board table lists the same values (5000 on the cascade, from the tracked cascade JSON). |
 | `data_uart.header_bytes` | 40; IWR1443 36 | 8-byte magic word + 32-byte header (`SerialStreamer.cpp:22`). **IWR1443 36 is a HYPOTHESIS** (audit (b): SDK 2 header has no `subFrameNumber`). |
 | `data_uart.tlv_dialect` | `sdk3`, `mcuplus_cascade`, `sdk2` | `TLVProcessing.hpp:11-21`. The cascade TLV codes 10 and 104 are defined but not parsed. **`sdk2` is unconfirmed (D7)**: the file loads, but `cross_check_radar_cfg` rejects serial streaming with it. |
 | `lvds.supported` | cascade `false` | `SystemConfigReader.cpp:476-482`; D4 |
