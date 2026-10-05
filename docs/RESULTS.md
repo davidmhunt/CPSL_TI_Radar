@@ -53,3 +53,15 @@ Basename: `baseline_pre_rework_iwr1843_serial_release__radar_0_IWR1843_demo__rep
 - Latency: not measurable through the current public API; not recorded.
 - Notebook smoke test (`process_adc_data.ipynb` on the ethpull `adc_data.bin`, 89 frames): partial pass (commit `3b61a2b`). The cube loads as (89, 4, 250, 126) and the ADC-sample, range-FFT and range-azimuth plots render (`*.notebook_*.png` next to the ethpull sidecar). Two notebook defects, not capture or driver faults, left unfixed: loading needs `numpy<2` (`np.reshape(newshape=...)` fails on numpy 2.x), and the range-Doppler cell fails (63 velocity bins vs 126 chirps per frame in the TDM cfg). Follow-up for the notebook.
 - Other boards: out of scope (IWR1843 only).
+
+## Bench validation, IWR1843 (core-06)
+
+Tag `validation_iwr1843_dca_release`, DCA1000 raw-ADC, `front_radar_IWR1843_stress_test_baseline.json`, 3 x 60 s SIGINT stops, run by following `docs/tutorials/bench_validation.md`. Driver binary sha256 `3ecd94cd17a3...` (with `cap_sys_nice`), repo HEAD `6281aad`. Files in `docs/results/validation/`, basenames `validation_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep<k>__60s__<UTC>` (rep1 `20261005T214321Z`, rep2 `20261005T214452Z`, rep3 `20261005T214602Z`).
+
+| Rep | fps mean / min / max | Dropped packets | rx_overrun_count | CPU % mean / max | RSS max (kB) | Granted SO_RCVBUF | .bin check |
+|---|---|---|---|---|---|---|---|
+| 1 | 10.0 / 9 / 11 | 0 | 0 | 16.1 / 20.0 | 10004 | 134217728 | exact |
+| 2 | 10.0 / 9 / 11 | 0 | 0 | 16.3 / 18.9 | 9908 | 134217728 | exact |
+| 3 | 10.0 / 9 / 11 | 0 | 0 | 16.2 / 19.0 | 10820 | 134217728 | exact |
+
+Caveats: exit 0 on all three; every run logs `sensorStop was not acknowledged with 'Done'` (100 ms read timeout while the board streams; harmless). CPU is higher than the pre-rework baseline (9 to 10 %) because this binary has `cap_sys_nice`; the baseline did not. The core-11 SIGINT flush fix is confirmed (`exact`, was 896 B short).

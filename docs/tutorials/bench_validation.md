@@ -14,7 +14,7 @@ Run every command from the repository root. Only one person at a time may hold t
 
 1. Power the board off. Set the S1 switch to **functional mode**: SOP2 = 0, SOP1 = 0, SOP0 = 1 (SOP mode 4); flashing mode is 101. The board reads the switch only at power-up. See [`readme_images/IWR1843_SOP_nodes.png`](../../readme_images/IWR1843_SOP_nodes.png), which labels the ON side of S1.
 2. Connect the board by USB. `ls /dev/ttyACM*` should show `/dev/ttyACM0` (CLI) and `/dev/ttyACM1` (data), the ports in the config below; otherwise edit `cli.port` and `serial_stream.port`.
-3. For raw ADC, connect the DCA1000 to the LVDS connector and by Ethernet to the host NIC, then power both. `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` checks that it answers at `192.168.33.180`.
+3. For raw ADC, connect the DCA1000 to the LVDS connector and by Ethernet to the host NIC, then power both. `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` pings `192.168.33.180` (report only). A working DCA1000 may not answer ping (the IWR1843 bench's does not), so the real check is the first run in section 5.
 4. Power-cycle the board before a run if the firmware was just flashed or the last run crashed.
 
 ## 3. Firmware
@@ -70,10 +70,10 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | Dropped packets (`dca_dropped_packets_total`) | 0 | n/a | 0 |
 | Rx overruns (`dca_rx_overrun_count_final`) | 0 | n/a | 0 |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
-| `adc_data.bin` size (`bin_size_check.verdict`) | SIGINT stop: `short_sigint_tail` (<= 896 B short, known bug, core-11). Natural stop: `exact` | n/a | 896 B short x3 |
-| CPU % mean (guide) | below 15 | below 3 | 9.1 to 10.5 / 0.5 to 0.6 |
+| `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
+| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (no `cap_sys_nice`), 16.1 to 16.3 (with it, 3 reps 2026-10-05) / 0.5 to 0.6 |
 
-For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The baseline ran without `cap_sys_nice`, so its DCA numbers are without real-time priority.
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The core-04 baseline ran without `cap_sys_nice`; with it (what `host_setup.py` applies) the DCA CPU is about 16 %, hence the 20 % limit.
 
 A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a fail: record it and see section 10.
 
@@ -105,7 +105,8 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 |---|---|
 | `bench: refusing to run, host preflight failed` | Run `uv run tools/setup/host_setup.py --nic <dca-nic> --apply`, then retry. A rebuild removes `cap_sys_nice`. |
 | `no frame received before start timeout` (`FAILED`, exit 2) | Check board mode (SOP jumpers), USB ports, DCA1000 power and cable, and the ping in section 2. For the cascade, power-cycle first. Read `driver_stdout.log`. |
+| `Runner: sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Seen at the end of every healthy IWR1843 SIGINT run: the board is busy streaming and the 100 ms read times out. Harmless if `status` is `ok` and the `.bin` is `exact`. |
 | `not every config command was acknowledged` | Harmless if only `calibData` is rejected. Otherwise the cfg has a command the firmware does not know. |
 | Dropped packets or overruns | `rmem_max` below 128 MB, no `cap_sys_nice`, or a slow NIC. Re-run `host_setup.py`; confirm `granted_so_rcvbuf_bytes` in the sidecar is 134217728. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |
-| `exit=-6` after a USB unplug | Known crash on a lost radar port (core-11). Reconnect, power-cycle, rerun. |
+| Non-zero exit after a USB unplug | The driver now exits 1 with `sensorStop could not be sent` (core-11) instead of crashing. Reconnect, power-cycle, rerun. |
