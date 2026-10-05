@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "name": "IWR6843",
+  "sdk": "mmwave_sdk_3",
+  "cli": {
+    "baud": 115200,
+    "ack": "Done",
+    "error_tokens": ["Error", "not recognized"],
+    "prompt": "mmwDemo:/>",
+    "prompt_wait_ms": 500,
+    "cmd_timeout_ms": 100,
+    "start_cmd": "sensorStart",
+    "stop_cmd": "sensorStop",
+    "skip_prefixes": ["%", "#"]
+  },
+  "lifecycle": { "config_once_per_boot": false },
+  "cfg_dialect": { "rx_mask_fields": [1], "frame_period_field": 5 },
+  "data_uart": { "baud": 921600, "header_bytes": 40, "tlv_dialect": "sdk3", "timeout_ms": 1000 },
+  "lvds": { "supported": true, "lanes": 2, "layout": "two_lane_iq_pairs", "iq_order": "q_first" },
+  "dca1000": { "packet_bytes": 1472, "packet_delay_us": 100, "fpga_timer_s": 30 }
+}

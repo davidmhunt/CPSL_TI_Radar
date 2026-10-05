@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "name": "AWR2243_CASCADE",
+  "sdk": "mmwave_mcuplus",
+  "cli": {
+    "baud": 115200,
+    "ack": "Done",
+    "error_tokens": ["Error", "not recognized"],
+    "prompt": "mmwDemo:/>",
+    "prompt_wait_ms": 500,
+    "cmd_timeout_ms": 5000,
+    "start_cmd": "sensorStart",
+    "stop_cmd": "sensorStop",
+    "skip_prefixes": ["%", "#"]
+  },
+  "lifecycle": { "config_once_per_boot": true },
+  "cfg_dialect": { "rx_mask_fields": [1, 4], "frame_period_field": 6 },
+  "data_uart": { "baud": 3125000, "header_bytes": 40, "tlv_dialect": "mcuplus_cascade", "timeout_ms": 5000 },
+  "lvds": { "supported": false }
+}
