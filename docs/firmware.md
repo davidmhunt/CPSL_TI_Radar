@@ -16,7 +16,6 @@ Firmware role's source of project facts
 | `firmware_dev/projects/ti_stock_demos/` | Stock SDK 3.6 IWR1843/IWR6843 mmw demos, built out of tree (overlay in `build/sdk/`; no TI source tracked) | ″ |
 | `firmware_dev/projects/iwr1843_sar_lvds/` | IWR1843 SDK 3.6 `xwr18xx/mmw` demo copied verbatim into `src/` (pristine baseline commit `bb3a348` in `firmware_dev`), built out of tree; base for the SAR/LVDS firmware | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
-| `firmware_dev/build/{cascade,legacy}/` | Old-flow build outputs (gitignored; root-owned from pre-`fw` container runs; the cascade baseline is no longer needed, firmware-05 removes the folder with `docker compose run --rm firmware-env rm -rf /build_context/build`) | ″ |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/`) | this repo — to be reorganized into the v2.0 shipped-firmware directory |
 
 ## Toolchain (in the Docker image, under `/opt/ti/`)
@@ -39,7 +38,7 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 | Task | Command |
 |------|---------|
 | List / create projects | `./fw list` · `./fw new <project>` (guide: `projects/README.md`) |
-| Build a project | `./fw build <project>` → `projects/<project>/build/` (`CCS_CONFIG`, `FW_*` passed through; build.sh gets the commit as `FW_COMMIT`) |
+| Build a project | `./fw build <project>` → `projects/<project>/build/` (`CCS_CONFIG`, `FW_*` passed through; build.sh gets the commit as `FW_COMMIT`, short hash of `firmware_dev` HEAD, `-dirty` if `git status --porcelain` is non-empty). Long builds: `setsid nohup ./fw build <p> > log 2>&1 &` |
 | Flash a project | `./fw flash <project> <port> [image]` — `flash.sh` exits 0 flashed, 1 failed, 2 bad args, 3 manual steps printed (no headless flasher) |
 | Fetch installers | `./downloads/download.sh` |
 | Build image | `docker compose build` (image `cpsl-ti-radar-firmware-dev:latest`) |
@@ -81,6 +80,9 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
   layout; its DSS `.const.2` grows 4 B and the linker then places `.bss` before `.far`. At a path of the
   same length as `ti_stock_demos`, both maps match exactly and the project's `src/` and the SDK demo folder
   give byte-identical `.bin`s (firmware-04).
+- Binaries embed the in-container build path (`/build_context/projects/<p>/build/...`), so build
+  hashes compare only at the same project folder name. The pre-layout cascade build (29 Sep,
+  427998 B, `9ff9d3cc…`) does not match the new layout (428030 B); not a regression (firmware-02).
 - The submodule's `.git` points outside the bind mount, so `git` does not work inside the
   container; `fw` passes the commit in as `FW_COMMIT`.
 - The `flash` compose service bind-mounts `/dev` so ports that
@@ -92,5 +94,8 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
   under `projects/awr2243_cascade_ddm/`, but none are tracked (the build takes the libraries
   from the Radar Toolbox); `prebuilt_binaries/` keeps TI's two SBL `.tiimage` files for
   `flash.sh`. Dropping/relicensing them is still open.
+- `iwr1843_sar_lvds/src/{mss,dss}/*.cfg` (XDC configs) carry TI's old "Restricted rights" header;
+  the SDK software manifest lists `packages\ti\demo` as BSD-3-Clause. Whether that suffices for a
+  public release is the user's call. The `ti_stock_demos` `.cfg`/`.pl` copies have no header (also BSD per the manifest).
 - Shipped-firmware directory + publish script with a provenance manifest.
 - Licensing check on any TI binaries shipped publicly (user decision).
