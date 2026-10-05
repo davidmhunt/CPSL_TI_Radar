@@ -6,6 +6,15 @@ relative to `CPSL_TI_Radar_cpp/`; `file:line` refers to that commit. The
 design that answers these findings is
 [`driver_v2_design.md`](driver_v2_design.md).
 
+Later commits shift two sets of references:
+- `c5b632e` (core-02) added 15 lines at the top of
+  `src/SerialStreamer/TLVProcessing.cpp`, so add 15 to its line numbers when
+  reading at a later HEAD.
+- `a4ed54a` (core-04 harness) touched no `src/` file.
+
+The core-04 harness `tools/bench/` records host and NIC settings but not
+`CMAKE_BUILD_TYPE` (see (a) Build).
+
 Claims marked **HYPOTHESIS** have not been isolated by an experiment (rule 9).
 Each one names the experiment that would settle it.
 
@@ -364,4 +373,5 @@ at `N - that bin` means I and Q are swapped. The result sets the descriptor's
   then the sensor stops. A 60 s run would end after about 3 s and then hit
   the 2 s timeout in `main.cpp:50-75`. The baseline needs `numFrames = 0` (a
   copy of the cfg) or a run length matched to the cfg.
-- **Build type.** Record `CMAKE_BUILD_TYPE` in the sidecar (see (a)).
+- **Build type.** Record `CMAKE_BUILD_TYPE` in the sidecar (see (a)). `tools/bench/bench_run.py`
+  (`a4ed54a`) does not record it yet.
