@@ -19,3 +19,6 @@ jsonconfig.json
 # --- friday harness (managed by init_harness.py) ---
 __pycache__/
 # --- end friday harness ---
+
+# CMake preset build dirs (CPSL_TI_Radar_cpp/CMakePresets.json; build/ has its own .gitignore)
+CPSL_TI_Radar_cpp/build-*/
