@@ -38,11 +38,7 @@ endif()
 # Add the executables
 add_executable(CPSL_TI_Radar_CPP main.cpp)
 
-# Bake in the absolute path to the default config at build time so the binary
-# works from any working directory, not just build/.
-target_compile_definitions(CPSL_TI_Radar_CPP PRIVATE
-    DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/system/front_radar_IWR1843_stress_test.json"
-)
+# The config is a required argument: CPSL_TI_Radar_CPP <system.json> [--validate]
 
 # Perform linking
 target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Runner)
