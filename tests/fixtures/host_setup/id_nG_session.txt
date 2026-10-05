@@ -1,0 +1,1 @@
+cpsl adm dialout cdrom sudo dip plugdev users lpadmin pipewire docker

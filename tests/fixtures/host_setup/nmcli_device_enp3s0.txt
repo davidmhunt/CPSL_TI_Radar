@@ -1,0 +1,2 @@
+GENERAL.STATE:100 (connected)
+GENERAL.CONNECTION:Wired connection 1

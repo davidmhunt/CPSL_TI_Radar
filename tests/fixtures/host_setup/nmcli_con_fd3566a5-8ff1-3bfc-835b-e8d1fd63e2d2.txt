@@ -1,0 +1,5 @@
+connection.id:Wired connection 2
+connection.uuid:fd3566a5-8ff1-3bfc-835b-e8d1fd63e2d2
+connection.interface-name:enx306893aba600
+ipv4.method:manual
+ipv4.addresses:10.41.10.1/24

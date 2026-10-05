@@ -1,0 +1,5 @@
+connection.id:Wired connection 1
+connection.uuid:8cca3611-6a6e-34cd-99f7-f55a946082b8
+connection.interface-name:enp3s0
+ipv4.method:manual
+ipv4.addresses:192.168.1.57/24, 192.168.33.30/24

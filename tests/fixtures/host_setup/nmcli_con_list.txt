@@ -1,0 +1,9 @@
+Dukeblue:4b6730ac-c95e-44c4-ba28-383215711acc:802-11-wireless:wlp1s0
+Wired connection 1:8cca3611-6a6e-34cd-99f7-f55a946082b8:802-3-ethernet:enp3s0
+tailscale0:8dbcf85d-604c-4e5f-b95c-c19e08733665:tun:tailscale0
+br-425a519e1c1c:6924b7ef-5c37-4ee5-9ac2-29b8ad567fdd:bridge:br-425a519e1c1c
+docker0:25448f3e-6a17-47fb-829d-881c487fcda2:bridge:docker0
+lo:5b1c4f02-e89b-4479-a637-2f9079f2e149:loopback:lo
+br-3b89a3fb491e:dc10496f-8936-4647-9df4-04f26a1a1392:bridge:br-3b89a3fb491e
+CPSL_tp_link:c7ef6c44-5a7c-4535-b1c3-4db47a1cb383:802-11-wireless:
+Wired connection 2:fd3566a5-8ff1-3bfc-835b-e8d1fd63e2d2:802-3-ethernet:
