@@ -1,0 +1,24 @@
+[project]
+name = "cpsl-ti-radar"
+version = "2.0.0.dev0"
+description = "Host-side drivers, configs, and tools for TI mmWave radars (IWR1443/1843/6843, AWR2243 cascade)"
+requires-python = ">=3.12"
+dependencies = [
+    "pyserial>=3.5",
+]
+
+[tool.uv]
+# Not an installable package (yet) — uv manages the environment only.
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# ROS 2 (sourced in the shell) puts its pytest plugins on PYTHONPATH; launch_testing
+# needs deps this venv lacks, so keep those plugins out of the project test run.
+addopts = ["-p", "no:launch_testing", "-p", "no:launch_ros"]
+norecursedirs = ["archived_code", "firmware_dev", "Firmware", ".friday", "build", ".venv"]
