@@ -1,28 +1,26 @@
 {
-    "verbose": false,
-    "TI_Radar_Config_Management": {
-        "TI_Radar_config_path": "../radar/cascade/cascade_shortrange.cfg"
+    "schema_version": 2,
+    "board": "AWR2243_CASCADE",
+    "radar_cfg": "../radar/cascade/cascade_shortrange.cfg",
+    "cli": {
+        "port": "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with_CMSIS-DAP_00000000-if00"
     },
-    "CLI_Controller": {
-        "CLI_port": "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with_CMSIS-DAP_00000000-if00",
-        "baud_rate": 115200,
-        "cmd_timeout_ms": 5000
+    "serial_stream": {
+        "enabled": true,
+        "port": "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with_CMSIS-DAP_00000000-if03"
     },
-    "Streamer": {
-        "serial_streaming": {
-            "enabled": true,
-            "data_port": "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with_CMSIS-DAP_00000000-if03",
-            "baud_rate": 3125000,
-            "timeout_ms": 5000
-        },
-        "DCA1000_streaming": {
-            "enabled": false,
-            "FPGA_IP": "192.168.33.180",
-            "system_IP": "192.168.33.30",
-            "data_port": 4098,
-            "cmd_port": 4096
-        },
-        "save_to_file": false,
-        "board_type": "AWR2243_CASCADE"
+    "dca1000": {
+        "enabled": false,
+        "fpga_ip": "192.168.33.180",
+        "host_ip": "192.168.33.30",
+        "cmd_port": 4096,
+        "data_port": 4098
+    },
+    "output": {
+        "save_adc_frames": false,
+        "save_raw_lvds": false
+    },
+    "runtime": {
+        "log_level": "info"
     }
 }

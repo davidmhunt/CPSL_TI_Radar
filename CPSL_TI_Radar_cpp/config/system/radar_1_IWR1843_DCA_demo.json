@@ -1,25 +1,26 @@
 {
-    "verbose": true,
-    "TI_Radar_Config_Management": {
-        "TI_Radar_config_path": "../radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg"
+    "schema_version": 2,
+    "board": "IWR1843",
+    "radar_cfg": "../radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg",
+    "cli": {
+        "port": "/dev/ttyACM0"
     },
-    "CLI_Controller": {
-        "CLI_port": "/dev/ttyACM0"
+    "serial_stream": {
+        "enabled": false,
+        "port": "/dev/ttyACM1"
     },
-    "Streamer": {
-        "serial_streaming": {
-            "enabled": false,
-            "data_port": "/dev/ttyACM1"
-        },
-        "DCA1000_streaming": {
-            "enabled": true,
-            "FPGA_IP": "192.168.33.180",
-            "system_IP": "192.168.33.30",
-            "data_port": 4098,
-            "cmd_port": 4096
-        },
-        "save_to_file": true,
-        "SDK_version": "3.6",
-        "board_type": "IWR1843"
+    "dca1000": {
+        "enabled": true,
+        "fpga_ip": "192.168.33.180",
+        "host_ip": "192.168.33.30",
+        "cmd_port": 4096,
+        "data_port": 4098
+    },
+    "output": {
+        "save_adc_frames": true,
+        "save_raw_lvds": false
+    },
+    "runtime": {
+        "log_level": "debug"
     }
 }
