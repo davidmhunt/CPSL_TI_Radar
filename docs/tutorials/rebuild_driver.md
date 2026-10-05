@@ -21,7 +21,7 @@ ctest --preset release            # hardware-free unit tests; all must pass
 cd ..
 ```
 
-You need CMake 3.25 or newer for presets (`cmake --version`). Without presets, the same build is `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build -DCMAKE_BUILD_TYPE=Release` followed by `cmake --build CPSL_TI_Radar_cpp/build -j`.
+You need CMake 3.25 or newer for presets (`cmake --version`). Without presets, the same build is `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build` (Release is the default) followed by `cmake --build CPSL_TI_Radar_cpp/build -j`.
 
 Debugging a crash? `--preset asan-ubsan` builds and tests under AddressSanitizer and UndefinedBehaviorSanitizer in `build-asan-ubsan/`. It does not replace `build/`.
 
