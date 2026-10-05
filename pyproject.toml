@@ -15,6 +15,13 @@ package = false
 dev = [
     "pytest>=9.1.1",
 ]
+# Optional: only for the analysis notebooks in utilities/ (uv run --group notebooks ...).
+notebooks = [
+    "numpy",
+    "matplotlib",
+    "nbconvert",
+    "ipykernel",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
