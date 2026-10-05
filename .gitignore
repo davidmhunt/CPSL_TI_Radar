@@ -11,6 +11,11 @@ __pycache__/*
 harness.config.env
 .venv/
 
+# Generated / build outputs
+/build/
+generated_config.*
+jsonconfig.json
+
 # --- friday harness (managed by init_harness.py) ---
 __pycache__/
 # --- end friday harness ---
