@@ -172,7 +172,7 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     drv.write_text(FAKE_DRIVER.format(py=sys.executable))
     drv.chmod(drv.stat().st_mode | stat.S_IXUSR)
     cfg = json.loads(STRESS_JSON.read_text())
-    cfg["TI_Radar_Config_Management"]["TI_Radar_config_path"] = str(STRESS_CFG)
+    cfg["radar_cfg"] = str(STRESS_CFG)
     cfg_path = tmp_path / "fake_system.json"
     cfg_path.write_text(json.dumps(cfg))
     monkeypatch.setattr(bench_run, "RUNS", tmp_path / "runs")
@@ -196,6 +196,9 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     assert chk["verdict"] == "exact"  # fake driver flushes; real-driver SIGINT tail is classified separately
     for k in ("commit", "system_config", "board", "host", "nic", "expected"):
         assert k in side
+    assert side["system_config_schema_version"] == 2
+    assert side["save_adc_frames"] is True and side["output_dir"] is None
+    assert r["output_files_dir"] == r["bin_size_check"]["file"].rsplit("/", 1)[0]  # per-run dir
     assert side["build"]["CMAKE_BUILD_TYPE"] == "Release"
     assert side["build"]["CMAKE_CXX_FLAGS_RELEASE"] == "-O3 -DNDEBUG"
     assert side["radar_cfg_numFrames"] == 30  # the shipped stress cfg, only a warning
@@ -219,13 +222,56 @@ def test_preflight_refuses_with_fix_commands(tmp_path, monkeypatch):
     assert "build-type" not in msg
 
 
-def test_requires_verbose(tmp_path):
+def test_requires_debug_log_level(tmp_path):
     cfg = json.loads(STRESS_JSON.read_text())
-    cfg["verbose"] = False
+    cfg["runtime"]["log_level"] = "info"
     p = tmp_path / "quiet.json"
     p.write_text(json.dumps(cfg))
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as e:
         bench_run.main([str(p)])
+    assert "log_level" in str(e.value)
+
+
+def test_rejects_v1_config_with_migration_hint(tmp_path):
+    v1 = REPO / "tests/fixtures/v1_configs/front_radar_IWR1843_stress_test.json"
+    with pytest.raises(SystemExit) as e:
+        bench_run.main([str(v1)])
+    assert "migrate_config_v1_to_v2.py" in str(e.value)
+
+
+def test_output_dir_resolves_relative_to_config(tmp_path):
+    cfg_path = tmp_path / "sys" / "c.json"
+    run_dir = tmp_path / "run"
+    assert bench_run.output_dir(cfg_path, {"output": {}}, run_dir) == run_dir
+    assert bench_run.output_dir(cfg_path, {"output": {"dir": "../out/a"}}, run_dir) == tmp_path / "out/a"
+    assert bench_run.output_dir(cfg_path, {"output": {"dir": "/abs/x"}}, run_dir) == Path("/abs/x")
+
+
+def test_end_to_end_bin_in_output_dir(tmp_path, monkeypatch):
+    """With output.dir set, the .bin check reads the file from there."""
+    monkeypatch.setattr(bench_run, "PREFLIGHT_HOST", PreflightHost())
+    drv = tmp_path / "fake_driver.py"
+    # the fake driver writes adc_data.bin into its cwd; point output.dir at the
+    # per-run dir through an absolute path the test controls instead
+    drv.write_text(FAKE_DRIVER.format(py=sys.executable).replace(
+        'open("adc_data.bin", "wb")', 'open(__import__("os").environ["FAKE_OUT"] + "/adc_data.bin", "wb")'))
+    drv.chmod(drv.stat().st_mode | stat.S_IXUSR)
+    out_files = tmp_path / "captures"
+    monkeypatch.setenv("FAKE_OUT", str(out_files))
+    cfg = json.loads(STRESS_JSON.read_text())
+    cfg["radar_cfg"] = str(STRESS_CFG)
+    cfg["output"]["dir"] = "captures"  # relative to the config file
+    cfg_path = tmp_path / "fake_system.json"
+    cfg_path.write_text(json.dumps(cfg))
+    monkeypatch.setattr(bench_run, "RUNS", tmp_path / "runs")
+    (tmp_path / "CMakeCache.txt").write_text("CMAKE_BUILD_TYPE:STRING=Release\n")
+    rc = bench_run.main([str(cfg_path), "--seconds", "2", "--tag", "unit", "--driver", str(drv),
+                         "--out-dir", str(tmp_path / "out"), "--start-timeout", "10"])
+    assert rc == 0
+    side = json.loads(next((tmp_path / "out").glob("*.json")).read_text())
+    assert side["output_dir"] == "captures"
+    assert side["result"]["output_files_dir"] == str(out_files)
+    assert side["result"]["bin_size_check"]["verdict"] == "exact"
 
 
 def test_cmake_cache_and_numframes():
@@ -252,8 +298,11 @@ def test_baseline_configs_run_forever_and_match_stress():
     assert lib.frame_cfg_num_frames(STRESS_CFG.read_text()) == 30  # shipped file untouched
     assert lib.expected_from_radar_cfg(new_cfg) == lib.expected_from_radar_cfg(STRESS_CFG.read_text())
     sysj = json.loads((base / "system/front_radar_IWR1843_stress_test_baseline.json").read_text())
-    assert sysj["TI_Radar_Config_Management"]["TI_Radar_config_path"].endswith(
-        "1843_stress_test_baseline_numframes0.cfg")
+    assert sysj["schema_version"] == 2 and sysj["board"] == "IWR1843"
+    assert sysj["radar_cfg"].endswith("1843_stress_test_baseline_numframes0.cfg")
+    # same work as the pre-rework baseline runs: debug stats, both output files, cwd output
+    assert sysj["runtime"]["log_level"] == "debug"
+    assert sysj["output"] == {"save_adc_frames": True, "save_raw_lvds": True}
     demo = base / "radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg"
     assert lib.frame_cfg_num_frames(demo.read_text()) == 0
 

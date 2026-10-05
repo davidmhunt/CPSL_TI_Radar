@@ -26,6 +26,20 @@ import migrate_config_v1_to_v2 as mig  # noqa: E402
 
 V1_FILES = sorted(FIXTURES.glob("*.json"))
 
+# Deliberate edits made to a tracked v2 file after the scripted migration
+# (merged over the script's output before comparing):
+# - the bench baseline keeps writing LVDS_Raw_0.bin, as the pre-rework
+#   baseline runs did, so later runs do the same disk I/O (core-10 step 7)
+HAND_EDITS = {
+    "front_radar_IWR1843_stress_test_baseline.json": {"output": {"save_raw_lvds": True}},
+}
+
+
+def merge(doc: dict, patch: dict) -> dict:
+    for k, v in patch.items():
+        doc[k] = merge(doc.get(k, {}), v) if isinstance(v, dict) else v
+    return doc
+
 
 @pytest.fixture(autouse=True)
 def boards_dir(monkeypatch):
@@ -52,7 +66,10 @@ def test_golden_conversion_matches_tracked_v2(v1, tmp_path):
     r = run(work, "--in-place")
     assert r.returncode == 0, r.stderr
     assert "UNMAPPED" not in r.stderr
-    assert work.read_text() == (SYSTEM / v1.name).read_text()
+    got = work.read_text()
+    if v1.name in HAND_EDITS:
+        got = mig.dumps(merge(json.loads(got), HAND_EDITS[v1.name]))
+    assert got == (SYSTEM / v1.name).read_text()
 
 
 def test_whole_directory_in_place_then_idempotent(tmp_path):

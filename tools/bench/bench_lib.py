@@ -1,11 +1,12 @@
 """Pure parsing / summary logic for the streaming bench harness (no hardware).
 
-The harness runs the unmodified ``CPSL_TI_Radar_CPP`` binary with a system
-config that has ``"verbose": true`` and reads its stdout.  Everything the
+The harness runs the unmodified ``CPSL_TI_Radar_CPP`` binary with a schema v2
+system config that sets ``"runtime": {"log_level": "debug"}`` (the v1
+``"verbose": true``) and reads its stdout.  Everything the
 driver already prints is enough:
 
 * ``[DCA1000] SO_RCVBUF granted: <bytes> bytes``
-* per DCA1000 frame (verbose)::
+* per DCA1000 frame (log_level debug)::
 
       frame: <received_frames>
       \tpackets: <n>
@@ -14,7 +15,7 @@ driver already prints is enough:
       \tdropped packet events: <n>
       \trx_overrun_count: <n>
 
-* per serial header (verbose; same ``frame:`` prefix, followed by ``\tversion:``)
+* per serial header (log_level debug; same ``frame:`` prefix, followed by ``\tversion:``)
 * ``TLV frame <n>: <k> detected points`` (main.cpp, one per delivered frame)
 * ``SerialStreamer: frame number jumped from a to b (M missed in total)``
 

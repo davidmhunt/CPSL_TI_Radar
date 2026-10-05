@@ -2,15 +2,18 @@
 """Run a system config on a radar for N seconds and record a streaming baseline.
 
 Runs the unmodified driver binary (``CPSL_TI_Radar_CPP``) as a subprocess,
-parses its verbose stdout, samples its CPU from /proc once per second, sends
+parses its debug-level stdout (the system config, schema v2, must set
+``runtime.log_level: "debug"``), samples its CPU from /proc once per second, sends
 SIGINT after N seconds and writes, under ``docs/results/baseline/`` by default:
 
     <tag>__<config>__rep<k>__<N>s__<UTC stamp>.csv    per-second rows
     <same basename>.json                              provenance sidecar
 
-Existing files are never overwritten.  The raw stdout log and the driver's
-output files (adc_data.bin, LVDS_Raw_0.bin, written to its cwd) go to a
-per-run directory under ``tools/bench/runs/`` (git-ignored).
+Existing files are never overwritten.  The raw stdout log goes to a per-run
+directory under ``tools/bench/runs/`` (git-ignored), which is also the
+driver's cwd.  The driver's output files (adc_data.bin, LVDS_Raw_0.bin) are
+written to the config's ``output.dir`` (relative to the config file), or to
+that per-run directory when ``output.dir`` is unset.
 
 Usage (from the repo root):
     uv run tools/bench/bench_run.py <system.json> --seconds 60 --rep 1 \
@@ -85,10 +88,19 @@ def nic_info(system_ip: str | None) -> dict:
     return info
 
 
+def output_dir(cfg_path: Path, cfg: dict, run_dir: Path) -> Path:
+    """Where the driver writes adc_data.bin / LVDS_Raw_0.bin (schema v2 output.dir)."""
+    d = cfg.get("output", {}).get("dir")
+    if not d:
+        return run_dir  # unset: the driver's cwd
+    p = Path(d)
+    return p if p.is_absolute() else (cfg_path.parent / p).resolve()
+
+
 def provenance(args, cfg_path: Path, cfg: dict, radar_cfg: Path, expected: dict,
                driver: Path, basename: str) -> dict:
-    stream = cfg.get("Streamer", {})
-    dca = stream.get("DCA1000_streaming", {})
+    dca = cfg.get("dca1000", {})
+    out = cfg.get("output", {})
     return {
         "basename": basename,
         "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
@@ -108,11 +120,14 @@ def provenance(args, cfg_path: Path, cfg: dict, radar_cfg: Path, expected: dict,
         "system_config_sha256": sha256(cfg_path),
         "radar_config": str(radar_cfg.relative_to(REPO)) if radar_cfg.is_relative_to(REPO) else str(radar_cfg),
         "radar_config_sha256": sha256(radar_cfg),
-        "board": stream.get("board_type"),
-        "sdk_version": stream.get("SDK_version"),
+        "system_config_schema_version": cfg.get("schema_version"),
+        "board": cfg.get("board"),
+        "board_overrides": cfg.get("board_overrides", {}),
         "dca1000_enabled": bool(dca.get("enabled")),
-        "serial_enabled": bool(stream.get("serial_streaming", {}).get("enabled")),
-        "save_to_file": bool(stream.get("save_to_file")),
+        "serial_enabled": bool(cfg.get("serial_stream", {}).get("enabled")),
+        "save_adc_frames": bool(out.get("save_adc_frames")),
+        "save_raw_lvds": bool(out.get("save_raw_lvds")),
+        "output_dir": out.get("dir"),
         "expected": expected,
         "host": {
             "kernel": platform.release(), "machine": platform.machine(),
@@ -122,7 +137,7 @@ def provenance(args, cfg_path: Path, cfg: dict, radar_cfg: Path, expected: dict,
             "netdev_max_backlog": read_text("/proc/sys/net/core/netdev_max_backlog"),
             "cpu_count": os.cpu_count(),
         },
-        "nic": nic_info(dca.get("system_IP")) if dca.get("enabled") else {"note": "DCA1000 path not enabled"},
+        "nic": nic_info(dca.get("host_ip")) if dca.get("enabled") else {"note": "DCA1000 path not enabled"},
     }
 
 
@@ -136,7 +151,8 @@ def sample_proc(pid: int):
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("config", type=Path, help="system config .json (verbose must be true)")
+    ap.add_argument("config", type=Path,
+                    help="system config .json, schema v2 (runtime.log_level must be \"debug\")")
     ap.add_argument("--seconds", "-n", type=int, default=60)
     ap.add_argument("--rep", type=int, default=1)
     ap.add_argument("--tag", default="baseline_pre_rework",
@@ -159,14 +175,17 @@ def main(argv=None) -> int:
 
     cfg_path = args.config.resolve()
     cfg = json.loads(cfg_path.read_text())
-    if not cfg.get("verbose"):
-        sys.exit("bench: the system config must set \"verbose\": true (stats come from the driver's stdout)")
-    stream = cfg.get("Streamer", {})
-    dca_on = bool(stream.get("DCA1000_streaming", {}).get("enabled"))
-    ser_on = bool(stream.get("serial_streaming", {}).get("enabled"))
+    if cfg.get("schema_version") != 2:
+        sys.exit("bench: the system config is not schema v2; convert it with: "
+                 f"uv run tools/migrate_config_v1_to_v2.py --in-place {args.config}")
+    if cfg.get("runtime", {}).get("log_level") != "debug":
+        sys.exit("bench: the system config must set \"runtime\": {\"log_level\": \"debug\"} "
+                 "(stats come from the driver's debug stdout)")
+    dca_on = bool(cfg.get("dca1000", {}).get("enabled"))
+    ser_on = bool(cfg.get("serial_stream", {}).get("enabled"))
     if not (dca_on or ser_on):
         sys.exit("bench: config enables neither DCA1000 nor serial streaming")
-    radar_cfg = Path(cfg["TI_Radar_Config_Management"]["TI_Radar_config_path"])
+    radar_cfg = Path(cfg["radar_cfg"])
     if not radar_cfg.is_absolute():
         radar_cfg = (cfg_path.parent / radar_cfg).resolve()
     expected = lib.expected_from_radar_cfg(radar_cfg.read_text())
@@ -217,6 +236,7 @@ def main(argv=None) -> int:
 
     parser, lines = lib.Parser(), queue.Queue()
     launched = time.monotonic()
+    output_dir(cfg_path, cfg, run_dir).mkdir(parents=True, exist_ok=True)  # driver opens files there
     log = open(run_dir / "driver_stdout.log", "w")
     proc = subprocess.Popen([str(args.driver.resolve()), str(cfg_path)], cwd=run_dir,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -305,16 +325,18 @@ def main(argv=None) -> int:
               "granted_so_rcvbuf_bytes": parser.granted_rcvbuf,
               "dca_received_frames_cum_at_exit": received,
               "summary": summary, "driver_warnings_first": parser.warnings[:20]}
-    if dca_on and prov["save_to_file"]:
+    if dca_on and (prov["save_adc_frames"] or prov["save_raw_lvds"]):
+        files_dir = output_dir(cfg_path, cfg, run_dir)
+        result["output_files_dir"] = str(files_dir)
         chk = {}
         for name in ("adc_data.bin", "LVDS_Raw_0.bin"):
-            p = run_dir / name
+            p = files_dir / name
             chk[name] = p.stat().st_size if p.exists() else None
-        if chk["adc_data.bin"] is not None:
+        if prov["save_adc_frames"] and chk["adc_data.bin"] is not None:
             result["bin_size_check"] = lib.check_bin_size(
                 chk["adc_data.bin"], expected["bytes_per_frame"], received, sigint_sent)
-            result["bin_size_check"]["file"] = str(run_dir / "adc_data.bin")
-        result["lvds_raw_bytes"] = chk["LVDS_Raw_0.bin"]
+            result["bin_size_check"]["file"] = str(files_dir / "adc_data.bin")
+        result["lvds_raw_bytes"] = chk["LVDS_Raw_0.bin"] if prov["save_raw_lvds"] else None
     prov["result"] = result
     lib.write_csv(csv_path, rows)
     lib.write_sidecar(side_path, prov)
