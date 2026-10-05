@@ -13,11 +13,7 @@ DCA1000Handler::DCA1000Handler():
     frame_mutex(),
     system_config_reader(),
     radar_config_reader(),
-    DCA_fpgaIP(""),
-    DCA_systemIP(""),
-    DCA_cmdPort(-1),
-    DCA_dataPort(-1),
-    socket_(),
+    source_(nullptr),
     udp_packet_size(1472),
     received_frames(0),
     bytes_per_frame(0),
@@ -39,95 +35,9 @@ DCA1000Handler::DCA1000Handler():
  */
 DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
                                 const RadarConfigReader& radarConfigReader):
-    initialized(false),
-    new_frame_available(false),
-    frame_mutex(),
-    system_config_reader(),
-    radar_config_reader(),
-    DCA_fpgaIP(""),
-    DCA_systemIP(""),
-    DCA_cmdPort(-1),
-    DCA_dataPort(-1),
-    socket_(),
-    udp_packet_size(1472),
-    received_frames(0),
-    bytes_per_frame(0),
-    samples_per_chirp(0),
-    chirps_per_frame(0),
-    num_rx_channels(4),
-    save_adc_frames(false),
-    save_raw_lvds(false),
-    adc_cube_out_file(nullptr),
-    raw_lvds_out_file(nullptr),
-    adc_data_cube(),
-    latest_frame_byte_buffer()
-    {
-        initialize(configReader,radarConfigReader);
-    }
-/**
- * @brief Copy constructor
- * 
- * @param rhs 
- */
-DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
-    initialized(rhs.initialized),
-    new_frame_available(rhs.new_frame_available),
-    frame_mutex(), //mutexes aren't copyable
-    system_config_reader(rhs.system_config_reader),
-    radar_config_reader(rhs.radar_config_reader),
-    DCA_fpgaIP(rhs.DCA_fpgaIP),
-    DCA_systemIP(rhs.DCA_systemIP),
-    DCA_cmdPort(rhs.DCA_cmdPort),
-    DCA_dataPort(rhs.DCA_dataPort),
-    socket_(), // DCA1000Socket is not copyable — fresh instance
-    udp_packet_size(rhs.udp_packet_size),
-    received_frames(rhs.received_frames),
-    bytes_per_frame(rhs.bytes_per_frame),
-    samples_per_chirp(rhs.samples_per_chirp),
-    chirps_per_frame(rhs.chirps_per_frame),
-    num_rx_channels(rhs.num_rx_channels),
-    save_adc_frames(rhs.save_adc_frames),
-    save_raw_lvds(rhs.save_raw_lvds),
-    adc_cube_out_file(rhs.adc_cube_out_file),
-    raw_lvds_out_file(rhs.raw_lvds_out_file),
-    adc_data_cube(rhs.adc_data_cube),
-    latest_frame_byte_buffer(rhs.latest_frame_byte_buffer)
-{}
-
-DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
-    if(this != &rhs){
-        //close file streams if we're the sole owner
-        if (adc_cube_out_file && adc_cube_out_file.use_count() == 1 &&
-            adc_cube_out_file->is_open())
-            adc_cube_out_file->close();
-        if (raw_lvds_out_file && raw_lvds_out_file.use_count() == 1 &&
-            raw_lvds_out_file->is_open())
-            raw_lvds_out_file->close();
-
-        initialized          = rhs.initialized;
-        new_frame_available  = rhs.new_frame_available;
-        //don't re-assign mutexes
-        system_config_reader = rhs.system_config_reader;
-        radar_config_reader  = rhs.radar_config_reader;
-        DCA_fpgaIP           = rhs.DCA_fpgaIP;
-        DCA_systemIP         = rhs.DCA_systemIP;
-        DCA_cmdPort          = rhs.DCA_cmdPort;
-        DCA_dataPort         = rhs.DCA_dataPort;
-        // socket_ is not copyable — leave as-is (fresh/uninitialized state)
-        udp_packet_size      = rhs.udp_packet_size;
-        received_frames      = rhs.received_frames;
-        bytes_per_frame      = rhs.bytes_per_frame;
-        samples_per_chirp    = rhs.samples_per_chirp;
-        chirps_per_frame     = rhs.chirps_per_frame;
-        num_rx_channels      = rhs.num_rx_channels;
-        save_adc_frames      = rhs.save_adc_frames;
-        save_raw_lvds        = rhs.save_raw_lvds;
-        adc_cube_out_file    = rhs.adc_cube_out_file;
-        raw_lvds_out_file    = rhs.raw_lvds_out_file;
-        adc_data_cube        = rhs.adc_data_cube;
-        latest_frame_byte_buffer = rhs.latest_frame_byte_buffer;
-    }
-    return *this;
+    DCA1000Handler()
+{
+    initialize(configReader,radarConfigReader);
 }
 
 /**
@@ -135,25 +45,33 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
  * 
  */
 DCA1000Handler::~DCA1000Handler() {
-    // socket_ destructor handles RX thread join and socket close
+    // a UdpPacketSource's socket joins its RX thread and closes when the last owner goes
+    if(source_){
+        source_->stop();
+    }
     close_output_files();
 }
 
 bool DCA1000Handler::stop(){
     bool ok = true;
     try {
-        if(initialized){
-            //joins the RX thread, then tells the DCA1000 to stop
-            ok = send_recordStop();
-            if(!ok){
-                cpsl::radar::log_warn("DCA1000Handler: recordStop was not acknowledged");
+        if(source_){
+            //UDP: joins the RX thread, then tells the DCA1000 to stop
+            const cpsl::radar::Status s = source_->stop();
+            if(!s){
+                cpsl::radar::log_warn("DCA1000Handler: ", s.message);
+                ok = false;
             }
-        } else {
-            socket_.stop_rx();
         }
     } catch (const std::exception& e) {
         cpsl::radar::log_error("DCA1000Handler: error while stopping: ", e.what());
         ok = false;
+    }
+    {
+        //the worker thread has been joined: the assembler's counters are final
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        stats_.assembler = assembler_.get_stats();
+        stats_.frames = received_frames;
     }
     output_files_ok_ = close_output_files();
     if(!output_files_ok_){
@@ -190,7 +108,8 @@ bool DCA1000Handler::close_output_files(){
 
 bool DCA1000Handler::initialize(
     const SystemConfigReader& systemConfigReader,
-    const RadarConfigReader& radarConfigReader){
+    const RadarConfigReader& radarConfigReader,
+    std::shared_ptr<cpsl::radar::PacketSource> source){
 
     initialized = false;
 
@@ -199,20 +118,20 @@ bool DCA1000Handler::initialize(
         return false;
     }
 
-    //initialize sockets
-    if(init_sockets() != true){
+    set_packet_source(source ? std::move(source)
+                             : std::make_shared<cpsl::radar::UdpPacketSource>(system_config_reader));
+
+    //open the sockets, then configure the DCA1000
+    cpsl::radar::Status s = source_->open();
+    if(s){
+        s = source_->configure();
+    }
+    if(!s){
+        cpsl::radar::log_error("DCA1000Handler: ", s.message);
         return false;
     }
 
-    //configure the DCA1000
-    if(configure_DCA1000() != true){
-        initialized = false; //initializing the DCA1000 falied
-        return false;
-    }
-
-    //set initialization status to true
     initialized = true;
-    
     return true;
 }
 
@@ -232,7 +151,9 @@ bool DCA1000Handler::configure_pipeline(
     if(system_config_reader.initialized == false){
         return false;
     }
-    load_config();
+    save_adc_frames = system_config_reader.get_save_adc_frames();
+    save_raw_lvds = system_config_reader.get_save_raw_lvds();
+    udp_packet_size = system_config_reader.getBoard().dca1000.packet_bytes;
 
     //initialize file streaming
     if(save_adc_frames || save_raw_lvds){
@@ -254,268 +175,19 @@ void DCA1000Handler::set_publish_hook(std::function<void()> hook){
     publish_hook_ = std::move(hook);
 }
 
-/**
- * @brief 
- * 
- * @return true 
- * @return false 
- */
-bool DCA1000Handler::send_resetFPGA(){
-
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::RESET_FPGA);
-    
-    //send command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else{
-        return false;
-    }
+void DCA1000Handler::set_packet_source(std::shared_ptr<cpsl::radar::PacketSource> source){
+    source_ = std::move(source);
 }
 
 bool DCA1000Handler::send_recordStart(){
-
-    //get the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::RECORD_START);
-
-    //send command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            socket_.start_rx();
-            return true;
-        }else{
-            return false;
-        }
-    } else{
+    if(!source_){
         return false;
     }
-}
-
-bool DCA1000Handler::send_recordStop(){
-
-    // Stop RX thread before telling DCA1000 to stop (avoids recvfrom blocking on exit)
-    socket_.stop_rx();
-
-    //get the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::RECORD_STOP);
-
-    //send command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else{
-        return false;
+    const cpsl::radar::Status s = source_->start();
+    if(!s){
+        cpsl::radar::log_error("DCA1000Handler: ", s.message);
     }
-}
-
-bool DCA1000Handler::send_systemConnect(){
-    
-    //get the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::SYSTEM_CONNECT);
-    
-    //send command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else{
-        return false;
-    }
-}
-
-/**
- * @brief 
- * 
- * @param packet_size 
- * @param delay_us 
- * @return true 
- * @return false 
- */
-bool DCA1000Handler::send_configPacketData(size_t packet_size, uint16_t delay_us){
-
-    //declare data vector
-    std::vector<uint8_t> data(6,0);
-
-    //define packet size
-    std::uint16_t pkt_size = static_cast<std::uint16_t>(packet_size);
-    data[0] = static_cast<uint8_t>(pkt_size & 0xFF);
-    data[1] = static_cast<uint8_t>((pkt_size >> 8) & 0xFF);
-
-    //define delay
-    data[2] = static_cast<uint8_t>(delay_us & 0xFF);
-    data[3] = static_cast<uint8_t>((delay_us >> 8) & 0xFF);
-
-    // bytes 4 & 5 are future use
-
-    //generate the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::CONFIG_PACKET_DATA,
-                                        data);    
-
-    //send command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else {
-        return false;
-    }
-}
-
-/**
- * @brief Send the Configure FPGA Command
- * 
- * @return true 
- * @return false 
- */
-bool DCA1000Handler::send_configFPGAGen(){
-    std::vector<uint8_t> data(6,0);
-
-    //data logging mode - Raw Mode
-    data[0] = 0x01;
-
-    //LVDS mode from the board descriptor (lvds.lanes): 0x01 = 4-lane, 0x02 = 2-lane
-    const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
-    if (!board.lvds.supported) {
-        cpsl::radar::log_error("DCA1000Handler::send_configFPGAGen(): board ", board.name,
-                               " has no LVDS capture support (lvds.supported false)");
-        return false;
-    }
-    data[1] = board.lvds.lanes == 4 ? 0x01 : 0x02;
-
-    //data transfer mode - LVDS capture
-    data[2] = 0x01;
-
-    //data capture mode - ethernet stream
-    data[3] = 0x02;
-
-    //data format mode - 16 bit
-    data[4] = 0x03;
-
-    //timer (dca1000.fpga_timer_s; 30 s on every shipped board)
-    data[5] = static_cast<uint8_t>(board.dca1000.fpga_timer_s);
-
-    //generate the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                        DCA1000Commands::CONFIG_FPGA_GEN,
-                                        data);
-    
-    //send command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //confirm success
-        if (status == 0){
-            return true;
-        }else{
-            return false;
-        }
-    } else {
-        return false;
-    }
-}
-
-/**
- * @brief 
- * 
- * @return float 
- */
-float DCA1000Handler::send_readFPGAVersion(){
-
-    //get the command
-    std::vector<uint8_t> cmd = DCA1000Commands::construct_command(
-                                    DCA1000Commands::READ_FPGA_VERSION);
-
-    //send the command
-    socket_.send_command(cmd);
-
-    //get the response
-    std::vector<uint8_t> rcv_data(8,0);
-    if (socket_.receive_response(rcv_data)){
-        
-        //get the status
-        uint16_t status = static_cast<uint16_t>(rcv_data[5]) << 8;
-        status = status | static_cast<uint16_t>(rcv_data[4]);
-
-        //get version numbers
-        uint16_t major_version = (status & 0b01111111);
-        uint16_t minor_version = (status >> 7) & 0b01111111;
-
-        return static_cast<float>(major_version) + (static_cast<float>(minor_version)*1e-1);
-    }else{
-        return 0.0;
-    }
+    return static_cast<bool>(s);
 }
 
 /**
@@ -526,10 +198,10 @@ float DCA1000Handler::send_readFPGAVersion(){
  */
 bool DCA1000Handler::process_next_packet(){
 
-    // Pop next packet from the socket ring buffer (blocks up to 500 ms)
-    uint8_t pkt_buf[1472];
+    // Pop the next packet from the source (UDP: the RX ring buffer; waits up to 500 ms)
+    uint8_t pkt_buf[cpsl::radar::PacketSource::kMaxPacketBytes];
     int received_bytes = 0;
-    if (!socket_.pop_packet(pkt_buf, received_bytes, 500)) return false;
+    if (!source_ || !source_->pop(pkt_buf, received_bytes, std::chrono::milliseconds(500))) return false;
 
     ingest_packet(pkt_buf, received_bytes);
     return true;
@@ -580,73 +252,23 @@ std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler
     return adc_data_cube;
 }
 
-/**
- * @brief Load required information from the system_config_reader
- * 
- */
-void DCA1000Handler::load_config(){
-
-    DCA_fpgaIP = system_config_reader.getDCAFpgaIP();
-    DCA_systemIP = system_config_reader.getDCASystemIP();
-    DCA_cmdPort = system_config_reader.getDCACmdPort();
-    DCA_dataPort = system_config_reader.getDCADataPort();
-    save_adc_frames = system_config_reader.get_save_adc_frames();
-    save_raw_lvds = system_config_reader.get_save_raw_lvds();
-    udp_packet_size = system_config_reader.getBoard().dca1000.packet_bytes;
-
-    cpsl::radar::log_debug("FPGA IP: ", DCA_fpgaIP, ", system IP: ", DCA_systemIP,
-                           ", cmd port: ", DCA_cmdPort, ", data port: ", DCA_dataPort);
+bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
+                                std::chrono::steady_clock::time_point& completed_at){
+    std::lock_guard<std::mutex> lock(frame_mutex);
+    if(!new_frame_available){
+        return false;
+    }
+    new_frame_available = false;
+    out = adc_data_cube;
+    index = latest_index_;
+    missing_bytes = latest_missing_;
+    completed_at = latest_completed_at_;
+    return true;
 }
 
-bool DCA1000Handler::init_sockets() {
-    return socket_.init(DCA_fpgaIP, DCA_systemIP, DCA_cmdPort, DCA_dataPort,
-                        system_config_reader.getDCARcvbufBytes());
-}
-
-/**
- * @brief Send a series of commands to the DCA1000 to configure it
- * 
- * @return true - DCA1000 successfully configured
- * @return false - DCA1000 not successfully configured
- */
-bool DCA1000Handler::configure_DCA1000(){
-
-    if (!socket_.is_initialized()) {
-        cpsl::radar::log_error("attempted to configure DCA1000 but socket is not initialized");
-        return false;
-    }
-
-    //send system connect
-    if(send_systemConnect() != true){
-        return false;
-    }
-
-    //send reset FPGA
-    if(send_resetFPGA() != true){
-        return false;
-    }
-
-    //send configure packet data (dca1000.packet_bytes / packet_delay_us; 1472 B / 100 us)
-    const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
-    if(send_configPacketData(udp_packet_size,
-                             static_cast<uint16_t>(board.dca1000.packet_delay_us)) != true){
-        return false;
-    }
-
-    //send config FPGA gen
-    if(send_configFPGAGen() != true){
-        return false;
-    }
-
-    //read the FPGA version
-    float fpga_version = send_readFPGAVersion();
-
-    if(fpga_version > 0){
-        cpsl::radar::log_info("FPGA (firmware version: ", fpga_version, ") initialized successfully");
-        return true;
-    } else{
-        return false;
-    }
+DCA1000Handler::Stats DCA1000Handler::get_stats(){
+    std::lock_guard<std::mutex> lock(frame_mutex);
+    return stats_;
 }
 
 void DCA1000Handler::init_buffers()
@@ -674,9 +296,14 @@ void DCA1000Handler::init_buffers()
         //hold a frame open for a few packets past its end so a reordered packet can still land
         assembler_.configure(bytes_per_frame,
                              FrameAssembler::kDefaultReorderSlackPackets * (udp_packet_size - 10));
-        assembler_.set_frame_sink([this](const std::vector<uint8_t>&, uint64_t, size_t) {
-            save_frame_byte_buffer();
+        assembler_.set_frame_sink([this](const std::vector<uint8_t>&, uint64_t index, size_t missing) {
+            save_frame_byte_buffer(index, missing);
         });
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            stats_ = Stats();
+        }
+        last_frame_ns_.store(0, std::memory_order_relaxed);
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
@@ -700,44 +327,52 @@ void DCA1000Handler::print_status(){
         "\tduplicate packets: " << stats.duplicate_packets << "\n" <<
         "\tincomplete frames: " << stats.incomplete_frames << "\n" <<
         "\tskipped frames: " << stats.skipped_frames << "\n" <<
-        "\trx_overrun_count: " << socket_.get_overrun_count();
+        "\trx_overrun_count: " << (source_ ? source_->overrun_count() : 0);
         cpsl::radar::log_debug(o.str());
     }
 }
 
 
 /**
- * @brief saves the latest frame byte buffer into the 
- * latest_frame_byte_buffer variable, resets the frame_byte_buffer
- * and next_frame_byte_buffer_idx varialbes, and sets the
- * new_frame_available variable to true
- * 
- * @param print_system_status on True, prints status
- * 
+ * @brief Convert the frame the assembler just completed, publish it (cube,
+ * flag, index, missing bytes, completion time and a counter snapshot change
+ * together under frame_mutex), print the debug status and save it.
+ *
+ * @param index frame index (stream offset / bytes_per_frame)
+ * @param missing_bytes zero-filled bytes in the frame
  */
-void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
+void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes){
 
     //increment the frame tracking
     received_frames += 1;
 
     //convert outside the lock, then publish: the cube and its flag change
     //together under frame_mutex, so the flag is never visible before its cube
-    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> cube =
-        converter_.convert(assembler_.get_frame_bytes());
+    Cube cube = converter_.convert(assembler_.get_frame_bytes());
 
     if(publish_hook_){
         publish_hook_();
     }
 
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     {
         std::lock_guard<std::mutex> lock(frame_mutex);
         adc_data_cube.swap(cube);
+        if(new_frame_available){
+            //latest wins: the previous frame was never taken
+            stats_.frames_overwritten += 1;
+        }
         new_frame_available = true;
+        latest_index_ = index;
+        latest_missing_ = missing_bytes;
+        latest_completed_at_ = now;
+        stats_.assembler = assembler_.get_stats();
+        stats_.frames = received_frames;
     }
+    last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count(),
+                         std::memory_order_relaxed);
 
-    if(print_system_status){
-        print_status();
-    }
+    print_status();
 
     //only this thread writes adc_data_cube, so reading it here needs no lock
     if(save_adc_frames){

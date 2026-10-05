@@ -68,6 +68,7 @@ bool DCA1000Socket::init(const std::string& fpga_ip, const std::string& system_i
     int actual_rcvbuf = 0;
     socklen_t optlen = sizeof(actual_rcvbuf);
     getsockopt(data_socket_, SOL_SOCKET, SO_RCVBUF, &actual_rcvbuf, &optlen);
+    granted_rcvbuf_ = actual_rcvbuf > 0 ? static_cast<size_t>(actual_rcvbuf) : 0;
     cpsl::radar::log_info("[DCA1000] SO_RCVBUF granted: ", actual_rcvbuf, " bytes");
 
     // Bind sockets

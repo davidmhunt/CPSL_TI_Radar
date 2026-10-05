@@ -105,11 +105,15 @@ bool CLIController::send_config_to_IWR() {
 
         //skipped commands are never sent, so they do not count as unacknowledged
         bool all_done = true;
+        bool any_io_error = false;
         for (const string& command : plan.send) {
             if(!CLIController::sendCommand(command, system_config_reader.getRadarCliTimeoutMs())){
                 all_done = false;
             }
+            any_io_error = any_io_error || io_error_;
         }
+        //for the whole cfg, io_error() says whether any command hit an I/O error
+        io_error_ = any_io_error;
         return all_done;
     } else{
         cpsl::radar::log_error("attempted to send commands to IWR, but CLI controller isn't initialized");

@@ -195,6 +195,13 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
         }
         have_previous_frame = false;
         missed_frame_count = 0;
+        {
+            std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+            committed_frames_ = 0;
+            taken_at_ = 0;
+        }
+        last_frame_ns_.store(0, std::memory_order_relaxed);
+        io_error_.store(false, std::memory_order_relaxed);
     } else{
         initialized = false;
         cpsl::radar::log_error("attempted to initialize the serial streamer, ",
@@ -378,6 +385,7 @@ bool SerialStreamer::get_next_serial_frame(void) {
     io_context->reset();
 
     // Check for errors and handle the results
+    io_error_.store(ec && ec != boost::asio::error::operation_aborted, std::memory_order_relaxed);
     if (!ec) {
 
         //load data into the vector
@@ -589,6 +597,31 @@ void SerialStreamer::commit_frame(TLVDetectedPoints & points, TLVDetectedPointsS
     }
     have_previous_frame = true;
     previous_frame_number = header_frameNumber;
+    committed_frames_ += 1;
+    last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now().time_since_epoch()).count(),
+                         std::memory_order_relaxed);
+}
+
+bool SerialStreamer::take_frame(std::vector<std::vector<float>> & points,
+                                std::vector<std::vector<float>> & side_info,
+                                uint32_t & frame_number,
+                                uint64_t & overwritten){
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+    if (committed_frames_ == taken_at_){
+        return false;
+    }
+    overwritten = committed_frames_ - taken_at_ - 1;
+    taken_at_ = committed_frames_;
+    points = tlv_detected_points_processor.detected_points;
+    side_info = tlv_side_info_processor.side_info;
+    frame_number = header_frameNumber;
+    return true;
+}
+
+uint64_t SerialStreamer::get_committed_frame_count(void){
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+    return committed_frames_;
 }
 
 bool SerialStreamer::process_TLV(

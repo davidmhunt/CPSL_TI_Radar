@@ -56,6 +56,9 @@ public:
 
     uint32_t get_overrun_count() const;
 
+    // SO_RCVBUF the kernel granted in init() (0 before init)
+    size_t get_granted_rcvbuf() const { return granted_rcvbuf_; }
+
     bool is_initialized() const { return initialized_; }
 
 private:
@@ -82,6 +85,7 @@ private:
     sockaddr_in fpga_address_{};
 
     bool initialized_ = false;
+    size_t granted_rcvbuf_ = 0;
 
     void rx_thread_func();
 };

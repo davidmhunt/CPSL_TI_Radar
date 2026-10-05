@@ -10,7 +10,10 @@
 #include <iostream>
 #include <fstream>
 #include <bitset>
+#include <atomic>
+#include <chrono>
 #include <memory>
+#include <mutex>
 #include <endian.h>
 
 #include "SystemConfigReader.hpp"
@@ -43,6 +46,21 @@ public:
     std::vector<std::vector<float>> tlv_get_latest_detected_points_side_info(void);
     uint32_t get_latest_frame_number(void);
     uint32_t get_missed_frame_count(void);
+
+    //the latest valid frame, if it has not been taken yet: its points
+    //([x, y, z, v] rows), side info ([snr_dB, noise_dB] rows, empty without
+    //TLV 7) and frame number, read together under one lock. `overwritten`
+    //is the number of frames committed since the last take and never taken.
+    bool take_frame(std::vector<std::vector<float>> & points,
+                    std::vector<std::vector<float>> & side_info,
+                    uint32_t & frame_number,
+                    uint64_t & overwritten);
+    //frames validated and committed since initialize()
+    uint64_t get_committed_frame_count(void);
+    //steady_clock time (ns since epoch) of the last committed frame; 0 = none yet
+    int64_t last_frame_ns(void) const { return last_frame_ns_.load(std::memory_order_relaxed); }
+    //true if the last read of the data port failed with an error other than a timeout
+    bool io_error(void) const { return io_error_.load(std::memory_order_relaxed); }
 
 private:
 
@@ -84,6 +102,12 @@ private:
         uint32_t numTLVs = 0;
         uint32_t subFrameNumber = 0;
     } pending_;
+
+    //frames committed / frame count at the last take_frame() (under tlv_processing_mutex)
+    uint64_t committed_frames_ = 0;
+    uint64_t taken_at_ = 0;
+    std::atomic<int64_t> last_frame_ns_{0};
+    std::atomic<bool> io_error_{false};
 
     //frame continuity tracking
     bool have_previous_frame;
