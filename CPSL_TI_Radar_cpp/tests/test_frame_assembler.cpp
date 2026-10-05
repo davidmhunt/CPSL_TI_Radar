@@ -183,7 +183,7 @@ TEST_CASE(byte_count_uses_all_six_header_bytes) {
 }
 
 TEST_CASE(byte_count_gap_does_not_zero_fill_the_next_packet) {
-    // core-02 KNOWN_BUG, fixed by byte-offset placement (P1): a byte-count gap
+    // core-02 known bug, fixed by byte-offset placement (P1): a byte-count gap
     // used to leave the counter behind so the next in-order packet got
     // spurious zero padding.
     FrameAssembler fa;
@@ -203,7 +203,7 @@ TEST_CASE(byte_count_gap_does_not_zero_fill_the_next_packet) {
 }
 
 TEST_CASE(late_duplicate_is_counted_not_dropped) {
-    // core-02 KNOWN_BUG, fixed: a duplicate / reordered packet used to
+    // core-02 known bug, fixed: a duplicate / reordered packet used to
     // underflow dropped_packets (~4e9) and emit a spurious frame.
     FrameAssembler fa;
     fa.configure(100);
@@ -219,7 +219,7 @@ TEST_CASE(late_duplicate_is_counted_not_dropped) {
 }
 
 TEST_CASE(gap_spanning_a_frame_boundary_keeps_next_frame_aligned) {
-    // core-02 KNOWN_BUG, fixed: zero fill past a frame boundary used to be
+    // core-02 known bug, fixed: zero fill past a frame boundary used to be
     // lost, so every later byte landed too early in its frame.
     FrameAssembler fa;
     fa.configure(100);

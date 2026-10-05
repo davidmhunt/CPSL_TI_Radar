@@ -216,7 +216,7 @@ TEST_CASE(tlv_length_past_end_of_message_rejected) {
 }
 
 TEST_CASE(rejected_frame_number_is_never_reported_as_latest) {
-    // core-02 KNOWN_BUG, fixed: header fields were stored before the length
+    // core-02 known bug, fixed: header fields were stored before the length
     // check, so get_latest_frame_number() returned a rejected frame's number
     SerialStreamer s;
     CHECK(feed(s, make_message(3, {})));

@@ -18,6 +18,25 @@ config argument is required (no argument: usage, exit 2). `--validate` loads
 the config, board descriptor and radar cfg, runs the cross-checks, prints a
 summary and exits 0/1 without opening any port or socket.
 Built as C++17 (`-std=gnu++17`).
+
+**Stop and shutdown.** SIGINT/SIGTERM only set an atomic flag
+(`src/utilities/StopSignal`, `SA_RESETHAND`: a second Ctrl-C terminates).
+`main` polls it, leaves its frame loop and calls `Runner::stop()`, then
+returns normally. `stop()` is idempotent and never throws: it joins the run
+threads, then `DCA1000Handler::stop()` (RX thread, `recordStop`, flush and
+close `adc_data.bin` / `LVDS_Raw_0.bin`), then `sensorStop`. Every step runs
+even if an earlier one failed. `CLIController` sends over a
+`cpsl::radar::ByteStream` (`src/utilities/ByteStream`; `SerialPortStream`
+in the driver, a fake in tests) and turns any write/read error into a false
+return and `io_error()`. The executable exits 1 when `stop()` hit an I/O
+error (e.g. the radar's USB was unplugged); a missing acknowledgement is
+only a warning.
+
+**Sanitizers.** `CPSL_TI_Radar_cpp/CMakePresets.json` has an `asan-ubsan`
+preset (ASan + UBSan, `-O1 -g`, UB not recoverable) that builds in
+`CPSL_TI_Radar_cpp/build-asan-ubsan` and runs the whole ctest suite:
+`cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan`
+(from `CPSL_TI_Radar_cpp/`).
 `include/json` (nlohmann/json) is a
 submodule and must be present.
 
@@ -73,15 +92,21 @@ port) lives in `src/utilities/SerialBaud*` (termios2).
 
 - **RX thread** (SCHED_RR 99): tight `recvfrom` loop pushing raw 1472-byte
   packets into a 512-slot lock-free ring buffer.
-- **Worker thread** (Runner thread): pops packets, checks sequence numbers,
-  assembles frames, converts the ADC cube, does file I/O.
+- **Worker thread** (Runner thread): pops packets, places them by byte
+  offset (`FrameAssembler`), converts the ADC cube, does file I/O.
 - `SO_RCVBUF` requests `dca1000.rcvbuf_bytes` (default 64 MB; needs
   `net.core.rmem_max` raised); data socket timeout 500 ms.
-- `dropped_packets`, `dropped_packet_events`, `rx_overrun_count` print per
-  frame with `runtime.log_level: "debug"`.
+- `dropped_packets`, `dropped_packet_events`, `late packets`, `duplicate
+  packets`, `incomplete frames`, `skipped frames` and `rx_overrun_count`
+  print per frame with `runtime.log_level: "debug"`.
 
-Frames are signaled via a mutex-protected `new_frame_available` flag;
-consumers poll `get_next_adc_cube(timeout_ms)`.
+The worker converts a completed frame outside any lock, then publishes the
+cube and the `new_frame_available` flag together under one mutex, so the
+flag is never visible before the cube it announces (core-11 G2;
+`test_dca_frame_publish`). Consumers poll `get_next_adc_cube(timeout_ms)`,
+which copies the cube and clears the flag under the same mutex.
+`DCA1000Handler::configure_pipeline()` + `ingest_packet()` run this path
+without a socket (tests).
 
 ## DCA1000 UDP packet format
 
@@ -91,8 +116,22 @@ consumers poll `get_next_adc_cube(timeout_ms)`.
 - Bytes 4–9: byte count (uint48, little-endian)
 - Bytes 10+: ADC payload (1462 bytes per full packet; max UDP 1472)
 
-Dropped packets are detected by `seq_num != prev_seq_num + 1` and
-zero-padded. There is no retransmission.
+`FrameAssembler` places every payload by its byte count: stream offset `o`
+is byte `o % bytes_per_frame` of frame `o / bytes_per_frame`, copied with one
+`memcpy` per packet (split at a frame boundary). A lost, late or duplicated
+packet therefore never shifts later bytes. Two frames are open at a time.
+A frame is emitted once all its bytes have arrived, or once the stream is
+`reorder_slack` bytes past its end (the driver uses 8 packets, so a packet
+reordered across a frame boundary still lands); its missing bytes are zero.
+A frame that received nothing is skipped, not emitted. There is no
+retransmission.
+
+Counters (sequence numbers, 64-packet window): a forward gap adds its
+packets to `dropped_packets` (one `dropped_packet_events`); an older packet
+is `duplicate` if already seen, else `late`, and a late packet that fills a
+gap takes its drop back. Data for an already-emitted frame is dropped and
+counted late. `incomplete_frames` / `skipped_frames` count frames emitted
+with zeros / never emitted.
 
 ## ADC cube layout
 

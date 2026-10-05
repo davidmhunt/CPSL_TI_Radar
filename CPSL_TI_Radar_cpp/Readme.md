@@ -137,7 +137,14 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding). To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering, the stop path: file flush, signal flag, CLI write errors). `test_cli_stop` runs a whole `Runner` on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); no test opens a serial port. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+
+To run the same suite under AddressSanitizer and UndefinedBehaviorSanitizer (any report fails the test), use the `asan-ubsan` preset from `CPSL_TI_Radar_cpp/` (it builds in `build-asan-ubsan/`):
+
+```bash
+cd CPSL_TI_Radar_cpp
+cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan
+```
 
 `test_board_descriptor` covers the board descriptor files in [`config/boards/`](./config/boards/) (see "Board descriptors" below).
 
@@ -209,7 +216,7 @@ main.cpp
         └── SerialStreamer        — serial TLV stream → detected points
 ```
 
-`Runner` spawns two threads (`run_dca1000`, `run_serial`). The `DCA1000Socket` RX thread runs at real-time priority (SCHED_RR 99) and pushes raw packets into a 512-slot ring buffer; the worker thread pops packets, assembles frames via `FrameAssembler`, and converts to the ADC cube via `ADCCubeConverter`. Frames are signaled via `new_frame_available` (mutex-protected); consumers call `get_next_adc_cube(timeout_ms)`.
+`Runner` spawns two threads (`run_dca1000`, `run_serial`). The `DCA1000Socket` RX thread runs at real-time priority (SCHED_RR 99) and pushes raw packets into a 512-slot ring buffer; the worker thread pops packets, assembles frames via `FrameAssembler`, and converts to the ADC cube via `ADCCubeConverter`. `FrameAssembler` places each payload at its byte offset in the frame, so drops, duplicates and reordering never shift data (see `docs/ARCHITECTURE.md`). A frame's cube and its `new_frame_available` flag are published together under one mutex; consumers call `get_next_adc_cube(timeout_ms)`.
 
 ## Running
 
@@ -320,6 +327,8 @@ cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 # run it
 ./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json
 ```
+
+Stop a run with Ctrl-C (or SIGTERM): the driver finishes the frame loop, sends `sensorStop` and the DCA1000 `recordStop`, and flushes and closes `adc_data.bin`, which then holds exactly `bytes_per_frame` x frames. A second Ctrl-C kills it at once (only needed if the stop hangs). The run also ends by itself when no frame arrives for 2 s. The exit status is 0 after a clean stop and 1 if stopping hit an I/O error, e.g. the radar's USB was unplugged; the output files are closed either way.
 
 Running without an argument prints the usage and exits with status 2. The executable prints the
 config path at startup so you can confirm which file is loaded. A rebuild is only needed after

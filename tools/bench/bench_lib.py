@@ -237,10 +237,11 @@ def check_bin_size(actual: int, bytes_per_frame: int, received_frames: int,
                    stopped_by_sigint: bool) -> dict:
     """Compare adc_data.bin size with bytes_per_frame x received_frames.
 
-    The driver prints a frame's stats before writing it and the SIGINT
-    handler calls exit() without destroying the Runner, so the ofstream is
-    never flushed.  A short file on the SIGINT path is therefore classified
-    separately from a genuine mismatch (it is still reported as a diff).
+    Before core-11 the driver's SIGINT handler called exit() without
+    destroying the Runner, so the ofstream was never flushed (896 B short in
+    the baseline).  A short file on the SIGINT path is therefore classified
+    separately from a genuine mismatch (it is still reported as a diff); a
+    build with the core-11 stop path should give "exact".
     """
     expected = bytes_per_frame * received_frames
     diff = expected - actual
