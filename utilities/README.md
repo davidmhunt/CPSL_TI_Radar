@@ -1,6 +1,15 @@
 # Utilities
 
-Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Radar_cpp/`). The notebooks need `numpy` and `matplotlib` (plus `pyserial` for `determine_serial_ports`), which are not in the uv environment; run them from this directory.
+Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Radar_cpp/`). The notebooks need `numpy` and `matplotlib` (plus `pyserial` for `determine_serial_ports`). `numpy`, `matplotlib`, `nbconvert` and `ipykernel` are in the optional uv `notebooks` group (`uv run --group notebooks jupyter lab`); the default and `dev` environments do not install them. Run notebooks from this directory.
+
+`process_adc_data.ipynb` works on numpy 2. It derives chirps per loop, loops per frame and the TDM-MIMO TX split from the `.cfg` (`frameCfg`, `chirpCfg`, `channelCfg`, `profileCfg`), so the range-Doppler plot has one velocity bin per loop (63 for the baseline cfg, per TX), not one per chirp. Point it at a capture non-interactively with `CFG_FILE` (full cfg path) and `ADC_DATA_FILE` (the `adc_data.bin`):
+
+```bash
+cd utilities
+CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test_baseline_numframes0.cfg \
+ADC_DATA_FILE=/path/to/adc_data.bin \
+uv run --group notebooks jupyter nbconvert --to notebook --execute process_adc_data.ipynb --output /tmp/out.ipynb
+```
 
 ## Notebooks
 
