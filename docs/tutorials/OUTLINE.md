@@ -9,7 +9,7 @@ This file has no prose yet.
 
 | # | File (planned) | Lesson | Depends on |
 |---|----------------|--------|------------|
-| A1 | `01_build_and_test.md` | Build the driver and run the unit tests (`cmake`, `ctest`) | core-08 (CMake), core-12 (default build type), D2 (C++17) |
+| A1 | `01_build_and_test.md` | Build the driver and run the unit tests (`cmake`, `ctest`) | core-08 (CMake), core-10 (C++17 if D2), core-12 (default build type) |
 | A2 | `02_host_setup.md` | Host setup: `rmem_max`, static IP for the DCA1000, `dialout`, `cap_sys_nice` | core-15 (affinity/priority settings) |
 | A3 | `03_first_run.md` | First run from a system config, plus `--validate` without hardware | core-10 (schema v2, `--validate`) |
 | A4 | `04_serial_vs_dca1000.md` | Serial TLV point cloud vs DCA1000 raw ADC: when to use which, and the config switches | core-10, core-16 (serial framing) |
@@ -27,4 +27,4 @@ This file has no prose yet.
 | B3 | `12_add_a_tlv_type.md` | Add a TLV type to a UART dialect, with a test | core-16 (`parse_uart_frame` seam) |
 | B4 | `13_consume_frames.md` | Write a frame consumer with `next_adc_frame` / `next_point_cloud` | core-13 (API), D5 |
 | B5 | `14_write_a_test.md` | Write and run a ctest test (fake transports, replay data, `asan-ubsan` preset) | core-11, core-13 |
-| B6 | `15_measure_performance.md` | Measure performance: `bench_pipeline` replay, then the core-04 harness against `docs/RESULTS.md` | core-04, core-11 (`bench_pipeline`) |
+| B6 | `15_measure_performance.md` | Measure performance: `bench_pipeline` replay, then the core-04 harness against `docs/RESULTS.md` | core-04, core-09 (`bench_pipeline`) |

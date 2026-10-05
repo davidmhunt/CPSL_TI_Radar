@@ -12,9 +12,6 @@ Later commits shift two sets of references:
   reading at a later HEAD.
 - `a4ed54a` (core-04 harness) touched no `src/` file.
 
-The core-04 harness `tools/bench/` records host and NIC settings but not
-`CMAKE_BUILD_TYPE` (see (a) Build).
-
 Claims marked **HYPOTHESIS** have not been isolated by an experiment (rule 9).
 Each one names the experiment that would settle it.
 
@@ -76,6 +73,18 @@ state. The design's P2/P3 items target this.
   `new_frame_available` under a second lock (`DCA1000Handler.cpp:534-541`).
   A frame that completes between those two steps is never signalled. The
   serial path has the same pattern (`src/SerialStreamer/SerialStreamer.cpp:277-284`).
+- **Producer publishes the flag before the data (DCA path).**
+  `save_frame_byte_buffer` sets `new_frame_available = true`
+  (`DCA1000Handler.cpp:684-686`) *before* it converts and writes
+  `adc_data_cube` (`:691-693`).
+  - A polling consumer that runs in that window copies the **previous**
+    cube (`:534-536`) and clears the flag (`:539-541`).
+  - The new frame is then never signalled, and a stale cube is delivered
+    as new.
+  - The serial path orders this correctly: TLVs are processed under the
+    lock first, and the flag is set after (`SerialStreamer.cpp:222-232`).
+  - Fix and test: design §7, core-11 (`test_dca_frame_publish`), with a
+    regression case for the core-14 queue.
 - **Queue growth and back-pressure.** There is no queue, only "latest frame
   wins". An overwritten frame is not counted anywhere: `save_frame_byte_buffer`
   overwrites `adc_data_cube` without checking the flag
@@ -131,7 +140,8 @@ state. The design's P2/P3 items target this.
   - **HYPOTHESIS:** this is the largest single CPU cost on a fresh checkout.
     Experiment: run the core-04 harness twice, once with an empty build type
     and once with `Release`, on the same config.
-  - **Action for core-04:** its sidecar must record the build type.
+  - **Action for core-04:** done in `d7a0a2b`. The harness now records the
+    build type and flags and refuses non-Release builds.
 
 ## (b) Hard-coded board knowledge that should be data
 
@@ -277,7 +287,7 @@ per point).
   calls are also Linux-only.
 
 **CMake:**
-- One central include block in `src/CMakeLists.txt:101-133` adds include
+- One central include block in `src/CMakeLists.txt:14-46` adds include
   dirs for only 4 of 11 targets. `Utilities`, `FrameAssembler`,
   `ADCCubeConverter`, `DCA1000Commands`, `DCA1000Socket` and `TLVProcessing`
   export none. As a result:
@@ -328,7 +338,7 @@ stream as `[Q0, Q1, I0, I1]`, with the first pair assigned to `imag`.
 
 **What TI documents (authoritative source found).** TI SWRA581B, *mmWave
 Radar Device ADC Raw Data Capture* (rev. Oct 2018):
-- §7 (xWR16xx/IWR6843 with DCA1000): "lane 1 contains the real part … lane 2
+- §6 (xWR16xx/IWR6843 with DCA1000): "lane 1 contains the real part … lane 2
   contains the imaginary part … The saved file has non-interleaved format
   beginning with the real part of every two samples and followed by the
   imaginary part of the every two samples."
@@ -369,9 +379,9 @@ at `N - that bin` means I and Q are swapped. The result sets the descriptor's
 
 ## Notes for core-04 (baseline)
 
-- **Short run.** `1843_stress_test.cfg` has `frameCfg … 30 100 …`: 30 frames,
-  then the sensor stops. A 60 s run would end after about 3 s and then hit
-  the 2 s timeout in `main.cpp:50-75`. The baseline needs `numFrames = 0` (a
-  copy of the cfg) or a run length matched to the cfg.
-- **Build type.** Record `CMAKE_BUILD_TYPE` in the sidecar (see (a)). `tools/bench/bench_run.py`
-  (`a4ed54a`) does not record it yet.
+These were raised by this audit and are already handled on the core-04 side:
+- **Short run.** `1843_stress_test.cfg` stops after 30 frames (`frameCfg … 30 100 …`).
+  `d7a0a2b` adds a `numFrames 0` copy and `front_radar_IWR1843_stress_test_baseline.json`.
+- **Build type.** `d7a0a2b` records `CMAKE_BUILD_TYPE` in the sidecar (see (a) Build).
+- **I/Q check.** `30b3b34` adds `tools/bench/iq_check.py`. It implements the range-FFT
+  check from the I/Q note above; core-17 consumes its result.

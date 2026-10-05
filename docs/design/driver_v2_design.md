@@ -57,7 +57,7 @@ descriptor names the decoder so the rest stays data.
 | `data_uart.tlv_dialect` | `sdk3` (type 1 = float x/y/z/v, type 7 = int16 SNR/noise) \| `sdk2` (Q-format objects) \| `mcuplus_cascade` (sdk3 plus types 10/11/12) | `TLVProcessing.*` |
 | `lvds.supported` | bool | cascade DCA1000 rejection `SystemConfigReader.cpp:477-482` |
 | `lvds.lanes` | 2 \| 4 (sent in `CONFIG_FPGA_GEN`) | `DCA1000Handler.cpp:381-391` |
-| `lvds.layout` | `two_lane_iq_pairs` (SWRA581B §7) \| `lane_per_rx` (SWRA581B §5 4-lane) | `ADCCubeConverter.cpp:24-31` |
+| `lvds.layout` | `two_lane_iq_pairs` (SWRA581B §6) \| `lane_per_rx` (SWRA581B §5 4-lane) | `ADCCubeConverter.cpp:24-31` |
 | `lvds.iq_order` | `i_first` \| `q_first` | `ADCCubeConverter.cpp:72-78` |
 | `dca1000.*` | FPGA packet size, delay and timer | `DCA1000Handler.cpp:403,594-595` |
 
@@ -116,7 +116,7 @@ Example (IWR1843, DCA1000):
   overridden per run with `board_overrides`.
 - Paths resolve relative to the JSON file, as they do today.
 - A file with no `schema_version` is v1. Loading it fails with a message that
-  names the migration script.
+  names the migration script (recommended; pending D8).
 
 **Change list (v1 → v2):**
 
@@ -139,7 +139,7 @@ Example (IWR1843, DCA1000):
 | — | `runtime.*` | new: queue depth, stall policy, affinity, priorities |
 
 **Migration script.** `tools/migrate_config_v1_to_v2.py` (`uv run`) converts
-the 38 tracked files in one go. It is idempotent and reports any key it could
+every tracked v1 system config in one go. It is idempotent and reports any key it could
 not map.
 
 ## 3. Target library API
@@ -178,7 +178,7 @@ struct AdcFrame {                          // contiguous, native LVDS order = ad
 struct PointCloud { uint32_t frame_number; std::vector<Point> points; };  // Point{x,y,z,v,snr_db,noise_db}
 ```
 
-**Why the storage order is [chirp][rx][sample].** It is the order the 2-lane
+**Why the storage order is [chirp][rx][sample]** (recommended; pending D5). It is the order the 2-lane
 LVDS stream already arrives in, after I/Q pairing (audit (a), file output).
 Conversion becomes one sequential pass, and saving becomes one `write()`. The
 old index order `[rx][sample][chirp]` survives as the `at()` accessor, plus a
@@ -232,9 +232,11 @@ Gains below are **estimates** until measured. Each item is measured two ways:
 | P10 | No `endl`-flushed prints in per-packet or per-frame paths; periodic stats at `debug` | `FrameAssembler.cpp:85,96`; `DCA1000Handler.cpp:649-659` | removes stdout stalls in drop storms | replay with 1% injected drops |
 | P11 | Configurable affinity and priorities | `DCA1000Socket.cpp:99-104`; `Runner.cpp:231-243` | lower jitter on loaded hosts | harness drops under `stress-ng` load |
 
-**Ordering.** Every item lands after the core-04 gate. P0 gets its own
-directive (core-12) so its large gain is measured in isolation; P1 goes with
-the correctness fixes (core-11) because it is a correctness change first.
+**Ordering.** Every item lands after the core-04 gate, one commit per item,
+each with a `bench_pipeline` before/after row (§7 measurement rule).
+`bench_pipeline` itself lands first, in core-09, and does not change
+behaviour. P1 goes with the correctness fixes (core-11). P0 gets its own
+directive (core-12).
 
 ## 6. Test plan (on the core-02 net)
 
@@ -257,17 +259,22 @@ the correctness fixes (core-11) because it is a correctness change first.
     by 4.
   - `test_radar_e2e_fake`: `Radar` over a fake `PacketSource` and fake
     `ByteStream`, covering configure/start/stop idempotence, the stall
-    policy, and `config_once_per_boot`.
+    policy, and `config_once_per_boot`. From core-14 it adds a
+    publish-ordering case: no stale or duplicate frame under a racing
+    consumer.
+  - `test_dca_frame_publish` (core-11): the frame flag is never visible
+    before the cube it announces.
 - **Sanitizer preset.** A `CMakePresets.json` `asan-ubsan` preset runs the
   whole suite. It catches the TLV out-of-bounds read class of bugs.
-- **Benchmark.** `bench_pipeline` is built but not run by default ctest. A
-  `ctest -L bench` label runs it.
+- **Benchmark.** `bench_pipeline` (core-09) is built but not run by default
+  ctest. A `ctest -L bench` label runs it.
 - **Keep the core-04 harness working.** `tools/bench/` (commit `a4ed54a`)
   reads v1 JSON keys (`verbose`, `Streamer`; `bench_run.py:87,154-155`) and
   parses the driver's stdout (`bench_lib.py:47-51`: `SO_RCVBUF granted`,
   `frame:`, tab-indented counters, `TLV frame`, `frame number jumped`). Any
   directive that changes those keys or lines updates the harness in the same
-  commit. The v2 driver gets a stable `--stats` line format that the harness
+  commit. Since `d7a0a2b` the harness also records the build type and refuses
+  non-Release builds. The v2 driver gets a stable `--stats` line format that the harness
   switches to in core-13. `uv run pytest tests/test_bench.py` is in those
   directives' Verify.
 - **Hardware.** Only core-04 (baseline) needs it. After that, bench
@@ -277,49 +284,271 @@ the correctness fixes (core-11) because it is a correctness change first.
 ## 7. Follow-up directives (core-07+)
 
 **Ordering rules.**
-- core-07 to core-09 change no runtime behaviour and may land before core-04
-  finishes.
-- core-10 and everything after waits for core-04's baseline.
+- core-07 to core-09 may land before core-04 finishes.
+  - They delete dead code, restructure CMake with identical compile flags
+    apart from `-I` order, or add new files and a new build target.
+  - None changes the driver binary's behaviour or codegen. Behaviour-visible
+    changes (CLI default config, `-std=c++17`) were moved to core-10 for
+    that reason.
+- core-10 and everything after waits for core-04's committed baseline.
 
-Every directive below:
+**Every directive below:**
 - includes a docs step that keeps `docs/ARCHITECTURE.md`,
   `CPSL_TI_Radar_cpp/Readme.md` and `README.md` accurate for what it changed;
-- ends its Verify with "docs match: a `grep` for every renamed key, class or
-  path finds no stale mention in those three files, and the Reviewer reads
-  the changed sections".
+- ends its Verify with **"docs match"**: a `grep` for every renamed key,
+  class or path finds no stale mention in those three files, and the Reviewer
+  reads the changed sections.
 
-| ID | Title (tag) | Steps (Coder unless noted) | Verify idea | Needs |
-|----|-------------|----------------------------|-------------|-------|
-| core-07 | Hygiene: stale comments, dead code, doc errors `[light]` | Remove `main.cpp:29-30,40` comments, `JSONHandler`, `write_vector_to_file`, `udp_packet_buffer`, garbled `TLVCodes` constant, commented debug blocks; fix the comma operator; fix ARCHITECTURE worker priority; remove Readme `Processor`/`ROS/Listeners`; fix the "four lanes" comment. **Docs step:** ARCHITECTURE, Readme. | ctest green; `grep -rn "DCA1000Runner\|JSONHandler\|INFOATS" CPSL_TI_Radar_cpp/src CPSL_TI_Radar_cpp/main.cpp` empty; no runtime-path diff beyond deletions; docs match | — |
-| core-08 | CMake modernization, flags unchanged `[light]` | Per-target `target_include_directories` in each `src/*/CMakeLists.txt`; delete the central block; `find_package(Threads/Boost)` before use; tests drop `INCLUDES`; one exported `CPSL_TI_Radar::driver` interface target; remove `DEFAULT_CONFIG_PATH`; `-std=c++17` only if D2 is approved. **Docs step:** Readme build/install, ARCHITECTURE build. | ctest green; compile flags in `compile_commands.json` identical to before except `-I` order (and `-std`, if D2 is approved); `tests/CMakeLists.txt` has no `INCLUDES`; `cmake --install` + a 10-line consumer project builds; docs match | — |
-| core-09 | Board descriptors + loader (not wired in) `[heavy]` | Add `config/boards/{IWR1443,IWR1843,IWR6843,AWR2243_CASCADE}.json` per §1; `BoardDescriptor::load` with strict validation; cfg cross-checks as a function. Runtime unchanged. **Docs step:** ARCHITECTURE "Configuration" gains the descriptor; Readme lists the board files. | `test_board_descriptor` passes (4 boards + 6 rejection cases); the runtime source diff touches only new files; docs match | — |
-| **gate** | **core-04 baseline committed** | | | |
-| core-10 | Schema v2 + migration + board dispatch from data `[heavy]` | v2 parser; `tools/migrate_config_v1_to_v2.py` + migrate the 38 JSONs; replace every `board_type ==` check (audit (b)) with descriptor fields; `--validate` flag. **Docs step:** README migration section gets §9's note; Readme JSON section rewritten for v2; ARCHITECTURE configuration. | `grep -rn '"IWR1443"\|"IWR1843"\|"IWR6843"\|"AWR2243_CASCADE"' CPSL_TI_Radar_cpp/src` empty; `--validate` passes for every tracked JSON; migration golden test; `tools/bench` reads v2 keys and `uv run pytest tests/test_bench.py` passes; existing ctest green; docs match | core-09 |
-| core-11 | Correctness: FrameAssembler placement (P1) + core-02 bugs `[heavy]` | P1; SerialStreamer validates before publishing; TLV length guard; RadarConfigReader bounds + init; `push_packet` pre-configure guard; `asan-ubsan` preset; add the `bench_pipeline` replay target (`ctest -L bench`) and record its ns/byte for the current build in the Log. **Docs step:** ARCHITECTURE "UDP packet format" (byte-offset placement, late/duplicate counters). | all core-02 `KNOWN_BUG`s are `CHECK`s and pass; ctest green under `asan-ubsan`; replay golden frames equal; docs match | core-10 |
-| core-12 | Default Release build (P0) `[light]` | Default `CMAKE_BUILD_TYPE=Release` when unset; print it at configure time. **Docs step:** Readme build section. | `cmake` with no build type gives `-O2`/`-O3` in `compile_commands.json`; `bench_pipeline` replay CPU ns/byte recorded before/after in the Log; optional bench row; docs match | core-04, core-11 (`bench_pipeline` lands in core-11) |
-| core-13 | Library API v2 (`Radar`, `RadarConfig`, `Status`, log sink) `[heavy]` | §3 API over today's internals; no `exit`, no unconditional prints, no escaping exceptions; idempotent stop; stall policy; signal flag in `main`; non-copyable owners; fake-transport seams. **Docs step:** ARCHITECTURE component graph + API; Readme usage; README; unblocks core-05's OUTLINE "API" lessons. | `test_radar_e2e_fake` passes; `grep -rn "exit(\|std::cout" CPSL_TI_Radar_cpp/src` only in the log sink; `--validate` still works; `--stats` format documented and `uv run pytest tests/test_bench.py` passes against it; docs match | core-10, core-11 |
-| core-14 | Zero-copy DCA pipeline (P2, P3, P7, P9, P10) `[heavy]` | Frame pool, contiguous `AdcFrame`, single-pass converter, cv frame queue with `frames_overwritten`, single-write file output, quiet hot path. **Docs step:** ARCHITECTURE "ADC cube layout" + "RX path"; Readme output files; `utilities/` notebook note if the file format is unchanged (it should be). | `bench_pipeline` shows 0 steady-state allocations/frame and lower ns/byte than core-12's recorded value; `adc_data.bin` byte-identical to the old writer on a replay; ctest green; `uv run pytest tests/test_bench.py` passes; optional bench row vs baseline; docs match | core-13 |
-| core-15 | RX socket: batching, back-pressure, affinity (P4, P5, P6, P11) `[heavy]` | `recvmmsg`, no discard on a full ring, `SO_RXQ_OVFL` counter, runtime affinity and priorities. **Docs step:** ARCHITECTURE RX path; Readme host prerequisites (affinity, caps). | replay over loopback UDP (`bench_pipeline --udp`) shows fewer syscalls per packet (`strace -c` excerpt in Log) and no user-space discard under an injected 200 ms stall within SO_RCVBUF; ctest green; docs match | core-14 |
-| core-16 | Serial path rework (P8) + `parse_uart_frame` seam + TLV dialects `[heavy]` | Length-driven framing; pure parser; `sdk3`/`mcuplus_cascade` dialects; `sdk2` dialect once confirmed (Researcher first; see Decisions D7); remove `#define private public`. **Docs step:** Readme drops the "one frame old" note; ARCHITECTURE serial path. | `test_uart_parse` + pty replay: frame delivered before the next magic word (timestamp check); tests contain no `#define private`; docs match | core-13 |
-| core-17 | Apply the I/Q bench result `[light]` | Set `lvds.iq_order` for IWR1843/6843 from the core-04 bench check; add a golden test with a real captured frame. **Docs step:** ARCHITECTURE ADC layout cites SWRA581B and the bench result. | the range-FFT peak of the committed capture lands at the reflector bin in a ctest/pytest; docs match | core-04 bench check, core-09 |
+**Measurement rule.**
+- Every perf item (P0–P11) lands in its own commit.
+- That commit's directive Log carries a `bench_pipeline` row with ns/byte
+  and allocations/frame, taken before and after on the same host and build
+  type.
+- `bench_pipeline` exists from core-09 on.
+
+### core-07 Hygiene: stale comments, dead code, doc errors `[light]`
+
+Needs: none (pre-gate).
+
+**Steps.** Remove:
+- the `main.cpp:29-30,40` comments
+- `JSONHandler`
+- `write_vector_to_file` and `udp_packet_buffer`
+- the garbled `TLVCodes` constant
+- the commented-out debug blocks
+
+Fix:
+- the comma operator
+- the ARCHITECTURE worker priority
+- the "four lanes" comment
+
+Also remove the Readme's `Processor` and `ROS/Listeners` sections.
+
+**Docs step.** ARCHITECTURE and the C++ Readme.
+
+**Verify.**
+- ctest green.
+- `grep -rn "DCA1000Runner\|JSONHandler\|INFOATS" CPSL_TI_Radar_cpp/src CPSL_TI_Radar_cpp/main.cpp` is empty.
+- The diff only deletes code or edits comments in `src/`.
+- docs match.
+
+### core-08 CMake modernization, flags unchanged `[light]`
+
+Needs: none (pre-gate).
+
+**Steps.**
+- Per-target `target_include_directories` in each `src/*/CMakeLists.txt`.
+- Delete the central block (`src/CMakeLists.txt:14-46`).
+- Call `find_package(Threads/Boost)` before use.
+- Tests drop `INCLUDES`.
+- One exported `CPSL_TI_Radar::driver` interface target.
+- `DEFAULT_CONFIG_PATH` and the C++ standard are **not** touched here.
+
+**Docs step.** Readme build/install section and ARCHITECTURE build section.
+
+**Verify.**
+- ctest green.
+- Compile flags in `compile_commands.json` are identical to before except for `-I` order.
+- `tests/CMakeLists.txt` has no `INCLUDES`.
+- `cmake --install` plus a 10-line consumer project builds.
+- docs match.
+
+### core-09 Board descriptors, loader, and `bench_pipeline` `[heavy]`
+
+Needs: none (pre-gate).
+
+**Steps.**
+- Add `config/boards/{IWR1443,IWR1843,IWR6843,AWR2243_CASCADE}.json` per §1.
+- `BoardDescriptor::load` with strict validation, and the cfg cross-checks as a function. Not wired into the runtime.
+- Add the `bench_pipeline` replay target. It drives today's `FrameAssembler` and `ADCCubeConverter` with synthetic packets (`ctest -L bench`, not in the default run) and reports frames/s, ns/byte and allocations/frame.
+- Record the first values in the Log for a Release build.
+
+**Docs step.** ARCHITECTURE "Configuration" gains the descriptor. The Readme lists the board files and `ctest -L bench`.
+
+**Verify.**
+- `test_board_descriptor` passes (4 boards + 6 rejection cases).
+- `bench_pipeline` runs and prints the three metrics; the Log row is pasted.
+- The runtime source diff touches only new files.
+- docs match.
+
+**── Gate: core-04 baseline committed ──**
+
+### core-10 Schema v2, migration, data-driven board dispatch, CLI, C++17 `[heavy]`
+
+Needs: core-09, core-04.
+
+**Steps.**
+- v2 parser.
+- `tools/migrate_config_v1_to_v2.py`, then migrate **every tracked v1 system config**.
+- Replace every `board_type ==` check (audit (b)) with descriptor fields.
+- `--validate` flag; require the config argument (remove `DEFAULT_CONFIG_PATH`).
+- Update `tools/bench` to v2 keys.
+- If D2 is approved, `-std=c++17` goes in its own commit with a `bench_pipeline` before/after row.
+
+**Docs step.** README migration section gets §9's note. The Readme JSON section is rewritten for v2. ARCHITECTURE configuration section.
+
+**Verify.**
+- `grep -rn '"IWR1443"\|"IWR1843"\|"IWR6843"\|"AWR2243_CASCADE"' CPSL_TI_Radar_cpp/src` is empty.
+- `--validate` passes for every tracked JSON; no-argument run prints usage.
+- Migration golden test passes.
+- `uv run pytest tests/test_bench.py` passes.
+- ctest green.
+- docs match.
+
+### core-11 Correctness: FrameAssembler placement (P1), frame-flag ordering, core-02 bugs `[heavy]`
+
+Needs: core-10.
+
+**Steps.**
+- P1 in its own commit, with a `bench_pipeline` before/after row.
+- Publish the DCA frame flag **after** the cube is written, under one lock (audit (a), producer-side ordering bug).
+- SerialStreamer validates before publishing.
+- TLV length guard.
+- RadarConfigReader bounds and initialization.
+- `push_packet` pre-configure guard.
+- `asan-ubsan` preset.
+
+**Docs step.** ARCHITECTURE "UDP packet format" (byte-offset placement, late/duplicate counters).
+
+**Verify.**
+- All core-02 `KNOWN_BUG`s are `CHECK`s and pass.
+- New `test_dca_frame_publish`: a consumer polling in the publish window never receives the previous frame flagged as new. Uses a hook between convert and publish.
+- ctest green under `asan-ubsan`.
+- Replay golden frames equal.
+- docs match.
+
+### core-12 Default Release build (P0) `[light]`
+
+Needs: core-11.
+
+**Steps.**
+- Default `CMAKE_BUILD_TYPE=Release` when unset; print it at configure time.
+
+**Docs step.** Readme build section.
+
+**Verify.**
+- `cmake` with no build type gives `-O2`/`-O3` in `compile_commands.json`.
+- `bench_pipeline` row before/after (empty vs Release).
+- Optional bench row through core-06.
+- docs match.
+
+### core-13 Library API v2 (`Radar`, `RadarConfig`, `Status`, log sink) `[heavy]`
+
+Needs: core-10, core-11.
+
+**Steps.**
+- The §3 API over today's internals.
+- No `exit`, no unconditional prints, no escaping exceptions.
+- Idempotent stop; stall policy; signal flag in `main`.
+- Non-copyable owners; fake-transport seams.
+- A stable `--stats` line format, with `tools/bench` switched to it.
+
+**Docs step.** ARCHITECTURE component graph and API. Readme usage. README. This unblocks the OUTLINE "API" lessons.
+
+**Verify.**
+- `test_radar_e2e_fake` passes.
+- `grep -rn "exit(\|std::cout" CPSL_TI_Radar_cpp/src` finds hits only in the log sink.
+- `uv run pytest tests/test_bench.py` passes against `--stats`.
+- docs match.
+
+### core-14 Zero-copy DCA pipeline (P2, P3, P7, P9, P10) `[heavy]`
+
+Needs: core-13, plus D5 and D10 (and D11 for output files).
+
+**Steps.** One commit per item, in this order:
+1. P10 quiet hot path
+2. P2 frame pool
+3. P3 single-pass converter into contiguous `AdcFrame`
+4. P7 cv frame queue with `frames_overwritten`
+5. P9 single-write file output
+
+**Docs step.** ARCHITECTURE "ADC cube layout" and "RX path". Readme output files.
+
+**Verify.**
+- The Log has five `bench_pipeline` rows, one per commit (ns/byte, allocations/frame), each measured against the previous commit.
+- Steady state reaches 0 allocations/frame.
+- `adc_data.bin` is byte-identical to the old writer on a replay.
+- `test_radar_e2e_fake` gains a publish-ordering case: no stale or duplicate frame through the queue under a consumer racing the producer.
+- `uv run pytest tests/test_bench.py` passes.
+- Optional bench row vs baseline.
+- docs match.
+
+### core-15 RX socket: batching, back-pressure, affinity (P4, P5, P6, P11) `[heavy]`
+
+Needs: core-14.
+
+**Steps.** One commit per item:
+- `recvmmsg`
+- no discard on a full ring, plus a `SO_RXQ_OVFL` counter
+- runtime affinity and priorities
+
+**Docs step.** ARCHITECTURE RX path. Readme host prerequisites.
+
+**Verify.**
+- A row per commit from `bench_pipeline --udp` (loopback), including a `strace -c` excerpt for P5.
+- No user-space discard under an injected 200 ms stall within SO_RCVBUF.
+- ctest green.
+- docs match.
+
+### core-16 Serial path rework (P8), `parse_uart_frame` seam, TLV dialects `[heavy]`
+
+Needs: core-13; D6, D7.
+
+**Steps.**
+- Length-driven framing.
+- Pure parser.
+- `sdk3` and `mcuplus_cascade` dialects; `sdk2` only once confirmed.
+- Remove `#define private public`.
+- If D6 is approved, drop Boost.
+
+**Docs step.** The Readme drops the "one frame old" note. ARCHITECTURE serial path.
+
+**Verify.**
+- `test_uart_parse` passes.
+- pty replay delivers each frame before the next magic word (timestamp check).
+- Tests contain no `#define private`.
+- docs match.
+
+### core-17 Apply the I/Q bench result `[light]`
+
+Needs: core-09 and the core-04 `tools/bench/iq_check.py` result (30b3b34).
+
+**Steps.**
+- Set `lvds.iq_order` for IWR1843/6843 from the core-04 bench check.
+- Add a golden test on the committed capture.
+
+**Docs step.** ARCHITECTURE ADC layout cites SWRA581B §6 and the bench result.
+
+**Verify.**
+- The range-FFT peak of the capture lands at the reflector bin in a ctest or pytest.
+- docs match.
 
 **Not proposed (design question only):** cascade 4-lane raw ADC (D4).
 
 ## 8. Decisions needed (user)
 
+These are recommendations. §3 and §9 are written as if each one were
+approved and change with the answers.
+
 | # | Question | Recommendation |
 |---|----------|----------------|
 | D1 | nlohmann_json: vendored submodule or system package? | Keep the pinned submodule as the default (offline, reproducible, Docker-simple). Add `CPSL_USE_SYSTEM_JSON=ON` to use `find_package(nlohmann_json 3.11)`. |
-| D2 | Bump to C++17? | **Yes** in core-08: `std::filesystem`, `optional`, `string_view`, `[[nodiscard]]`. GCC 13 on Ubuntu 24.04 and ROS 2 Jazzy are C++17 already. |
+| D2 | Bump to C++17? | **Yes**, in core-10 after the gate, in its own measured commit: `std::filesystem`, `optional`, `string_view`, `[[nodiscard]]`. GCC 13 on Ubuntu 24.04 and ROS 2 Jazzy are C++17 already. |
 | D3 | Windows support? | **No.** Linux-only (termios2, SCHED_RR, `recvmmsg`, `endian.h`). Keep platform calls behind `PacketSource`/`ByteStream` so a port stays possible. |
 | D4 | Cascade 4-lane raw ADC via DCA1000? | **Defer.** The descriptor reserves `lvds.supported:false`. It needs firmware-loop work, a DCA1000 and cascade hardware that is not on the bench, and a new `layout` decoder. Revisit after core-17. |
-| D5 | Change `AdcFrame` to contiguous `[chirp][rx][sample]`? This breaks the nested-vector API and `CPSL_TI_Radar_ROS`. | **Yes**, with `at()` plus a one-release `to_nested()` shim. Update the ROS package in its own repo. |
-| D6 | Drop Boost (asio only does serial I/O) for plain termios + `poll`? | **Yes** in core-16. Removes a system dependency; `termios2` already exists. |
+| D5 | Change `AdcFrame` to contiguous `[chirp][rx][sample]`? This breaks the nested-vector API and `CPSL_TI_Radar_ROS`. | **Yes**, with `at()` plus a one-release `to_nested()` shim. Update the ROS package in its own repo. If no, core-14 keeps the nested type and P3/P9 shrink. |
+| D6 | Drop Boost (asio only does serial I/O) for plain termios + `poll`? | **Yes**, in core-16. Removes a system dependency; `termios2` already exists. |
 | D7 | IWR1443 serial (SDK 2) support | Have a Researcher confirm the SDK 2 UART format first (audit (b) hypothesis). Until then, `sdk2` is a load error with a clear message. |
-| D8 | Loading v1 configs | Hard error that names the migration script (recommended), not dual-schema reading. |
-| D9 | Amend core-04 to add the I/Q range-FFT check (about 10 min with a reflector) and a `numFrames 0` stress cfg? | **Yes.** It is the only way to settle the I/Q question (audit), and the shipped stress cfg stops after 30 frames. |
+| D8 | Loading v1 configs | Hard error that names the migration script, not dual-schema reading. |
+| D9 | I/Q check in core-04 | Already partly done: core-04 added `tools/bench/iq_check.py` (30b3b34) and a `numFrames 0` baseline cfg (d7a0a2b). **Recommend** the user runs the reflector capture during the core-04 bench session (about 10 min). It is the only way to settle the I/Q question. |
+| D10 | Frame delivery: change from "latest frame wins" (today; overwritten frames are uncounted) to a drop-oldest queue, default depth 4, with `frames_overwritten` in `Stats`? | **Yes.** Slow consumers see a short backlog instead of silent loss. `runtime.frame_queue_depth: 1` restores latest-wins. |
+| D11 | Make the raw LVDS file (`LVDS_Raw_0.bin`, written on every run with `save_to_file` today) opt-in through `output.save_raw_lvds`? | **Yes.** It doubles disk I/O and is only needed to debug packet loss. `adc_data.bin` stays on with `save_adc_frames`. |
 
 ## 9. v1 → v2 migration note (draft for `README.md`, landed by core-10)
+
+This draft assumes D5, D8, D10 and D11 are approved as recommended. Edit it to
+match the user's answers before landing.
+
 
 > **Configs.** v2 system configs carry `"schema_version": 2` and name a board
 > descriptor (`"board": "IWR1843"`, from `CPSL_TI_Radar_cpp/config/boards/`).
