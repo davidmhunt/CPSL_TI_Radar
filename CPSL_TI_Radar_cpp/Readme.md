@@ -76,7 +76,7 @@ sudo sysctl -p /etc/sysctl.d/99-radar.conf
 
 The DCA1000 RX thread runs at real-time priority (SCHED_RR 99). To allow this without running as root, either grant the executable the capability after building:
 ```bash
-sudo setcap 'cap_sys_nice=eip' ./build/CPSL_TI_Radar_CPP
+sudo setcap cap_sys_nice+ep ./build/CPSL_TI_Radar_CPP
 ```
 
 Or add the following to `/etc/security/limits.conf` (replace `<username>` with your username), then log out and back in:
@@ -85,6 +85,8 @@ Or add the following to `/etc/security/limits.conf` (replace `<username>` with y
 ```
 
 The capability is stored on the binary file, so a rebuild removes it; grant it again after each build. `uv run tools/setup/host_setup.py` reports whether it is set (see "Quick setup" above). An existing `rtprio` limit below 99, such as PipeWire's `@pipewire - rtprio 95`, is not enough for the RX thread.
+
+The pre-rework IWR1843 baseline (core-04) ran without `cap_sys_nice`, so the RX thread did not get real-time priority. Any later hardware performance comparison must say whether the capability was set.
 
 ## Building CPSL_TI_Radar_cpp
 
