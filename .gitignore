@@ -5,3 +5,12 @@ __pycache__/*
 *.gif
 *.mp4
 *.swp
+
+# Secrets and local environment (never commit)
+.env
+harness.config.env
+.venv/
+
+# --- friday harness (managed by init_harness.py) ---
+__pycache__/
+# --- end friday harness ---
