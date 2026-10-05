@@ -30,6 +30,11 @@ if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
+# Replay benchmark (bench/): built with the tests, run only by ctest -L bench
+if(BUILD_TESTING)
+  add_subdirectory(bench)
+endif()
+
 # Add the executables
 add_executable(CPSL_TI_Radar_CPP main.cpp)
 
