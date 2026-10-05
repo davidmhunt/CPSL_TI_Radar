@@ -208,6 +208,27 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     assert side["preflight_overridden"] == []
 
 
+def test_nonzero_driver_exit_code_is_surfaced(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench_run, "PREFLIGHT_HOST", PreflightHost())
+    drv = tmp_path / "fake_driver.py"
+    drv.write_text(FAKE_DRIVER.format(py=sys.executable) + "sys.exit(1)\n")
+    drv.chmod(drv.stat().st_mode | stat.S_IXUSR)
+    cfg = json.loads(STRESS_JSON.read_text())
+    cfg["radar_cfg"] = str(STRESS_CFG)
+    cfg_path = tmp_path / "fake_system.json"
+    cfg_path.write_text(json.dumps(cfg))
+    monkeypatch.setattr(bench_run, "RUNS", tmp_path / "runs")
+    out = tmp_path / "out"
+    (tmp_path / "CMakeCache.txt").write_text(
+        "//x\nCMAKE_BUILD_TYPE:STRING=Release\nCMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DNDEBUG\n")
+    rc = bench_run.main([str(cfg_path), "--seconds", "3", "--rep", "1", "--tag", "unit",
+                         "--driver", str(drv), "--out-dir", str(out), "--start-timeout", "10"])
+    assert rc == 1
+    r = json.loads(next(out.glob("*.json")).read_text())["result"]
+    assert r["status"] == "exit=1" and r["stop"]["exit_code"] == 1
+    assert "driver exit code 1" in r["note"]
+
+
 def test_preflight_refuses_with_fix_commands(tmp_path, monkeypatch):
     drv = tmp_path / "drv"
     drv.write_text("#!/bin/sh\n")

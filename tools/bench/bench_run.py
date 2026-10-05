@@ -318,7 +318,11 @@ def main(argv=None) -> int:
     summary = lib.summarize(rows)
     dca_events = [e for e in parser.events if e["kind"] == "dca_frame"]
     received = dca_events[-1]["frames_cum"] if dca_events else 0
-    result = {"status": "ok" if nsec == args.seconds and result_note == "ok" else "INCOMPLETE",
+    status = "ok" if nsec == args.seconds and result_note == "ok" else "INCOMPLETE"
+    if proc.returncode != 0:  # surface the driver's exit code (e.g. exit=1 after an unplug)
+        status = f"exit={proc.returncode}"
+        result_note += f"; driver exit code {proc.returncode}"
+    result = {"status": status,
               "note": result_note, "startup_s": round(t0 - launched, 3),
               "stop": {"mode": args.stop_mode, "sigint_sent": sigint_sent,
                        "exit_code": proc.returncode},
