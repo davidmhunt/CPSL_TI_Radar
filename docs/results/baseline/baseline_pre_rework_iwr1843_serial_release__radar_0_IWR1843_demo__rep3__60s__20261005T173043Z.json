@@ -1,0 +1,96 @@
+{
+  "basename": "baseline_pre_rework_iwr1843_serial_release__radar_0_IWR1843_demo__rep3__60s__20261005T173043Z",
+  "board": "IWR1843",
+  "branch": "release/v2.0",
+  "build": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_DEBUG": "-g",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG"
+  },
+  "command_line": [
+    "tools/bench/bench_run.py",
+    "CPSL_TI_Radar_cpp/config/system/radar_0_IWR1843_demo.json",
+    "--seconds",
+    "60",
+    "--rep",
+    "3",
+    "--tag",
+    "baseline_pre_rework_iwr1843_serial_release"
+  ],
+  "commit": "5c53cdb1a1f0e3ca593b2fde150d29f61eb564b9",
+  "created_utc": "2026-10-05T17:30:43+00:00",
+  "dca1000_enabled": false,
+  "dirty_driver_or_bench_paths": [],
+  "driver_binary": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP",
+  "driver_binary_mtime_utc": "2026-10-05T16:43:51+00:00",
+  "driver_binary_sha256": "e9e1d5baf6ebee7fcef1d9c059f4e708c4d07af3247bef2d82d1bde03e638ea8",
+  "expected": {
+    "adc_samples": 256,
+    "bytes_per_frame": 131072,
+    "chirps_per_frame": 32,
+    "expected_fps": 10.0,
+    "frame_period_ms": 100.0,
+    "rx_antennas": 4
+  },
+  "host": {
+    "cpu_count": 4,
+    "hostname": "cpsl-gmk-6",
+    "kernel": "7.0.0-34-generic",
+    "machine": "x86_64",
+    "netdev_max_backlog": "1000",
+    "rmem_default": "212992",
+    "rmem_max": "134217728",
+    "uname": "Linux cpsl-gmk-6 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64 x86_64"
+  },
+  "nic": {
+    "note": "DCA1000 path not enabled"
+  },
+  "non_release_override": false,
+  "radar_cfg_numFrames": 0,
+  "radar_config": "CPSL_TI_Radar_cpp/config/radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg",
+  "radar_config_sha256": "cd5df1f259274d362fa59f4af09869bfab15c1ac7292ebf791b3b6d7fdb56698",
+  "rep": 3,
+  "result": {
+    "dca_received_frames_cum_at_exit": 0,
+    "driver_warnings_first": [
+      "Runner: warning: not every config command was acknowledged with 'Done'"
+    ],
+    "granted_so_rcvbuf_bytes": null,
+    "note": "ok",
+    "startup_s": 0.352,
+    "status": "ok",
+    "stop": {
+      "exit_code": 0,
+      "mode": "sigint",
+      "sigint_sent": true
+    },
+    "summary": {
+      "cpu_pct_max": 2.0,
+      "cpu_pct_mean": 0.5,
+      "dca_dropped_packet_events_total": 0,
+      "dca_dropped_packets_total": 0,
+      "dca_fps_max": 0,
+      "dca_fps_mean": 0.0,
+      "dca_fps_min": 0,
+      "dca_frames_total": 0,
+      "dca_packets_total": 0,
+      "dca_rx_overrun_count_final": 0,
+      "seconds": 60,
+      "serial_headers_total": 600,
+      "tlv_fps_max": 11,
+      "tlv_fps_mean": 10.0,
+      "tlv_fps_min": 9,
+      "tlv_frames_total": 600,
+      "tlv_missed_frames_total": 0
+    }
+  },
+  "save_to_file": false,
+  "sdk_version": "3.6",
+  "seconds_requested": 60,
+  "serial_enabled": true,
+  "system_config": "CPSL_TI_Radar_cpp/config/system/radar_0_IWR1843_demo.json",
+  "system_config_sha256": "c11e74e07f0af6308214549378204dfe0c6943098842c34cfcfad6736ae823ab",
+  "tag": "baseline_pre_rework_iwr1843_serial_release"
+}
