@@ -368,4 +368,88 @@ TEST_CASE(same_key_in_different_objects_is_fine) {
     for (const char* b : {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}) must_load(b);
 }
 
+// ---------------------------------------------------------------------------
+// cfg_dialect.skip_commands and filter_cfg_commands (calibData rule)
+// ---------------------------------------------------------------------------
+
+using cpsl::radar::CfgCommandPlan;
+using cpsl::radar::filter_cfg_commands;
+
+static std::vector<std::string> v(std::initializer_list<const char*> l) {
+    std::vector<std::string> out;
+    for (const char* s : l) out.push_back(s);
+    return out;
+}
+
+TEST_CASE(skip_commands_per_board) {
+    // IWR1843 only: its flashed firmware answers "'calibData' is not recognized"
+    // (every core-04 baseline run). The others have no evidence, so no entry.
+    CHECK(must_load("IWR1843").cfg_dialect.skip_commands == v({"calibData"}));
+    CHECK(must_load("IWR6843").cfg_dialect.skip_commands.empty());
+    CHECK(must_load("IWR1443").cfg_dialect.skip_commands.empty());
+    CHECK(must_load("AWR2243_CASCADE").cfg_dialect.skip_commands.empty());
+}
+
+TEST_CASE(skip_commands_validation) {
+    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = "calibData"; }),
+              "/cfg_dialect/skip_commands: expected an array"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({"calib Data"}); }),
+              "/cfg_dialect/skip_commands/0: \"calib Data\" must be one command word"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({""}); }),
+              "must be one command word"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({1}); }),
+              "/cfg_dialect/skip_commands/0: expected a string"));
+    CHECK(has(reject("IWR1843",
+                     [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({"calibData", "calibData"}); }),
+              "listed twice"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({"sensorStart"}); }),
+              "cannot be skipped"));
+    // an empty list is valid, and board_overrides can clear the shipped list
+    CHECK_EQ(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array(); }), std::string(""));
+    BoardDescriptor d;
+    std::string err;
+    json clear = {{"cfg_dialect", {{"skip_commands", json::array()}}}};
+    CHECK(BoardDescriptor::load_by_name(kBoards, "IWR1843", d, err, &clear));
+    CHECK(d.cfg_dialect.skip_commands.empty());
+}
+
+TEST_CASE(filter_skips_listed_command) {
+    BoardDescriptor d = must_load("IWR1843");
+    CfgCommandPlan p = filter_cfg_commands(v({"sensorStop", "flushCfg", "calibData 0 0 0", "sensorStart"}), d);
+    CHECK(p.send == v({"sensorStop", "flushCfg"}));
+    CHECK(p.skipped == v({"calibData 0 0 0"}));
+}
+
+TEST_CASE(filter_matches_first_token_exactly_ignoring_whitespace) {
+    BoardDescriptor d = must_load("IWR1843");
+    CfgCommandPlan p = filter_cfg_commands(
+        v({"calibData 0 0 0\r", "  calibData\t0 0 0  ", "calibData", "calibdata 0 0 0", "CALIBDATA 0 0 0",
+           "calibDataX 0", "xcalibData 0", "% calibData 0 0 0", "#calibData"}),
+        d);
+    // leading/trailing whitespace and tabs do not hide the command
+    CHECK(p.skipped == v({"calibData 0 0 0", "  calibData\t0 0 0", "calibData"}));
+    // other spellings are sent (and rejected by the firmware, as before); comments dropped
+    CHECK(p.send == v({"calibdata 0 0 0", "CALIBDATA 0 0 0", "calibDataX 0", "xcalibData 0"}));
+}
+
+TEST_CASE(filter_keeps_other_commands_in_order) {
+    BoardDescriptor d = must_load("IWR1843");
+    std::vector<std::string> in = v({"% comment", "", "sensorStop", "flushCfg", "dfeDataOutputMode 1",
+                                     "channelCfg 15 7 0", "calibData 0 0 0", "adcCfg 2 1",
+                                     "  lvdsStreamCfg -1 0 1 0", "sensorStart", "\r"});
+    CfgCommandPlan p = filter_cfg_commands(in, d);
+    CHECK(p.send == v({"sensorStop", "flushCfg", "dfeDataOutputMode 1", "channelCfg 15 7 0", "adcCfg 2 1",
+                       "  lvdsStreamCfg -1 0 1 0"}));
+    CHECK_EQ(p.skipped.size(), static_cast<size_t>(1));
+}
+
+TEST_CASE(filter_with_empty_skip_list_is_a_no_op) {
+    BoardDescriptor d = must_load("IWR6843");
+    CHECK(d.cfg_dialect.skip_commands.empty());
+    std::vector<std::string> in = v({"sensorStop", "calibData 0 0 0", "frameCfg 0 1 16 0 100 1 0", "sensorStart"});
+    CfgCommandPlan p = filter_cfg_commands(in, d);
+    CHECK(p.send == v({"sensorStop", "calibData 0 0 0", "frameCfg 0 1 16 0 100 1 0"}));
+    CHECK(p.skipped.empty());
+}
+
 TEST_MAIN()

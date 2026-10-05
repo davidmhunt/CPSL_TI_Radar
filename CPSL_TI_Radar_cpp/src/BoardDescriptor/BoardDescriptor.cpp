@@ -238,10 +238,30 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     {
         const json& c = j.at("cfg_dialect");
         const std::string p = "/cfg_dialect";
-        if (!r.object(c, p, {"rx_mask_fields", "frame_period_field"}) ||
+        if (!r.object(c, p, {"rx_mask_fields", "frame_period_field"}, {"skip_commands"}) ||
             !r.uint_array(c, "rx_mask_fields", p, 1, 64, d.cfg_dialect.rx_mask_fields) ||
             !r.uint(c, "frame_period_field", p, 1, 64, d.cfg_dialect.frame_period_field)) {
             return false;
+        }
+        // skip_commands: optional, may be empty; each entry one command word
+        if (c.contains("skip_commands")) {
+            const json& v = c.at("skip_commands");
+            const std::string sp = p + "/skip_commands";
+            if (!v.is_array()) return r.fail(sp, "expected an array of command names");
+            std::set<std::string> seen;
+            for (size_t i = 0; i < v.size(); i++) {
+                const std::string ip = sp + "/" + std::to_string(i);
+                if (!v[i].is_string()) return r.fail(ip, "expected a string");
+                const std::string cmd = v[i].get<std::string>();
+                if (cmd.empty() || cmd.find_first_of(" \t\r\n") != std::string::npos) {
+                    return r.fail(ip, "\"" + cmd + "\" must be one command word (no spaces)");
+                }
+                if (cmd == d.cli.start_cmd || cmd == d.cli.stop_cmd) {
+                    return r.fail(ip, "\"" + cmd + "\" is the board's start/stop command and cannot be skipped");
+                }
+                if (!seen.insert(cmd).second) return r.fail(ip, "\"" + cmd + "\" is listed twice");
+                d.cfg_dialect.skip_commands.push_back(cmd);
+            }
         }
     }
 
@@ -316,6 +336,33 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
 
     out = d;
     return true;
+}
+
+CfgCommandPlan filter_cfg_commands(const std::vector<std::string>& lines, const BoardDescriptor& board) {
+    CfgCommandPlan plan;
+    for (std::string line : lines) {
+        // trailing whitespace / CR from Windows-style cfg files
+        std::string::size_type end = line.find_last_not_of(" \t\r");
+        line.erase(end == std::string::npos ? 0 : end + 1);
+        if (line.empty()) continue;
+
+        bool comment = false;
+        for (const std::string& pre : board.cli.skip_prefixes) {
+            if (line.compare(0, pre.size(), pre) == 0) comment = true;
+        }
+        if (comment) continue;
+        if (line.find(board.cli.start_cmd) != std::string::npos) continue;
+
+        std::istringstream iss(line);
+        std::string first;
+        iss >> first;
+        bool skip = false;
+        for (const std::string& cmd : board.cfg_dialect.skip_commands) {
+            if (first == cmd) skip = true;
+        }
+        (skip ? plan.skipped : plan.send).push_back(line);
+    }
+    return plan;
 }
 
 bool parse_json_strict(std::istream& in, const std::string& source, json& out, std::string& error) {

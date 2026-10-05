@@ -53,6 +53,9 @@ struct BoardDescriptor {
     struct CfgDialect {
         std::vector<uint32_t> rx_mask_fields;  // channelCfg field indices (command = 0)
         uint32_t frame_period_field = 0;       // frameCfg field index of the period
+        // Optional. cfg commands this board's firmware rejects; they are left in
+        // the .cfg file but never sent (see filter_cfg_commands). Default empty.
+        std::vector<std::string> skip_commands;
     };
     struct DataUart {
         uint32_t baud = 0;
@@ -103,6 +106,22 @@ struct BoardDescriptor {
     static bool from_json(const nlohmann::json& j, const std::string& expected_name,
                           const std::string& source, BoardDescriptor& out, std::string& error);
 };
+
+// The commands a radar .cfg sends to this board, in file order.
+struct CfgCommandPlan {
+    std::vector<std::string> send;     // sent one per line by the CLI controller
+    std::vector<std::string> skipped;  // dropped by cfg_dialect.skip_commands
+};
+
+// Turn the lines of a radar .cfg into the commands to send (pure; no I/O).
+// Each line loses trailing spaces, tabs and CR. Then it is dropped if it is
+// empty, if it starts with one of cli.skip_prefixes (a comment), or if it
+// contains cli.start_cmd (sent separately when streaming starts). A line whose
+// first whitespace-separated token equals one of cfg_dialect.skip_commands
+// (exact, case-sensitive, as the TI CLI matches commands) goes to `skipped`.
+// Every other line goes to `send` unchanged. An empty skip_commands list
+// skips nothing.
+CfgCommandPlan filter_cfg_commands(const std::vector<std::string>& lines, const BoardDescriptor& board);
 
 // Parse JSON without exceptions, rejecting duplicate object keys (nlohmann
 // would otherwise keep the last one silently). On failure returns false and
