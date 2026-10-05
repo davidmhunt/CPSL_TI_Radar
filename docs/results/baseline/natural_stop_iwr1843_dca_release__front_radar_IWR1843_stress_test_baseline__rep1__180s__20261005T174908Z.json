@@ -1,0 +1,118 @@
+{
+  "basename": "natural_stop_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep1__180s__20261005T174908Z",
+  "board": "IWR1843",
+  "branch": "release/v2.0",
+  "build": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_DEBUG": "-g",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG"
+  },
+  "command_line": [
+    "tools/bench/bench_run.py",
+    "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json",
+    "--seconds",
+    "180",
+    "--rep",
+    "1",
+    "--stop-mode",
+    "natural",
+    "--tag",
+    "natural_stop_iwr1843_dca_release"
+  ],
+  "commit": "67965094e62b3d6f3e76d4a2be8a883ea44a6106",
+  "created_utc": "2026-10-05T17:49:08+00:00",
+  "dca1000_enabled": true,
+  "dirty_driver_or_bench_paths": [],
+  "driver_binary": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP",
+  "driver_binary_mtime_utc": "2026-10-05T16:43:51+00:00",
+  "driver_binary_sha256": "e9e1d5baf6ebee7fcef1d9c059f4e708c4d07af3247bef2d82d1bde03e638ea8",
+  "expected": {
+    "adc_samples": 250,
+    "bytes_per_frame": 504000,
+    "chirps_per_frame": 126,
+    "expected_fps": 10.0,
+    "frame_period_ms": 100.0,
+    "rx_antennas": 4
+  },
+  "host": {
+    "cpu_count": 4,
+    "hostname": "cpsl-gmk-6",
+    "kernel": "7.0.0-34-generic",
+    "machine": "x86_64",
+    "netdev_max_backlog": "1000",
+    "rmem_default": "212992",
+    "rmem_max": "134217728",
+    "uname": "Linux cpsl-gmk-6 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64 x86_64"
+  },
+  "nic": {
+    "driver": "igc",
+    "ethtool_ring": "Ring parameters for enp3s0:\nPre-set maximums:\nRX:\t\t\t4096\nRX Mini:\t\tn/a\nRX Jumbo:\t\tn/a\nTX:\t\t\t4096\nTX push buff len:\tn/a\nCurrent hardware settings:\nRX:\t\t\t256\nRX Mini:\t\tn/a\nRX Jumbo:\t\tn/a\nTX:\t\t\t256\nRX Buf Len:\t\tn/a\nCQE Size:\t\tn/a\nTX Push:\t\toff\nRX Push:\t\toff\nTX push buff len:\tn/a\nTCP data split:\t\tn/a",
+    "interface": "enp3s0",
+    "mtu": "1500",
+    "operstate": "up",
+    "speed_mbps": "1000",
+    "system_ip": "192.168.33.30"
+  },
+  "non_release_override": false,
+  "radar_cfg_numFrames": 0,
+  "radar_config": "CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test_baseline_numframes0.cfg",
+  "radar_config_sha256": "394b51637d9d1cd77b520582b45e66667d63dee7cfab833d0f479468e63bc8a3",
+  "rep": 1,
+  "result": {
+    "bin_size_check": {
+      "actual_bytes": 133054464,
+      "expected_bytes": 133056000,
+      "file": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/tools/bench/runs/natural_stop_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep1__180s__20261005T174908Z/adc_data.bin",
+      "short_by_bytes": 1536,
+      "short_by_frames": 0.003,
+      "verdict": "MISMATCH"
+    },
+    "dca_received_frames_cum_at_exit": 264,
+    "driver_warnings_first": [
+      "Runner: warning: not every config command was acknowledged with 'Done'",
+      "[DCA1000] Warning: could not set RX thread to SCHED_RR 99 (run as root or grant cap_sys_nice)",
+      "runner timed out waiting for next adc_cube",
+      "Failed to receive response",
+      "terminate called after throwing an instance of 'boost::wrapexcept<boost::system::system_error>'",
+      "what():  write: Input/output error [system:5 at /usr/include/boost/asio/detail/reactive_descriptor_service.hpp:283 in function 'write_some']"
+    ],
+    "granted_so_rcvbuf_bytes": 134217728,
+    "lvds_raw_bytes": 133555968,
+    "note": "ok",
+    "startup_s": 0.331,
+    "status": "ok",
+    "stop": {
+      "exit_code": -6,
+      "mode": "natural",
+      "sigint_sent": false
+    },
+    "summary": {
+      "cpu_pct_max": 22.0,
+      "cpu_pct_mean": 2.9,
+      "dca_dropped_packet_events_total": 0,
+      "dca_dropped_packets_total": 0,
+      "dca_fps_max": 11,
+      "dca_fps_mean": 1.467,
+      "dca_fps_min": 0,
+      "dca_frames_total": 264,
+      "dca_packets_total": 91385,
+      "dca_rx_overrun_count_final": 0,
+      "seconds": 180,
+      "serial_headers_total": 0,
+      "tlv_fps_max": 0,
+      "tlv_fps_mean": 0.0,
+      "tlv_fps_min": 0,
+      "tlv_frames_total": 0,
+      "tlv_missed_frames_total": 0
+    }
+  },
+  "save_to_file": true,
+  "sdk_version": "3.6",
+  "seconds_requested": 180,
+  "serial_enabled": false,
+  "system_config": "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json",
+  "system_config_sha256": "13c3b4287bc8cab2cfc26df26bef114ffd4cd986a747f2d107eab9fe5aef0b9d",
+  "tag": "natural_stop_iwr1843_dca_release"
+}
