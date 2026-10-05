@@ -1,6 +1,8 @@
 #include"CLIController.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <exception>
 
 #include "Log.hpp"
@@ -104,7 +106,7 @@ bool CLIController::send_config_to_IWR() {
         //skipped commands are never sent, so they do not count as unacknowledged
         bool all_done = true;
         for (const string& command : plan.send) {
-            if(!CLIController::sendCommand(command)){
+            if(!CLIController::sendCommand(command, system_config_reader.getRadarCliTimeoutMs())){
                 all_done = false;
             }
         }
@@ -121,7 +123,8 @@ bool CLIController::send_config_to_IWR() {
  */
 bool CLIController::sendStartCommand()
 {
-    return CLIController::sendCommand(system_config_reader.getBoard().cli.start_cmd);
+    return CLIController::sendCommand(system_config_reader.getBoard().cli.start_cmd,
+                                      system_config_reader.getRadarCliTimeoutMs());
 }
 
 /**
@@ -131,7 +134,17 @@ bool CLIController::sendStartCommand()
  */
 bool CLIController::sendStopCommand()
 {
-    return CLIController::sendCommand(system_config_reader.getBoard().cli.stop_cmd);
+    return CLIController::sendCommand(system_config_reader.getBoard().cli.stop_cmd, stop_timeout_ms());
+}
+
+int CLIController::stop_timeout_ms() const
+{
+    const cpsl::radar::BoardDescriptor::Cli& cli = system_config_reader.getBoard().cli;
+    if (cli.stop_timeout_ms > 0) {
+        return static_cast<int>(cli.stop_timeout_ms);
+    }
+    const int after_frame = static_cast<int>(std::ceil(frame_period_ms_ > 0.0f ? frame_period_ms_ : 0.0f)) + 200;
+    return std::max(static_cast<int>(cli.cmd_timeout_ms), after_frame);
 }
 
 /**
@@ -172,7 +185,10 @@ std::error_code CLIController::read_until_with_timeout(
  * @return true if the board responded with "Done"; false on a timeout, a
  *  missing ack, or an I/O error (which also sets io_error()). Never throws.
  */
-bool CLIController::sendCommand(const string& command) {
+bool CLIController::sendCommand(const string& command, int timeout_ms) {
+
+    //io_error() describes this command only (core-11 review S2: it used to stick)
+    io_error_ = false;
 
     if (!stream) {
         cpsl::radar::log_error("CLIController: '", command, "' not sent: no CLI port");
@@ -184,7 +200,9 @@ bool CLIController::sendCommand(const string& command) {
     try {
         //send the command over the serial port
         const string line = command + "\n";
-        std::error_code wec = stream->write(reinterpret_cast<const uint8_t*>(line.data()), line.size());
+        //bounded: a wedged CDC device must not hang the stop path (core-11 review S5)
+        std::error_code wec = stream->write(reinterpret_cast<const uint8_t*>(line.data()), line.size(),
+                                            std::chrono::milliseconds(timeout_ms));
         if (wec) {
             io_error_ = true;
             cpsl::radar::log_error("CLIController: write of '", command, "' failed: ", wec.message());
@@ -194,7 +212,7 @@ bool CLIController::sendCommand(const string& command) {
         //wait to receive confirmation (cli.ack) that the command was accepted
         const cpsl::radar::BoardDescriptor::Cli& cli = system_config_reader.getBoard().cli;
         string resp;
-        std::error_code ec = read_until_with_timeout(resp, cli.ack, system_config_reader.getRadarCliTimeoutMs());
+        std::error_code ec = read_until_with_timeout(resp, cli.ack, timeout_ms);
 
         //the board prints its prompt after the ack and drops input while it does
         //(the AM273x cascade demo loses the first characters of the next command),
@@ -213,7 +231,7 @@ bool CLIController::sendCommand(const string& command) {
         //handle error codes
         if (ec == std::errc::timed_out) {
             cpsl::radar::log_warn("CLIController: no '", cli.ack, "' for '", command, "' within ",
-                                  system_config_reader.getRadarCliTimeoutMs(), " ms");
+                                  timeout_ms, " ms");
             return false;
         } else if (ec) {
             io_error_ = true;

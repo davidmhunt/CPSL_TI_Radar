@@ -130,6 +130,7 @@ void Runner::initialize(const std::string & json_config_file_path,
     }
 
     if (cli_controller.initialized){
+        cli_controller.set_frame_period_ms(radar_config_reader.get_frame_period_ms());
         bool config_sent = cli_controller.send_config_to_IWR();
 
         const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();

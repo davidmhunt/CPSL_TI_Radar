@@ -44,6 +44,10 @@ struct BoardDescriptor {
         std::string prompt;
         uint32_t prompt_wait_ms = 0;
         uint32_t cmd_timeout_ms = 0;
+        // Optional. How long stop_cmd waits for the ack. 0 (key omitted or
+        // null) = computed: max(cmd_timeout_ms, frame period + 200 ms), since
+        // the demo acks sensorStop only after the current frame ends.
+        uint32_t stop_timeout_ms = 0;
         std::string start_cmd;
         std::string stop_cmd;
         std::vector<std::string> skip_prefixes;

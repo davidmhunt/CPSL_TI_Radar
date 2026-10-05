@@ -39,10 +39,34 @@ std::shared_ptr<SerialPortStream> SerialPortStream::open(const std::string& port
     return s;
 }
 
-std::error_code SerialPortStream::write(const uint8_t* data, size_t len) {
-    boost::system::error_code ec;
-    boost::asio::write(port_, boost::asio::buffer(data, len), ec);
-    return to_std(ec);
+std::error_code SerialPortStream::write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) {
+    boost::system::error_code write_ec;
+    bool done = false;
+    bool timed_out = false;
+    boost::asio::steady_timer timer(io_);
+    timer.expires_after(timeout);
+
+    boost::asio::async_write(port_, boost::asio::buffer(data, len),
+                             [&](const boost::system::error_code& e, size_t) {
+                                 write_ec = e;
+                                 done = true;
+                                 boost::system::error_code ignore;
+                                 timer.cancel(ignore);
+                             });
+    timer.async_wait([&](const boost::system::error_code& e) {
+        if (!e) {
+            timed_out = true;
+            boost::system::error_code ignore;
+            port_.cancel(ignore);  // completes the write with operation_aborted
+        }
+    });
+
+    io_.restart();
+    io_.run();
+
+    if (done && !write_ec) return std::error_code();
+    if (timed_out) return std::make_error_code(std::errc::timed_out);
+    return to_std(write_ec);
 }
 
 std::error_code SerialPortStream::read_some(uint8_t* buf, size_t cap, size_t& n,

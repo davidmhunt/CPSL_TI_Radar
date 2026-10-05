@@ -9,6 +9,7 @@
     "prompt": "mmwDemo:/>",
     "prompt_wait_ms": 500,
     "cmd_timeout_ms": 5000,
+    "stop_timeout_ms": null,
     "start_cmd": "sensorStart",
     "stop_cmd": "sensorStop",
     "skip_prefixes": ["%", "#"]

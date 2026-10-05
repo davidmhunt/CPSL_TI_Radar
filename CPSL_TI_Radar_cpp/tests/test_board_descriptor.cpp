@@ -279,6 +279,24 @@ TEST_CASE(rejects_schema_name_type_and_structure_errors) {
     CHECK(has(reject("AWR2243_CASCADE", [](json& j) { j["dca1000"] = json::object(); }), "not allowed"));
 }
 
+TEST_CASE(stop_timeout_is_optional_null_means_computed) {
+    for (const char* name : {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}) {
+        BoardDescriptor d = must_load(name);
+        CHECK_EQ(d.cli.stop_timeout_ms, 0u);  // shipped files: null = computed
+    }
+    BoardDescriptor d;
+    std::string err;
+    json set = {{"cli", {{"stop_timeout_ms", 750}}}};
+    CHECK(BoardDescriptor::load_by_name(kBoards, "IWR1843", d, err, &set));
+    CHECK_EQ(d.cli.stop_timeout_ms, 750u);
+    json omitted = {{"cli", {{"stop_timeout_ms", nullptr}}}};  // merge patch: null removes the key
+    CHECK(BoardDescriptor::load_by_name(kBoards, "IWR1843", d, err, &omitted));
+    CHECK_EQ(d.cli.stop_timeout_ms, 0u);
+    CHECK(has(reject("IWR1843", [](json& j) { j["cli"]["stop_timeout_ms"] = 0; }),
+              "/cli/stop_timeout_ms: 0 is outside [1, 600000]"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["cli"]["stop_timeout_ms"] = "300"; }), "expected an integer"));
+}
+
 TEST_CASE(board_overrides_are_merged_then_validated) {
     BoardDescriptor d;
     std::string err;

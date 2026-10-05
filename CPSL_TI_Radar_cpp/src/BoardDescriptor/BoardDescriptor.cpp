@@ -212,7 +212,13 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
         const json& c = j.at("cli");
         const std::string p = "/cli";
         if (!r.object(c, p, {"baud", "ack", "error_tokens", "prompt", "prompt_wait_ms", "cmd_timeout_ms",
-                             "start_cmd", "stop_cmd", "skip_prefixes"})) {
+                             "start_cmd", "stop_cmd", "skip_prefixes"},
+                      {"stop_timeout_ms"})) {
+            return false;
+        }
+        // stop_timeout_ms: optional; null or absent = computed from the frame period
+        if (c.contains("stop_timeout_ms") && !c.at("stop_timeout_ms").is_null() &&
+            !r.uint(c, "stop_timeout_ms", p, 1, 600000, d.cli.stop_timeout_ms)) {
             return false;
         }
         if (!r.uint(c, "baud", p, 1, 0xFFFFFFFFu, d.cli.baud) || !r.str(c, "ack", p, d.cli.ack) ||

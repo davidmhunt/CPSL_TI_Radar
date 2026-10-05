@@ -30,7 +30,7 @@ add_driver_test(test_board_descriptor     LIBS BoardDescriptor)
 add_driver_test(test_dca_frame_publish    LIBS DCA1000Handler)
 add_driver_test(test_dca_file_flush      LIBS DCA1000Handler)
 add_driver_test(test_stop_signal         LIBS Utilities)
-add_driver_test(test_cli_stop            LIBS Runner)
+add_driver_test(test_cli_stop            LIBS Runner util)
 add_driver_test(test_log                 LIBS Utilities)
 add_driver_test(test_radar_config        LIBS Utilities)
 # a handler that exits (even with status 0) must not count as a pass

@@ -34,14 +34,24 @@ public:
     bool sendStartCommand();
     bool sendStopCommand();
 
-    //true once a write or read on the port has failed (not a mere missing "Done")
+    //true if the last command hit a write or read error (not a mere missing
+    //"Done"); cleared at the start of every command. A prompt-read error
+    //after a "Done" sets it but does not fail that command.
     bool io_error() const { return io_error_; }
+
+    //frame period of the radar cfg, for the computed stop timeout
+    void set_frame_period_ms(float ms) { frame_period_ms_ = ms; }
+    //how long sendStopCommand() waits for the ack: cli.stop_timeout_ms if
+    //the board sets it, else max(cli.cmd_timeout_ms, frame period + 200 ms)
+    //(the demo acks sensorStop only after the current frame ends)
+    int stop_timeout_ms() const;
 
     bool initialized;
     
 private:
 
-    bool sendCommand(const std::string& command);
+    //timeout_ms: how long to wait for the ack (and the most the write may take)
+    bool sendCommand(const std::string& command, int timeout_ms);
     //append to `response` until it contains `delim`, or timeout_ms passes
     std::error_code read_until_with_timeout(
         std::string & response,
@@ -51,6 +61,7 @@ private:
     std::shared_ptr<cpsl::radar::ByteStream> stream;
     SystemConfigReader system_config_reader;
     bool io_error_;
+    float frame_period_ms_ = 0.0f;
 };
 
 #endif

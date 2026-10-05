@@ -14,6 +14,7 @@
 #include "dca_test_support.hpp"
 #include "ByteStream.hpp"
 #include "CLIController.hpp"
+#include "Log.hpp"
 #include "Runner.hpp"
 
 #include <arpa/inet.h>
@@ -24,25 +25,37 @@
 #include <atomic>
 #include <boost/system/system_error.hpp>
 #include <deque>
+#include <map>
+#include <pty.h>
 #include <mutex>
 #include <thread>
 
 // A scripted CLI: every written line is answered with "Done" + the prompt.
 // After `fail_after` writes, writes fail: by throwing (as boost::asio::write
-// does on an unplugged port) or by returning EIO.
+// does on an unplugged port), by returning EIO, or by hanging until the
+// write's timeout (a wedged CDC device). reply_delay holds a command's reply
+// back; prompt_error_on drops one command's prompt and fails the next read.
 class FakeCli : public cpsl::radar::ByteStream {
 public:
-    enum class Fail { none, throw_system_error, return_eio, read_eio, no_reply };
+    enum class Fail { none, throw_system_error, return_eio, read_eio, no_reply, write_hangs };
+    using clock = std::chrono::steady_clock;
 
-    std::error_code write(const uint8_t* data, size_t len) override {
-        std::lock_guard<std::mutex> l(m_);
+    std::error_code write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) override {
+        std::unique_lock<std::mutex> l(m_);
         const std::string line(reinterpret_cast<const char*>(data), len);
+        const std::string cmd = line.substr(0, line.size() - 1);
         attempted.push_back(line);
+        write_timeouts.push_back(timeout);
         if (fail != Fail::none && writes_ok >= fail_after) {
             if (fail == Fail::throw_system_error)
                 throw boost::system::system_error(boost::system::error_code(EIO, boost::system::system_category()),
                                                   "write");
             if (fail == Fail::return_eio) return std::error_code(EIO, std::system_category());
+            if (fail == Fail::write_hangs) {
+                l.unlock();
+                std::this_thread::sleep_for(timeout);  // never completes: the timeout ends it
+                return std::make_error_code(std::errc::timed_out);
+            }
             if (fail == Fail::no_reply) { writes_ok++; return {}; }
             // read_eio: the write lands, the read fails
             writes_ok++;
@@ -50,18 +63,44 @@ public:
             return {};
         }
         writes_ok++;
-        pending_ += "\r\n" + line.substr(0, line.size() - 1) + "\r\nDone\r\nmmwDemo:/>";
+        auto d = reply_delay.find(cmd);
+        const clock::time_point at = clock::now() + (d == reply_delay.end() ? std::chrono::milliseconds(0) : d->second);
+        if (cmd == prompt_error_on) {
+            pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\n"});
+            prompt_error_ = true;
+        } else {
+            pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\nmmwDemo:/>"});
+        }
         return {};
     }
 
-    std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds) override {
-        std::lock_guard<std::mutex> l(m_);
+    std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) override {
         n = 0;
+        std::unique_lock<std::mutex> l(m_);
         if (read_error_) return std::error_code(EIO, std::system_category());
-        if (pending_.empty()) return std::make_error_code(std::errc::timed_out);
-        n = std::min(cap, pending_.size());
-        std::memcpy(buf, pending_.data(), n);
-        pending_.erase(0, n);
+        if (pending_.empty()) {
+            if (prompt_error_) {
+                prompt_error_ = false;
+                return std::error_code(EIO, std::system_category());
+            }
+            l.unlock();
+            std::this_thread::sleep_for(std::min(timeout, std::chrono::milliseconds(5)));
+            return std::make_error_code(std::errc::timed_out);
+        }
+        const clock::time_point at = pending_.front().first;
+        if (clock::now() < at) {
+            l.unlock();
+            const auto wait = std::min<clock::duration>(timeout, at - clock::now());
+            std::this_thread::sleep_for(wait);
+            l.lock();
+            if (pending_.empty() || clock::now() < pending_.front().first)
+                return std::make_error_code(std::errc::timed_out);
+        }
+        std::string& front = pending_.front().second;
+        n = std::min(cap, front.size());
+        std::memcpy(buf, front.data(), n);
+        front.erase(0, n);
+        if (front.empty()) pending_.pop_front();
         return {};
     }
 
@@ -72,14 +111,40 @@ public:
     }
 
     std::vector<std::string> attempted;
+    std::vector<std::chrono::milliseconds> write_timeouts;
     size_t writes_ok = 0;
     Fail fail = Fail::none;
     size_t fail_after = 0;
+    std::map<std::string, std::chrono::milliseconds> reply_delay;
+    std::string prompt_error_on;
 
 private:
     std::mutex m_;
-    std::string pending_;
+    std::deque<std::pair<clock::time_point, std::string>> pending_;
     bool read_error_ = false;
+    bool prompt_error_ = false;
+};
+
+// Collects warn and error messages while alive.
+class WarnCapture {
+public:
+    WarnCapture() {
+        cpsl::radar::set_log_sink([this](cpsl::radar::LogLevel l, const std::string& m) {
+            if (l == cpsl::radar::LogLevel::warn || l == cpsl::radar::LogLevel::error) {
+                std::lock_guard<std::mutex> lock(m_);
+                lines.push_back(m);
+            }
+        });
+    }
+    ~WarnCapture() { cpsl::radar::set_log_sink(nullptr); }
+    std::vector<std::string> get() {
+        std::lock_guard<std::mutex> lock(m_);
+        return lines;
+    }
+
+private:
+    std::mutex m_;
+    std::vector<std::string> lines;
 };
 
 static SystemConfigReader serial_free_config(const std::string& name) {
@@ -132,6 +197,110 @@ TEST_CASE(uninitialized_controller_does_not_throw) {
     CLIController cli;
     CHECK(!cli.sendStopCommand());
     CHECK(!cli.send_config_to_IWR());
+}
+
+// ---- Step 3 of core-13: sensorStop ack window, per-command io_error, timed write ----
+
+// The IWR1843 fixture: cmd_timeout_ms 100, frame period 100 ms. sensorStop is
+// acknowledged only after the current frame ends, so a 100 ms window missed
+// it on every healthy bench stop (core-06 review S1).
+TEST_CASE(sensorStop_ack_after_1_5x_cmd_timeout_is_no_warning) {
+    SystemConfigReader sys = serial_free_config("cli_slow_stop");
+    std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
+    CLIController cli;
+    CHECK(cli.initialize(sys, fake));
+    cli.set_frame_period_ms(100.0f);
+    CHECK_EQ(cli.stop_timeout_ms(), 300);  // max(100, 100 + 200)
+    fake->reply_delay["sensorStop"] = std::chrono::milliseconds(150);  // 1.5 x cmd_timeout_ms
+    WarnCapture warns;
+    CHECK(cli.sendStopCommand());
+    CHECK(!cli.io_error());
+    CHECK(warns.get().empty());
+    CHECK_EQ(fake->write_timeouts.back().count(), 300);  // the write is bounded by the same window
+}
+
+TEST_CASE(stop_timeout_override_and_floor) {
+    // board_overrides.cli.stop_timeout_ms wins over the computed value
+    json j;
+    {
+        std::ifstream f(dca_test::write_system_config("cli_stop_override", dca_test::tmp_dir(), false));
+        j = json::parse(f);
+    }
+    j["board_overrides"] = {{"cli", {{"stop_timeout_ms", 750}}}};
+    const std::string path = dca_test::tmp_dir() + "/cli_stop_override.json";
+    std::ofstream(path) << j.dump();
+    SystemConfigReader sys(path);
+    CHECK(sys.initialized);
+    CLIController cli;
+    CHECK(cli.initialize(sys, std::make_shared<FakeCli>()));
+    cli.set_frame_period_ms(100.0f);
+    CHECK_EQ(cli.stop_timeout_ms(), 750);
+    // computed: never below cmd_timeout_ms
+    CLIController cli2;
+    CHECK(cli2.initialize(serial_free_config("cli_stop_floor"), std::make_shared<FakeCli>()));
+    CHECK_EQ(cli2.stop_timeout_ms(), 200);  // no frame period known: max(100, 0 + 200)
+}
+
+// core-11 review S2: io_error_ was sticky, so a prompt-read hiccup after a
+// "Done" made a later plain timeout look like an I/O error.
+TEST_CASE(prompt_read_error_then_timeout_is_reported_as_a_timeout) {
+    SystemConfigReader sys = serial_free_config("cli_sticky");
+    std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
+    CLIController cli;
+    CHECK(cli.initialize(sys, fake));
+    fake->prompt_error_on = "sensorStart";
+    CHECK(cli.sendStartCommand());  // "Done" arrived: the command succeeded
+    CHECK(cli.io_error());          // the prompt read after it failed
+    fake->fail_from_now(FakeCli::Fail::no_reply);
+    WarnCapture warns;
+    CHECK(!cli.sendStopCommand());
+    CHECK(!cli.io_error());  // a plain timeout, not an I/O error
+    const std::vector<std::string> w = warns.get();
+    CHECK_EQ(w.size(), size_t(1));
+    CHECK(!w.empty() && w[0].find("no 'Done' for 'sensorStop'") != std::string::npos);
+}
+
+// core-11 review S5: a blocking write could hang stop() on a wedged device.
+TEST_CASE(write_that_never_completes_returns_within_the_timeout) {
+    SystemConfigReader sys = serial_free_config("cli_hang");
+    std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
+    CLIController cli;
+    CHECK(cli.initialize(sys, fake));
+    cli.set_frame_period_ms(100.0f);
+    fake->fail_from_now(FakeCli::Fail::write_hangs);
+    const auto t0 = std::chrono::steady_clock::now();
+    const bool ok = cli.sendStopCommand();
+    const long long ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    CHECK(!ok);
+    CHECK(cli.io_error());
+    CHECK(ms >= 290);   // waited the stop window (300 ms) ...
+    CHECK(ms < 300 + 500);  // ... and no longer
+}
+
+// The real SerialPortStream: a pty whose master never reads fills up and
+// blocks the writer; the timed write must give up.
+TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
+    int master = -1, slave = -1;
+    char name[256] = {0};
+    CHECK(openpty(&master, &slave, name, nullptr, nullptr) == 0);
+    if (master < 0) return;
+    close(slave);  // SerialPortStream opens it by name
+    std::string err;
+    std::shared_ptr<cpsl::radar::SerialPortStream> port = cpsl::radar::SerialPortStream::open(name, 115200, err);
+    CHECK(port != nullptr);
+    if (port) {
+        const std::vector<uint8_t> big(8 * 1024 * 1024, 'x');
+        const auto t0 = std::chrono::steady_clock::now();
+        const std::error_code ec = port->write(big.data(), big.size(), std::chrono::milliseconds(300));
+        const long long ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        CHECK(ec == std::errc::timed_out);
+        CHECK(ms >= 290);
+        CHECK(ms < 300 + 1000);
+    }
+    port.reset();
+    close(master);
 }
 
 // ---- Part 2: Runner over a fake CLI and a loopback fake DCA1000 ----

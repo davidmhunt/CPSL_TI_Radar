@@ -29,6 +29,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `cli.ack` | `Done` | `CLIController.cpp:223,246` |
 | `cli.prompt`, `prompt_wait_ms` | `mmwDemo:/>`, 500 | `CLIController.cpp:225-230`. The same prompt string is set in the SDK 3.6 demo (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:1325`) and in the cascade demo (`firmware_dev/projects/awr2243_cascade_ddm/.../mss/mmw_cli.c:2220`). **IWR1443 (SDK 2): not checked against source.** |
 | `cli.cmd_timeout_ms` | 100; cascade 5000 | `SystemConfigReader.cpp:16` default; `config/system/radar_0_AWR2243_cascade_serial.json:9` |
+| `cli.stop_timeout_ms` | `null` on all four (computed) | Optional (core-13). How long `stop_cmd` waits for the ack. `null` or omitted means `max(cmd_timeout_ms, frame period + 200 ms)`: the demo acks `sensorStop` only after the current frame ends, and with the IWR1843's 100 ms timeout and 100 ms frames every healthy bench stop missed it (core-06 review S1). A number (1–600000) overrides it, also through `board_overrides`. |
 | `cli.start_cmd`, `stop_cmd` | `sensorStart`, `sensorStop` | `CLIController.cpp:135,156,165` |
 | `cli.skip_prefixes` | `%`, `#` | `CLIController.cpp:132` |
 | `cli.error_tokens` | `Error`, `not recognized` | **Not used by today's code** (design §1 adds it). `Error` matches the demos' `CLI_write("Error: ...")` replies (SDK 3.6 `mmw_cli.c:377,821`, for example). `not recognized` is the TI CLI utility's unknown-command reply, quoted from memory: **unverified**, so check it before core-10 relies on it. |

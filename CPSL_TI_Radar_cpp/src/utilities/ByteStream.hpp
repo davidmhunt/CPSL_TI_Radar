@@ -25,8 +25,10 @@ class ByteStream {
 public:
     virtual ~ByteStream() = default;
 
-    // Write all `len` bytes. A non-zero error means the write failed.
-    virtual std::error_code write(const uint8_t* data, size_t len) = 0;
+    // Write all `len` bytes within `timeout`. A non-zero error means the
+    // write failed; std::errc::timed_out means it did not finish in time
+    // (e.g. a wedged USB CDC device), and some bytes may have gone out.
+    virtual std::error_code write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) = 0;
 
     // Wait at most `timeout` for data and read up to `cap` bytes into `buf`;
     // `n` is the count read. No data in time: std::errc::timed_out, n == 0.
@@ -40,7 +42,7 @@ public:
     static std::shared_ptr<SerialPortStream> open(const std::string& port, unsigned int baud, std::string& error);
     ~SerialPortStream() override;
 
-    std::error_code write(const uint8_t* data, size_t len) override;
+    std::error_code write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) override;
     std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) override;
 
 private:
