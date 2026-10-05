@@ -4,6 +4,8 @@
 #     cross-checks, frame shape)
 #   - an IWR1843 config lists calibData as skipped (cfg_dialect.skip_commands)
 #   - a v1 file exits non-zero and names the migration script
+#   - at the default log level nothing but the summary is printed: no
+#     "[RadarConfig]" load chatter (core-13)
 # Invoked by ctest with -DDRIVER=<binary> -DCONFIG_DIR=<config> -DV1_FIXTURE=<v1 .json>.
 
 file(GLOB configs "${CONFIG_DIR}/system/*.json")
@@ -17,7 +19,10 @@ foreach(cfg IN LISTS configs)
   execute_process(COMMAND "${DRIVER}" --validate "${cfg}"
                   RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
   get_filename_component(name "${cfg}" NAME)
-  if(rc EQUAL 0)
+  if(rc EQUAL 0 AND "${out}${err}" MATCHES "\\[RadarConfig\\]")
+    message(STATUS "FAIL  ${name} (printed load chatter)\n${out}${err}")
+    math(EXPR failed "${failed} + 1")
+  elseif(rc EQUAL 0)
     message(STATUS "ok    ${name}")
   else()
     message(STATUS "FAIL  ${name} (exit ${rc})\n${out}${err}")

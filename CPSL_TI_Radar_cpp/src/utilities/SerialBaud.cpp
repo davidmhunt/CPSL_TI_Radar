@@ -1,6 +1,6 @@
 #include "SerialBaud.hpp"
 
-#include <iostream>
+#include "Log.hpp"
 
 // Defined in SerialBaudTermios2.cpp, which can't share a translation unit with
 // <termios.h> (pulled in by boost::asio) because <asm/termbits.h> redefines it.
@@ -16,15 +16,15 @@ bool set_serial_baud_rate(boost::asio::serial_port & port, unsigned int baud_rat
 
     unsigned int actual_baud_rate = 0;
     if(!set_custom_baud_termios2(port.native_handle(), baud_rate, actual_baud_rate)){
-        std::cerr << "set_serial_baud_rate: failed to set baud rate " << baud_rate
-                  << " (" << ec.message() << ")" << std::endl;
+        cpsl::radar::log_error("set_serial_baud_rate: failed to set baud rate ", baud_rate,
+                               " (", ec.message(), ")");
         return false;
     }
 
     if(actual_baud_rate != baud_rate){
-        std::cerr << "set_serial_baud_rate: requested " << baud_rate
-                  << " baud but the driver applied " << actual_baud_rate
-                  << ". The USB-UART bridge may not support this rate." << std::endl;
+        cpsl::radar::log_error("set_serial_baud_rate: requested ", baud_rate,
+                               " baud but the driver applied ", actual_baud_rate,
+                               ". The USB-UART bridge may not support this rate.");
         return false;
     }
 

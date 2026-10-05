@@ -1,5 +1,9 @@
 #include "DCA1000Handler.hpp"
 
+#include <sstream>
+
+#include "Log.hpp"
+
 /**
  * @brief Default constructor (un-initialized)
  */
@@ -142,13 +146,13 @@ bool DCA1000Handler::stop(){
             //joins the RX thread, then tells the DCA1000 to stop
             ok = send_recordStop();
             if(!ok){
-                std::cerr << "DCA1000Handler: recordStop was not acknowledged" << std::endl;
+                cpsl::radar::log_warn("DCA1000Handler: recordStop was not acknowledged");
             }
         } else {
             socket_.stop_rx();
         }
     } catch (const std::exception& e) {
-        std::cerr << "DCA1000Handler: error while stopping: " << e.what() << std::endl;
+        cpsl::radar::log_error("DCA1000Handler: error while stopping: ", e.what());
         ok = false;
     }
     output_files_ok_ = close_output_files();
@@ -172,12 +176,12 @@ bool DCA1000Handler::close_output_files(){
                 (*f)->flush();
                 (*f)->close();
                 if ((*f)->fail()) {
-                    std::cerr << "DCA1000Handler: failed to flush/close an output file" << std::endl;
+                    cpsl::radar::log_error("DCA1000Handler: failed to flush/close an output file");
                     ok = false;
                 }
             }
         } catch (const std::exception& e) {
-            std::cerr << "DCA1000Handler: error closing an output file: " << e.what() << std::endl;
+            cpsl::radar::log_error("DCA1000Handler: error closing an output file: ", e.what());
             ok = false;
         }
     }
@@ -437,8 +441,8 @@ bool DCA1000Handler::send_configFPGAGen(){
     //LVDS mode from the board descriptor (lvds.lanes): 0x01 = 4-lane, 0x02 = 2-lane
     const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
     if (!board.lvds.supported) {
-        std::cerr << "DCA1000Handler::send_configFPGAGen(): board " << board.name
-                  << " has no LVDS capture support (lvds.supported false)" << std::endl;
+        cpsl::radar::log_error("DCA1000Handler::send_configFPGAGen(): board ", board.name,
+                               " has no LVDS capture support (lvds.supported false)");
         return false;
     }
     data[1] = board.lvds.lanes == 4 ? 0x01 : 0x02;
@@ -590,11 +594,8 @@ void DCA1000Handler::load_config(){
     save_raw_lvds = system_config_reader.get_save_raw_lvds();
     udp_packet_size = system_config_reader.getBoard().dca1000.packet_bytes;
 
-    //print key ports
-    std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
-    std::cout << "System IP: " << DCA_systemIP << std::endl;
-    std::cout << "cmd port: " << DCA_cmdPort << std::endl;
-    std::cout << "data port: " << DCA_dataPort << std::endl;
+    cpsl::radar::log_debug("FPGA IP: ", DCA_fpgaIP, ", system IP: ", DCA_systemIP,
+                           ", cmd port: ", DCA_cmdPort, ", data port: ", DCA_dataPort);
 }
 
 bool DCA1000Handler::init_sockets() {
@@ -611,7 +612,7 @@ bool DCA1000Handler::init_sockets() {
 bool DCA1000Handler::configure_DCA1000(){
 
     if (!socket_.is_initialized()) {
-        std::cerr << "attempted to configure DCA1000 but socket is not initialized" << std::endl;
+        cpsl::radar::log_error("attempted to configure DCA1000 but socket is not initialized");
         return false;
     }
 
@@ -641,7 +642,7 @@ bool DCA1000Handler::configure_DCA1000(){
     float fpga_version = send_readFPGAVersion();
 
     if(fpga_version > 0){
-        std::cout << "FPGA (firmware version: " << fpga_version << ") initialized successfully" << std::endl;
+        cpsl::radar::log_info("FPGA (firmware version: ", fpga_version, ") initialized successfully");
         return true;
     } else{
         return false;
@@ -680,25 +681,27 @@ void DCA1000Handler::init_buffers()
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
     }else{
-        std::cerr << "attempted to initialize DCA1000 Handler buffers,\
-        but radar_config_reader wasn't initialized";
+        cpsl::radar::log_error("attempted to initialize DCA1000 Handler buffers, ",
+                               "but radar_config_reader wasn't initialized");
     }
 }
 
 void DCA1000Handler::print_status(){
-    if(system_config_reader.get_verbose()){
+    if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
         auto stats = assembler_.get_stats();
-        std::cout <<
-        "frame: " << received_frames << std::endl <<
-        "\tpackets: " << stats.received_packets << std::endl <<
-        "\tdata bytes: " << stats.adc_data_byte_count << std::endl <<
-        "\tdropped packets: " << stats.dropped_packets << std::endl <<
-        "\tdropped packet events: " << stats.dropped_packet_events << std::endl <<
-        "\tlate packets: " << stats.late_packets << std::endl <<
-        "\tduplicate packets: " << stats.duplicate_packets << std::endl <<
-        "\tincomplete frames: " << stats.incomplete_frames << std::endl <<
-        "\tskipped frames: " << stats.skipped_frames << std::endl <<
-        "\trx_overrun_count: " << socket_.get_overrun_count() << std::endl;
+        std::ostringstream o;
+        o <<
+        "frame: " << received_frames << "\n" <<
+        "\tpackets: " << stats.received_packets << "\n" <<
+        "\tdata bytes: " << stats.adc_data_byte_count << "\n" <<
+        "\tdropped packets: " << stats.dropped_packets << "\n" <<
+        "\tdropped packet events: " << stats.dropped_packet_events << "\n" <<
+        "\tlate packets: " << stats.late_packets << "\n" <<
+        "\tduplicate packets: " << stats.duplicate_packets << "\n" <<
+        "\tincomplete frames: " << stats.incomplete_frames << "\n" <<
+        "\tskipped frames: " << stats.skipped_frames << "\n" <<
+        "\trx_overrun_count: " << socket_.get_overrun_count();
+        cpsl::radar::log_debug(o.str());
     }
 }
 
@@ -752,7 +755,7 @@ bool DCA1000Handler::init_out_file(){
             std::ios::out | std::ofstream::binary | std::ios::trunc);
 
         if(adc_cube_out_file -> is_open() != true){
-            std::cout << "Failed to open or create " << path << std::endl;
+            cpsl::radar::log_error("Failed to open or create ", path);
             return false;
         }
     }
@@ -763,7 +766,7 @@ bool DCA1000Handler::init_out_file(){
             std::ios::out | std::ofstream::binary | std::ios::trunc);
 
         if(raw_lvds_out_file -> is_open() != true){
-            std::cout << "Failed to open or create " << path << std::endl;
+            cpsl::radar::log_error("Failed to open or create ", path);
             return false;
         }
     }
@@ -802,6 +805,6 @@ void DCA1000Handler::write_adc_data_cube_to_file(void){
             }
         }
     }else{
-        std::cerr << "adc_cube_out_file.bin is not open, failed to save ADC data" <<std::endl;
+        cpsl::radar::log_error("adc_data.bin is not open, failed to save ADC data");
     }
 }

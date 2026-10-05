@@ -1,5 +1,6 @@
 #include "DCA1000Socket.hpp"
-#include <iostream>
+#include "Log.hpp"
+
 #include <cstring>
 #include <unistd.h>
 #include <pthread.h>
@@ -39,13 +40,13 @@ bool DCA1000Socket::init(const std::string& fpga_ip, const std::string& system_i
     // Create sockets
     cmd_socket_ = socket(AF_INET, SOCK_DGRAM, 0);
     if (cmd_socket_ < 0) {
-        std::cerr << "Failed to create cmd socket" << std::endl;
+        cpsl::radar::log_error("DCA1000Socket: failed to create the cmd socket");
         return false;
     }
 
     data_socket_ = socket(AF_INET, SOCK_DGRAM, 0);
     if (data_socket_ < 0) {
-        std::cerr << "Failed to create data socket" << std::endl;
+        cpsl::radar::log_error("DCA1000Socket: failed to create the data socket");
         return false;
     }
 
@@ -67,24 +68,24 @@ bool DCA1000Socket::init(const std::string& fpga_ip, const std::string& system_i
     int actual_rcvbuf = 0;
     socklen_t optlen = sizeof(actual_rcvbuf);
     getsockopt(data_socket_, SOL_SOCKET, SO_RCVBUF, &actual_rcvbuf, &optlen);
-    std::cout << "[DCA1000] SO_RCVBUF granted: " << actual_rcvbuf << " bytes" << std::endl;
+    cpsl::radar::log_info("[DCA1000] SO_RCVBUF granted: ", actual_rcvbuf, " bytes");
 
     // Bind sockets
     if (bind(cmd_socket_, reinterpret_cast<struct sockaddr*>(&cmd_address_),
              sizeof(cmd_address_)) < 0) {
-        std::cerr << "Failed to bind cmd socket" << std::endl;
+        cpsl::radar::log_error("DCA1000Socket: failed to bind the cmd socket to ", system_ip, ":", cmd_port);
         close(cmd_socket_); cmd_socket_ = -1;
         return false;
     }
-    std::cout << "Bound to command socket" << std::endl;
+    cpsl::radar::log_debug("Bound to command socket");
 
     if (bind(data_socket_, reinterpret_cast<struct sockaddr*>(&data_address_),
              sizeof(data_address_)) < 0) {
-        std::cerr << "Failed to bind data socket" << std::endl;
+        cpsl::radar::log_error("DCA1000Socket: failed to bind the data socket to ", system_ip, ":", data_port);
         close(data_socket_); data_socket_ = -1;
         return false;
     }
-    std::cout << "Bound to data socket" << std::endl;
+    cpsl::radar::log_debug("Bound to data socket");
 
     initialized_ = true;
     return true;
@@ -99,8 +100,8 @@ void DCA1000Socket::start_rx() {
     struct sched_param sp;
     sp.sched_priority = 99;
     if (pthread_setschedparam(rx_thread_.native_handle(), SCHED_RR, &sp) != 0) {
-        std::cerr << "[DCA1000] Warning: could not set RX thread to SCHED_RR 99 "
-                  << "(run as root or grant cap_sys_nice)" << std::endl;
+        cpsl::radar::log_warn("[DCA1000] could not set RX thread to SCHED_RR 99 ",
+                              "(run as root or grant cap_sys_nice)");
     }
 }
 
@@ -111,14 +112,14 @@ void DCA1000Socket::stop_rx() {
 
 bool DCA1000Socket::send_command(std::vector<uint8_t>& cmd) {
     if (cmd_socket_ < 0) {
-        std::cerr << "cmd socket not bound" << std::endl;
+        cpsl::radar::log_error("DCA1000Socket: cmd socket not bound");
         return false;
     }
     ssize_t sent = sendto(cmd_socket_, cmd.data(), cmd.size(), 0,
                           reinterpret_cast<struct sockaddr*>(&fpga_address_),
                           sizeof(fpga_address_));
     if (sent != static_cast<ssize_t>(cmd.size())) {
-        std::cerr << "Failed to send command" << std::endl;
+        cpsl::radar::log_warn("DCA1000Socket: failed to send a command");
         return false;
     }
     return true;
@@ -126,7 +127,7 @@ bool DCA1000Socket::send_command(std::vector<uint8_t>& cmd) {
 
 bool DCA1000Socket::receive_response(std::vector<uint8_t>& buffer) {
     if (cmd_socket_ < 0) {
-        std::cerr << "cmd socket not bound" << std::endl;
+        cpsl::radar::log_error("DCA1000Socket: cmd socket not bound");
         return false;
     }
     struct sockaddr_in from{};
@@ -134,7 +135,7 @@ bool DCA1000Socket::receive_response(std::vector<uint8_t>& buffer) {
     ssize_t n = recvfrom(cmd_socket_, buffer.data(), buffer.size(), 0,
                          reinterpret_cast<struct sockaddr*>(&from), &from_len);
     if (n < 0) {
-        std::cerr << "Failed to receive response" << std::endl;
+        cpsl::radar::log_warn("DCA1000Socket: no response from the DCA1000");
         return false;
     }
     return true;

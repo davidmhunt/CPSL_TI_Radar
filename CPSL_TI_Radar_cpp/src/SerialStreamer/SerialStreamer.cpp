@@ -1,5 +1,10 @@
 #include "SerialStreamer.hpp"
 
+#include <iomanip>
+#include <sstream>
+
+#include "Log.hpp"
+
 using namespace std;
 using namespace boost::asio;
 
@@ -177,23 +182,23 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
         boost::system::error_code ec;
         data_port->open(system_config_reader.getRadarDataPort(), ec);
         if(ec){
-            std::cerr << "SerialStreamer: cannot open " << system_config_reader.getRadarDataPort()
-                      << ": " << ec.message() << std::endl;
+            cpsl::radar::log_error("SerialStreamer: cannot open ", system_config_reader.getRadarDataPort(),
+                                   ": ", ec.message());
             initialized = false;
             return false;
         }
         try{
             initialized = set_serial_baud_rate(*data_port, system_config_reader.getRadarDataBaudRate());
         } catch(const std::exception& e){
-            std::cerr << "SerialStreamer: cannot set the data port baud rate: " << e.what() << std::endl;
+            cpsl::radar::log_error("SerialStreamer: cannot set the data port baud rate: ", e.what());
             initialized = false;
         }
         have_previous_frame = false;
         missed_frame_count = 0;
     } else{
         initialized = false;
-        std::cerr << "attempted to initialize cli controller,\
-            but system_config_reader was not initialized";
+        cpsl::radar::log_error("attempted to initialize the serial streamer, ",
+                               "but system_config_reader was not initialized");
     }
 
     return initialized;
@@ -389,11 +394,11 @@ bool SerialStreamer::get_next_serial_frame(void) {
         return true;
     } else if (ec == boost::asio::error::operation_aborted) {
         // Timeout occurred
-        std::cout << "SerialStreamer: Timeout while waiting for response" << std::endl;
+        cpsl::radar::log_debug("SerialStreamer: Timeout while waiting for response");
         return false;
     } else {
         // Other errors
-        std::cerr << "Error while reading response: " << ec.message() << std::endl;
+        cpsl::radar::log_error("SerialStreamer: error while reading the data port: ", ec.message());
         return false;
     }
 }
@@ -443,7 +448,7 @@ bool SerialStreamer::process_message_header(void){
     pending_.numTLVs = header_data[6];
     pending_.subFrameNumber = header_data[7];
 
-    if(system_config_reader.get_verbose()){
+    if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
         print_status();
     }
 
@@ -453,15 +458,17 @@ bool SerialStreamer::process_message_header(void){
 
 void SerialStreamer::print_status(void){
 
-    std::cout <<
-    "frame: " << pending_.frameNumber << std::endl <<
-    "\tversion: " << pending_.version << std::endl <<
-    "\ttotal Packet length: " << pending_.totalPacketLen << " bytes" << std::endl <<
-    "\tplatform: " << pending_.platform << std::endl <<
-    "\ttime (CPU cycles): " << pending_.timeCPUCycles << std::endl <<
-    "\tDetected Objects: " << pending_.numDetectedObj << std::endl <<
-    "\tNumber of TLVs: " << pending_.numTLVs << std::endl <<
-    "\tSubframe number: " << pending_.subFrameNumber << std::endl;
+    std::ostringstream o;
+    o <<
+    "frame: " << pending_.frameNumber << "\n" <<
+    "\tversion: " << pending_.version << "\n" <<
+    "\ttotal Packet length: " << pending_.totalPacketLen << " bytes" << "\n" <<
+    "\tplatform: " << pending_.platform << "\n" <<
+    "\ttime (CPU cycles): " << pending_.timeCPUCycles << "\n" <<
+    "\tDetected Objects: " << pending_.numDetectedObj << "\n" <<
+    "\tNumber of TLVs: " << pending_.numTLVs << "\n" <<
+    "\tSubframe number: " << pending_.subFrameNumber;
+    cpsl::radar::log_debug(o.str());
 }
 
 /**
@@ -481,7 +488,8 @@ bool SerialStreamer::check_valid_message(void){
             return true;
         }
     else{
-        std::cout << "serialStreamer: invalid message" << std::endl;
+        cpsl::radar::log_debug("serialStreamer: invalid message (length ", serial_message_data_buffer.size(),
+                               ", header says ", pending_.totalPacketLen, ")");
         return false;
     }
 }
@@ -513,7 +521,7 @@ bool SerialStreamer::process_TLV_messages(void){
     {
         //make sure the TLV header and payload fit in the received message
         if (tlv_start_byte_idx + 8 > serial_message_data_buffer.size()){
-            std::cout << "SerialStreamer: TLV header past end of message" << std::endl;
+            cpsl::radar::log_warn("SerialStreamer: TLV header past end of message");
             return false;
         }
 
@@ -525,8 +533,8 @@ bool SerialStreamer::process_TLV_messages(void){
         start_idx = tlv_start_byte_idx + 8;
         end_idx = start_idx + TLV_len;
         if (end_idx > serial_message_data_buffer.size()){
-            std::cout << "SerialStreamer: TLV (type " << TLV_type << ") length " << TLV_len
-                      << " runs past end of message" << std::endl;
+            cpsl::radar::log_warn("SerialStreamer: TLV (type ", TLV_type, ") length ", TLV_len,
+                                  " runs past end of message");
             return false;
         }
         std::vector<uint8_t> tlv_data(
@@ -535,8 +543,8 @@ bool SerialStreamer::process_TLV_messages(void){
         );
 
         if (!process_TLV(tlv_data, TLV_type, points, side_info)){
-            std::cout << "SerialStreamer: TLV (type " << TLV_type << ") payload of " << TLV_len
-                      << " bytes is malformed" << std::endl;
+            cpsl::radar::log_warn("SerialStreamer: TLV (type ", TLV_type, ") payload of ", TLV_len,
+                                  " bytes is malformed");
             return false;
         }
 
@@ -575,9 +583,9 @@ void SerialStreamer::commit_frame(TLVDetectedPoints & points, TLVDetectedPointsS
     if (have_previous_frame && header_frameNumber != previous_frame_number + 1){
         uint32_t missed = header_frameNumber - previous_frame_number - 1;
         missed_frame_count += missed;
-        std::cout << "SerialStreamer: frame number jumped from " << previous_frame_number
-                  << " to " << header_frameNumber << " (" << missed_frame_count
-                  << " missed in total)" << std::endl;
+        cpsl::radar::log_warn("SerialStreamer: frame number jumped from ", previous_frame_number,
+                              " to ", header_frameNumber, " (", missed_frame_count,
+                              " missed in total)");
     }
     have_previous_frame = true;
     previous_frame_number = header_frameNumber;

@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <exception>
 
+#include "Log.hpp"
+
 /**
  * @brief default constructor without initialization
 */
@@ -132,7 +134,7 @@ void RadarConfigReader::initialize(const std::string & filename,
     cfg_file = std::make_shared<std::ifstream>();
     cfg_file -> open(filename);
     if (! cfg_file -> is_open()){
-        std::cerr << "RadarConfigReader: error opening file: " << filename << std::endl;
+        cpsl::radar::log_error("RadarConfigReader: error opening file: ", filename);
         error = "cannot open " + filename;
         initialized = false;
     } else{
@@ -155,12 +157,12 @@ void RadarConfigReader::initialize(const std::string & filename,
         //process the configuration
         error.clear();
         if (!process_cfg()) {
-            std::cerr << "RadarConfigReader: " << filename << ": " << error << std::endl;
+            cpsl::radar::log_error("RadarConfigReader: ", filename, ": ", error);
             initialized = false;
             return;
         }
 
-        std::cout << "[RadarConfig] rx_antennas: " << rx_antennas << std::endl;
+        cpsl::radar::log_debug("[RadarConfig] rx_antennas: ", rx_antennas);
 
         initialized = true;
     }

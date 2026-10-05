@@ -18,7 +18,9 @@ endforeach()
 
 #link libraries
 target_link_libraries(ADCCubeConverter  PUBLIC BoardDescriptor)  #LvdsLayout / IqOrder
-target_link_libraries(DCA1000Socket     PUBLIC Threads::Threads)
+target_link_libraries(FrameAssembler    PUBLIC Log)
+target_link_libraries(DCA1000Socket     PUBLIC Log
+                                        PUBLIC Threads::Threads)
 
 target_link_libraries(DCA1000Handler    PUBLIC Utilities
                                         PUBLIC DCA1000Commands

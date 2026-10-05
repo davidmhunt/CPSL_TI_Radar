@@ -1,5 +1,9 @@
 #include "Runner.hpp"
 
+#include <cstring>
+
+#include "Log.hpp"
+
 /**
  * @brief default contructor (leaves uninitialized)
  * 
@@ -80,6 +84,7 @@ void Runner::initialize(const std::string & json_config_file_path,
 
     //initialize the radar config reader (field layout from the board's cfg dialect)
     if(system_config_reader.initialized){
+        cpsl::radar::set_log_level(system_config_reader.get_log_level());
         const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
         radar_config_reader.initialize(system_config_reader.getRadarConfigPath(),
                                        board.cfg_dialect.rx_mask_fields,
@@ -118,14 +123,13 @@ void Runner::initialize(const std::string & json_config_file_path,
         if (!config_sent && board.lifecycle.config_once_per_boot){
             //e.g. the cascade demo can't be reconfigured once it has been started (TI known
             //issue), so a rejected command almost always means the board needs a power-cycle
-            std::cerr << "Runner: the " << board.name << " did not acknowledge every config command. "
-                      << "Its demo can only be configured once per boot: "
-                      << "power-cycle the EVM and try again." << std::endl;
+            cpsl::radar::log_error("Runner: the ", board.name, " did not acknowledge every config command. ",
+                                   "Its demo can only be configured once per boot: ",
+                                   "power-cycle the EVM and try again.");
             initialized = false;
             return;
         } else if (!config_sent){
-            std::cerr << "Runner: warning: not every config command was acknowledged with 'Done'"
-                      << std::endl;
+            cpsl::radar::log_warn("Runner: not every config command was acknowledged with 'Done'");
         }
         initialized = true;
         stop_done = false;
@@ -157,11 +161,11 @@ void Runner::start(){
     if(initialized){
         
         if(!cli_controller.sendStartCommand()){
-            std::cerr << "Runner: sensorStart was not acknowledged with 'Done'" << std::endl;
+            cpsl::radar::log_warn("Runner: sensorStart was not acknowledged with 'Done'");
         }
 
     }else{
-        std::cout << "attempted to start, but Runner isn't initialized" <<std::endl;
+        cpsl::radar::log_error("attempted to start, but Runner isn't initialized");
     }
 }
 
@@ -234,7 +238,7 @@ bool Runner::stop(){
     }
 
     if(initialized){
-        std::cout << "runner sending stop commands" << std::endl;
+        cpsl::radar::log_debug("runner sending stop commands");
 
         //each step runs even if the one before failed: the files must still be
         //closed when the radar's USB is gone, and sensorStop must still be tried
@@ -254,16 +258,16 @@ bool Runner::stop(){
         //sensorStop: an I/O error (radar unplugged) is a failure, a missing "Done" a warning
         if(!cli_controller.sendStopCommand()){
             if(cli_controller.io_error()){
-                std::cerr << "Runner: sensorStop could not be sent (radar disconnected?)" << std::endl;
+                cpsl::radar::log_error("Runner: sensorStop could not be sent (radar disconnected?)");
                 ok = false;
             } else{
-                std::cerr << "Runner: sensorStop was not acknowledged with 'Done'" << std::endl;
+                cpsl::radar::log_warn("Runner: sensorStop was not acknowledged with 'Done'");
             }
         }
 
         if (system_config_reader.getBoard().lifecycle.config_once_per_boot){
-            std::cout << "Runner: power-cycle the " << system_config_reader.getBoard().name
-                      << " EVM before configuring it again" << std::endl;
+            cpsl::radar::log_info("Runner: power-cycle the ", system_config_reader.getBoard().name,
+                                  " EVM before configuring it again");
         }
     }
 
@@ -285,9 +289,9 @@ void Runner::set_thread_priority() {
 
     int result = pthread_setschedparam(thread_id, policy, &param);
     if (result != 0) {
-        std::cout << "Failed to set thread priority: " << strerror(errno) << std::endl;
+        cpsl::radar::log_warn("Failed to set thread priority: ", std::strerror(result));
     } else {
-        std::cout << "Thread priority successfully raised." << std::endl;
+        cpsl::radar::log_debug("Thread priority successfully raised.");
     }
 }
 
@@ -375,7 +379,7 @@ std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> Runner::get_ne
             elapsed_time = std::chrono::steady_clock::now() - start_time;
 
             if(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time).count() > timeout_ms){
-                std::cerr << "runner timed out waiting for next adc_cube" << std::endl;
+                cpsl::radar::log_debug("runner timed out waiting for next adc_cube");
                 return std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>();
             }
         }
@@ -408,7 +412,7 @@ std::vector<std::vector<float>> Runner::get_next_tlv_detected_points(
             elapsed_time = std::chrono::steady_clock::now() - start_time;
 
             if(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time).count() > timeout_ms){
-                std::cerr << "runner timed out waiting for next detected_points" << std::endl;
+                cpsl::radar::log_debug("runner timed out waiting for next detected_points");
                 return ret_vector;
             }
         }
@@ -447,7 +451,7 @@ bool Runner::get_next_tlv_detected_points(
         //check to make sure that we haven't timed out
         if(std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time).count() > timeout_ms){
-            std::cerr << "runner timed out waiting for next detected_points" << std::endl;
+            cpsl::radar::log_debug("runner timed out waiting for next detected_points");
             return false;
         }
     }

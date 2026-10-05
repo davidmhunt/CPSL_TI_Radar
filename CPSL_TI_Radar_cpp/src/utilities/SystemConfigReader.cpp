@@ -3,21 +3,10 @@
 #include <climits>
 #include <cstdlib>
 #include <fstream>
-#include <iostream>
 #include <set>
 #include <sys/stat.h>
 
 using json = nlohmann::json;
-
-const char* to_string(LogLevel v) {
-    switch (v) {
-        case LogLevel::error: return "error";
-        case LogLevel::warn: return "warn";
-        case LogLevel::info: return "info";
-        case LogLevel::debug: return "debug";
-    }
-    return "?";
-}
 
 namespace {
 
@@ -159,7 +148,7 @@ bool SystemConfigReader::initialize(const std::string& jsonFilePath) {
     json_file_path = jsonFilePath;
     initialized = load();
     if (!initialized) {
-        std::cerr << "SystemConfigReader: " << error << std::endl;
+        cpsl::radar::log_error("SystemConfigReader: ", error);
     }
     return initialized;
 }

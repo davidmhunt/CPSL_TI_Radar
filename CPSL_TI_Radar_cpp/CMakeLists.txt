@@ -72,7 +72,7 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
 )
 
 # Install libraries
-install(TARGETS nlohmann_json BoardDescriptor Utilities CLIController SerialStreamer DCA1000Handler ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing DCA1000Commands driver
+install(TARGETS nlohmann_json BoardDescriptor Log Utilities CLIController SerialStreamer DCA1000Handler ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing DCA1000Commands driver
         EXPORT export_${PKG_NAME}
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib

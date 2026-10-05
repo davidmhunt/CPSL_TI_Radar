@@ -3,6 +3,8 @@
 #include <chrono>
 #include <exception>
 
+#include "Log.hpp"
+
 using namespace std;
 
 /**
@@ -38,8 +40,7 @@ bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
     initialized = false;
 
     if(!system_config_reader.initialized){
-        std::cerr << "attempted to initialize cli controller, but system_config_reader was not initialized"
-                  << std::endl;
+        cpsl::radar::log_error("attempted to initialize cli controller, but system_config_reader was not initialized");
         return false;
     }
 
@@ -47,7 +48,7 @@ bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
     std::shared_ptr<cpsl::radar::SerialPortStream> port = cpsl::radar::SerialPortStream::open(
         system_config_reader.getRadarCliPort(), system_config_reader.getRadarCliBaudRate(), error);
     if(!port){
-        std::cerr << "CLIController: " << error << std::endl;
+        cpsl::radar::log_error("CLIController: ", error);
         return false;
     }
     stream = port;
@@ -80,7 +81,7 @@ bool CLIController::send_config_to_IWR() {
 
         //if the configuration file isn't found
         if (!configFile) {
-            cerr << "Failed to open configuration file." << endl;
+            cpsl::radar::log_error("CLIController: failed to open the radar cfg ", configFilePath);
             return false;
         }
 
@@ -95,11 +96,9 @@ bool CLIController::send_config_to_IWR() {
         const cpsl::radar::CfgCommandPlan plan =
             cpsl::radar::filter_cfg_commands(lines, system_config_reader.getBoard());
 
-        if(system_config_reader.get_verbose()){
-            for (const string& skipped : plan.skipped) {
-                cout << "Skipped command (board " << system_config_reader.getBoard().name
-                     << " skip_commands): " << skipped << endl;
-            }
+        for (const string& skipped : plan.skipped) {
+            cpsl::radar::log_debug("Skipped command (board ", system_config_reader.getBoard().name,
+                                   " skip_commands): ", skipped);
         }
 
         //skipped commands are never sent, so they do not count as unacknowledged
@@ -111,7 +110,7 @@ bool CLIController::send_config_to_IWR() {
         }
         return all_done;
     } else{
-        std::cerr << "attempted to send commands to IWR, but CLI controller isn't initialized" << std::endl;
+        cpsl::radar::log_error("attempted to send commands to IWR, but CLI controller isn't initialized");
         return false;
     }
 }
@@ -176,11 +175,11 @@ std::error_code CLIController::read_until_with_timeout(
 bool CLIController::sendCommand(const string& command) {
 
     if (!stream) {
-        cerr << "CLIController: '" << command << "' not sent: no CLI port" << endl;
+        cpsl::radar::log_error("CLIController: '", command, "' not sent: no CLI port");
         return false;
     }
 
-    std::cout << "Sent command: " << command << endl; 
+    cpsl::radar::log_debug("Sent command: ", command);
 
     try {
         //send the command over the serial port
@@ -188,7 +187,7 @@ bool CLIController::sendCommand(const string& command) {
         std::error_code wec = stream->write(reinterpret_cast<const uint8_t*>(line.data()), line.size());
         if (wec) {
             io_error_ = true;
-            cerr << "CLIController: write of '" << command << "' failed: " << wec.message() << endl;
+            cpsl::radar::log_error("CLIController: write of '", command, "' failed: ", wec.message());
             return false;
         }
 
@@ -204,34 +203,36 @@ bool CLIController::sendCommand(const string& command) {
             std::error_code pec = read_until_with_timeout(resp, cli.prompt, static_cast<int>(cli.prompt_wait_ms));
             if (pec && pec != std::errc::timed_out) {
                 io_error_ = true;
-                cerr << "CLIController: error while reading the prompt: " << pec.message() << endl;
+                cpsl::radar::log_warn("CLIController: error while reading the prompt after '", command, "': ",
+                                      pec.message());
             }
         }
 
-        //TODO: ONly print the part before the "Done" message
-        cout << "Received response: " << resp << endl;
+        cpsl::radar::log_debug("Received response: ", resp);
 
         //handle error codes
         if (ec == std::errc::timed_out) {
-            cout << "Timeout while waiting for response. Partial response received." << "\n" << endl;
+            cpsl::radar::log_warn("CLIController: no '", cli.ack, "' for '", command, "' within ",
+                                  system_config_reader.getRadarCliTimeoutMs(), " ms");
             return false;
         } else if (ec) {
             io_error_ = true;
-            cerr << "Error while reading response: " << ec.message() << "\n" << endl;
+            cpsl::radar::log_error("CLIController: error while reading the response to '", command, "': ",
+                                   ec.message());
             return false;
         } else if (resp.find(cli.ack) == string::npos) {
-            cout << "Received partial response. '" << cli.ack << "' message not found." << "\n" << endl;
+            cpsl::radar::log_debug("Received partial response. '", cli.ack, "' message not found.");
             return false;
         }
         return true;
     } catch (const std::exception& e) {
         //a ByteStream that throws (e.g. boost::system::system_error after an unplug)
         io_error_ = true;
-        cerr << "CLIController: '" << command << "' failed: " << e.what() << endl;
+        cpsl::radar::log_error("CLIController: '", command, "' failed: ", e.what());
         return false;
     } catch (...) {
         io_error_ = true;
-        cerr << "CLIController: '" << command << "' failed with an unknown exception" << endl;
+        cpsl::radar::log_error("CLIController: '", command, "' failed with an unknown exception");
         return false;
     }
 }

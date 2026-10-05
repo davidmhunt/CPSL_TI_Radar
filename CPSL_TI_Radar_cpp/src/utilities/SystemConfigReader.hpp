@@ -11,7 +11,7 @@
 // resolves the board descriptor (with board_overrides merged in) and runs
 // cross_check_radar_cfg for the enabled streams; any error there fails the
 // load. Nothing here throws; on failure `initialized` is false and
-// get_error() holds the message (also printed to stderr).
+// get_error() holds the message (also logged at error level).
 //
 // Paths ("radar_cfg", a "board" path, "output.dir") are relative to the JSON
 // file's directory unless absolute. A plain board name (e.g. IWR1843) is
@@ -25,11 +25,12 @@
 
 #include "nlohmann/json.hpp"
 #include "BoardDescriptor.hpp"
+#include "Log.hpp"
 
 using json = nlohmann::json;
 
-enum class LogLevel { error, warn, info, debug };
-const char* to_string(LogLevel v);
+// runtime.log_level (cpsl::radar::LogLevel; the alias keeps older callers building)
+using LogLevel = cpsl::radar::LogLevel;
 
 class SystemConfigReader {
     public:
