@@ -101,8 +101,8 @@ inline int run_all() {
 #define CHECK_EQ(a, b)                                                           \
     do {                                                                         \
         th::counters().checks++;                                                 \
-        auto&& th_a = (a);                                                       \
-        auto&& th_b = (b);                                                       \
+        auto th_a = (a); /* by value: never ODR-uses static const members */     \
+        auto th_b = (b);                                                         \
         if (!(th_a == th_b))                                                     \
             th::fail(__FILE__, __LINE__,                                         \
                      std::string("CHECK_EQ(" #a ", " #b ") got ") +              \
