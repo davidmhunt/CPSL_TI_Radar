@@ -9,20 +9,9 @@
 
 //JSON handling
 #include "Runner.hpp"
+#include "StopSignal.hpp"
 
 using json = nlohmann::json;
-
-Runner* runner_global = nullptr;
-
-
-void signalHandler(int signum){
-    std::cout << "Interrupt signal (" << signum << ") received.\n";
-    if (runner_global && runner_global->initialized) {
-        runner_global->stop();
-    }
-
-    exit(0);
-}
 
 static void print_usage(const char* prog){
     std::cerr << "usage: " << prog << " <system.json> [--validate]\n"
@@ -151,21 +140,26 @@ int main(int argc, char* argv[]){
         return validate(config_file);
     }
 
-    //handle sigint commands
-    signal(SIGINT,signalHandler);
+    //SIGINT/SIGTERM only set a flag; the loop below sees it and stops cleanly
+    //(threads joined, sensorStop/recordStop sent, output files flushed and closed)
+    if(!cpsl::radar::install_stop_signal_handlers()){
+        std::cerr << "warning: could not install the SIGINT/SIGTERM handler" << std::endl;
+    }
 
     std::cout << "Using config: " << config_file << std::endl;
 
     Runner runner(config_file);
-    runner_global = &runner;
 
     if(runner.initialized){
         int frame_count = 0;
         int timeout_ms = 2000;
 
-        runner.start();
+        //a Ctrl-C while the config was being sent: don't start streaming
+        if(!cpsl::radar::stop_requested()){
+            runner.start();
+        }
 
-        while(true){
+        while(!cpsl::radar::stop_requested()){
             bool got_frame = false;
 
             if(runner.get_dca1000_streaming_enabled() &&
@@ -188,10 +182,13 @@ int main(int argc, char* argv[]){
             }
 
             //stop once no stream produces a frame within the timeout
-            if(!got_frame){
+            //(a stop request during the wait is checked by the loop condition)
+            if(!got_frame && !cpsl::radar::stop_requested()){
                 break;
             }
-            frame_count += 1;
+            if(got_frame){
+                frame_count += 1;
+            }
         }
 
         if(runner.get_serial_streaming_enabled()){
@@ -199,6 +196,9 @@ int main(int argc, char* argv[]){
                       << runner.get_tlv_missed_frame_count() << " missed" << std::endl;
         }
 
+        if(cpsl::radar::stop_requested()){
+            std::cout << "Stop requested (SIGINT/SIGTERM), stopping" << std::endl;
+        }
         runner.stop();
     } else{
         std::cerr << "Runner failed to initialize" << std::endl;

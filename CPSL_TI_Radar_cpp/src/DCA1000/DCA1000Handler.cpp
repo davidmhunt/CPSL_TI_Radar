@@ -132,13 +132,55 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
  */
 DCA1000Handler::~DCA1000Handler() {
     // socket_ destructor handles RX thread join and socket close
+    close_output_files();
+}
 
-    if (adc_cube_out_file && adc_cube_out_file.use_count() == 1 &&
-        adc_cube_out_file->is_open())
-        adc_cube_out_file->close();
-    if (raw_lvds_out_file && raw_lvds_out_file.use_count() == 1 &&
-        raw_lvds_out_file->is_open())
-        raw_lvds_out_file->close();
+bool DCA1000Handler::stop(){
+    bool ok = true;
+    try {
+        if(initialized){
+            //joins the RX thread, then tells the DCA1000 to stop
+            ok = send_recordStop();
+            if(!ok){
+                std::cerr << "DCA1000Handler: recordStop was not acknowledged" << std::endl;
+            }
+        } else {
+            socket_.stop_rx();
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "DCA1000Handler: error while stopping: " << e.what() << std::endl;
+        ok = false;
+    }
+    if(!close_output_files()){
+        ok = false;
+    }
+    return ok;
+}
+
+/**
+ * @brief Flush and close the output files this handler owns (shared copies
+ * are left to their last owner). Safe to call again; never throws.
+ *
+ * @return false if a flush or close failed
+ */
+bool DCA1000Handler::close_output_files(){
+    bool ok = true;
+    for (std::shared_ptr<std::ofstream>* f : {&adc_cube_out_file, &raw_lvds_out_file}) {
+        try {
+            if (*f && f->use_count() == 1 && (*f)->is_open()) {
+                (*f)->flush();
+                (*f)->close();
+                if ((*f)->fail()) {
+                    std::cerr << "DCA1000Handler: failed to flush/close an output file" << std::endl;
+                    ok = false;
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "DCA1000Handler: error closing an output file: " << e.what() << std::endl;
+            ok = false;
+        }
+    }
+    return ok;
 }
 
 bool DCA1000Handler::initialize(

@@ -103,6 +103,12 @@ public:
     //tests only: called between converting a frame and publishing it
     void set_publish_hook(std::function<void()> hook);
 
+    //end of a capture: stop the RX thread, send recordStop if the DCA1000 was
+    //initialized, then flush and close the output files. Call it after the
+    //thread running process_next_packet() has been joined. Idempotent; never throws.
+    //Returns false if recordStop was not acknowledged or a file failed to flush.
+    bool stop();
+
     //commands to the DCA1000
     bool send_resetFPGA(); //2nd command
     bool send_recordStart(); 
@@ -136,6 +142,7 @@ private:
     //handling files
     bool init_out_file();
     void write_adc_data_cube_to_file();
+    bool close_output_files();
 };
 
 #endif // DCA1000_H

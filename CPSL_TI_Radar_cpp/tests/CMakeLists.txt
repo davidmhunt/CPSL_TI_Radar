@@ -28,6 +28,11 @@ add_driver_test(test_tlv_processing        LIBS TLVProcessing)
 add_driver_test(test_serial_streamer_frames LIBS SerialStreamer)
 add_driver_test(test_board_descriptor     LIBS BoardDescriptor)
 add_driver_test(test_dca_frame_publish    LIBS DCA1000Handler)
+add_driver_test(test_dca_file_flush      LIBS DCA1000Handler)
+add_driver_test(test_stop_signal         LIBS Utilities)
+# a handler that exits (even with status 0) must not count as a pass
+set_tests_properties(test_stop_signal PROPERTIES
+                     PASS_REGULAR_EXPRESSION "cases, [0-9]+ checks, 0 failures")
 
 # The driver's --validate path over every tracked system config (and a v1
 # fixture, which must be rejected with the migration hint).

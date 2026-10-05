@@ -108,6 +108,7 @@ void Runner::initialize(const std::string & json_config_file_path){
                       << std::endl;
         }
         initialized = true;
+        stop_done = false;
     }else{
         initialized = false;
     }
@@ -117,6 +118,7 @@ void Runner::start(){
     
     //set the stop_called variable
     stop_called = false;
+    stop_done = false;
 
     //start the DCA1000
     if (system_config_reader.get_dca1000_streaming_enabled())
@@ -189,7 +191,12 @@ void Runner::start_serial(){
 }
 
 void Runner::stop(){
-    
+
+    //idempotent: main() stops explicitly, then the destructor calls stop() again
+    if(stop_done.exchange(true)){
+        return;
+    }
+
     //set the stop called flag to true
     std::unique_lock<std::mutex> stop_called_unique_lock(
         stop_called_mutex,
@@ -199,22 +206,21 @@ void Runner::stop(){
     stop_called = true;
     stop_called_unique_lock.unlock();
 
-    if(initialized){
-        //join the run thread
-        if(run_thread_dca1000.joinable()){
-            run_thread_dca1000.join();
-        }
-        if (run_thread_serial.joinable()){
-            run_thread_serial.join();
-        }
-        
+    //join the run threads (they exit within one packet/read timeout)
+    if(run_thread_dca1000.joinable()){
+        run_thread_dca1000.join();
+    }
+    if (run_thread_serial.joinable()){
+        run_thread_serial.join();
+    }
 
+    if(initialized){
         std::cout << "runner sending stop commands" << std::endl;
 
-        //stop the stop commands
+        //DCA1000: RX thread, recordStop, then flush and close adc_data.bin / LVDS_Raw_0.bin
         if (system_config_reader.get_dca1000_streaming_enabled())
         {
-            dca1000_handler.send_recordStop();
+            dca1000_handler.stop();
         }
         cli_controller.sendStopCommand();
 

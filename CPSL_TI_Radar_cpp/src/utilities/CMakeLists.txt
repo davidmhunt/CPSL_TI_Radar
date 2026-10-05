@@ -1,7 +1,8 @@
 find_package(Boost REQUIRED)
 
 #create the utilities library
-add_library(Utilities SystemConfigReader.cpp RadarConfigReader.cpp SerialBaud.cpp SerialBaudTermios2.cpp)
+add_library(Utilities SystemConfigReader.cpp RadarConfigReader.cpp SerialBaud.cpp SerialBaudTermios2.cpp
+                      StopSignal.cpp)
 
 target_include_directories(Utilities PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

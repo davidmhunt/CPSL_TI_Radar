@@ -8,6 +8,7 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <chrono>
 #include <pthread.h> // Include pthread for thread priority adjustments
 
@@ -33,6 +34,7 @@ private:
     bool running_dca1000;
     bool running_serial;
     bool stop_called;
+    std::atomic<bool> stop_done{true};  //stop() already ran since the last initialize()/start()
 
     SystemConfigReader system_config_reader;
     RadarConfigReader radar_config_reader;
@@ -67,6 +69,8 @@ public:
     void start();
     void start_dca1000();
     void start_serial();
+    //stop the sensor and the DCA1000, join the threads, flush and close the
+    //output files; idempotent (the destructor calls it again)
     void stop();
 
     //wait for and get the next frame
