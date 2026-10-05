@@ -25,7 +25,7 @@ The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for y
 
 Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
-Copy the example system config and set `runtime.log_level` to `"debug"` (the harness reads frame counts from the debug output and rejects the config otherwise) and, for DCA runs, `output.save_adc_frames` to `true` (otherwise there is no `adc_data.bin` size check) before running the harness. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
+Copy the example system config and, for DCA runs, set `output.save_adc_frames` to `true` (otherwise there is no `adc_data.bin` size check) before running the harness. Any `runtime.log_level` works: the harness runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json --validate
@@ -46,7 +46,7 @@ The harness starts the driver, samples CPU once per second, sends SIGINT after `
 
 Each run writes two files to `--out-dir`, with the same basename `<tag>__<config>__rep<k>__<N>s__<UTC>`:
 
-- `.csv`, one row per second: `dca_frames`, `dca_packets`, `dca_dropped_packets`, `dca_dropped_packet_events`, `dca_rx_overrun_count_cum`, `serial_headers`, `tlv_frames`, `tlv_missed_frames`, `cpu_pct`, `rss_kb`.
+- `.csv`, one row per second: `dca_frames`, `dca_packets`, `dca_dropped_packets`, `dca_dropped_packet_events`, `dca_rx_overrun_count_cum`, `tlv_frames`, `tlv_missed_frames`, `cpu_pct`, `rss_kb`.
 - `.json` sidecar, the provenance and verdict: driver sha256, build flags, host and NIC settings, the config used, `expected` (frame size and rate), and `result` (`status`, `stop.exit_code`, `summary`, `bin_size_check`).
 
 Quick read:
@@ -97,7 +97,7 @@ A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a
 
 Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
-Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from `planning/CASCADE_HARDWARE_SETUP.md`. Its config ships with `log_level: "info"`; see section 4. Expect 20 Hz (50 ms period) and no missed TLV frames.
+Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from `planning/CASCADE_HARDWARE_SETUP.md`. Its config ships with `log_level: "info"`, which the harness accepts. Expect 20 Hz (50 ms period) and no missed TLV frames.
 
 ## 10. Troubleshooting
 
@@ -105,7 +105,7 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 |---|---|
 | `bench: refusing to run, host preflight failed` | Run `uv run tools/setup/host_setup.py --nic <dca-nic> --apply`, then retry. A rebuild removes `cap_sys_nice`. |
 | `no frame received before start timeout` (`FAILED`, exit 2) | Check board mode (SOP jumpers), USB ports, DCA1000 power and cable, and the ping in section 2. For the cascade, power-cycle first. Read `driver_stdout.log`. |
-| `Runner: sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Seen at the end of every healthy IWR1843 SIGINT run: likely the 100 ms command timeout equals the 100 ms frame period, so the board's `Done` arrives too late (tracked for core-13). Harmless if `status` is `ok` and the `.bin` is `exact`. |
+| `sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Fixed in core-13: `sensorStop` now waits `max(cli.cmd_timeout_ms, frame period + 200 ms)` (`cli.stop_timeout_ms` overrides it). Seen now, the board did not answer within that window; harmless if `status` is `ok` and the `.bin` is `exact`. |
 | `not every config command was acknowledged` | Harmless if only `calibData` is rejected. Otherwise the cfg has a command the firmware does not know. |
 | Dropped packets or overruns | `rmem_max` below 128 MB, no `cap_sys_nice`, or a slow NIC. Re-run `host_setup.py`; confirm `granted_so_rcvbuf_bytes` in the sidecar is 134217728. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |

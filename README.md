@@ -74,7 +74,7 @@ Python notebooks for analyzing C++ output files are in [`utilities/`](./utilitie
 
 v2.0 is a rework and may break v1 interfaces. Removed from the tree (all recoverable from git history; the last commit that contained `archived_code/` is `4cc80474927025ff7935ddb1bb1f09ed78e0ca2d`):
 
-- `archived_code/` — the v1 Python DCA1000/serial driver (`CPSL_TI_Radar_py`, `ConfigManager`, conda environments), early C++ prototypes, and the superseded `DCA1000Runner`. Use the C++ driver in `CPSL_TI_Radar_cpp/`; `Runner` replaces `DCA1000Runner`.
+- `archived_code/` — the v1 Python DCA1000/serial driver (`CPSL_TI_Radar_py`, `ConfigManager`, conda environments), early C++ prototypes, and the superseded `DCA1000Runner`. Use the C++ driver in `CPSL_TI_Radar_cpp/`; `cpsl::radar::Radar` replaces `DCA1000Runner` (see "Library" below).
 - `MAIN_NO_RUNNER` executable (`main_no_runner.cpp`) — only `CPSL_TI_Radar_CPP` is built now.
 - `utilities/Postprocess_adc_data.py` and `utilities/bartlet.ipynb` — depended on removed v1 modules or v1 capture files. The remaining notebooks no longer import `ConfigManager`; they parse the `.cfg` directly.
 - CMake package renamed: `find_package(CPSL_TI_Radar_CPP)` / `CPSL_TI_Radar_CPP::<target>` is now `find_package(CPSL_TI_Radar)` / `CPSL_TI_Radar::driver`. A deprecated `CPSL_TI_Radar_CPP` compatibility package (old target names as aliases, with a deprecation message) is installed for one release and then removed. See `CPSL_TI_Radar_cpp/Readme.md`.
@@ -112,7 +112,7 @@ converting that file.
 | `Streamer.board_type` | `board` | names a descriptor; the v1 `SDK_version` fallback (2.x -> IWR1443, 3.x -> IWR1843) is applied by the script |
 | `Streamer.SDK_version` | removed | the descriptor carries the SDK |
 | `Processor`, `ROS`, `Listeners` | removed | never read by the driver |
-| — | `runtime.*` | new; only `log_level` is applied so far |
+| — | `runtime.*` | new; `log_level` and `stall_timeout_ms` are applied, the queue/affinity/priority keys are reserved |
 
 Behaviour changes that come with v2 configs:
 
@@ -129,12 +129,23 @@ Behaviour changes that come with v2 configs:
 
 `CPSL_TI_Radar_CPP <system.json>` now requires the config path; the built-in default config is
 gone. Add `--validate` to check a config without hardware: it prints the board, ports, frame
-shape, bytes per frame and skipped commands, and exits 0 or 1 without opening any port or socket.
+shape, bytes per frame, `output.dir` and skipped commands, and exits 0 or 1 without opening any
+port or socket. `--frames N` and `--duration S` end a run; `--stats` prints a versioned
+`stats v1` counter line per stream every second (see `CPSL_TI_Radar_cpp/Readme.md`).
+
+### Library
+
+`Runner` is replaced by `cpsl::radar::Radar` (`RadarConfig::load` → `Radar::open` → `configure` →
+`start` → `next_adc_frame` / `next_point_cloud` → `stop`). Calls return a `Status` instead of
+printing or throwing; messages go to a log sink filtered by `runtime.log_level`. The ADC frame
+layout is unchanged (`[rx][sample][chirp]`). Points are `Point{x,y,z,v,snr_db,noise_db}`. Link
+`CPSL_TI_Radar::driver`. [`CPSL_TI_Radar_ROS`](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
+still uses `Runner` and does not build against v2.0 until it moves to `Radar`.
 
 ### Output files
 
 `adc_data.bin` keeps its byte layout and is written to `output.dir` (the current directory when
-unset). The raw LVDS file `LVDS_Raw_0.bin` is only written with `output.save_raw_lvds: true`.
+unset), which the driver creates if it does not exist. The raw LVDS file `LVDS_Raw_0.bin` is only written with `output.save_raw_lvds: true`.
 
 ## ROS Integration
 

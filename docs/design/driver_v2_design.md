@@ -54,7 +54,7 @@ descriptor names the decoder so the rest stays data.
 | `cfg_dialect.rx_mask_fields` | `channelCfg` field indices whose set bits are summed into the Rx count | `RadarConfigReader.cpp:285-289` |
 | `cfg_dialect.frame_period_field` | `frameCfg` field index of the period (5, or 6 on the cascade) | field-count guess `RadarConfigReader.cpp:270-274` |
 | `data_uart.header_bytes` | 40 (SDK 3, MCU+) or 36 (SDK 2, **HYPOTHESIS**, audit (b)) | fixed 32+8 |
-| `data_uart.tlv_dialect` | `sdk3` (type 1 = float x/y/z/v, type 7 = int16 SNR/noise) \| `sdk2` (Q-format objects) \| `mcuplus_cascade` (sdk3 plus types 10/11/12) | `TLVProcessing.*` |
+| `data_uart.tlv_dialect` | `sdk3` (type 1 = float x/y/z/v, type 7 = int16 SNR/noise) \| `sdk2` (Q-format objects) \| `mcuplus_cascade` (sdk3 plus types 10/11/12) | `TLVProcessing.*`. Parsed and validated, but not used for dispatch until core-16 |
 | `lvds.supported` | bool | cascade DCA1000 rejection `SystemConfigReader.cpp:477-482` |
 | `lvds.lanes` | 2 \| 4 (sent in `CONFIG_FPGA_GEN`) | `DCA1000Handler.cpp:381-391` |
 | `lvds.layout` | `two_lane_iq_pairs` (SWRA581B §6) \| `lane_per_rx` (SWRA581B §5 4-lane) | `ADCCubeConverter.cpp:24-31` |
@@ -187,7 +187,8 @@ buffers come from a pool of reused nested buffers and are still swapped on compl
 copied. A flat layout is revisited only if `bench_pipeline` (core-09, core-14) shows the
 converter is a real bottleneck. If a flat layout is ever adopted, the v2 README, the migration
 note and the docs must call out the format change prominently so people migrating can adapt.
-Because the type is unchanged, `CPSL_TI_Radar_ROS` is not broken by this.
+The type is unchanged, so `AdcFrame` does not break `CPSL_TI_Radar_ROS`. Removing `Runner` does
+(core-13, user ruling): the package breaks until it moves to `Radar`.
 
 **Internal seams for tests.**
 - `PacketSource`: UDP or replay.
@@ -196,7 +197,7 @@ Because the type is unchanged, `CPSL_TI_Radar_ROS` is not broken by this.
   `#define private public` in `tests/test_serial_streamer_frames.cpp`.
 
 **CLI.** `CPSL_TI_Radar_CPP <system.json> [--validate] [--frames N]
-[--duration S]`. A config argument is required: the baked-in
+[--duration S]` (`--frames`, `--duration` and `--stats` landed in core-13). A config argument is required: the baked-in
 `DEFAULT_CONFIG_PATH` goes. `--validate` loads and cross-checks the config
 without touching hardware; core-05's cold-reader check uses it. SIGINT sets an
 atomic flag, and the main loop calls `stop()`.
@@ -248,7 +249,9 @@ directive (core-12).
 - **KNOWN_BUGs.** Every `KNOWN_BUG` turns into `CHECK` in the directive that
   fixes it:
   - core-11: FrameAssembler × 3, SerialStreamer header
-  - core-16: parse_frame seam
+  - core-16: none. There never was a `parse_frame` KNOWN_BUG; core-16
+    removes the `#define private public` seam in
+    `tests/test_serial_streamer_frames.cpp`.
 - **New ctest suites** (all hardware-free):
   - `test_board_descriptor`: all four files load; unknown keys, bad enums
     and layout/cfg mismatches are rejected.
@@ -445,9 +448,15 @@ Needs: core-10, core-11.
 **Steps.**
 - The §3 API over today's internals.
 - No `exit`, no unconditional prints, no escaping exceptions.
-- Idempotent stop; stall policy; signal flag in `main`.
+- Stall policy (`runtime.stall_timeout_ms`). Idempotent stop, the signal flag in `main` and the `ByteStream` seam landed in core-11.
 - Non-copyable owners; fake-transport seams.
 - A stable `--stats` line format, with `tools/bench` switched to it.
+
+**Landed in core-13** (#30). It differs from §3 in three ways: `Radar::open` also takes optional
+`Transports` (a fake `ByteStream`, a `ReplayPacketSource`); `next_adc_frame`/`next_point_cloud` take
+an optional `Status*` that says why they returned false (timeout, stalled, stopped); and `Runner` is
+removed, not wrapped (user ruling). `docs/ARCHITECTURE.md` documents the API, the `stats v1` lines and
+the stall policy.
 
 **Docs step.** ARCHITECTURE component graph and API. Readme usage. README. This unblocks the OUTLINE "API" lessons.
 
@@ -459,7 +468,7 @@ Needs: core-10, core-11.
 
 ### core-14 Zero-copy DCA pipeline (P2, P3, P7, P9, P10) `[heavy]`
 
-Needs: core-13, plus D5 and D10 (and D11 for output files).
+Needs: core-13, plus D5 and D10. (D11 and `output.dir` landed in core-10.)
 
 **Steps.** One commit per item, in this order:
 1. P10 quiet hot path
@@ -486,12 +495,13 @@ Needs: core-14.
 **Steps.** One commit per item:
 - `recvmmsg`
 - no discard on a full ring, plus a `SO_RXQ_OVFL` counter
-- runtime affinity and priorities
+- wire the `runtime` affinity and priority keys (parsed and validated
+  since core-10, reserved until this directive)
 
 **Docs step.** ARCHITECTURE RX path. Readme host prerequisites.
 
 **Verify.**
-- A row per commit from `bench_pipeline --udp` (loopback), including a `strace -c` excerpt for P5.
+- A row per commit from `bench_pipeline --udp` (loopback; core-15 Step 1 adds the mode), including a `strace -c` excerpt for P5.
 - No user-space discard under an injected 200 ms stall within SO_RCVBUF.
 - ctest green.
 - docs match.
@@ -546,7 +556,7 @@ was accepted except D5. §3, §5, §7 and §9 reflect the rulings.
 | D6 | Drop Boost (asio only does serial I/O) for plain termios + `poll`? | **Yes**, in core-16. Removes a system dependency; `termios2` already exists. | Accepted as recommended. |
 | D7 | IWR1443 serial (SDK 2) support | Have a Researcher confirm the SDK 2 UART format first (audit (b) hypothesis). Until then, `sdk2` is a load error with a clear message. | Accepted as recommended. |
 | D8 | Loading v1 configs | Hard error that names the migration script, not dual-schema reading. | Accepted as recommended. |
-| D9 | I/Q check in core-04 | Already partly done: core-04 added `tools/bench/iq_check.py` (30b3b34) and a `numFrames 0` baseline cfg (d7a0a2b). **Recommend** the user runs the reflector capture during the core-04 bench session (about 10 min). It is the only way to settle the I/Q question. | **Recommendation accepted, result partial.** Lane order looks right (single-sided spectrum, commit 6796509), but the ground return peaked near 2.1 m against about 1.0 m expected. A second capture is deferred; the user will verify through the live GUI later. Source: `plans/history.md` 2026-10-05. |
+| D9 | I/Q check in core-04 | Already partly done: core-04 added `tools/bench/iq_check.py` (30b3b34) and a `numFrames 0` baseline cfg (d7a0a2b). **Recommend** the user runs the reflector capture during the core-04 bench session (about 10 min). It is the only way to settle the I/Q question. | **Recommendation accepted, result partial.** Lane order looks right (single-sided spectrum, commit 6796509), but the ground return peaked near 2.1 m against about 1.0 m expected. A second capture is deferred; the user will verify through the live GUI later. Source: `plans/history.md` 2026-10-05. Superseded: core-17 Step 1 takes a reflector capture at the next bench visit. |
 | D10 | Frame delivery: change from "latest frame wins" (today; overwritten frames are uncounted) to a drop-oldest queue, default depth 4, with `frames_overwritten` in `Stats`? | **Yes.** Slow consumers see a short backlog instead of silent loss. `runtime.frame_queue_depth: 1` restores latest-wins. | Accepted as recommended. |
 | D11 | Make the raw LVDS file (`LVDS_Raw_0.bin`, written on every run with `save_to_file` today) opt-in through `output.save_raw_lvds`? | **Yes.** It doubles disk I/O and is only needed to debug packet loss. `adc_data.bin` stays on with `save_adc_frames`. | Accepted as recommended. |
 

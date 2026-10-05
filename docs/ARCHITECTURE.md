@@ -10,7 +10,7 @@ update it as the rework changes structure. Firmware is described in
 ```bash
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
 cmake --build CPSL_TI_Radar_cpp/build -j
-./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP <system config .json> [--validate]
+./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP <system config .json> [--validate] [--stats] [--frames N] [--duration S]
 ```
 
 With no `-DCMAKE_BUILD_TYPE`, the top-level `CMakeLists.txt` sets the type to
@@ -19,24 +19,75 @@ Release in the cache and prints it at configure time. An explicit type
 `tools/bench` and the host-setup doctor's `build-type` check expect Release,
 so the plain command passes them.
 
-One executable: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial). The
-config argument is required (no argument: usage, exit 2). `--validate` loads
-the config, board descriptor and radar cfg, runs the cross-checks, prints a
-summary and exits 0/1 without opening any port or socket.
-Built as C++17 (`-std=gnu++17`).
+One executable: `CPSL_TI_Radar_CPP` (`main.cpp`, on the public API below;
+DCA1000 and serial). The config argument is required (no argument: usage,
+exit 2). `--validate` loads the config, board descriptor and radar cfg, runs
+the cross-checks, checks `output.dir` (exists / will be created / error),
+prints a summary and exits 0/1 without opening any port or socket. A run
+ends on SIGINT/SIGTERM, after `--frames N` completed frames or `--duration S`
+seconds, or when no frame arrives for 2 s (with `runtime.stall_timeout_ms`
+set, on a stall instead). Built as C++17 (`-std=gnu++17`).
+
+**Public API** (namespace `cpsl::radar`; `src/Radar/Radar.hpp`,
+`src/utilities/{RadarConfig,Status,Log}.hpp`). No call throws, exits or
+prints; failures are a `Status {code, message}` and messages go to the log
+sink.
+
+| Call | Does |
+|------|------|
+| `RadarConfig::load(path)` | `Result<RadarConfig>`: system JSON + board descriptor (with `board_overrides`) + parsed radar cfg, cross-checked; `board()`, `frame_shape()`, `commands()` |
+| `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets}` swaps in a fake `ByteStream` or a `ReplayPacketSource` |
+| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured` |
+| `start()` | `recordStart` and the RX thread, the DCA worker (SCHED_RR 80) and serial reader threads, then `sensorStart` |
+| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | latest completed frame (`AdcFrame`: `[rx][sample][chirp]` cube copied in, `index`, `completed_at`, `missing_bytes`, `shape`; `PointCloud` of `Point{x,y,z,v,snr_db,noise_db}`); false with `why` = `timeout`, `stalled`, `stopped`, `invalid_state` or `disabled` |
+| `stats()` | the counters of the `stats v1` lines below |
+| `stop()` | see below; the destructor calls it |
+| `set_log_sink(fn)`, `set_log_level(l)` | process-wide; default sink: one line per message to stderr, `warning: `/`error: ` prefixes |
 
 **Stop and shutdown.** SIGINT/SIGTERM only set an atomic flag
 (`src/utilities/StopSignal`, `SA_RESETHAND`: a second Ctrl-C terminates).
-`main` polls it, leaves its frame loop and calls `Runner::stop()`, then
-returns normally. `stop()` is idempotent and never throws: it joins the run
-threads, then `DCA1000Handler::stop()` (RX thread, `recordStop`, flush and
-close `adc_data.bin` / `LVDS_Raw_0.bin`), then `sensorStop`. Every step runs
-even if an earlier one failed. `CLIController` sends over a
+`main` polls it, leaves its frame loop and calls `Radar::stop()`, then
+returns normally. `stop()` is idempotent and safe from several threads: one
+lifecycle mutex, so a second caller waits for the first and gets the same
+`Status`. It joins the worker threads, then `DCA1000Handler::stop()`
+(packet source: RX thread, `recordStop`; then flush and close
+`adc_data.bin` / `LVDS_Raw_0.bin`), then `sensorStop`. Every step runs even
+if an earlier one failed. `CLIController` sends over a
 `cpsl::radar::ByteStream` (`src/utilities/ByteStream`; `SerialPortStream`
-in the driver, a fake in tests) and turns any write/read error into a false
-return and `io_error()`. The executable exits 1 when `stop()` hit an I/O
-error (e.g. the radar's USB was unplugged); a missing acknowledgement is
-only a warning.
+in the driver, a fake in tests); every write and read is bounded by the
+command's timeout, and a write/read error makes the command fail with
+`io_error()` (cleared at the start of each command). `sensorStop` waits
+`max(cli.cmd_timeout_ms, frame period + 200 ms)`, or the descriptor's
+`cli.stop_timeout_ms`, because the demo acknowledges it only after the
+current frame. `stop()` returns `io_error` when `sensorStop` could not be
+sent (e.g. the radar's USB was unplugged) and `file_error` when an output
+file failed to flush; the executable then exits 1. A missing
+acknowledgement is only a warning.
+
+**Stall policy.** `runtime.stall_timeout_ms` > 0: when a stream completes no
+frame for that long while running, the next `next_adc_frame` /
+`next_point_cloud` call logs a warning, adds 1 to `Stats::stalls` and
+returns false with `stalled`, once per stall (later calls in the same stall
+time out normally). `main` stops the run on it. 0 (the default) turns it
+off, and `main` keeps its 2 s no-frame exit.
+
+**Stats lines.** `--stats` prints, once a second and once more after
+`stop()`, one line per enabled stream, counters cumulative since `start()`
+and `t` in seconds since `start()`. `tools/bench` reads only these lines;
+the format is versioned (`v1`), and a change to its keys needs a new version:
+
+```
+stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n> duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n> stalls=<n> rcvbuf=<bytes>
+stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
+```
+
+`frames` counts completed frames (DCA: the frames in `adc_data.bin`;
+serial: valid TLV frames). `packets` … `skipped` are the `FrameAssembler`
+counters (see "DCA1000 UDP packet format"), sampled at each completed frame
+and at stop. `overrun` is `rx_overrun_count` (RX ring full), `overwritten`
+counts frames replaced before `next_*` took them (latest frame wins),
+`rcvbuf` is the `SO_RCVBUF` the kernel granted, `missed` counts gaps in the
+demo's frame number.
 
 **Sanitizers.** `CPSL_TI_Radar_cpp/CMakePresets.json` has an `asan-ubsan`
 preset (ASan + UBSan, `-O1 -g`, UB not recoverable) that builds in
@@ -51,7 +102,7 @@ CMake structure: each library's `src/<dir>/CMakeLists.txt` declares its own
 `find_package` for what it uses (Threads, Boost), so a target gets the headers
 of everything it links and no central include list exists. Tests list only
 `LIBS` in `add_driver_test`. `src/CMakeLists.txt` also defines the interface
-target `driver` (links `Runner`), exported with the install as
+target `driver` (links `Radar`), exported with the install as
 `CPSL_TI_Radar::driver`. New libraries get their own subdirectory, are added
 in `src/CMakeLists.txt`, and need no other include wiring. `src/BoardDescriptor/`
 (board descriptor loader, see Configuration) is linked by `Utilities` and
@@ -75,42 +126,45 @@ Release (the default build type) for comparable numbers.
 ## Component graph
 
 ```
-main.cpp
-  └── Runner
-        ├── SystemConfigReader   (parses JSON system config v2; loads the board)
-        │     └── BoardDescriptor    (board descriptor, cfg cross-checks, cfg command filter)
-        ├── RadarConfigReader    (parses TI .cfg with the board's cfg dialect, bytes_per_frame)
-        ├── CLIController        (serial → radar, sends the filtered .cfg commands)
-        ├── DCA1000Handler       (thin coordinator)
-        │     ├── DCA1000Socket      (UDP socket, RX thread SCHED_RR 99, ring buffer)
+main.cpp (CLI)
+  └── Radar                     (public API; src/Radar)
+        ├── RadarConfig          (src/utilities)
+        │     ├── SystemConfigReader   (JSON system config v2; loads the board)
+        │     │     └── BoardDescriptor    (board descriptor, cfg cross-checks, cfg command filter)
+        │     └── RadarConfigReader    (TI .cfg with the board's cfg dialect, bytes_per_frame)
+        ├── CLIController        (sends the filtered .cfg commands over a ByteStream)
+        ├── DCA1000Handler       (assembles, converts, publishes and saves frames)
+        │     ├── PacketSource       (UdpPacketSource: DCA1000Socket + DCA1000Commands; or ReplayPacketSource)
         │     ├── FrameAssembler     (sequence check, frame assembly, drop stats)
-        │     ├── ADCCubeConverter   (ADC conversion per lvds.layout / lvds.iq_order)
-        │     └── DCA1000Commands    (FPGA command protocol)
+        │     └── ADCCubeConverter   (ADC conversion per lvds.layout / lvds.iq_order)
         └── SerialStreamer        (serial TLV stream → detected points; TLVProcessing)
+  Log, Status                   (every library; Log has no dependencies)
 ```
 
-`Runner` spawns `run_dca1000` and `run_serial` threads. The DCA worker
-raises itself to SCHED_RR 80; the serial worker keeps the default policy.
-Serial baud handling (including the cascade's 3,125,000 baud data
-port) lives in `src/utilities/SerialBaud*` (termios2).
+`Radar::start()` spawns a DCA worker thread (SCHED_RR 80) and a serial
+reader thread; `DCA1000Socket` adds the RX thread. Serial baud handling
+(including the cascade's 3,125,000 baud data port) lives in
+`src/utilities/SerialBaud*` (termios2).
 
 ## DCA1000 RX path
 
 - **RX thread** (SCHED_RR 99): tight `recvfrom` loop pushing raw 1472-byte
   packets into a 512-slot lock-free ring buffer.
-- **Worker thread** (Runner thread): pops packets, places them by byte
+- **Worker thread** (`Radar`'s DCA worker): pops packets, places them by byte
   offset (`FrameAssembler`), converts the ADC cube, does file I/O.
 - `SO_RCVBUF` requests `dca1000.rcvbuf_bytes` (default 64 MB; needs
   `net.core.rmem_max` raised); data socket timeout 500 ms.
 - `dropped_packets`, `dropped_packet_events`, `late packets`, `duplicate
   packets`, `incomplete frames`, `skipped frames` and `rx_overrun_count`
-  print per frame with `runtime.log_level: "debug"`.
+  print per frame with `runtime.log_level: "debug"`, and are in `stats()`
+  and the `stats v1` lines.
 
 The worker converts a completed frame outside any lock, then publishes the
 cube and the `new_frame_available` flag together under one mutex, so the
 flag is never visible before the cube it announces (core-11 G2;
-`test_dca_frame_publish`). Consumers poll `get_next_adc_cube(timeout_ms)`,
-which copies the cube and clears the flag under the same mutex.
+`test_dca_frame_publish`). `Radar::next_adc_frame` polls every 5 ms and
+copies the cube (with its index, missing-byte count and completion time)
+and clears the flag under the same mutex.
 `DCA1000Handler::configure_pipeline()` + `ingest_packet()` run this path
 without a socket (tests).
 
@@ -156,8 +210,8 @@ Three files describe a run (design §1, §2):
    read by `SystemConfigReader`): `"schema_version": 2`, `board`,
    `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
    `output` (`dir`, `save_adc_frames`, `save_raw_lvds`) and `runtime`
-   (`log_level`; the queue/affinity/priority keys are validated but reserved
-   for core-14/15). Paths resolve against the JSON file's directory. Loading
+   (`log_level`, `stall_timeout_ms`; the queue/affinity/priority keys are
+   validated but reserved for core-14/15). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
    is strict (unknown keys, bad types, repeated keys are errors with a JSON
    path). A v1 file is rejected with the name of
    `tools/migrate_config_v1_to_v2.py`. The fields are listed in
@@ -187,12 +241,12 @@ fields through `SystemConfigReader::getBoard()`:
 | Behaviour | Descriptor field | Used in |
 |-----------|------------------|---------|
 | cfg commands sent | `cli.skip_prefixes`, `cli.start_cmd`, `cfg_dialect.skip_commands` (`filter_cfg_commands`) | `CLIController` |
-| CLI handshake | `cli.baud`, `ack`, `prompt`, `prompt_wait_ms`, `cmd_timeout_ms`, `start_cmd`, `stop_cmd` | `CLIController` |
+| CLI handshake | `cli.baud`, `ack`, `prompt`, `prompt_wait_ms`, `cmd_timeout_ms`, `stop_timeout_ms`, `start_cmd`, `stop_cmd` | `CLIController` |
 | Rx count, frame period | `cfg_dialect.rx_mask_fields`, `frame_period_field` | `RadarConfigReader` |
 | Data UART | `data_uart.baud`, `timeout_ms` | `SerialStreamer` |
-| DCA1000 FPGA setup | `lvds.lanes`, `dca1000.packet_bytes`, `packet_delay_us`, `fpga_timer_s` | `DCA1000Handler` |
+| DCA1000 FPGA setup | `lvds.lanes`, `dca1000.packet_bytes`, `packet_delay_us`, `fpga_timer_s` | `UdpPacketSource` |
 | ADC decoder | `lvds.layout`, `lvds.iq_order` | `ADCCubeConverter` |
-| One cfg per power-up | `lifecycle.config_once_per_boot` | `Runner` |
+| One cfg per power-up | `lifecycle.config_once_per_boot` | `Radar` |
 
 `cfg_dialect.skip_commands` drops commands the board's firmware rejects
 before they are sent (the IWR1843 skips `calibData`); the `.cfg` files keep

@@ -126,7 +126,7 @@ target_link_libraries(consumer PRIVATE CPSL_TI_Radar::driver)
 ```
 Configure it with `-DCMAKE_PREFIX_PATH=<install prefix>`.
 
-**Renamed in v2.0.** The package was previously found as `find_package(CPSL_TI_Radar_CPP)` with targets such as `CPSL_TI_Radar_CPP::Runner`. For one release a deprecated compatibility package of that name is still installed: it calls `find_package(CPSL_TI_Radar)`, defines the old `CPSL_TI_Radar_CPP::<target>` names as aliases and prints a deprecation message. It will be removed after the next release, so switch to `find_package(CPSL_TI_Radar)` and `CPSL_TI_Radar::driver`. Headers are installed under `<prefix>/include/CPSL_TI_Radar_CPP/<subdir>/` and are reached through the target, so `#include "Runner.hpp"` works without extra include paths.
+**Renamed in v2.0.** The package was previously found as `find_package(CPSL_TI_Radar_CPP)` with targets such as `CPSL_TI_Radar_CPP::DCA1000Handler`. For one release a deprecated compatibility package of that name is still installed: it calls `find_package(CPSL_TI_Radar)`, defines the old `CPSL_TI_Radar_CPP::<target>` names as aliases (all but `Runner`, which v2.0 removes in favour of `Radar`) and prints a deprecation message. It will be removed after the next release, so switch to `find_package(CPSL_TI_Radar)` and `CPSL_TI_Radar::driver`. Headers are installed under `<prefix>/include/CPSL_TI_Radar_CPP/<subdir>/` and are reached through the target, so `#include "Radar.hpp"` works without extra include paths.
 
 ## Running tests
 
@@ -138,7 +138,7 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering, the stop path: file flush, signal flag, CLI write errors). `test_cli_stop` runs a whole `Runner` on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); no test opens a serial port. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); no test opens a serial port. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
 
 To run the same suite under AddressSanitizer and UndefinedBehaviorSanitizer (any report fails the test), use the `asan-ubsan` preset from `CPSL_TI_Radar_cpp/` (it builds in `build-asan-ubsan/`):
 
@@ -198,26 +198,35 @@ The cascade EVM (AM273x + 2× AWR2243) runs TI's 2-chip cascade DDM demo. Build 
 
 Once the correct firmware is flashed onto your board, power cycle the board and place it into functional mode.
 
-## Architecture
+## Library use
 
-The C++ code is organized as follows:
+Link `CPSL_TI_Radar::driver` (see above) and use `cpsl::radar::Radar` (header `Radar.hpp`). No call
+throws or exits; each returns a `Status` (or a `Result` holding one) whose `message` says what
+failed, and log messages go to stderr at `runtime.log_level` unless you install
+`cpsl::radar::set_log_sink`.
 
+```cpp
+#include "Radar.hpp"
+#include <iostream>
+
+int main() {
+    namespace radar = cpsl::radar;
+    auto cfg = radar::RadarConfig::load("config/system/front_radar_IWR1843_stress_test.json");
+    if (!cfg) { std::cerr << cfg.status.message << "\n"; return 1; }
+    auto opened = radar::Radar::open(*cfg);       // ports, sockets, output.dir; sends nothing
+    if (!opened) { std::cerr << opened.status.message << "\n"; return 1; }
+    radar::Radar& r = **opened;
+    if (!r.configure() || !r.start()) return 1;    // cfg to the radar, then streaming
+    radar::AdcFrame frame;                          // frame.data[rx][sample][chirp]
+    for (int i = 0; i < 100 && r.next_adc_frame(frame, std::chrono::milliseconds(1000)); i++) {
+        std::cout << "frame " << frame.index << ", " << frame.missing_bytes << " bytes missing\n";
+    }
+    return r.stop() ? 0 : 1;                        // the destructor would also stop
+}
 ```
-main.cpp
-  └── Runner
-        ├── SystemConfigReader   — parses JSON system config
-        ├── RadarConfigReader    — parses IWR .cfg, computes bytes_per_frame
-        ├── CLIController        — sends .cfg commands over serial to the IWR
-        ├── DCA1000Handler       — thin coordinator; owns the three classes below
-        │     ├── DCA1000Socket      — UDP socket lifecycle, SCHED_RR 99 RX thread,
-        │     │                        lock-free ring buffer for decoupled packet reception
-        │     ├── FrameAssembler     — sequence checking, drop detection, frame assembly
-        │     └── ADCCubeConverter   — interleaved (IWR1443) and non-interleaved
-        │                              (IWR1843/IWR6843) ADC cube conversion
-        └── SerialStreamer        — serial TLV stream → detected points
-```
 
-`Runner` spawns two threads (`run_dca1000`, `run_serial`). The `DCA1000Socket` RX thread runs at real-time priority (SCHED_RR 99) and pushes raw packets into a 512-slot ring buffer; the worker thread pops packets, assembles frames via `FrameAssembler`, and converts to the ADC cube via `ADCCubeConverter`. `FrameAssembler` places each payload at its byte offset in the frame, so drops, duplicates and reordering never shift data (see `docs/ARCHITECTURE.md`). A frame's cube and its `new_frame_available` flag are published together under one mutex; consumers call `get_next_adc_cube(timeout_ms)`.
+`next_point_cloud` does the same for the serial TLV stream. `docs/ARCHITECTURE.md` lists every
+call, the stop sequence, the stall policy and the threads.
 
 ## Running
 
@@ -252,17 +261,18 @@ v1 -> v2 migration section).
 |-----|----------|---------|
 | `schema_version` | yes | `2` |
 | `board` | yes | A board name (`IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), looked up as `<boards dir>/<name>.json`: the boards dir is `$CPSL_TI_RADAR_BOARDS_DIR` if set, otherwise `../boards` next to the JSON file (the layout of `config/`). Or a path to a descriptor file (relative to the JSON file). |
-| `board_overrides` | no | Deep-merged over the descriptor, then validated like it. Baud rates and timeouts live here, for example `{"cli": {"cmd_timeout_ms": 300}, "data_uart": {"baud": 3125000, "timeout_ms": 5000}}`. |
+| `board_overrides` | no | Deep-merged over the descriptor, then validated like it. Baud rates and timeouts live here, for example `{"cli": {"cmd_timeout_ms": 300}, "data_uart": {"baud": 3125000, "timeout_ms": 5000}}`. `cli.stop_timeout_ms` sets how long `sensorStop` waits for `Done`; by default it is `max(cmd_timeout_ms, frame period + 200 ms)`, because the demo answers only after the current frame. |
 | `radar_cfg` | yes | The TI `.cfg` sent to the radar. Relative paths resolve against the JSON file's directory; the tracked configs use `../radar/<subdir>/<file>.cfg`. |
 | `cli.port` | yes | CLI serial port (usually the lower-numbered `/dev/ttyACM*`; [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) lists them). |
 | `serial_stream.enabled`, `.port` | no | TLV point cloud from the demo over the data UART. `port` is required when enabled. The section may be omitted when off. |
 | `dca1000.enabled`, `.fpga_ip`, `.host_ip`, `.cmd_port`, `.data_port` | no | Raw ADC through the DCA1000. The four address fields are required when enabled; the section may be omitted when off. |
 | `dca1000.rcvbuf_bytes` | no | `SO_RCVBUF` requested for the data socket (default 67108864; see the host settings above). |
-| `output.dir` | no | Where `adc_data.bin` and `LVDS_Raw_0.bin` are written, relative to the JSON file. Unset: the current directory. |
+| `output.dir` | no | Where `adc_data.bin` and `LVDS_Raw_0.bin` are written, relative to the JSON file. Unset: the current directory. The driver creates it (with its parents) when it opens the radar; `--validate` says whether it exists or will be created, and fails if a part of the path is a file or the parent is not writable. |
 | `output.save_adc_frames` | no | Write every ADC frame to `adc_data.bin` (default `false`). |
 | `output.save_raw_lvds` | no | Write the raw LVDS payload to `LVDS_Raw_0.bin` (default `false`; only needed to debug packet loss). |
-| `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`. `debug` prints the per-frame status lines (the v1 `"verbose": true`) and each skipped cfg command. |
-| `runtime.frame_queue_depth`, `.stall_timeout_ms`, `.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults 4, 0, `null`, `null`, 99, 80) but not applied yet. |
+| `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`: the least severe message printed. `debug` adds the per-frame status lines (the v1 `"verbose": true`), every CLI command and reply, and each skipped cfg command. |
+| `runtime.stall_timeout_ms` | no | `0` (default) is off. Above 0: when no frame arrives for that many ms while streaming, the driver warns and the run stops (instead of after 2 s without frames). |
+| `runtime.frame_queue_depth`, `.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults 4, `null`, `null`, 99, 80) but not applied yet. |
 
 At least one of `serial_stream` and `dca1000` must be enabled.
 
@@ -321,15 +331,26 @@ The system config path is a required argument:
 cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 
 # check a config without hardware: loads the board descriptor and radar cfg, runs the
-# cross-checks, prints the board, ports, frame shape, bytes/frame and skipped commands;
-# opens no port or socket; exit 0 if usable, 1 otherwise
+# cross-checks, prints the board, ports, frame shape, bytes/frame, output.dir and skipped
+# commands; opens no port or socket; exit 0 if usable, 1 otherwise
 ./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --validate
 
 # run it
 ./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json
+
+# run 300 frames (or 30 s), printing a stats line every second
+./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --frames 300 --stats
+./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --duration 30
 ```
 
-Stop a run with Ctrl-C (or SIGTERM): the driver finishes the frame loop, sends `sensorStop` and the DCA1000 `recordStop`, and flushes and closes `adc_data.bin`, which then holds exactly `bytes_per_frame` x frames. A second Ctrl-C kills it at once (only needed if the stop hangs). The run also ends by itself when no frame arrives for 2 s. The exit status is 0 after a clean stop and 1 if stopping hit an I/O error, e.g. the radar's USB was unplugged; the output files are closed either way.
+| Flag | Effect |
+|------|--------|
+| `--validate` | Check the config as above, then exit. |
+| `--stats` | Print a `stats v1 dca ...` / `stats v1 serial ...` line per stream every second and once after the stop: frames, packets, drops, late and duplicate packets, overruns, overwritten frames, stalls, granted `SO_RCVBUF` (format in `docs/ARCHITECTURE.md`). `tools/bench` reads these lines. |
+| `--frames N` | Stop after N completed frames (DCA1000 frames if enabled, otherwise TLV frames). |
+| `--duration S` | Stop after S seconds of streaming. |
+
+Stop a run with Ctrl-C (or SIGTERM): the driver finishes the frame loop, sends `sensorStop` and the DCA1000 `recordStop`, and flushes and closes `adc_data.bin`, which then holds exactly `bytes_per_frame` x frames. A second Ctrl-C kills it at once (only needed if the stop hangs). The run also ends by itself when no frame arrives for 2 s (or after `runtime.stall_timeout_ms`, when set). The exit status is 0 after a clean stop and 1 if stopping hit an I/O error, e.g. the radar's USB was unplugged, or an output file failed to flush; the output files are closed either way.
 
 Running without an argument prints the usage and exits with status 2. The executable prints the
 config path at startup so you can confirm which file is loaded. A rebuild is only needed after

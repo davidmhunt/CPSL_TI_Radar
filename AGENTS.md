@@ -106,7 +106,7 @@ shared, not private to one session.
 
 | Dir | Contents |
 |-----|----------|
-| `CPSL_TI_Radar_cpp/` | C++ driver (primary): `CLIController`, `SerialStreamer`, DCA1000 streaming, `Runner`; configs in `config/radar/` and `config/system/`; `include/json` submodule. Build: `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j` |
+| `CPSL_TI_Radar_cpp/` | C++ driver (primary): `CLIController`, `SerialStreamer`, DCA1000 streaming, the `Radar` API; configs in `config/radar/` and `config/system/`; `include/json` submodule. Build: `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j` |
 | `firmware_dev/` | Opt-in submodule (`CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`): firmware sources, Docker build env, download/build/flash scripts — Firmware role's namespace, see `docs/firmware.md` |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/` + `iwr_raw_rosnode` submodule); to be reorganized into the v2.0 shipped-firmware directory |
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |

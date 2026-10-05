@@ -214,8 +214,8 @@ Status Radar::configure() {
                               "configured once per boot: power-cycle the EVM and try again.");
             }
             m.state = Impl::configured;
-            return Status(Code::config_rejected, "not every cfg command was acknowledged with '" + board.cli.ack +
-                                                     "' (see the warnings)");
+            return Status(Code::config_rejected, "not every config command was acknowledged with '" +
+                                                     board.cli.ack + "' (see the warnings)");
         }
         m.state = Impl::configured;
         return Status::ok();
