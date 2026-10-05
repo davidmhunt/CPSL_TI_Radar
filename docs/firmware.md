@@ -14,6 +14,7 @@ Firmware role's source of project facts
 | `firmware_dev/tools/` | Cross-project scripts (`cascade_serial_check.py`, `md_to_pdf.py`) | ″ |
 | `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/`, `prebuilt_binaries/` SBL images + demo.cfg) | ″ |
 | `firmware_dev/projects/ti_stock_demos/` | Stock SDK 3.6 IWR1843/IWR6843 mmw demos, built out of tree (overlay in `build/sdk/`; no TI source tracked) | ″ |
+| `firmware_dev/projects/iwr1843_sar_lvds/` | IWR1843 SDK 3.6 `xwr18xx/mmw` demo copied verbatim into `src/` (pristine baseline commit `bb3a348` in `firmware_dev`), built out of tree; base for the SAR/LVDS firmware | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
 | `firmware_dev/build/{cascade,legacy}/` | Old-flow build outputs (gitignored; root-owned from pre-`fw` container runs; the cascade baseline is no longer needed, firmware-05 removes the folder with `docker compose run --rm firmware-env rm -rf /build_context/build`) | ″ |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/`) | this repo — to be reorganized into the v2.0 shipped-firmware directory |
@@ -44,6 +45,7 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 | Build image | `docker compose build` (image `cpsl-ti-radar-firmware-dev:latest`) |
 | Build cascade | `./fw build awr2243_cascade_ddm` → `projects/awr2243_cascade_ddm/build/am273x_cascade.appimage` (`CCS_CONFIG=Debug` for debug) |
 | Build SDK 3.6 stock demos | `./fw build ti_stock_demos [18xx\|68xx]` → `projects/ti_stock_demos/build/iwr{1843,6843}_demo.{bin,elf}` |
+| Build IWR1843 SAR/LVDS project | `./fw build iwr1843_sar_lvds` → `projects/iwr1843_sar_lvds/build/iwr1843_sar_lvds.{bin,elf}` (clean build of `src/` every time; `flash.sh` prints UniFlash steps, exits 3) |
 | Flash cascade | `./fw flash awr2243_cascade_ddm <CLI port> [image\|prebuilt]` — success only on `All commands from config file are executed !!!` |
 | Bring-up check | `docker compose run --rm flash python3 /build_context/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
 | Python helpers | `uv run python tools/md_to_pdf.py <file.md>` |
@@ -75,6 +77,10 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
   The 68xx demo makefile has no `mmwDemo` target (use `all`). The `.bin` size depends on the build
   path (path strings in `.text`), so a rebuilt `.bin` matches TI's prebuilt in section layout, not
   byte for byte; two builds at the same path are byte-identical.
+  `iwr1843_sar_lvds` (path 2 characters longer) gives the same 324804 B `.bin` and an identical MSS map
+  layout; its DSS `.const.2` grows 4 B and the linker then places `.bss` before `.far`. At a path of the
+  same length as `ti_stock_demos`, both maps match exactly and the project's `src/` and the SDK demo folder
+  give byte-identical `.bin`s (firmware-04).
 - The submodule's `.git` points outside the bind mount, so `git` does not work inside the
   container; `fw` passes the commit in as `FW_COMMIT`.
 - The `flash` compose service bind-mounts `/dev` so ports that
