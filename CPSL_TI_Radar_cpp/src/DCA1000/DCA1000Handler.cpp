@@ -467,11 +467,9 @@ bool DCA1000Handler::process_next_packet(){
     int received_bytes = 0;
     if (!socket_.pop_packet(pkt_buf, received_bytes, 500)) return false;
 
-    // Delegate sequence checking and frame assembly to FrameAssembler
-    int frames_completed = assembler_.push_packet(pkt_buf, received_bytes);
-    for (int i = 0; i < frames_completed; i++) {
-        save_frame_byte_buffer();
-    }
+    // Delegate sequence checking and frame assembly to FrameAssembler; every
+    // completed frame reaches save_frame_byte_buffer() through the frame sink
+    assembler_.push_packet(pkt_buf, received_bytes);
 
     // Write entire ADC payload to raw LVDS file in one syscall
     if (save_raw_lvds && received_bytes > 10) {
@@ -631,7 +629,12 @@ void DCA1000Handler::init_buffers()
             )
         );
 
-        assembler_.configure(bytes_per_frame);
+        //hold a frame open for a few packets past its end so a reordered packet can still land
+        assembler_.configure(bytes_per_frame,
+                             FrameAssembler::kDefaultReorderSlackPackets * (udp_packet_size - 10));
+        assembler_.set_frame_sink([this](const std::vector<uint8_t>&, uint64_t, size_t) {
+            save_frame_byte_buffer();
+        });
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
@@ -650,6 +653,10 @@ void DCA1000Handler::print_status(){
         "\tdata bytes: " << stats.adc_data_byte_count << std::endl <<
         "\tdropped packets: " << stats.dropped_packets << std::endl <<
         "\tdropped packet events: " << stats.dropped_packet_events << std::endl <<
+        "\tlate packets: " << stats.late_packets << std::endl <<
+        "\tduplicate packets: " << stats.duplicate_packets << std::endl <<
+        "\tincomplete frames: " << stats.incomplete_frames << std::endl <<
+        "\tskipped frames: " << stats.skipped_frames << std::endl <<
         "\trx_overrun_count: " << socket_.get_overrun_count() << std::endl;
     }
 }

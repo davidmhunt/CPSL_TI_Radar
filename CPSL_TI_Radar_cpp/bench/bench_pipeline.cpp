@@ -1,7 +1,7 @@
 // bench_pipeline: hardware-free replay benchmark of the DCA1000 raw-ADC path
 // (driver v2 design §5, directive core-09).
 //
-// Replays synthetic DCA1000 UDP packets through today's FrameAssembler and an
+// Replays synthetic DCA1000 UDP packets through the driver's FrameAssembler and an
 // ADC converter, and reports frames/s, CPU ns per ADC byte and heap
 // allocations per frame (counting global operator new). The converter is
 // pluggable so the D5 question (nested vs flat AdcFrame) can be revisited
@@ -200,7 +200,8 @@ struct ReplayResult {
 
 ReplayResult replay(Kernel& k, const PacketStream& ps, size_t bytes_per_frame) {
     FrameAssembler fa;
-    fa.configure(bytes_per_frame);  // untimed: allocates the two frame buffers
+    // untimed: allocates the frame buffers. Same reorder slack as DCA1000Handler.
+    fa.configure(bytes_per_frame, FrameAssembler::kDefaultReorderSlackPackets * (kPacketBytes - kHeader));
     uint64_t frames = 0;
     uint64_t a0 = g_allocs;
     Clock::time_point t0 = Clock::now();
@@ -212,6 +213,12 @@ ReplayResult replay(Kernel& k, const PacketStream& ps, size_t bytes_per_frame) {
             escape(k.data_ptr());
             frames++;
         }
+    }
+    // end of stream: a last frame with a dropped packet is still open
+    for (int f = 0, done = fa.flush(); f < done; f++) {
+        k.convert(fa.get_frame_bytes());
+        escape(k.data_ptr());
+        frames++;
     }
     double ns = std::chrono::duration<double, std::nano>(Clock::now() - t0).count();
     uint64_t allocs = g_allocs - a0;
@@ -370,6 +377,7 @@ int main(int argc, char** argv) {
     PacketStream streams[3] = {std::move(clean), make_stream("drop_1pct", B, frames, 0.01, 0, 0, 2),
                                make_stream("dup_reorder", B, frames, 0, 0.005, 0.005, 3)};
     std::vector<std::string> notes;
+    bool golden_ok = true;
     std::streambuf* old = std::cout.rdbuf();
     NullBuf quiet;
     for (const PacketStream& ps : streams) {
@@ -385,24 +393,30 @@ int main(int argc, char** argv) {
         }
         std::cout.rdbuf(old);
         print_rows(ps.name.c_str(), kernels, runs);
-        char buf[512];
+        char buf[640];
+        const unsigned long long done = static_cast<unsigned long long>(runs[0].front().frames);
         std::snprintf(buf, sizeof buf,
-                      "%-12s %zu packets (%zu dropped, %zu duplicated, %zu swapped); frames completed %llu of %zu; "
-                      "assembler stats: dropped_packets %u, drop events %u",
-                      ps.name.c_str(), ps.off.size(), ps.dropped, ps.duplicated, ps.swapped,
-                      static_cast<unsigned long long>(runs[0].front().frames), frames, st.dropped_packets,
-                      st.dropped_packet_events);
+                      "%-12s %zu packets (%zu dropped, %zu duplicated, %zu swapped); frames completed %llu of %zu "
+                      "(%s); assembler stats: dropped_packets %u, drop events %u, late %u, duplicate %u, "
+                      "incomplete frames %u, skipped frames %u",
+                      ps.name.c_str(), ps.off.size(), ps.dropped, ps.duplicated, ps.swapped, done, frames,
+                      done == frames ? "= golden" : "NOT golden", st.dropped_packets, st.dropped_packet_events,
+                      st.late_packets, st.duplicate_packets, st.incomplete_frames, st.skipped_frames);
         notes.push_back(buf);
+        if (done != frames) golden_ok = false;
     }
 
     std::printf("\n  replay input:\n");
     for (const std::string& n : notes) std::printf("    %s\n", n.c_str());
     std::printf("\n  ns/byte: wall-clock time per ADC payload byte on one thread. allocs/frame: operator new\n"
                 "  calls in the timed region / frames converted. x (a): how many times faster than (a), by\n"
-                "  median ns/byte. Replay rows include today's FrameAssembler, identical for every variant.\n"
-                "  The injected faults hit the core-02 KNOWN_BUGs: a drop that straddles a frame boundary\n"
-                "  loses that frame (zero_pad overshoot), and duplicates/reordering underflow the drop\n"
-                "  counter and over-complete frames, so the fault rows' frame counts are not meaningful\n"
-                "  until core-11. Compare variants within a row group, not across groups.\n");
+                "  median ns/byte. Replay rows include the driver's FrameAssembler (byte-offset placement,\n"
+                "  core-11 P1; flushed at end of stream), identical for every variant. Every replay row must\n"
+                "  complete exactly the requested number of frames (\"= golden\"). Compare variants within a\n"
+                "  row group, not across groups.\n");
+    if (!golden_ok) {
+        std::fprintf(stderr, "FAIL: a replay row did not complete the golden frame count\n");
+        return 1;
+    }
     return 0;
 }

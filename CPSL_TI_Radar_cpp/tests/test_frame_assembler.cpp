@@ -7,6 +7,8 @@
 #include "test_harness.hpp"
 #include "FrameAssembler.hpp"
 
+#include <algorithm>
+
 typedef std::vector<uint8_t> Bytes;
 
 static uint8_t pattern(uint64_t o) { return static_cast<uint8_t>(o % 251 + 1); }
@@ -180,10 +182,9 @@ TEST_CASE(byte_count_uses_all_six_header_bytes) {
     CHECK_EQ(fa.get_stats().adc_data_byte_count, big + 20);
 }
 
-TEST_CASE(byte_count_gap_leaves_counter_behind_and_zero_fills_next_packet) {
-    // Bug pinned (FrameAssembler.cpp:96-101): in the byte-count-mismatch
-    // branch the payload is copied but never added to adc_data_byte_count_,
-    // so the NEXT in-order packet looks like it has a gap and is preceded by
+TEST_CASE(byte_count_gap_does_not_zero_fill_the_next_packet) {
+    // core-02 KNOWN_BUG, fixed by byte-offset placement (P1): a byte-count gap
+    // used to leave the counter behind so the next in-order packet got
     // spurious zero padding.
     FrameAssembler fa;
     fa.configure(200);
@@ -197,29 +198,29 @@ TEST_CASE(byte_count_gap_leaves_counter_behind_and_zero_fills_next_packet) {
     expected.insert(expected.end(), 20, 0);
     Bytes rest = stream_bytes(60, 140);
     expected.insert(expected.end(), rest.begin(), rest.end());
-    KNOWN_BUG(first_frame == expected,
-              "byte-count gap makes the following packet get spurious zero fill");
+    CHECK(first_frame == expected);
+    CHECK_EQ(fa.get_stats().incomplete_frames, 1u);
 }
 
-TEST_CASE(out_of_order_packet_corrupts_counters) {
-    // Bugs pinned (FrameAssembler.cpp:93-101): a duplicate / reordered packet
-    // makes (seq - received - 1) and (byte_count - adc_count) underflow, so
-    // dropped_packets jumps by ~4 billion and a spurious frame is emitted.
+TEST_CASE(late_duplicate_is_counted_not_dropped) {
+    // core-02 KNOWN_BUG, fixed: a duplicate / reordered packet used to
+    // underflow dropped_packets (~4e9) and emit a spurious frame.
     FrameAssembler fa;
     fa.configure(100);
     push(fa, make_packet(1, 0, 40));
     push(fa, make_packet(2, 40, 40));
     push(fa, make_packet(3, 80, 40));
     int frames = push(fa, make_packet(2, 40, 40));  // late duplicate of packet 2
-    KNOWN_BUG(fa.get_stats().dropped_packets < 1000u,
-              "out-of-order packet underflows dropped_packets");
-    KNOWN_BUG(frames == 0, "out-of-order packet emits a spurious frame");
+    CHECK_EQ(fa.get_stats().dropped_packets, 0u);
+    CHECK_EQ(frames, 0);
+    CHECK_EQ(fa.get_stats().duplicate_packets, 1u);
+    CHECK_EQ(fa.get_stats().late_packets, 0u);
+    CHECK_EQ(fa.get_stats().received_packets, 3u);
 }
 
-TEST_CASE(gap_spanning_a_frame_boundary_misaligns_next_frame) {
-    // Bug pinned (FrameAssembler.cpp:68-72): when the zero fill crosses the
-    // end of the frame, finalize_frame() restarts at index 0 and the
-    // overshoot is lost, so every later byte lands too early in its frame.
+TEST_CASE(gap_spanning_a_frame_boundary_keeps_next_frame_aligned) {
+    // core-02 KNOWN_BUG, fixed: zero fill past a frame boundary used to be
+    // lost, so every later byte landed too early in its frame.
     FrameAssembler fa;
     fa.configure(100);
     CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
@@ -228,15 +229,213 @@ TEST_CASE(gap_spanning_a_frame_boundary_misaligns_next_frame) {
     CHECK_EQ(push(fa, make_packet(4, 120, 40)), 1);
     Bytes frame0 = stream_bytes(0, 80);
     frame0.insert(frame0.end(), 20, 0);
-    CHECK(fa.get_frame_bytes() == frame0);                 // ... correct
-    // ... and frame 1 should begin with the other 20 lost bytes (zeros)
-    CHECK_EQ(push(fa, make_packet(5, 160, 40)), 0);
-    CHECK_EQ(push(fa, make_packet(6, 200, 40)), 1);
+    CHECK(fa.get_frame_bytes() == frame0);
+    // ... and frame 1 begins with the other 20 lost bytes (zeros). Packet 5
+    // reaches frame 1's last byte, so it completes the frame.
+    CHECK_EQ(push(fa, make_packet(5, 160, 40)), 1);
     Bytes frame1(20, 0);
     Bytes rest = stream_bytes(120, 80);
     frame1.insert(frame1.end(), rest.begin(), rest.end());
-    KNOWN_BUG(fa.get_frame_bytes() == frame1,
-              "zero fill past a frame boundary is not carried into the next frame");
+    CHECK(fa.get_frame_bytes() == frame1);
+    CHECK_EQ(fa.get_frame_index(), static_cast<uint64_t>(1));
+    CHECK_EQ(push(fa, make_packet(6, 200, 40)), 0);
+    CHECK_EQ(fa.get_stats().incomplete_frames, 2u);
+}
+
+TEST_CASE(push_before_configure_is_an_error) {
+    FrameAssembler fa;
+    Bytes p = make_packet(1, 0, 40);
+    CHECK_EQ(push(fa, p), -1);
+    CHECK_EQ(fa.flush(), 0);
+    CHECK_EQ(fa.get_stats().received_packets, 0u);
+    fa.configure(100);
+    CHECK_EQ(push(fa, p), 0);
+}
+
+TEST_CASE(duplicate_inside_an_open_frame_changes_nothing) {
+    FrameAssembler fa;
+    fa.configure(100);
+    CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(2, 40, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(2, 40, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(3, 80, 20)), 1);
+    CHECK(fa.get_frame_bytes() == stream_bytes(0, 100));
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.duplicate_packets, 2u);
+    CHECK_EQ(st.dropped_packets, 0u);
+    CHECK_EQ(st.dropped_packet_events, 0u);
+    CHECK_EQ(st.incomplete_frames, 0u);
+}
+
+TEST_CASE(reorder_inside_a_frame_is_recovered) {
+    // packet 3 arrives before packet 2: counted as a drop, then the late
+    // packet fills the gap and the drop is taken back
+    FrameAssembler fa;
+    fa.configure(120);
+    CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(3, 80, 20)), 0);
+    CHECK_EQ(fa.get_stats().dropped_packets, 1u);
+    CHECK_EQ(push(fa, make_packet(2, 40, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(4, 100, 20)), 1);
+    CHECK(fa.get_frame_bytes() == stream_bytes(0, 120));
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.dropped_packets, 0u);
+    CHECK_EQ(st.dropped_packet_events, 1u);
+    CHECK_EQ(st.late_packets, 1u);
+    CHECK_EQ(st.incomplete_frames, 0u);
+}
+
+TEST_CASE(reorder_across_a_frame_boundary_with_slack_is_recovered) {
+    // frame 0's last packet arrives after frame 1's first: with reorder
+    // slack, frame 0 is held open and completes when the late packet lands
+    FrameAssembler fa;
+    fa.configure(100, 70);
+    CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(2, 40, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(4, 120, 40)), 0);   // stream end 160 < 100 + 70: held
+    CHECK_EQ(push(fa, make_packet(3, 80, 40)), 1);    // late, completes frame 0
+    CHECK(fa.get_frame_bytes() == stream_bytes(0, 100));
+    CHECK_EQ(fa.get_frame_index(), static_cast<uint64_t>(0));
+    CHECK_EQ(push(fa, make_packet(5, 160, 40)), 1);
+    CHECK(fa.get_frame_bytes() == stream_bytes(100, 100));
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.dropped_packets, 0u);
+    CHECK_EQ(st.late_packets, 1u);
+    CHECK_EQ(st.incomplete_frames, 0u);
+}
+
+TEST_CASE(reorder_across_a_frame_boundary_without_slack_is_late) {
+    // slack 0: frame 0 is emitted as soon as frame 1 data arrives, so its
+    // last packet is late; it is counted and dropped, frame 1 stays aligned
+    FrameAssembler fa;
+    fa.configure(100);
+    CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(2, 40, 40)), 0);
+    CHECK_EQ(push(fa, make_packet(4, 120, 40)), 1);
+    Bytes frame0 = stream_bytes(0, 80);
+    frame0.insert(frame0.end(), 20, 0);
+    CHECK(fa.get_frame_bytes() == frame0);
+    CHECK_EQ(push(fa, make_packet(3, 80, 40)), 0);    // late: [80,100) dropped, [100,120) kept
+    CHECK_EQ(push(fa, make_packet(5, 160, 40)), 1);
+    CHECK(fa.get_frame_bytes() == stream_bytes(100, 100));
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.dropped_packets, 0u);
+    CHECK_EQ(st.late_packets, 1u);
+    CHECK_EQ(st.incomplete_frames, 1u);
+}
+
+TEST_CASE(gap_longer_than_a_frame_skips_whole_frames) {
+    // packets for frames 1..3 lost: frame 0 is emitted with its tail zeroed,
+    // frames 1..3 are skipped (never emitted), frame 4 lands at offset 0
+    FrameAssembler fa;
+    fa.configure(100);
+    CHECK_EQ(push(fa, make_packet(1, 0, 50)), 0);
+    CHECK_EQ(push(fa, make_packet(10, 400, 50)), 1);
+    Bytes frame0 = stream_bytes(0, 50);
+    frame0.insert(frame0.end(), 50, 0);
+    CHECK(fa.get_frame_bytes() == frame0);
+    CHECK_EQ(push(fa, make_packet(11, 450, 50)), 1);
+    CHECK(fa.get_frame_bytes() == stream_bytes(400, 100));
+    CHECK_EQ(fa.get_frame_index(), static_cast<uint64_t>(4));
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.skipped_frames, 3u);
+    CHECK_EQ(st.dropped_packets, 8u);
+    CHECK_EQ(st.dropped_packet_events, 1u);
+}
+
+TEST_CASE(huge_byte_count_jump_is_bounded) {
+    // a corrupt byte count far ahead must not loop per skipped frame
+    FrameAssembler fa;
+    fa.configure(100);
+    push(fa, make_packet(1, 0, 100));
+    CHECK_EQ(push(fa, make_packet(2, (1ull << 47), 100)), 1);
+    CHECK_EQ(fa.get_frame_index(), (1ull << 47) / 100);
+    CHECK(fa.get_stats().skipped_frames > 1000000u);
+}
+
+TEST_CASE(sink_sees_every_frame_once_in_order) {
+    // one packet that completes two frames: the sink gets both
+    FrameAssembler fa;
+    fa.configure(50);
+    std::vector<uint64_t> idx;
+    std::vector<Bytes> got;
+    fa.set_frame_sink([&](const Bytes& f, uint64_t i, size_t missing) {
+        idx.push_back(i);
+        got.push_back(f);
+        CHECK_EQ(missing, static_cast<size_t>(0));
+    });
+    CHECK_EQ(push(fa, make_packet(1, 0, 120)), 2);
+    CHECK_EQ(idx.size(), static_cast<size_t>(2));
+    CHECK_EQ(idx[0], static_cast<uint64_t>(0));
+    CHECK_EQ(idx[1], static_cast<uint64_t>(1));
+    CHECK(got[0] == stream_bytes(0, 50));
+    CHECK(got[1] == stream_bytes(50, 50));
+}
+
+TEST_CASE(flush_emits_open_frames) {
+    FrameAssembler fa;
+    fa.configure(100, 50);
+    push(fa, make_packet(1, 0, 40));
+    push(fa, make_packet(3, 80, 40));   // frame 0 has a hole; held for the slack
+    CHECK_EQ(fa.flush(), 2);           // frame 0 (incomplete) and frame 1 (20 bytes)
+    Bytes frame1 = stream_bytes(100, 20);
+    frame1.insert(frame1.end(), 80, 0);
+    CHECK(fa.get_frame_bytes() == frame1);
+    CHECK_EQ(fa.flush(), 0);
+    CHECK_EQ(fa.get_stats().incomplete_frames, 2u);
+}
+
+// Golden replay: a seeded stream with drops, duplicates and adjacent swaps
+// (some across frame boundaries). Every frame delivered must equal the
+// stream bytes with exactly the dropped packets' bytes zeroed, and every
+// frame index must come out once.
+TEST_CASE(golden_replay_with_drops_duplicates_and_reordering) {
+    const size_t B = 1000, P = 97, frames = 40;
+    const uint64_t total = B * frames;
+    struct Pkt { uint32_t seq; uint64_t off; size_t len; };
+    std::vector<Pkt> sent;
+    std::vector<bool> dropped_byte(total, false);
+    uint64_t s = 12345;
+    auto rnd = [&]() { s = s * 6364136223846793005ull + 1442695040888963407ull; return (s >> 33) % 1000; };
+    uint32_t seq = 1;
+    size_t n_drop = 0, n_dup = 0;
+    for (uint64_t off = 0; off < total; off += P, seq++) {
+        size_t len = static_cast<size_t>(std::min<uint64_t>(P, total - off));
+        bool edge = off == 0 || off + len == total;
+        if (!edge && rnd() < 20) {  // 2% dropped
+            for (size_t k = 0; k < len; k++) dropped_byte[off + k] = true;
+            n_drop++;
+            continue;
+        }
+        sent.push_back({seq, off, len});
+        if (!edge && rnd() < 20) { sent.push_back({seq, off, len}); n_dup++; }
+    }
+    size_t n_swap = 0;
+    for (size_t i = 1; i + 2 < sent.size(); i++)
+        if (rnd() < 30) { std::swap(sent[i], sent[i + 1]); n_swap++; i++; }
+    CHECK(n_drop > 0 && n_dup > 0 && n_swap > 0);
+
+    FrameAssembler fa;
+    fa.configure(B, 2 * P);  // slack covers an adjacent swap
+    std::vector<uint64_t> idx;
+    std::vector<Bytes> got;
+    fa.set_frame_sink([&](const Bytes& f, uint64_t i, size_t) { idx.push_back(i); got.push_back(f); });
+    for (const Pkt& p : sent) push(fa, make_packet(p.seq, p.off, p.len));
+    fa.flush();
+
+    CHECK_EQ(idx.size(), frames);
+    for (size_t f = 0; f < idx.size() && f < frames; f++) {
+        CHECK_EQ(idx[f], static_cast<uint64_t>(f));
+        Bytes expected = stream_bytes(f * B, B);
+        for (size_t k = 0; k < B; k++)
+            if (dropped_byte[f * B + k]) expected[k] = 0;
+        CHECK(got[f] == expected);
+    }
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.dropped_packets, static_cast<uint32_t>(n_drop));
+    CHECK_EQ(st.duplicate_packets, static_cast<uint32_t>(n_dup));
+    CHECK_EQ(st.skipped_frames, 0u);
 }
 
 TEST_CASE(configure_resets_state_and_stats) {
