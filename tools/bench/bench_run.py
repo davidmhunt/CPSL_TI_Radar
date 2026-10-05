@@ -33,12 +33,15 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "setup"))
 import bench_lib as lib  # noqa: E402
+import host_setup  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_DRIVER = REPO / "CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP"
 DEFAULT_OUT = REPO / "docs/results/baseline"
 RUNS = Path(__file__).resolve().parent / "runs"
+PREFLIGHT_HOST = None  # host_setup.Host() when None; tests substitute a fake
 
 
 def sha256(path: Path) -> str:
@@ -148,6 +151,9 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-non-release", action="store_true",
                     help="run even if the driver build is not CMAKE_BUILD_TYPE=Release "
                          "(sidecar records it; such a run is not a baseline)")
+    ap.add_argument("--allow-missing-prereq", action="store_true",
+                    help="run even if the host preflight (rmem_max, cap_sys_nice/rtprio) fails "
+                         "(sidecar records it)")
     ap.add_argument("--natural-timeout", type=float, default=120.0)
     args = ap.parse_args(argv)
 
@@ -170,14 +176,26 @@ def main(argv=None) -> int:
     build = lib.parse_cmake_cache(
         (args.driver.resolve().parent / "CMakeCache.txt").read_text()
         if (args.driver.resolve().parent / "CMakeCache.txt").exists() else "")
-    if build.get("CMAKE_BUILD_TYPE") != "Release":
-        msg = (f"driver build type is {build.get('CMAKE_BUILD_TYPE')!r} "
-               f"(from {args.driver.resolve().parent}/CMakeCache.txt), not 'Release'. Rebuild with: "
-               "cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build -DCMAKE_BUILD_TYPE=Release "
-               "&& cmake --build CPSL_TI_Radar_cpp/build -j")
-        if not args.allow_non_release:
-            sys.exit("bench: refusing to run: " + msg + " (override: --allow-non-release)")
-        print("bench: WARNING: " + msg, file=sys.stderr)
+    # Host preflight: the same checks as `tools/setup/host_setup.py` (rmem_max at
+    # runtime, cap_sys_nice/rtprio when the DCA1000 path runs, Release build).
+    checks = host_setup.preflight(args.driver.resolve(), need_realtime=dca_on, host=PREFLIGHT_HOST)
+    refused, overridden = [], []
+    for c in checks:
+        # an unreadable CMakeCache (N-A) cannot prove a Release build: refuse as before
+        if not (c.status == host_setup.MISSING or (c.name == "build-type" and c.status == host_setup.NA)):
+            continue
+        fix = "; ".join([s.display() for s in c.fix_cmds] + c.manual)
+        flag = "--allow-non-release" if c.name == "build-type" else "--allow-missing-prereq"
+        msg = (f"{c.name}: {c.detail}" + (" (not verifiably 'Release')" if c.status == host_setup.NA else "")
+               + (f". Fix: {fix}" if fix else "") + f" (override: {flag})")
+        if args.allow_non_release if c.name == "build-type" else args.allow_missing_prereq:
+            overridden.append(c.name)
+            print("bench: WARNING: " + msg, file=sys.stderr)
+        else:
+            refused.append(msg)
+    if refused:
+        sys.exit("bench: refusing to run, host preflight failed:\n  " + "\n  ".join(refused)
+                 + "\n(full report: uv run tools/setup/host_setup.py --nic <dca-nic>)")
     nframes = lib.frame_cfg_num_frames(radar_cfg.read_text())
     if nframes != 0:
         print(f"bench: WARNING: radar cfg frameCfg numFrames={nframes} (not 0): the radar "
@@ -194,6 +212,8 @@ def main(argv=None) -> int:
     prov["build"] = build
     prov["radar_cfg_numFrames"] = nframes
     prov["non_release_override"] = bool(args.allow_non_release)
+    prov["preflight"] = [c.to_dict() for c in checks]
+    prov["preflight_overridden"] = overridden
 
     parser, lines = lib.Parser(), queue.Queue()
     launched = time.monotonic()

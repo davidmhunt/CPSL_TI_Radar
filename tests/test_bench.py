@@ -11,6 +11,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools/bench"))
 import bench_lib as lib  # noqa: E402
 import bench_run  # noqa: E402
+import host_setup  # noqa: E402  (on sys.path via bench_run)
 
 STRESS_JSON = REPO / "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test.json"
 STRESS_CFG = REPO / "CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg"
@@ -147,7 +148,26 @@ FAKE_DRIVER = textwrap.dedent('''\
 ''')
 
 
+class PreflightHost(host_setup.Host):
+    """Real host, except rmem_max and getcap report a bench-ready machine."""
+
+    def __init__(self, rmem="134217728", cap=True):
+        self.rmem, self.cap = rmem, cap
+
+    def read(self, path):
+        return self.rmem + "\n" if path == "/proc/sys/net/core/rmem_max" else super().read(path)
+
+    def run(self, argv):
+        if argv[0] == "getcap":
+            return 0, f"{argv[1]} cap_sys_nice=ep\n" if self.cap else ""
+        return super().run(argv)
+
+    def rtprio_limit(self):
+        return 0
+
+
 def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench_run, "PREFLIGHT_HOST", PreflightHost())
     drv = tmp_path / "fake_driver.py"
     drv.write_text(FAKE_DRIVER.format(py=sys.executable))
     drv.chmod(drv.stat().st_mode | stat.S_IXUSR)
@@ -180,6 +200,23 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     assert side["build"]["CMAKE_CXX_FLAGS_RELEASE"] == "-O3 -DNDEBUG"
     assert side["radar_cfg_numFrames"] == 30  # the shipped stress cfg, only a warning
     assert side["board"] == "IWR1843" and "kernel" in side["host"] and "rmem_max" in side["host"]
+    assert [(c["name"], c["status"]) for c in side["preflight"]] == [
+        ("sysctl", "OK"), ("realtime", "OK"), ("build-type", "OK")]
+    assert side["preflight_overridden"] == []
+
+
+def test_preflight_refuses_with_fix_commands(tmp_path, monkeypatch):
+    drv = tmp_path / "drv"
+    drv.write_text("#!/bin/sh\n")
+    drv.chmod(0o755)
+    (tmp_path / "CMakeCache.txt").write_text("CMAKE_BUILD_TYPE:STRING=Release\n")
+    monkeypatch.setattr(bench_run, "PREFLIGHT_HOST", PreflightHost(rmem="212992", cap=False))
+    with pytest.raises(SystemExit) as e:
+        bench_run.main([str(STRESS_JSON), "--driver", str(drv)])
+    msg = str(e.value)
+    assert "sudo sysctl -w net.core.rmem_max=134217728" in msg
+    assert f"sudo setcap cap_sys_nice+ep {drv}" in msg and "--allow-missing-prereq" in msg
+    assert "build-type" not in msg
 
 
 def test_requires_verbose(tmp_path):

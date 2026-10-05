@@ -46,6 +46,14 @@ sudo apt update
 sudo apt install cmake
 ```
 
+> **Quick setup.** Steps 4 and 5, and the DCA1000 static IP under "Preparing your hardware", are checked by one command. Run it from the repository root:
+> ```bash
+> uv run tools/setup/host_setup.py --nic <dca-nic>                    # read-only report: OK / MISSING / WARN / N-A, with the fix for each
+> uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # print the exact commands and file contents, run nothing
+> uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (sudo per command, one confirmation per check)
+> ```
+> `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. `cap_sys_nice` is lost on every rebuild of the driver, so re-run the tool after building. Add `--udev` for stable `/dev/radar/<serial>-cli` and `-data` names when more than one XDS110 board is connected. The manual commands below still work if you'd rather do it by hand.
+
 #### 4. Allow access to serial ports
 1. Finally, to ensure that your system has access to the serial ports to connect to the radar, run the following command
 ```
@@ -75,6 +83,8 @@ Or add the following to `/etc/security/limits.conf` (replace `<username>` with y
 ```
 <username>  -  rtprio  99
 ```
+
+The capability is stored on the binary file, so a rebuild removes it; grant it again after each build. `uv run tools/setup/host_setup.py` reports whether it is set (see "Quick setup" above). An existing `rtprio` limit below 99, such as PipeWire's `@pipewire - rtprio 95`, is not enough for the RX thread.
 
 ## Building CPSL_TI_Radar_cpp
 
@@ -146,7 +156,7 @@ To stream samples from the DCA1000, the following steps must be completed
 2. Flash the correct firmware onto the IWR1443
 
 ### 1.Setup Static IP Address
-On your machine, configure the TCP/IPv4 to have the following settings:
+`uv run tools/setup/host_setup.py --nic <dca-nic>` checks this and, with `--apply`, adds the address to the NIC's NetworkManager profile without removing its other addresses (see "Quick setup" above). To do it by hand, configure the TCP/IPv4 to have the following settings:
 1. Static IP Address
 2. IP address: 192.168.33.30
 3. Subnet mask: 255.255.255.0
