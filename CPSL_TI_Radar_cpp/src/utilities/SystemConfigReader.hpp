@@ -11,7 +11,7 @@
 // resolves the board descriptor (with board_overrides merged in) and runs
 // cross_check_radar_cfg for the enabled streams; any error there fails the
 // load. Nothing here throws; on failure `initialized` is false and
-// get_error() holds the message (also logged at error level).
+// get_error() holds the message (not logged: the caller reports it).
 //
 // Paths ("radar_cfg", a "board" path, "output.dir") are relative to the JSON
 // file's directory unless absolute. A plain board name (e.g. IWR1843) is

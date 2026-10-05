@@ -146,10 +146,7 @@ void SystemConfigReader::reset() {
 bool SystemConfigReader::initialize(const std::string& jsonFilePath) {
     reset();
     json_file_path = jsonFilePath;
-    initialized = load();
-    if (!initialized) {
-        cpsl::radar::log_error("SystemConfigReader: ", error);
-    }
+    initialized = load();  // on failure the caller reports get_error()
     return initialized;
 }
 

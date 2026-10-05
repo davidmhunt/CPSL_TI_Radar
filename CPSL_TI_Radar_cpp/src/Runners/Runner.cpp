@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "Log.hpp"
+#include "RadarConfig.hpp"
 
 /**
  * @brief default contructor (leaves uninitialized)
@@ -89,7 +90,19 @@ void Runner::initialize(const std::string & json_config_file_path,
         radar_config_reader.initialize(system_config_reader.getRadarConfigPath(),
                                        board.cfg_dialect.rx_mask_fields,
                                        board.cfg_dialect.frame_period_field);
+        if(!radar_config_reader.initialized){
+            cpsl::radar::log_error("Runner: radar cfg ", system_config_reader.getRadarConfigPath(), ": ",
+                                   radar_config_reader.get_error());
+        }
     } else{
+        cpsl::radar::log_error("SystemConfigReader: ", system_config_reader.get_error());
+        return;
+    }
+
+    //output.dir: created here; DCA1000Handler opens the files in it
+    const cpsl::radar::Status dir_status = cpsl::radar::create_output_dir(system_config_reader.get_output_dir());
+    if(!dir_status){
+        cpsl::radar::log_error("Runner: ", dir_status.message);
         return;
     }
 

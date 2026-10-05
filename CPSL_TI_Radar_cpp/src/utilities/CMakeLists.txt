@@ -7,7 +7,7 @@ add_library(Log Log.cpp)
 
 #create the utilities library
 add_library(Utilities SystemConfigReader.cpp RadarConfigReader.cpp SerialBaud.cpp SerialBaudTermios2.cpp
-                      StopSignal.cpp ByteStream.cpp)
+                      StopSignal.cpp ByteStream.cpp RadarConfig.cpp)
 
 foreach(lib Log Utilities)
   target_include_directories(${lib} PUBLIC

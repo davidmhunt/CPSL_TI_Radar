@@ -8,6 +8,7 @@
 #include <vector>
 
 //JSON handling
+#include "RadarConfig.hpp"
 #include "Runner.hpp"
 #include "StopSignal.hpp"
 
@@ -30,40 +31,25 @@ static std::string join(const std::vector<uint32_t>& v){
 
 /**
  * @brief --validate: everything a run would check before touching hardware.
- * Loads the system config (which resolves the board descriptor with its
- * board_overrides and runs cross_check_radar_cfg), parses the radar cfg with
- * the board's cfg dialect and works out which cfg commands would be sent.
- * Opens no serial port and no socket.
+ * RadarConfig::load reads the system config (resolving the board descriptor
+ * with its board_overrides and running cross_check_radar_cfg), parses the
+ * radar cfg with the board's cfg dialect and works out which cfg commands
+ * would be sent; output.dir is checked on the filesystem (exists / will be
+ * created / error). Opens no serial port and no socket.
  */
 static int validate(const std::string& config_file){
-    SystemConfigReader cfg(config_file);
-    if (!cfg.initialized) {
-        //SystemConfigReader already printed the reason
+    cpsl::radar::Result<cpsl::radar::RadarConfig> loaded = cpsl::radar::RadarConfig::load(config_file);
+    if (!loaded) {
+        std::cerr << loaded.status.message << std::endl;
         std::cout << "INVALID: " << config_file << std::endl;
         return 1;
     }
-    const cpsl::radar::BoardDescriptor& board = cfg.getBoard();
-
-    RadarConfigReader radar;
-    try {
-        radar.initialize(cfg.getRadarConfigPath(), board.cfg_dialect.rx_mask_fields,
-                         board.cfg_dialect.frame_period_field);
-    } catch (const std::exception& e) {
-        std::cerr << "radar cfg " << cfg.getRadarConfigPath() << ": cannot parse: " << e.what() << std::endl;
-        std::cout << "INVALID: " << config_file << std::endl;
-        return 1;
-    }
-    if (!radar.initialized || radar.get_bytes_per_frame() == 0) {
-        std::cerr << "radar cfg " << cfg.getRadarConfigPath() << ": no usable frame shape" << std::endl;
-        std::cout << "INVALID: " << config_file << std::endl;
-        return 1;
-    }
-
-    std::ifstream f(cfg.getRadarConfigPath());
-    std::vector<std::string> lines;
-    std::string line;
-    while (std::getline(f, line)) lines.push_back(line);
-    const cpsl::radar::CfgCommandPlan plan = cpsl::radar::filter_cfg_commands(lines, board);
+    const cpsl::radar::RadarConfig& rc = *loaded;
+    const SystemConfigReader& cfg = rc.system();
+    const cpsl::radar::BoardDescriptor& board = rc.board();
+    const cpsl::radar::FrameShape& shape = rc.frame_shape();
+    const cpsl::radar::CfgCommandPlan& plan = rc.commands();
+    const cpsl::radar::OutputDirCheck out = rc.output_dir_check();
 
     std::cout << "config:     " << config_file << " (schema v" << SystemConfigReader::kSchemaVersion << ")\n"
               << "board:      " << board.name << " (" << cfg.getBoardPath() << "; sdk "
@@ -86,12 +72,14 @@ static int validate(const std::string& config_file){
     } else {
         std::cout << "dca1000:    off\n";
     }
-    std::cout << "frame:      " << radar.get_num_rx_antennas() << " rx x " << radar.get_samples_per_chirp()
-              << " samples x " << radar.get_chirps_per_frame() << " chirps, " << radar.get_frame_period_ms()
+    std::cout << "frame:      " << shape.rx << " rx x " << shape.samples
+              << " samples x " << shape.chirps << " chirps, " << shape.period_ms
               << " ms period (cfg fields: rx masks " << join(board.cfg_dialect.rx_mask_fields)
               << ", period " << board.cfg_dialect.frame_period_field << ")\n"
-              << "bytes/frame: " << radar.get_bytes_per_frame() << "\n"
-              << "output:     " << (cfg.get_output_dir().empty() ? std::string("(current directory)") : cfg.get_output_dir())
+              << "bytes/frame: " << shape.bytes << "\n"
+              << "output:     "
+              << (out.path.empty() ? std::string("(current directory)")
+                                   : out.path + " (" + cpsl::radar::to_string(out.state) + ")")
               << "; adc frames " << (cfg.get_save_adc_frames() ? "on" : "off") << ", raw lvds "
               << (cfg.get_save_raw_lvds() ? "on" : "off") << "\n"
               << "log level:  " << to_string(cfg.get_log_level()) << "\n"
@@ -104,6 +92,11 @@ static int validate(const std::string& config_file){
     }
     for (const std::string& n : cfg.getCfgCheckNotes()) {
         std::cout << "note:       " << n << "\n";
+    }
+    if (out.state == cpsl::radar::OutputDirCheck::State::error) {
+        std::cerr << out.message << std::endl;
+        std::cout << "INVALID: " << config_file << std::endl;
+        return 1;
     }
     std::cout << "OK: " << config_file << std::endl;
     return 0;

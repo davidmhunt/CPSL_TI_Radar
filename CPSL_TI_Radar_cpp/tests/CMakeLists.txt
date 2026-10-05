@@ -32,6 +32,7 @@ add_driver_test(test_dca_file_flush      LIBS DCA1000Handler)
 add_driver_test(test_stop_signal         LIBS Utilities)
 add_driver_test(test_cli_stop            LIBS Runner)
 add_driver_test(test_log                 LIBS Utilities)
+add_driver_test(test_radar_config        LIBS Utilities)
 # a handler that exits (even with status 0) must not count as a pass
 set_tests_properties(test_stop_signal PROPERTIES
                      PASS_REGULAR_EXPRESSION "cases, [0-9]+ checks, 0 failures")
@@ -44,4 +45,5 @@ add_test(NAME test_validate_all_configs
                  -DDRIVER=$<TARGET_FILE:CPSL_TI_Radar_CPP>
                  -DCONFIG_DIR=${CPP_ROOT}/config
                  -DV1_FIXTURE=${REPO_ROOT}/tests/fixtures/v1_configs/front_radar_IWR1843_stress_test_baseline.json
+                 -DTMP_DIR=${CMAKE_CURRENT_BINARY_DIR}/validate_tmp
                  -P ${CMAKE_CURRENT_LIST_DIR}/validate_all_configs.cmake)

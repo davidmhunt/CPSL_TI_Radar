@@ -134,7 +134,7 @@ void RadarConfigReader::initialize(const std::string & filename,
     cfg_file = std::make_shared<std::ifstream>();
     cfg_file -> open(filename);
     if (! cfg_file -> is_open()){
-        cpsl::radar::log_error("RadarConfigReader: error opening file: ", filename);
+        cpsl::radar::log_debug("RadarConfigReader: error opening file: ", filename);  //get_error() has it
         error = "cannot open " + filename;
         initialized = false;
     } else{
@@ -157,7 +157,7 @@ void RadarConfigReader::initialize(const std::string & filename,
         //process the configuration
         error.clear();
         if (!process_cfg()) {
-            cpsl::radar::log_error("RadarConfigReader: ", filename, ": ", error);
+            cpsl::radar::log_debug("RadarConfigReader: ", filename, ": ", error);  //get_error() has it
             initialized = false;
             return;
         }

@@ -4,9 +4,11 @@
 #     cross-checks, frame shape)
 #   - an IWR1843 config lists calibData as skipped (cfg_dialect.skip_commands)
 #   - a v1 file exits non-zero and names the migration script
+#   - output.dir under a regular file fails and names the path (core-13)
 #   - at the default log level nothing but the summary is printed: no
 #     "[RadarConfig]" load chatter (core-13)
-# Invoked by ctest with -DDRIVER=<binary> -DCONFIG_DIR=<config> -DV1_FIXTURE=<v1 .json>.
+# Invoked by ctest with -DDRIVER=<binary> -DCONFIG_DIR=<config> -DV1_FIXTURE=<v1 .json>
+# -DTMP_DIR=<scratch dir>.
 
 file(GLOB configs "${CONFIG_DIR}/system/*.json")
 list(LENGTH configs n)
@@ -45,9 +47,25 @@ if(rc EQUAL 0 OR NOT err MATCHES "tools/migrate_config_v1_to_v2.py")
   message(FATAL_ERROR "v1 file was not rejected with the migration hint (exit ${rc}):\n${out}${err}")
 endif()
 
+# output.dir under a regular file: a copy of a tracked config with absolute paths
+file(REMOVE_RECURSE "${TMP_DIR}")
+file(MAKE_DIRECTORY "${TMP_DIR}")
+file(WRITE "${TMP_DIR}/a_file" "x")
+file(READ "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json" j)
+string(JSON radar_cfg GET "${j}" radar_cfg)
+string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/system/${radar_cfg}\"")
+string(JSON j SET "${j}" board "\"${CONFIG_DIR}/boards/IWR1843.json\"")
+string(JSON j SET "${j}" output dir "\"${TMP_DIR}/a_file/captures\"")
+file(WRITE "${TMP_DIR}/under_file.json" "${j}")
+execute_process(COMMAND "${DRIVER}" --validate "${TMP_DIR}/under_file.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(rc EQUAL 0 OR NOT err MATCHES "a_file/captures cannot be created: .*a_file is a file")
+  message(FATAL_ERROR "output.dir under a file was not rejected with its path (exit ${rc}):\n${out}${err}")
+endif()
+
 execute_process(COMMAND "${DRIVER}" RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(rc EQUAL 0 OR NOT err MATCHES "usage:")
   message(FATAL_ERROR "no-argument run did not print usage and fail (exit ${rc})")
 endif()
 
-message(STATUS "${n} configs validated; calibData skip, v1 rejection and usage checked")
+message(STATUS "${n} configs validated; calibData skip, v1 rejection, output.dir under a file and usage checked")
