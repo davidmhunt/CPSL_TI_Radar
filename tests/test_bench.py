@@ -157,6 +157,8 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     cfg_path.write_text(json.dumps(cfg))
     monkeypatch.setattr(bench_run, "RUNS", tmp_path / "runs")
     out = tmp_path / "out"
+    (tmp_path / "CMakeCache.txt").write_text(
+        "//x\nCMAKE_BUILD_TYPE:STRING=Release\nCMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DNDEBUG\n")
     rc = bench_run.main([str(cfg_path), "--seconds", "3", "--rep", "1", "--tag", "unit",
                          "--driver", str(drv), "--out-dir", str(out), "--start-timeout", "10"])
     assert rc == 0
@@ -174,6 +176,9 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     assert chk["verdict"] == "exact"  # fake driver flushes; real-driver SIGINT tail is classified separately
     for k in ("commit", "system_config", "board", "host", "nic", "expected"):
         assert k in side
+    assert side["build"]["CMAKE_BUILD_TYPE"] == "Release"
+    assert side["build"]["CMAKE_CXX_FLAGS_RELEASE"] == "-O3 -DNDEBUG"
+    assert side["radar_cfg_numFrames"] == 30  # the shipped stress cfg, only a warning
     assert side["board"] == "IWR1843" and "kernel" in side["host"] and "rmem_max" in side["host"]
 
 
@@ -184,3 +189,33 @@ def test_requires_verbose(tmp_path):
     p.write_text(json.dumps(cfg))
     with pytest.raises(SystemExit):
         bench_run.main([str(p)])
+
+
+def test_cmake_cache_and_numframes():
+    c = lib.parse_cmake_cache("// c\nCMAKE_BUILD_TYPE:STRING=Debug\nCMAKE_CXX_FLAGS:STRING=\nOTHER:BOOL=ON\n")
+    assert c == {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_CXX_FLAGS": ""}
+    assert lib.frame_cfg_num_frames("frameCfg 0 1 63 30 100 1 0\n") == 30
+    assert lib.frame_cfg_num_frames("sensorStart\n") is None
+
+
+def test_refuses_non_release(tmp_path):
+    drv = tmp_path / "drv"
+    drv.write_text("#!/bin/sh\n")
+    drv.chmod(0o755)
+    (tmp_path / "CMakeCache.txt").write_text("CMAKE_BUILD_TYPE:STRING=\n")
+    with pytest.raises(SystemExit) as e:
+        bench_run.main([str(STRESS_JSON), "--driver", str(drv)])
+    assert "Release" in str(e.value)
+
+
+def test_baseline_configs_run_forever_and_match_stress():
+    base = REPO / "CPSL_TI_Radar_cpp/config"
+    new_cfg = (base / "radar/nav_configs/1843_stress_test_baseline_numframes0.cfg").read_text()
+    assert lib.frame_cfg_num_frames(new_cfg) == 0
+    assert lib.frame_cfg_num_frames(STRESS_CFG.read_text()) == 30  # shipped file untouched
+    assert lib.expected_from_radar_cfg(new_cfg) == lib.expected_from_radar_cfg(STRESS_CFG.read_text())
+    sysj = json.loads((base / "system/front_radar_IWR1843_stress_test_baseline.json").read_text())
+    assert sysj["TI_Radar_Config_Management"]["TI_Radar_config_path"].endswith(
+        "1843_stress_test_baseline_numframes0.cfg")
+    demo = base / "radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg"
+    assert lib.frame_cfg_num_frames(demo.read_text()) == 0

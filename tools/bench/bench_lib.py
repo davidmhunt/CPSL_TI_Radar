@@ -254,6 +254,30 @@ def check_bin_size(actual: int, bytes_per_frame: int, received_frames: int,
             "verdict": verdict}
 
 
+def parse_cmake_cache(text: str) -> dict:
+    """KEY -> value for the build-type and compiler flag entries of a CMakeCache.txt."""
+    want = ("CMAKE_BUILD_TYPE", "CMAKE_CXX_FLAGS", "CMAKE_CXX_FLAGS_RELEASE",
+            "CMAKE_CXX_FLAGS_DEBUG", "CMAKE_CXX_COMPILER", "CMAKE_CXX_STANDARD")
+    out = {}
+    for line in text.splitlines():
+        if line.startswith(("//", "#")) or ":" not in line or "=" not in line:
+            continue
+        key = line.split(":", 1)[0]
+        if key in want:
+            out[key] = line.split("=", 1)[1]
+    return out
+
+
+def frame_cfg_num_frames(cfg_text: str):
+    """numFrames of the last frameCfg line (0 = run forever), or None."""
+    n = None
+    for line in cfg_text.splitlines():
+        v = line.split()
+        if v and v[0] == "frameCfg" and len(v) > 4:
+            n = int(v[4])
+    return n
+
+
 def safe_label(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-")
 

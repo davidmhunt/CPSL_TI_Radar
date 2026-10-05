@@ -145,6 +145,9 @@ def main(argv=None) -> int:
     ap.add_argument("--stop-mode", choices=["sigint", "natural"], default="sigint",
                     help="sigint: signal the driver after N s. natural: do not signal; wait "
                          "for the driver to exit on its own (it quits 2 s after frames stop)")
+    ap.add_argument("--allow-non-release", action="store_true",
+                    help="run even if the driver build is not CMAKE_BUILD_TYPE=Release "
+                         "(sidecar records it; such a run is not a baseline)")
     ap.add_argument("--natural-timeout", type=float, default=120.0)
     args = ap.parse_args(argv)
 
@@ -164,6 +167,23 @@ def main(argv=None) -> int:
     if not args.driver.exists():
         sys.exit(f"bench: driver binary not found: {args.driver} (build it, see docs/ARCHITECTURE.md)")
 
+    build = lib.parse_cmake_cache(
+        (args.driver.resolve().parent / "CMakeCache.txt").read_text()
+        if (args.driver.resolve().parent / "CMakeCache.txt").exists() else "")
+    if build.get("CMAKE_BUILD_TYPE") != "Release":
+        msg = (f"driver build type is {build.get('CMAKE_BUILD_TYPE')!r} "
+               f"(from {args.driver.resolve().parent}/CMakeCache.txt), not 'Release'. Rebuild with: "
+               "cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build -DCMAKE_BUILD_TYPE=Release "
+               "&& cmake --build CPSL_TI_Radar_cpp/build -j")
+        if not args.allow_non_release:
+            sys.exit("bench: refusing to run: " + msg + " (override: --allow-non-release)")
+        print("bench: WARNING: " + msg, file=sys.stderr)
+    nframes = lib.frame_cfg_num_frames(radar_cfg.read_text())
+    if nframes != 0:
+        print(f"bench: WARNING: radar cfg frameCfg numFrames={nframes} (not 0): the radar "
+              f"stops after that many frames, a {args.seconds} s run will end early",
+              file=sys.stderr)
+
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     basename = lib.result_basename(args.tag, cfg_path.stem, args.rep, args.seconds, stamp)
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -171,6 +191,9 @@ def main(argv=None) -> int:
     run_dir = RUNS / basename
     run_dir.mkdir(parents=True)
     prov = provenance(args, cfg_path, cfg, radar_cfg, expected, args.driver.resolve(), basename)
+    prov["build"] = build
+    prov["radar_cfg_numFrames"] = nframes
+    prov["non_release_override"] = bool(args.allow_non_release)
 
     parser, lines = lib.Parser(), queue.Queue()
     launched = time.monotonic()
