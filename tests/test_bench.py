@@ -17,10 +17,10 @@ STRESS_JSON = REPO / "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress
 STRESS_CFG = REPO / "CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg"
 
 
-def dca_block(n, pkts, dropped, events, overrun):
-    return [f"frame: {n}", f"\tpackets: {pkts}", f"\tdata bytes: {pkts * 1462}",
-            f"\tdropped packets: {dropped}", f"\tdropped packet events: {events}",
-            f"\trx_overrun_count: {overrun}"]
+def dca_line(t, frames, pkts, dropped=0, events=0, overrun=0):
+    return (f"stats v1 dca t={t:.3f} frames={frames} packets={pkts} dropped={dropped} "
+            f"drop_events={events} late=0 duplicate=0 incomplete=0 skipped=0 overrun={overrun} "
+            f"overwritten=0 stalls=0 rcvbuf=134217728")
 
 
 def feed(parser, items):
@@ -29,43 +29,52 @@ def feed(parser, items):
     parser.finish()
 
 
-def test_parser_dca_serial_and_misc():
+def test_parser_reads_only_stats_lines():
     p = lib.Parser()
-    feed(p, [(0.0, "[DCA1000] SO_RCVBUF granted: 134217728 bytes"),
-             *[(1.0, l) for l in dca_block(1, 345, 0, 0, 0)],
-             (1.1, "frame: 7"), (1.1, "\tversion: 33620994"), (1.1, "\tDetected Objects: 3"),
+    feed(p, [(0.0, "Using config: x.json"),
+             (0.1, "[DCA1000] SO_RCVBUF granted: 134217728 bytes"),
+             (0.2, "frame: 1"), (0.2, "\tpackets: 345"),  # old debug lines: ignored
+             (1.0, dca_line(1.0, 10, 3450)),
+             (1.0, "stats v1 serial t=1.000 frames=9 missed=1 overwritten=0 stalls=0"),
              (1.1, "TLV frame 7: 3 detected points (first: x=1 y=2 z=0 v=0)"),
-             (1.2, "SerialStreamer: frame number jumped from 7 to 10 (2 missed in total)"),
-             (1.3, "runner timed out waiting for next adc_cube")])
+             (1.2, "warning: Radar: sensorStop was not acknowledged with 'Done'"),
+             (1.3, "stats v2 dca t=1 frames=99")])  # unknown version: ignored
     kinds = [e["kind"] for e in p.events]
-    assert kinds == ["dca_frame", "serial_header", "tlv_frame", "tlv_missed"]
+    assert kinds == ["dca_stats", "serial_stats"]
     assert p.granted_rcvbuf == 134217728
-    assert p.events[0]["packets"] == 345 and p.events[3]["cum"] == 2
-    assert p.warnings == ["runner timed out waiting for next adc_cube"]
+    assert p.events[0]["frames"] == 10 and p.events[0]["packets"] == 3450
+    assert p.events[0]["t_driver"] == 1.0 and p.events[0]["t"] == 1.0
+    assert p.events[1]["missed"] == 1
+    assert p.warnings == ["warning: Radar: sensorStop was not acknowledged with 'Done'"]
 
 
 def test_aggregate_deltas_and_cpu():
     p = lib.Parser()
-    items = []
-    # 3 frames in second 1, 2 in second 2 (with 4 dropped in 1 event), none in second 3
-    for t, n, pk, dr, ev, ov in [(10.1, 1, 100, 0, 0, 0), (10.4, 2, 200, 0, 0, 0),
-                                 (10.8, 3, 300, 0, 0, 0), (11.2, 4, 400, 4, 1, 0),
-                                 (11.7, 5, 500, 4, 1, 2)]:
-        items += [(t, l) for l in dca_block(n, pk, dr, ev, ov)]
-    feed(p, items)
+    # driver lines once a second (arrival jitter +-0.2 s), plus the final line after
+    # the stop; 3 frames in second 1, 2 in second 2 (4 dropped in 1 event), 0 in 3
+    feed(p, [(10.0, dca_line(1.0, 1, 100)),
+             (11.2, dca_line(2.0, 4, 400)),
+             (11.8, dca_line(3.0, 6, 600, 4, 1, 2)),
+             (13.1, dca_line(4.0, 6, 600, 4, 1, 2)),
+             (13.3, dca_line(4.2, 7, 700, 4, 1, 2)),  # final line, after the stop
+             (11.0, "stats v1 serial t=2.000 frames=5 missed=0 overwritten=0 stalls=0"),
+             (12.0, "stats v1 serial t=3.000 frames=14 missed=1 overwritten=0 stalls=0")])
     t0 = lib.first_frame_time(p.events)
-    assert t0 == 10.1
+    assert t0 == 10.0
     samples = [(t0 + k, 50 * k, 100, 2048) for k in range(4)]  # 50% CPU
     rows = lib.aggregate(p.events, samples, t0, 3)
-    assert [r["dca_frames"] for r in rows] == [3, 2, 0]
+    assert [r["dca_frames"] for r in rows] == [3, 2, 1]
     assert [r["dca_dropped_packets"] for r in rows] == [0, 4, 0]
     assert [r["dca_dropped_packet_events"] for r in rows] == [0, 1, 0]
     assert [r["dca_rx_overrun_count_cum"] for r in rows] == [0, 2, 2]
-    assert [r["dca_packets"] for r in rows] == [300, 200, 0]
+    assert [r["dca_packets"] for r in rows] == [300, 200, 100]
+    assert [r["tlv_frames"] for r in rows] == [5, 9, 0]
+    assert [r["tlv_missed_frames"] for r in rows] == [0, 1, 0]
     assert all(r["cpu_pct"] == 50.0 for r in rows)
     s = lib.summarize(rows)
-    assert s["dca_frames_total"] == 5 and s["dca_dropped_packets_total"] == 4
-    assert s["dca_fps_min"] == 0 and s["dca_rx_overrun_count_final"] == 2
+    assert s["dca_frames_total"] == 6 and s["dca_dropped_packets_total"] == 4
+    assert s["dca_fps_min"] == 1 and s["dca_rx_overrun_count_final"] == 2
+    assert lib.last_stats(p.events, "dca_stats")["frames"] == 7
 
 
 def test_parse_proc_stat_with_spaces_in_comm():
@@ -109,19 +118,13 @@ def test_names_and_no_overwrite(tmp_path):
         lib.write_sidecar(tmp_path / "a.json", {"x": 1})
 
 
-def test_driver_output_formats_still_in_source():
-    """Guard: the strings the parser keys on must still be printed by the driver."""
-    src = REPO / "CPSL_TI_Radar_cpp"
-    sock = (src / "src/DCA1000/DCA1000Socket.cpp").read_text()
-    hand = (src / "src/DCA1000/DCA1000Handler.cpp").read_text()
-    ser = (src / "src/SerialStreamer/SerialStreamer.cpp").read_text()
-    main = (src / "main.cpp").read_text()
-    assert "SO_RCVBUF granted: " in sock
-    for key in ('"frame: "', '"\\tpackets: "', '"\\tdropped packets: "',
-                '"\\tdropped packet events: "', '"\\trx_overrun_count: "'):
-        assert key in hand, key
-    assert '"\\tversion: "' in ser and "frame number jumped from " in ser
-    assert '"TLV frame "' in main
+def test_driver_stats_format_still_in_source():
+    """Guard: the stats v1 keys the parser reads must still be printed by the driver."""
+    main = (REPO / "CPSL_TI_Radar_cpp/main.cpp").read_text()
+    assert '"stats v1 dca t="' in main and '"stats v1 serial t="' in main
+    for key in ('" frames="', '" packets="', '" dropped="', '" drop_events="', '" overrun="',
+                '" rcvbuf="', '" missed="'):
+        assert key in main, key
 
 
 FAKE_DRIVER = textwrap.dedent('''\
@@ -129,22 +132,31 @@ FAKE_DRIVER = textwrap.dedent('''\
     import signal, sys, time
     from pathlib import Path
     mode = sys.argv[1] and Path(sys.argv[1]).read_text()
+    if "--stats" not in sys.argv:
+        sys.exit("fake driver: bench must pass --stats")
     stop = []
     def on_int(*a):
         stop.append(1)
     signal.signal(signal.SIGINT, on_int)
-    print("[DCA1000] SO_RCVBUF granted: 134217728 bytes", flush=True)
+    t0 = time.monotonic()
+    def stats(n):
+        print("stats v1 dca t=%.3f frames=%d packets=%d dropped=0 drop_events=0 late=0 duplicate=0 "
+              "incomplete=0 skipped=0 overrun=0 overwritten=0 stalls=0 rcvbuf=134217728"
+              % (time.monotonic() - t0, n, n * 345), flush=True)
     time.sleep(0.3)
     n = 0
     bpf = 504000
     out = open("adc_data.bin", "wb")
+    next_stats = time.monotonic() + 1.0
     while not stop:
         n += 1
         out.write(b"\\0" * bpf); out.flush()
-        print("frame: %d\\n\\tpackets: %d\\n\\tdata bytes: 0\\n\\tdropped packets: 0\\n"
-              "\\tdropped packet events: 0\\n\\trx_overrun_count: 0" % (n, n * 345), flush=True)
+        if time.monotonic() >= next_stats:
+            stats(n)
+            next_stats += 1.0
         time.sleep(0.1)
     out.close()
+    stats(n)  # the final line, after the stop
 ''')
 
 
@@ -173,6 +185,7 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     drv.chmod(drv.stat().st_mode | stat.S_IXUSR)
     cfg = json.loads(STRESS_JSON.read_text())
     cfg["radar_cfg"] = str(STRESS_CFG)
+    cfg["runtime"]["log_level"] = "info"  # stats come from --stats, not debug output
     cfg_path = tmp_path / "fake_system.json"
     cfg_path.write_text(json.dumps(cfg))
     monkeypatch.setattr(bench_run, "RUNS", tmp_path / "runs")
@@ -241,16 +254,6 @@ def test_preflight_refuses_with_fix_commands(tmp_path, monkeypatch):
     assert "sudo sysctl -w net.core.rmem_max=134217728" in msg
     assert f"sudo setcap cap_sys_nice+ep {drv}" in msg and "--allow-missing-prereq" in msg
     assert "build-type" not in msg
-
-
-def test_requires_debug_log_level(tmp_path):
-    cfg = json.loads(STRESS_JSON.read_text())
-    cfg["runtime"]["log_level"] = "info"
-    p = tmp_path / "quiet.json"
-    p.write_text(json.dumps(cfg))
-    with pytest.raises(SystemExit) as e:
-        bench_run.main([str(p)])
-    assert "log_level" in str(e.value)
 
 
 def test_rejects_v1_config_with_migration_hint(tmp_path):

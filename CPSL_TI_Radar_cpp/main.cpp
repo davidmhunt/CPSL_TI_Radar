@@ -1,25 +1,31 @@
-//C standard libraries
-#include <iostream>
+// CPSL_TI_Radar_CPP: the command-line driver, on the public API only
+// (cpsl::radar::RadarConfig, Radar, Status; design §3).
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include <string>
-#include <csignal>
-#include <exception>
-#include <fstream>
 #include <vector>
 
-//JSON handling
-#include "RadarConfig.hpp"
-#include "Runner.hpp"
+#include "Radar.hpp"
 #include "StopSignal.hpp"
 
-using json = nlohmann::json;
+namespace radar = cpsl::radar;
+using steady = std::chrono::steady_clock;
 
 static void print_usage(const char* prog){
-    std::cerr << "usage: " << prog << " <system.json> [--validate]\n"
+    std::cerr << "usage: " << prog << " <system.json> [--validate] [--stats] [--frames N] [--duration S]\n"
               << "  <system.json>  system config, schema v2 (v1 files: uv run "
               << SystemConfigReader::kMigrationScript << ")\n"
-              << "  --validate     load and cross-check the config (board descriptor, radar cfg)\n"
-              << "                 without opening any port or socket; exit 0 if it is usable"
+              << "  --validate     load and cross-check the config (board descriptor, radar cfg, output.dir)\n"
+              << "                 without opening any port or socket; exit 0 if it is usable\n"
+              << "  --stats        print one 'stats v1' line per stream every second, and a final one\n"
+              << "  --frames N     stop after N frames (DCA1000 frames if enabled, else TLV frames)\n"
+              << "  --duration S   stop after S seconds of streaming\n"
+              << "Without --frames/--duration the run ends on Ctrl-C (SIGINT/SIGTERM), or when no\n"
+              << "frame arrives for 2 s (runtime.stall_timeout_ms instead, when it is set)."
               << std::endl;
 }
 
@@ -38,7 +44,7 @@ static std::string join(const std::vector<uint32_t>& v){
  * created / error). Opens no serial port and no socket.
  */
 static int validate(const std::string& config_file){
-    cpsl::radar::Result<cpsl::radar::RadarConfig> loaded = cpsl::radar::RadarConfig::load(config_file);
+    radar::Result<radar::RadarConfig> loaded = radar::RadarConfig::load(config_file);
     if (!loaded) {
         std::cerr << loaded.status.message << std::endl;
         std::cout << "INVALID: " << config_file << std::endl;
@@ -102,14 +108,65 @@ static int validate(const std::string& config_file){
     return 0;
 }
 
+// "stats v1" lines (format in docs/ARCHITECTURE.md): cumulative counters
+// since start(), t in seconds since start()
+static void print_stats(const radar::Radar& r, double t){
+    const radar::Stats s = r.stats();
+    std::ostringstream o;
+    o << std::fixed << std::setprecision(3);
+    if (r.dca1000_enabled()) {
+        o << "stats v1 dca t=" << t << " frames=" << s.frames << " packets=" << s.packets
+          << " dropped=" << s.dropped << " drop_events=" << s.drop_events << " late=" << s.late
+          << " duplicate=" << s.duplicate << " incomplete=" << s.incomplete_frames
+          << " skipped=" << s.skipped_frames << " overrun=" << s.rx_overrun
+          << " overwritten=" << s.frames_overwritten << " stalls=" << s.stalls
+          << " rcvbuf=" << s.rcvbuf_bytes << "\n";
+    }
+    if (r.serial_enabled()) {
+        o << "stats v1 serial t=" << t << " frames=" << s.serial_frames << " missed=" << s.serial_missed
+          << " overwritten=" << s.serial_overwritten << " stalls=" << s.stalls << "\n";
+    }
+    std::cout << o.str() << std::flush;
+}
+
+static bool parse_count(const std::string& text, uint64_t& out){
+    char* end = nullptr;
+    const unsigned long long v = std::strtoull(text.c_str(), &end, 10);
+    if (text.empty() || text[0] == '-' || *end != '\0' || v == 0) return false;
+    out = v;
+    return true;
+}
+
+static bool parse_seconds(const std::string& text, double& out){
+    char* end = nullptr;
+    const double v = std::strtod(text.c_str(), &end);
+    if (text.empty() || *end != '\0' || !(v > 0)) return false;
+    out = v;
+    return true;
+}
+
 int main(int argc, char* argv[]){
 
     std::string config_file;
     bool validate_only = false;
+    bool stats = false;
+    uint64_t max_frames = 0;      // 0 = no limit
+    double max_seconds = 0;       // 0 = no limit
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
         if (a == "--validate") {
             validate_only = true;
+        } else if (a == "--stats") {
+            stats = true;
+        } else if (a == "--frames" || a == "--duration") {
+            const bool ok = i + 1 < argc && (a == "--frames" ? parse_count(argv[i + 1], max_frames)
+                                                             : parse_seconds(argv[i + 1], max_seconds));
+            if (!ok) {
+                std::cerr << a << " needs a positive " << (a == "--frames" ? "integer" : "number") << std::endl;
+                print_usage(argv[0]);
+                return 2;
+            }
+            i++;
         } else if (a == "-h" || a == "--help") {
             print_usage(argv[0]);
             return 0;
@@ -135,73 +192,129 @@ int main(int argc, char* argv[]){
 
     //SIGINT/SIGTERM only set a flag; the loop below sees it and stops cleanly
     //(threads joined, sensorStop/recordStop sent, output files flushed and closed)
-    if(!cpsl::radar::install_stop_signal_handlers()){
+    if(!radar::install_stop_signal_handlers()){
         std::cerr << "warning: could not install the SIGINT/SIGTERM handler" << std::endl;
     }
 
     std::cout << "Using config: " << config_file << std::endl;
 
-    Runner runner(config_file);
-
-    if(runner.initialized){
-        int frame_count = 0;
-        int timeout_ms = 2000;
-
-        //a Ctrl-C while the config was being sent: don't start streaming
-        if(!cpsl::radar::stop_requested()){
-            runner.start();
-        }
-
-        while(!cpsl::radar::stop_requested()){
-            bool got_frame = false;
-
-            if(runner.get_dca1000_streaming_enabled() &&
-                runner.get_next_adc_cube(timeout_ms).size() > 0){
-                got_frame = true;
-            }
-
-            if(runner.get_serial_streaming_enabled()){
-                std::vector<std::vector<float>> points;
-                if(runner.get_next_tlv_detected_points(points, timeout_ms)){
-                    got_frame = true;
-                    std::cout << "TLV frame " << runner.get_latest_tlv_frame_number()
-                              << ": " << points.size() << " detected points";
-                    if(!points.empty()){
-                        std::cout << " (first: x=" << points[0][0] << " y=" << points[0][1]
-                                  << " z=" << points[0][2] << " v=" << points[0][3] << ")";
-                    }
-                    std::cout << std::endl;
-                }
-            }
-
-            //stop once no stream produces a frame within the timeout
-            //(a stop request during the wait is checked by the loop condition)
-            if(!got_frame && !cpsl::radar::stop_requested()){
-                break;
-            }
-            if(got_frame){
-                frame_count += 1;
-            }
-        }
-
-        if(runner.get_serial_streaming_enabled()){
-            std::cout << "Received " << frame_count << " frames, "
-                      << runner.get_tlv_missed_frame_count() << " missed" << std::endl;
-        }
-
-        if(cpsl::radar::stop_requested()){
-            std::cout << "Stop requested (SIGINT/SIGTERM), stopping" << std::endl;
-        }
-        //non-zero if the stop hit an I/O error (e.g. the radar's USB was unplugged);
-        //the output files are closed either way
-        if(!runner.stop()){
-            std::cerr << "stopped with errors (see above)" << std::endl;
-            return 1;
-        }
-    } else{
-        std::cerr << "Runner failed to initialize" << std::endl;
+    radar::Result<radar::RadarConfig> cfg = radar::RadarConfig::load(config_file);
+    if (!cfg) {
+        std::cerr << "error: " << cfg.status.message << std::endl;
         return 1;
     }
+    radar::Result<std::unique_ptr<radar::Radar>> opened = radar::Radar::open(*cfg);
+    if (!opened) {
+        std::cerr << "error: " << opened.status.message << std::endl;
+        return 1;
+    }
+    radar::Radar& r = **opened;
+    const radar::BoardDescriptor& board = cfg->board();
 
+    //a Ctrl-C before or while the config is sent: don't start streaming
+    if (!radar::stop_requested()) {
+        const radar::Status s = r.configure();
+        //a non-ack is fatal only on a board that accepts one cfg per power-up
+        if (!s && !(s.code == radar::Code::config_rejected && !board.lifecycle.config_once_per_boot)) {
+            std::cerr << "error: " << s.message << std::endl;
+            r.stop();
+            return 1;
+        }
+        if (!s) {
+            std::cerr << "warning: " << s.message << std::endl;
+        }
+    }
+    if (!radar::stop_requested()) {
+        const radar::Status s = r.start();
+        if (!s) {
+            std::cerr << "error: " << s.message << std::endl;
+            r.stop();
+            return 1;
+        }
+    }
+
+    const bool dca = r.dca1000_enabled();
+    const bool serial = r.serial_enabled();
+    const uint32_t stall_ms = cfg->system().get_stall_timeout_ms();
+    //wait per stream per loop: short enough for 1 Hz stats and a quick Ctrl-C
+    const std::chrono::milliseconds wait(dca && serial ? 20 : 100);
+    const steady::time_point t_start = steady::now();
+    steady::time_point last_frame = t_start;
+    steady::time_point next_stats = t_start + std::chrono::seconds(1);
+    uint64_t tlv_frames = 0;
+    radar::AdcFrame frame;
+    radar::PointCloud cloud;
+
+    while (!radar::stop_requested()) {
+        bool got_frame = false;
+        bool stalled = false;
+        radar::Status why;
+
+        if (dca) {
+            if (r.next_adc_frame(frame, wait, &why)) {
+                got_frame = true;
+            } else if (why.code == radar::Code::stalled) {
+                stalled = true;
+            }
+        }
+        if (serial) {
+            if (r.next_point_cloud(cloud, wait, &why)) {
+                got_frame = true;
+                tlv_frames += 1;
+                std::cout << "TLV frame " << cloud.frame_number << ": " << cloud.points.size() << " detected points";
+                if (!cloud.points.empty()) {
+                    const radar::Point& p = cloud.points[0];
+                    std::cout << " (first: x=" << p.x << " y=" << p.y << " z=" << p.z << " v=" << p.v << ")";
+                }
+                std::cout << std::endl;
+            } else if (why.code == radar::Code::stalled) {
+                stalled = true;
+            }
+        }
+
+        const steady::time_point now = steady::now();
+        if (got_frame) last_frame = now;
+        if (stats && now >= next_stats) {
+            print_stats(r, std::chrono::duration<double>(now - t_start).count());
+            while (next_stats <= now) next_stats += std::chrono::seconds(1);
+        }
+        if (max_frames > 0) {
+            const radar::Stats st = r.stats();
+            if ((dca ? st.frames : st.serial_frames) >= max_frames) {
+                std::cerr << "--frames " << max_frames << " reached, stopping" << std::endl;
+                break;
+            }
+        }
+        if (max_seconds > 0 && std::chrono::duration<double>(now - t_start).count() >= max_seconds) {
+            std::cerr << "--duration " << max_seconds << " s reached, stopping" << std::endl;
+            break;
+        }
+        if (stall_ms > 0) {
+            if (stalled) {
+                std::cerr << "no frame for " << stall_ms << " ms (runtime.stall_timeout_ms), stopping" << std::endl;
+                break;
+            }
+        } else if (now - last_frame >= std::chrono::seconds(2)) {
+            std::cerr << "no frame for 2 s, stopping" << std::endl;
+            break;
+        }
+    }
+
+    if (serial) {
+        std::cout << "Received " << tlv_frames << " frames, " << r.stats().serial_missed << " missed" << std::endl;
+    }
+    if (radar::stop_requested()) {
+        std::cout << "Stop requested (SIGINT/SIGTERM), stopping" << std::endl;
+    }
+    //non-zero if the stop hit an I/O error (e.g. the radar's USB was unplugged)
+    //or an output file failed to flush; the files are closed either way
+    const radar::Status stopped = r.stop();
+    if (stats) {
+        print_stats(r, std::chrono::duration<double>(steady::now() - t_start).count());
+    }
+    if (!stopped) {
+        std::cerr << "stopped with errors: " << stopped.message << std::endl;
+        return 1;
+    }
     return 0;
 }

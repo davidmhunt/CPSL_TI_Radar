@@ -1,25 +1,17 @@
 """Pure parsing / summary logic for the streaming bench harness (no hardware).
 
-The harness runs the unmodified ``CPSL_TI_Radar_CPP`` binary with a schema v2
-system config that sets ``"runtime": {"log_level": "debug"}`` (the v1
-``"verbose": true``) and reads its stdout.  Everything the
-driver already prints is enough:
+The harness runs the unmodified ``CPSL_TI_Radar_CPP`` binary with ``--stats``
+and reads only its ``stats v1`` lines (format: docs/ARCHITECTURE.md, "Stats
+lines"). Once a second, and once more after the driver has stopped, it
+prints one line per enabled stream with counters cumulative since start::
 
-* ``[DCA1000] SO_RCVBUF granted: <bytes> bytes``
-* per DCA1000 frame (log_level debug)::
+    stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n>
+        duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n>
+        stalls=<n> rcvbuf=<bytes>                                 (one line)
+    stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
 
-      frame: <received_frames>
-      \tpackets: <n>
-      \tdata bytes: <n>
-      \tdropped packets: <n>
-      \tdropped packet events: <n>
-      \trx_overrun_count: <n>
-
-* per serial header (log_level debug; same ``frame:`` prefix, followed by ``\tversion:``)
-* ``TLV frame <n>: <k> detected points`` (main.cpp, one per delivered frame)
-* ``SerialStreamer: frame number jumped from a to b (M missed in total)``
-
-Nothing here imports the driver or touches a port.
+Any other line is only scanned for warning words. Nothing here imports the
+driver or touches a port.
 """
 from __future__ import annotations
 
@@ -35,7 +27,6 @@ CSV_COLUMNS = [
     "dca_dropped_packets",
     "dca_dropped_packet_events",
     "dca_rx_overrun_count_cum",
-    "serial_headers",
     "tlv_frames",
     "tlv_missed_frames",
     "cpu_pct",
@@ -45,113 +36,93 @@ CSV_COLUMNS = [
 # glibc/libstdc++ ofstream buffer; used only to classify a short .bin
 OFSTREAM_BUFFER_BYTES = 8192
 
-_RE_RCVBUF = re.compile(r"SO_RCVBUF granted:\s*(\d+)\s*bytes")
-_RE_FRAME = re.compile(r"^frame:\s*(\d+)\s*$")
-_RE_TLV_FRAME = re.compile(r"^TLV frame\s+(\d+):\s*(\d+)\s+detected points")
-_RE_MISSED = re.compile(r"frame number jumped from\s+(\d+)\s+to\s+(\d+)\s+\((\d+)\s+missed in total\)")
-_RE_KV = re.compile(r"^\t([A-Za-z_ ]+):\s*(-?\d+)")
+_RE_STATS = re.compile(r"^stats v1 (dca|serial)\s+(.*)$")
 _WARN_WORDS = ("timed out", "warning", "failed", "error", "not acknowledge")
 
 
 @dataclass
 class Parser:
-    """Stateful line parser: feed (timestamp, line); collects events."""
+    """Stateful line parser: feed (timestamp, line); collects stats events.
 
-    events: list = field(default_factory=list)  # dicts with t, kind, ...
+    Each ``stats v1`` line becomes {"t": arrival time, "kind": "dca_stats" or
+    "serial_stats", "t_driver": the line's t=, <key>: <int>, ...}.
+    """
+
+    events: list = field(default_factory=list)
     granted_rcvbuf: int | None = None
     warnings: list = field(default_factory=list)
-    _pending: dict | None = None
 
     def feed(self, t: float, line: str) -> None:
         line = line.rstrip("\r\n")
-        m = _RE_RCVBUF.search(line)
+        m = _RE_STATS.match(line)
         if m:
-            self.granted_rcvbuf = int(m.group(1))
-            return
-        m = _RE_FRAME.match(line)
-        if m:
-            self._flush_pending()
-            self._pending = {"t": t, "frame": int(m.group(1)), "kv": {}}
-            return
-        if self._pending is not None:
-            m = _RE_KV.match(line)
-            if m:
-                self._pending["kv"][m.group(1).strip()] = int(m.group(2))
-                return
-            if not line.startswith("\t"):
-                self._flush_pending()
-        m = _RE_TLV_FRAME.match(line)
-        if m:
-            self.events.append({"t": t, "kind": "tlv_frame", "frame": int(m.group(1)),
-                                "points": int(m.group(2))})
-            return
-        m = _RE_MISSED.search(line)
-        if m:
-            self.events.append({"t": t, "kind": "tlv_missed", "cum": int(m.group(3))})
+            ev = {"t": t, "kind": m.group(1) + "_stats"}
+            for tok in m.group(2).split():
+                key, _, val = tok.partition("=")
+                try:
+                    if key == "t":
+                        ev["t_driver"] = float(val)
+                    else:
+                        ev[key] = int(val)
+                except ValueError:
+                    continue
+            self.events.append(ev)
+            if ev["kind"] == "dca_stats" and "rcvbuf" in ev:
+                self.granted_rcvbuf = ev["rcvbuf"]
             return
         low = line.lower()
         if any(w in low for w in _WARN_WORDS) and len(self.warnings) < 50:
             self.warnings.append(line.strip())
 
-    def _flush_pending(self) -> None:
-        p, self._pending = self._pending, None
-        if p is None:
-            return
-        kv = p["kv"]
-        if "packets" in kv:
-            self.events.append({
-                "t": p["t"], "kind": "dca_frame", "frames_cum": p["frame"],
-                "packets": kv.get("packets", 0),
-                "dropped": kv.get("dropped packets", 0),
-                "events": kv.get("dropped packet events", 0),
-                "overrun": kv.get("rx_overrun_count", 0),
-            })
-        elif "version" in kv:
-            self.events.append({"t": p["t"], "kind": "serial_header", "frame": p["frame"]})
-
     def finish(self) -> None:
-        self._flush_pending()
+        """Nothing is buffered across lines; kept for the harness's call order."""
 
 
 def first_frame_time(events: list) -> float | None:
-    """Time of the first frame of any stream (t0 of the run)."""
+    """Arrival time of the first stats line reporting a frame (t0 of the run)."""
     for e in events:
-        if e["kind"] in ("dca_frame", "tlv_frame", "serial_header"):
+        if e.get("frames", 0) > 0:
             return e["t"]
     return None
 
 
-def aggregate(events: list, cpu_samples: list, t0: float, seconds: int) -> list:
-    """Per-second rows over [t0+k-1, t0+k).
+def last_stats(events: list, kind: str, t: float | None = None) -> dict | None:
+    """The last stats event of `kind` that arrived at or before `t` (any time if None)."""
+    last = None
+    for e in events:
+        if e["kind"] == kind and (t is None or e["t"] <= t):
+            last = e
+    return last
 
+
+def aggregate(events: list, cpu_samples: list, t0: float, seconds: int) -> list:
+    """Per-second rows from the cumulative stats lines.
+
+    Row k is the change between the last line before t0+k+0.5 and the last
+    line before t0+k-0.5. The driver prints once a second, so the half-second
+    margins keep arrival jitter from moving a line into the wrong row; its
+    final line (printed after the stop) lands in the last row.
     cpu_samples: [(t, cpu_ticks_total, clk_tck, rss_kb)] sampled at/near each
-    boundary; the first sample must be at t0.  Cumulative counters are
-    differenced against the last value seen before the bucket (0 before t0).
+    boundary; the first sample must be at t0.
     """
+    def delta(kind, key, lo, hi):
+        a, b = last_stats(events, kind, lo), last_stats(events, kind, hi)
+        if b is None:
+            return 0
+        return b.get(key, 0) - (a.get(key, 0) if a else 0)
+
     rows = []
-    cum = {"packets": 0, "dropped": 0, "events": 0, "overrun": 0, "missed": 0}
     for k in range(1, seconds + 1):
-        lo, hi = t0 + k - 1, t0 + k
-        bucket = [e for e in events if lo <= e["t"] < hi]
-        dca = [e for e in bucket if e["kind"] == "dca_frame"]
+        lo, hi = t0 + k - 0.5, t0 + k + 0.5
         row = {c: 0 for c in CSV_COLUMNS}
         row["second"] = k
-        row["dca_frames"] = len(dca)
-        for e in dca:
-            row["dca_packets"] = e["packets"] - cum["packets"]
-            row["dca_dropped_packets"] = e["dropped"] - cum["dropped"]
-            row["dca_dropped_packet_events"] = e["events"] - cum["events"]
-        if dca:
-            last = dca[-1]
-            cum.update(packets=last["packets"], dropped=last["dropped"],
-                       events=last["events"], overrun=last["overrun"])
-        row["dca_rx_overrun_count_cum"] = cum["overrun"]
-        row["serial_headers"] = sum(e["kind"] == "serial_header" for e in bucket)
-        row["tlv_frames"] = sum(e["kind"] == "tlv_frame" for e in bucket)
-        missed = [e for e in bucket if e["kind"] == "tlv_missed"]
-        if missed:
-            row["tlv_missed_frames"] = missed[-1]["cum"] - cum["missed"]
-            cum["missed"] = missed[-1]["cum"]
+        row["dca_frames"] = delta("dca_stats", "frames", lo, hi)
+        row["dca_packets"] = delta("dca_stats", "packets", lo, hi)
+        row["dca_dropped_packets"] = delta("dca_stats", "dropped", lo, hi)
+        row["dca_dropped_packet_events"] = delta("dca_stats", "drop_events", lo, hi)
+        row["dca_rx_overrun_count_cum"] = (last_stats(events, "dca_stats", hi) or {}).get("overrun", 0)
+        row["tlv_frames"] = delta("serial_stats", "frames", lo, hi)
+        row["tlv_missed_frames"] = delta("serial_stats", "missed", lo, hi)
         row["cpu_pct"], row["rss_kb"] = _cpu_for_second(cpu_samples, k)
         rows.append(row)
     return rows
@@ -192,7 +163,6 @@ def summarize(rows: list) -> dict:
     out["dca_dropped_packet_events_total"] = sum(col("dca_dropped_packet_events"))
     out["dca_packets_total"] = sum(col("dca_packets"))
     out["dca_rx_overrun_count_final"] = rows[-1]["dca_rx_overrun_count_cum"]
-    out["serial_headers_total"] = sum(col("serial_headers"))
     out["tlv_missed_frames_total"] = sum(col("tlv_missed_frames"))
     cpu = col("cpu_pct")
     if cpu:

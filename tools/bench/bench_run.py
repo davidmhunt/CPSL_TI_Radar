@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Run a system config on a radar for N seconds and record a streaming baseline.
 
-Runs the unmodified driver binary (``CPSL_TI_Radar_CPP``) as a subprocess,
-parses its debug-level stdout (the system config, schema v2, must set
-``runtime.log_level: "debug"``), samples its CPU from /proc once per second, sends
-SIGINT after N seconds and writes, under ``docs/results/baseline/`` by default:
+Runs the unmodified driver binary (``CPSL_TI_Radar_CPP --stats``) as a
+subprocess, parses its ``stats v1`` lines (any ``runtime.log_level`` works;
+the config must be schema v2), samples its CPU from /proc once per second,
+sends SIGINT after N seconds and writes, under ``docs/results/baseline/`` by
+default:
 
     <tag>__<config>__rep<k>__<N>s__<UTC stamp>.csv    per-second rows
     <same basename>.json                              provenance sidecar
@@ -152,7 +153,7 @@ def sample_proc(pid: int):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("config", type=Path,
-                    help="system config .json, schema v2 (runtime.log_level must be \"debug\")")
+                    help="system config .json, schema v2")
     ap.add_argument("--seconds", "-n", type=int, default=60)
     ap.add_argument("--rep", type=int, default=1)
     ap.add_argument("--tag", default="baseline_pre_rework",
@@ -178,9 +179,6 @@ def main(argv=None) -> int:
     if cfg.get("schema_version") != 2:
         sys.exit("bench: the system config is not schema v2; convert it with: "
                  f"uv run tools/migrate_config_v1_to_v2.py --in-place {args.config}")
-    if cfg.get("runtime", {}).get("log_level") != "debug":
-        sys.exit("bench: the system config must set \"runtime\": {\"log_level\": \"debug\"} "
-                 "(stats come from the driver's debug stdout)")
     dca_on = bool(cfg.get("dca1000", {}).get("enabled"))
     ser_on = bool(cfg.get("serial_stream", {}).get("enabled"))
     if not (dca_on or ser_on):
@@ -238,7 +236,7 @@ def main(argv=None) -> int:
     launched = time.monotonic()
     output_dir(cfg_path, cfg, run_dir).mkdir(parents=True, exist_ok=True)  # driver opens files there
     log = open(run_dir / "driver_stdout.log", "w")
-    proc = subprocess.Popen([str(args.driver.resolve()), str(cfg_path)], cwd=run_dir,
+    proc = subprocess.Popen([str(args.driver.resolve()), str(cfg_path), "--stats"], cwd=run_dir,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             bufsize=1, env={**os.environ, "PYTHONUNBUFFERED": "1"})
 
@@ -316,8 +314,9 @@ def main(argv=None) -> int:
     nsec = min(args.seconds, max(0, len(cpu_samples) - 1))
     rows = lib.aggregate(parser.events, cpu_samples, t0, nsec)
     summary = lib.summarize(rows)
-    dca_events = [e for e in parser.events if e["kind"] == "dca_frame"]
-    received = dca_events[-1]["frames_cum"] if dca_events else 0
+    # the driver's last stats line comes after its stop: every frame in adc_data.bin
+    final = lib.last_stats(parser.events, "dca_stats")
+    received = final["frames"] if final else 0
     status = "ok" if nsec == args.seconds and result_note == "ok" else "INCOMPLETE"
     if proc.returncode != 0:  # surface the driver's exit code (e.g. exit=1 after an unplug)
         status = f"exit={proc.returncode}"
