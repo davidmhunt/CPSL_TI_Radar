@@ -25,7 +25,7 @@ The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for y
 
 Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
-A bench config needs `runtime.log_level` set to `"debug"` (the harness reads frame counts from the debug output and rejects the config otherwise) and a radar `.cfg` with `frameCfg ... numFrames 0`. Check it without hardware:
+Copy the example system config and set `runtime.log_level` to `"debug"` (the harness reads frame counts from the debug output and rejects the config otherwise) and, for DCA runs, `output.save_adc_frames` to `true` (otherwise there is no `adc_data.bin` size check) before running the harness. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json --validate
@@ -58,7 +58,7 @@ jq '{status: .result.status, exit: .result.stop.exit_code, bin: .result.bin_size
 
 ## 7. Pass or fail
 
-Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results/baseline/`, summarized in `../RESULTS.md`), rounded by the Author. Every row must pass. Rows marked (guide) are loose limits from only three reps, not guarantees.
+Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results/baseline/`, summarized in `../RESULTS.md`), rounded by the Author, except CPU (core-06 runs). Every row must pass. Rows marked (guide) are loose limits from only three reps, not guarantees.
 
 | Check | DCA1000 raw-ADC | Serial TLV | Baseline value |
 |---|---|---|---|
@@ -71,9 +71,9 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | Rx overruns (`dca_rx_overrun_count_final`) | 0 | n/a | 0 |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
-| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (no `cap_sys_nice`), 16.1 to 16.3 (with it, 3 reps 2026-10-05) / 0.5 to 0.6 |
+| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (core-04, pre-rework driver), 16.1 to 16.3 (v2 driver `3ecd94cd` with `cap_sys_nice`, core-06) / 0.5 to 0.6 |
 
-For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The core-04 baseline ran without `cap_sys_nice`; with it (what `host_setup.py` applies) the DCA CPU is about 16 %, hence the 20 % limit.
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The 20 % CPU guide comes from the core-06 runs of the reworked driver (16.1 to 16.3 % over 4 reps); the core-04 baseline used the pre-rework driver (9 to 10 %). The cause of the difference is not isolated, since the driver code and the real-time priority (`cap_sys_nice`) both changed; an A/B run with and without `cap_sys_nice` would settle it.
 
 A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a fail: record it and see section 10.
 
@@ -85,7 +85,7 @@ A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a
 
 ## 9. Per-board differences
 
-| | IWR1843 | IWR1443 | IWR6843 | AWR2243 cascade |
+| | IWR1843 | IWR1443 (untested) | IWR6843 (untested) | AWR2243 cascade (untested) |
 |---|---|---|---|---|
 | Board descriptor | `config/boards/IWR1843.json` | `IWR1443.json` | `IWR6843.json` | `AWR2243_CASCADE.json` |
 | LVDS lanes | 2, `q_first` | 4, `lane_per_rx`, `i_first` | 2, `q_first` | none (`lvds.supported: false`) |
@@ -97,7 +97,7 @@ A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a
 
 Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
-Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from `planning/CASCADE_HARDWARE_SETUP.md`. Its config ships with `log_level: "info"`, so use a copy with `"debug"`. Expect 20 Hz (50 ms period) and no missed TLV frames.
+Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from `planning/CASCADE_HARDWARE_SETUP.md`. Its config ships with `log_level: "info"`; see section 4. Expect 20 Hz (50 ms period) and no missed TLV frames.
 
 ## 10. Troubleshooting
 
@@ -105,7 +105,7 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 |---|---|
 | `bench: refusing to run, host preflight failed` | Run `uv run tools/setup/host_setup.py --nic <dca-nic> --apply`, then retry. A rebuild removes `cap_sys_nice`. |
 | `no frame received before start timeout` (`FAILED`, exit 2) | Check board mode (SOP jumpers), USB ports, DCA1000 power and cable, and the ping in section 2. For the cascade, power-cycle first. Read `driver_stdout.log`. |
-| `Runner: sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Seen at the end of every healthy IWR1843 SIGINT run: the board is busy streaming and the 100 ms read times out. Harmless if `status` is `ok` and the `.bin` is `exact`. |
+| `Runner: sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Seen at the end of every healthy IWR1843 SIGINT run: likely the 100 ms command timeout equals the 100 ms frame period, so the board's `Done` arrives too late (tracked for core-13). Harmless if `status` is `ok` and the `.bin` is `exact`. |
 | `not every config command was acknowledged` | Harmless if only `calibData` is rejected. Otherwise the cfg has a command the firmware does not know. |
 | Dropped packets or overruns | `rmem_max` below 128 MB, no `cap_sys_nice`, or a slow NIC. Re-run `host_setup.py`; confirm `granted_so_rcvbuf_bytes` in the sidecar is 134217728. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |

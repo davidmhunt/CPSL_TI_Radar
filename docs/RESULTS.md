@@ -56,12 +56,15 @@ Basename: `baseline_pre_rework_iwr1843_serial_release__radar_0_IWR1843_demo__rep
 
 ## Bench validation, IWR1843 (core-06)
 
-Tag `validation_iwr1843_dca_release`, DCA1000 raw-ADC, `front_radar_IWR1843_stress_test_baseline.json`, 3 x 60 s SIGINT stops, run by following `docs/tutorials/bench_validation.md`. Driver binary sha256 `3ecd94cd17a3...` (with `cap_sys_nice`), repo HEAD `6281aad`. Files in `docs/results/validation/`, basenames `validation_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep<k>__60s__<UTC>` (rep1 `20261005T214321Z`, rep2 `20261005T214452Z`, rep3 `20261005T214602Z`).
+Tag `validation_iwr1843_dca_release`, DCA1000 raw-ADC, `front_radar_IWR1843_stress_test_baseline.json`, 3 x 60 s SIGINT stops (plus a rep 4 confirm run), run by following `docs/tutorials/bench_validation.md`. Driver binary sha256 `3ecd94cd17a3...` (with `cap_sys_nice`), repo HEAD `6281aad`. Files in `docs/results/validation/`, basenames `validation_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep<k>__60s__<UTC>` (rep1 `20261005T214321Z`, rep2 `20261005T214452Z`, rep3 `20261005T214602Z`).
 
 | Rep | fps mean / min / max | Dropped packets | rx_overrun_count | CPU % mean / max | RSS max (kB) | Granted SO_RCVBUF | .bin check |
 |---|---|---|---|---|---|---|---|
 | 1 | 10.0 / 9 / 11 | 0 | 0 | 16.1 / 20.0 | 10004 | 134217728 | exact |
 | 2 | 10.0 / 9 / 11 | 0 | 0 | 16.3 / 18.9 | 9908 | 134217728 | exact |
 | 3 | 10.0 / 9 / 11 | 0 | 0 | 16.2 / 19.0 | 10820 | 134217728 | exact |
+| 4 (confirm) | 10.0 / 9 / 11 | 0 | 0 | 16.2 / 19.0 | 10780 | 134217728 | exact |
 
-Caveats: exit 0 on all three; every run logs `sensorStop was not acknowledged with 'Done'` (100 ms read timeout while the board streams; harmless). CPU is higher than the pre-rework baseline (9 to 10 %) because this binary has `cap_sys_nice`; the baseline did not. The core-11 SIGINT flush fix is confirmed (`exact`, was 896 B short).
+Rep 4: tag `validation_iwr1843_dca_release_confirm`, basename `validation_iwr1843_dca_release_confirm__front_radar_IWR1843_stress_test_baseline__rep4__60s__20261005T214741Z`, same binary `3ecd94cd`, run after the doc fixes with the doc unmodified (600 frames, status ok, exit 0). Its files were committed in `6845a0a` under a core-11 subject.
+
+Caveats: exit 0 on all four; every run logs `sensorStop was not acknowledged with 'Done'` (likely the 100 ms command timeout equalling the frame period; tracked for core-13; harmless). CPU is higher than the pre-rework core-04 baseline (9 to 10 %; 16.1 to 16.3 % over 4 reps here). The cause is not isolated: the baseline used the pre-rework driver and this binary has both the driver changes and `cap_sys_nice`; an A/B run with and without `cap_sys_nice` would settle it. The < 20 % guide in the runbook comes from these runs. The core-11 SIGINT flush fix is confirmed (`exact`, was 896 B short).
