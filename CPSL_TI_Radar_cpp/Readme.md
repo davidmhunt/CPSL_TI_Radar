@@ -97,6 +97,18 @@ cmake ../
 cmake --build .
 ```
 
+## Running tests
+
+Unit tests live in `tests/` and need no radar, serial port, DCA1000 or network. They use a small in-tree harness (`tests/test_harness.hpp`), so there is nothing extra to install. Building the project builds them; run them with:
+
+```bash
+cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
+cmake --build CPSL_TI_Radar_cpp/build -j
+ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
+```
+
+Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding). To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+
 ## Preparing your hardware
 
 To stream samples from the DCA1000, the following steps must be completed

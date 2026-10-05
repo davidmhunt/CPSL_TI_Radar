@@ -164,6 +164,15 @@ size_t RadarConfigReader::get_num_rx_antennas(){
 }
 
 /**
+ * @brief Get the frame period from frameCfg
+ *
+ * @return float the frame period in milliseconds
+ */
+float RadarConfigReader::get_frame_period_ms(){
+    return frameCfg_frame_period;
+}
+
+/**
  * @brief Process a new cfg file (cfg_file path must already
  * be defined)
  * 

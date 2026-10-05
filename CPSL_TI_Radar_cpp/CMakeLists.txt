@@ -21,6 +21,11 @@ set(JSON_BuildTests OFF CACHE INTERNAL "")
 add_subdirectory(include/json)
 add_subdirectory(src)
 
+# Hardware-free unit tests (run with ctest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
+
 # Add the executables
 add_executable(CPSL_TI_Radar_CPP main.cpp)
 

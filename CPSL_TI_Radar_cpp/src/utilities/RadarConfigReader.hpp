@@ -24,6 +24,7 @@ class RadarConfigReader{
         size_t get_chirps_per_frame();
         size_t get_samples_per_chirp();
         size_t get_num_rx_antennas();
+        float get_frame_period_ms();
 
         //initialization status
         bool initialized;

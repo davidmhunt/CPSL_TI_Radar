@@ -112,7 +112,7 @@ shared, not private to one session.
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |
 | `tools/radar_viewer/` | Cascade live point-cloud viewer (stdlib HTTP + pyserial) — seed of the v2.0 GUI |
 | `utilities/` | Notebooks for post-processing driver output (ADC cube, raw LVDS, `.cfg`), serial-port and DCA1000 network debugging, and a TI SDK LVDS parser example |
-| `tests/` | pytest suite (`uv run pytest`); C++ tests run via `ctest` (none yet) |
+| `tests/` | pytest suite (`uv run pytest`); C++ unit tests are in `CPSL_TI_Radar_cpp/tests/` and run via `ctest` (see "Running tests" below) |
 | `planning/` | Cascade plan and hardware bring-up notes |
 | `docs/` | `ARCHITECTURE.md`, `RESULTS.md`, `firmware.md` |
 | `readme_images/` | IWR boot-mode (SOP) diagrams linked from `CPSL_TI_Radar_cpp/Readme.md` |
@@ -152,6 +152,13 @@ role must follow; `.friday/active/harness/roles/<role>.md` holds your role's nam
 tier, constraints, and handoff protocol. Read the core plus your own role
 file — not the other roles' files. Rule detail docs under `.friday/active/harness/rules/`
 are read only when a rule's trigger matches your next action.
+
+## Running tests
+
+- C++ (hardware-free unit tests, in-tree harness, no extra dependencies):
+  `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure`.
+  Add a test as `CPSL_TI_Radar_cpp/tests/test_<name>.cpp` plus an `add_driver_test` line in `tests/CMakeLists.txt`; details in `CPSL_TI_Radar_cpp/Readme.md`. Tests pin current behaviour; a bug found is recorded with `KNOWN_BUG(...)`, not fixed in the test pass.
+- Python: `uv run pytest` (`pyproject.toml` disables ROS's `launch_testing`/`launch_ros` plugins, so it passes with ROS sourced or not).
 
 ## Command Execution & Approval Policy
 
