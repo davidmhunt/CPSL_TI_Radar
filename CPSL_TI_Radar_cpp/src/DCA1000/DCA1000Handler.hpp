@@ -49,7 +49,6 @@ private:
     DCA1000Socket socket_;
 
     //processing udp data packets
-    std::vector<uint8_t> udp_packet_buffer;
     size_t udp_packet_size;
 
     //frame tracking (packet/drop stats are owned by assembler_)
@@ -122,7 +121,6 @@ private:
     //handling files
     bool init_out_file();
     void write_adc_data_cube_to_file();
-    void write_vector_to_file(std::vector<std::int16_t> &vector);
 };
 
 #endif // DCA1000_H

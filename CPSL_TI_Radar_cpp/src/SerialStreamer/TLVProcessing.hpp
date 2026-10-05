@@ -14,7 +14,6 @@ class TLVCodes{
         static const uint32_t AZIMUTH_STATIC_HEAT_MAP =4;
         static const uint32_t RANGE_DOPPLER_HEAT_MAP =5;
         static const uint32_t STATS =6;
-        static const uint32_t STMMWDEMO_OUTPUT_MSG_DETECTED_POINTS_SIDE_INFOATS =7;
         static const uint32_t MMWDEMO_OUTPUT_MSG_AZIMUT_ELEVATION_STATIC_HEAT_MAP =8;
         static const uint32_t MMWDEMO_OUTPUT_MSG_TEMPERATURE_STATS =9;
         static const uint32_t DETECTED_POINTS_SIDE_INFO =7;

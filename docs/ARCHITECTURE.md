@@ -33,8 +33,9 @@ main.cpp
         └── SerialStreamer        (serial TLV stream → detected points; TLVProcessing)
 ```
 
-`Runner` spawns `run_dca1000` and `run_serial` threads (SCHED_RR priority
-10). Serial baud handling (including the cascade's 3,125,000 baud data
+`Runner` spawns `run_dca1000` and `run_serial` threads. The DCA worker
+raises itself to SCHED_RR 80; the serial worker keeps the default policy.
+Serial baud handling (including the cascade's 3,125,000 baud data
 port) lives in `src/utilities/SerialBaud*` (termios2).
 
 ## DCA1000 RX path

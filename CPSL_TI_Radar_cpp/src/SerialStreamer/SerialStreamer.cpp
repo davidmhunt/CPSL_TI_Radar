@@ -375,21 +375,6 @@ bool SerialStreamer::get_next_serial_frame(void) {
             bytes_transfered
         );
 
-        // // Print the received response
-        // std::cout << "SerialStreamer: Received " << bytes_transfered << " bytes" << std::endl;
-
-        // // if(system_config_reader.verbose){
-            
-        //     const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
-        //     size_t raw_data_size = serial_stream.size();
-        //     std::cout << "Raw data: ";
-        //     for (size_t i = 0; i < raw_data_size; ++i) {
-        //         // Print each byte in hex format (uppercase)
-        //         std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
-        //     }
-        //     std::cout << std::dec << std::endl;
-        // }
-
         // Remove the received data from the buffer
         serial_stream.consume(bytes_transfered);
 
@@ -397,15 +382,6 @@ bool SerialStreamer::get_next_serial_frame(void) {
     } else if (ec == boost::asio::error::operation_aborted) {
         // Timeout occurred
         std::cout << "SerialStreamer: Timeout while waiting for response" << std::endl;
-        // const char* raw_data = boost::asio::buffer_cast<const char*>(serial_stream.data());
-        // size_t raw_data_size = serial_stream.size();
-        
-        // std::cout << "Raw data: ";
-        // for (size_t i = 0; i < raw_data_size; ++i) {
-        //     // Print each byte in hex format (uppercase)
-        //     std::cout << std::hex << std::uppercase << (0xFF & static_cast<unsigned char>(raw_data[i])) << " ";
-        // }
-        // std::cout << std::dec << std::endl;
         return false;
     } else {
         // Other errors

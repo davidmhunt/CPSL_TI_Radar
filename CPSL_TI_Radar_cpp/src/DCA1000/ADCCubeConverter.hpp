@@ -7,8 +7,9 @@
 // Two LVDS lane formats are supported:
 //   Interleaved   (IWR1443 / SDK 2): all Rx samples multiplexed; real and
 //                  imaginary components stored in separate Rx-grouped rows.
-//   Non-interleaved (IWR1843, IWR6843 / SDK 3+): four LVDS lanes carrying
-//                  alternating I/Q pairs; lanes are interleaved into complex values.
+//   Non-interleaved (IWR1843, IWR6843 / SDK 3+): two LVDS lanes carrying
+//                  alternating I/Q pairs (four int16 words per two samples); the
+//                  words are interleaved into complex values.
 //
 // Call configure() once after the radar parameters are known, then convert()
 // for each received frame.

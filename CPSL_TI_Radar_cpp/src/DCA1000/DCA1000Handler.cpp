@@ -15,7 +15,6 @@ DCA1000Handler::DCA1000Handler():
     DCA_cmdPort(-1),
     DCA_dataPort(-1),
     socket_(),
-    udp_packet_buffer(),
     udp_packet_size(1472),
     received_frames(0),
     bytes_per_frame(0),
@@ -47,7 +46,6 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
     DCA_cmdPort(-1),
     DCA_dataPort(-1),
     socket_(),
-    udp_packet_buffer(),
     udp_packet_size(1472),
     received_frames(0),
     bytes_per_frame(0),
@@ -79,7 +77,6 @@ DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
     DCA_cmdPort(rhs.DCA_cmdPort),
     DCA_dataPort(rhs.DCA_dataPort),
     socket_(), // DCA1000Socket is not copyable — fresh instance
-    udp_packet_buffer(rhs.udp_packet_buffer),
     udp_packet_size(rhs.udp_packet_size),
     received_frames(rhs.received_frames),
     bytes_per_frame(rhs.bytes_per_frame),
@@ -115,7 +112,6 @@ DCA1000Handler & DCA1000Handler::operator=(const DCA1000Handler & rhs){
         DCA_cmdPort          = rhs.DCA_cmdPort;
         DCA_dataPort         = rhs.DCA_dataPort;
         // socket_ is not copyable — leave as-is (fresh/uninitialized state)
-        udp_packet_buffer    = rhs.udp_packet_buffer;
         udp_packet_size      = rhs.udp_packet_size;
         received_frames      = rhs.received_frames;
         bytes_per_frame      = rhs.bytes_per_frame;
@@ -620,9 +616,6 @@ void DCA1000Handler::init_buffers()
         chirps_per_frame = radar_config_reader.get_chirps_per_frame();
         num_rx_channels = radar_config_reader.get_num_rx_antennas();
 
-        //configure the udp packet buffer
-        udp_packet_buffer = std::vector<uint8_t>(udp_packet_size, 0);
-
         //configure processing of completed frames
         latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame, 0);
         new_frame_available = false;
@@ -752,24 +745,6 @@ void DCA1000Handler::write_adc_data_cube_to_file(void){
                     );
                 }
             }
-        }
-    }else{
-        std::cerr << "adc_cube_out_file.bin is not open, failed to save ADC data" <<std::endl;
-    }
-}
-
-void DCA1000Handler::write_vector_to_file(std::vector<std::int16_t> &vector){
-    
-    //make sure that the adc_cube_out_file is open
-    if(adc_cube_out_file -> is_open()){
-        for(size_t idx = 0; idx < vector.size(); idx++){
-
-            //write the real part
-            adc_cube_out_file -> write(
-                reinterpret_cast<const char*>(
-                    &vector[idx]),
-                sizeof(vector[idx])
-            );
         }
     }else{
         std::cerr << "adc_cube_out_file.bin is not open, failed to save ADC data" <<std::endl;

@@ -238,13 +238,6 @@ This part of the JSON file determines where the data is coming from. Only one of
 * Like the other boards, a frame is only handed over when the next frame's magic word arrives, so the newest point
   cloud is one frame period old.
 
-#### Processor: 
-This part is currently not utilized when streaming DCA1000 data
-
-
-#### ROS/Listeners:
-If using ROS nodes to connect to the Radar code, set this to true. Otherwise set it to false. To make it easier to receive the data, we provide several starter ROS nodes in associated [CPSL_TI_Radar_ROS Repository](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
-
 ### 2. Radar .cfg file
 
 Several sample .cfg files are located in the [config/radar](./config/radar/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation. 
