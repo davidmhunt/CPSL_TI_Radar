@@ -1,0 +1,43 @@
+# iq_check.py output (unmodified script, rx0 frame0), iqcheck_ground_R1.0m__front_radar_IWR1843_stress_test_baseline__rep1__10s__20261005T173201Z, R=1.0 m
+N = 250, range resolution = 0.2638 m
+expected bin for 1.0 m: 3.8  (mirror N-k: 246.2)
+peak bin, current converter order: 8  (peak/median 82.7)
+peak bin, swapped I/Q order:       242
+VERDICT: inconclusive
+
+# Per-ordering magnitude bins (helper script, not committed; uses iq_check.avg_spectrum, DC guard 3)
+N=250 res=0.2638 m/bin expected bin=3.79 mirror=246.21
+frame 0 rx 0 CURRENT (median 388)
+  low 1-10 top5:  bin8=32061, bin7=26269, bin10=11495, bin6=9174, bin5=6687
+  mirror N-10..N-1 top5: bin249(N-1)=1769, bin248(N-2)=1518, bin246(N-4)=1330, bin245(N-5)=1323, bin247(N-3)=1321
+  overall top5 outside DC guard: bin8=32061, bin7=26269, bin11=18148, bin12=12020, bin10=11495
+frame 0 rx 0 SWAPPED (median 388)
+  low 1-10 top5:  bin1=1769, bin2=1518, bin4=1330, bin5=1323, bin3=1321
+  mirror N-10..N-1 top5: bin242(N-8)=32061, bin243(N-7)=26269, bin240(N-10)=11495, bin244(N-6)=9174, bin245(N-5)=6687
+  overall top5 outside DC guard: bin242=32061, bin243=26269, bin239=18148, bin238=12020, bin240=11495
+frame 0 rx 1 CURRENT (median 395)
+  low 1-10 top5:  bin8=23808, bin7=22720, bin9=15479, bin4=11434, bin10=9126
+  mirror N-10..N-1 top5: bin249(N-1)=2163, bin246(N-4)=2156, bin243(N-7)=1971, bin248(N-2)=1949, bin247(N-3)=1588
+  overall top5 outside DC guard: bin11=27805, bin8=23808, bin7=22720, bin12=22048, bin9=15479
+frame 0 rx 1 SWAPPED (median 395)
+  low 1-10 top5:  bin1=2163, bin4=2156, bin7=1971, bin2=1949, bin3=1588
+  mirror N-10..N-1 top5: bin242(N-8)=23808, bin243(N-7)=22720, bin241(N-9)=15479, bin246(N-4)=11434, bin240(N-10)=9126
+  overall top5 outside DC guard: bin239=27805, bin242=23808, bin243=22720, bin238=22048, bin241=15479
+frame 50 rx 0 CURRENT (median 388)
+  low 1-10 top5:  bin8=32183, bin7=26302, bin10=11458, bin6=9441, bin5=6506
+  mirror N-10..N-1 top5: bin249(N-1)=1759, bin248(N-2)=1501, bin246(N-4)=1340, bin247(N-3)=1318, bin245(N-5)=1304
+  overall top5 outside DC guard: bin8=32183, bin7=26302, bin11=17954, bin12=12077, bin10=11458
+frame 50 rx 0 SWAPPED (median 388)
+  low 1-10 top5:  bin1=1759, bin2=1501, bin4=1340, bin3=1318, bin5=1304
+  mirror N-10..N-1 top5: bin242(N-8)=32183, bin243(N-7)=26302, bin240(N-10)=11458, bin244(N-6)=9441, bin245(N-5)=6506
+  overall top5 outside DC guard: bin242=32183, bin243=26302, bin239=17954, bin238=12077, bin240=11458
+frame 50 rx 1 CURRENT (median 397)
+  low 1-10 top5:  bin8=23580, bin7=22746, bin9=15463, bin4=11191, bin10=9050
+  mirror N-10..N-1 top5: bin249(N-1)=2183, bin246(N-4)=2091, bin243(N-7)=1948, bin248(N-2)=1917, bin247(N-3)=1535
+  overall top5 outside DC guard: bin11=27421, bin8=23580, bin7=22746, bin12=21671, bin9=15463
+frame 50 rx 1 SWAPPED (median 397)
+  low 1-10 top5:  bin1=2183, bin4=2091, bin7=1948, bin2=1917, bin3=1535
+  mirror N-10..N-1 top5: bin242(N-8)=23580, bin243(N-7)=22746, bin241(N-9)=15463, bin246(N-4)=11191, bin240(N-10)=9050
+  overall top5 outside DC guard: bin239=27421, bin242=23580, bin243=22746, bin238=21671, bin241=15463
+
+# Note: current order puts the energy at bins 7-12 (>=80x median); mirror bins N-12..N-1 are at noise level. Peak is bin 8 (~2.1 m), not the expected bin ~4 (1.0 m): range mismatch, not an ordering ambiguity. Sidecar: iqcheck_ground_R1.0m__front_radar_IWR1843_stress_test_baseline__rep1__10s__20261005T173201Z.json
