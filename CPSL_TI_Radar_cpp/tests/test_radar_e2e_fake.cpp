@@ -1,0 +1,337 @@
+// cpsl::radar::Radar end to end over fake transports (driver v2 design §6,
+// directive core-13 Step 5): a ReplayPacketSource stands in for the DCA1000
+// and a scripted FakeCli for the radar's CLI port. Nothing is opened but
+// files under the test's build directory.
+#include "test_harness.hpp"
+#include "dca_test_support.hpp"
+#include "fake_transports.hpp"
+#include "Radar.hpp"
+
+#include <sys/stat.h>
+
+#include <filesystem>
+#include <fstream>
+#include <thread>
+
+using cpsl::radar::AdcFrame;
+using cpsl::radar::Code;
+using cpsl::radar::Radar;
+using cpsl::radar::RadarConfig;
+using cpsl::radar::ReplayPacketSource;
+using cpsl::radar::Status;
+using std::chrono::milliseconds;
+using clk = std::chrono::steady_clock;
+
+namespace {
+
+const std::string kRoot = dca_test::tmp_dir() + "/radar_e2e";
+
+const bool kSetup = [] {
+    std::filesystem::remove_all(kRoot);
+    std::filesystem::create_directories(kRoot);
+    return true;
+}();
+
+// A system config for tests/data/radar/iwr1843.cfg (231840 B/frame, 100 ms
+// frames, cmd_timeout_ms 100) with the DCA1000 enabled; `edit` changes it.
+template <class Edit>
+RadarConfig load(const std::string& name, Edit edit) {
+    const std::string out = kRoot + "/" + name;
+    std::filesystem::create_directories(out);
+    json j;
+    {
+        std::ifstream f(dca_test::write_system_config(name, out, true));
+        j = json::parse(f);
+    }
+    edit(j);
+    const std::string path = kRoot + "/" + name + ".json";
+    std::ofstream(path) << j.dump(2);
+    auto r = RadarConfig::load(path);
+    CHECK(static_cast<bool>(r));
+    if (!r) std::cerr << r.status.message << std::endl;
+    return *r;
+}
+RadarConfig load(const std::string& name) {
+    return load(name, [](json&) {});
+}
+
+struct Rig {
+    std::shared_ptr<FakeCli> cli = std::make_shared<FakeCli>();
+    std::shared_ptr<ReplayPacketSource> packets = std::make_shared<ReplayPacketSource>();
+    std::unique_ptr<Radar> radar;
+    uint32_t seq = 1;
+    size_t bytes_per_frame = 0;
+
+    explicit Rig(const RadarConfig& cfg) {
+        bytes_per_frame = static_cast<size_t>(cfg.frame_shape().bytes);
+        auto r = Radar::open(cfg, {cli, packets});
+        CHECK(static_cast<bool>(r));
+        if (r) radar = std::move(*r);
+        else std::cerr << r.status.message << std::endl;
+    }
+    // queue frame `index` (every 16-bit word = tag); `drop` removes that packet
+    void send_frame(uint64_t index, uint16_t tag, int drop = -1) {
+        auto p = dca_test::frame_packets(index, bytes_per_frame, tag, seq);
+        for (int i = 0; i < static_cast<int>(p.size()); i++) {
+            if (i != drop) packets->push(p[i]);
+        }
+    }
+};
+
+bool all_samples_are(const AdcFrame& f, int16_t v) {
+    for (const auto& rx : f.data)
+        for (const auto& s : rx)
+            for (const auto& c : s)
+                if (c.real() != v || c.imag() != v) return false;
+    return true;
+}
+
+long long ms_since(clk::time_point t0) {
+    return std::chrono::duration_cast<milliseconds>(clk::now() - t0).count();
+}
+
+}  // namespace
+
+TEST_CASE(configure_start_stop_idempotence) {
+    Rig rig(load("idem"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(r.start().code == Code::invalid_state);  // before configure()
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(rig.cli->writes() > 5);  // the cfg went through the fake CLI
+    CHECK(static_cast<bool>(r.start()));
+    CHECK(static_cast<bool>(r.start()));  // idempotent while running
+    CHECK_EQ(rig.cli->count("sensorStart\n"), size_t(1));
+    CHECK(r.configure().code == Code::invalid_state);  // not while running
+    const Status s1 = r.stop();
+    const Status s2 = r.stop();
+    CHECK(static_cast<bool>(s1));
+    CHECK(s1 == s2);
+    CHECK_EQ(rig.cli->count("sensorStop\n"), size_t(2));  // one in the cfg, one from stop()
+    CHECK(r.start().code == Code::invalid_state);  // after stop()
+    CHECK(r.configure().code == Code::invalid_state);
+    AdcFrame f;
+    Status why;
+    CHECK(!r.next_adc_frame(f, milliseconds(10), &why));
+    CHECK(why.code == Code::stopped);
+    cpsl::radar::PointCloud pc;
+    CHECK(!r.next_point_cloud(pc, milliseconds(10), &why));
+    CHECK(why.code == Code::disabled);
+}
+
+TEST_CASE(golden_frames_through_next_adc_frame) {
+    Rig rig(load("golden"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    AdcFrame f;
+    Status why;
+    auto check_frame = [&](uint64_t index, uint32_t missing, int16_t value) {
+        CHECK(r.next_adc_frame(f, milliseconds(3000), &why));
+        CHECK_EQ(f.index, index);
+        CHECK_EQ(f.missing_bytes, missing);
+        CHECK_EQ(f.data.size(), size_t(4));          // [rx]
+        CHECK_EQ(f.data[0].size(), size_t(63));      // [sample]
+        CHECK_EQ(f.data[0][0].size(), size_t(230));  // [chirp]
+        CHECK_EQ(f.shape.bytes, static_cast<uint64_t>(rig.bytes_per_frame));
+        if (missing == 0) CHECK(all_samples_are(f, value));
+    };
+    // a complete frame is published as soon as its last byte lands
+    rig.send_frame(0, 100);
+    check_frame(0, 0, 100);
+    rig.send_frame(1, 101);
+    check_frame(1, 0, 101);
+    // frame 2 loses one packet: it is published (zero-filled) only once the
+    // stream is the reorder slack (8 packets) past its end
+    rig.send_frame(2, 102, 7);
+    CHECK(!r.next_adc_frame(f, milliseconds(200), &why));
+    CHECK(why.code == Code::timeout);
+    auto p3 = dca_test::frame_packets(3, rig.bytes_per_frame, 103, rig.seq);
+    for (size_t i = 0; i < 12; i++) rig.packets->push(p3[i]);
+    check_frame(2, 1462, 0);
+    for (size_t i = 12; i < p3.size(); i++) rig.packets->push(p3[i]);
+    check_frame(3, 0, 103);
+    CHECK(static_cast<bool>(r.stop()));
+    const cpsl::radar::Stats st = r.stats();
+    CHECK_EQ(st.frames, uint64_t(4));
+    CHECK_EQ(st.dropped, uint64_t(1));
+    CHECK_EQ(st.incomplete_frames, uint64_t(1));
+    CHECK_EQ(st.frames_overwritten, uint64_t(0));
+    CHECK_EQ(st.packets, static_cast<uint64_t>(rig.seq - 1));
+    // adc_data.bin holds the four frames, flushed and closed
+    struct stat sb;
+    CHECK(stat((kRoot + "/golden/adc_data.bin").c_str(), &sb) == 0);
+    CHECK_EQ(static_cast<uint64_t>(sb.st_size), 4 * static_cast<uint64_t>(rig.bytes_per_frame));
+}
+
+TEST_CASE(latest_wins_counts_overwritten_frames) {
+    Rig rig(load("overwrite"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    for (int k = 0; k < 4; k++) rig.send_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+    const clk::time_point t0 = clk::now();
+    while (r.stats().frames < 4 && ms_since(t0) < 3000) std::this_thread::sleep_for(milliseconds(5));
+    AdcFrame f;
+    CHECK(r.next_adc_frame(f, milliseconds(1000)));
+    CHECK_EQ(f.index, uint64_t(3));  // the latest
+    CHECK_EQ(r.stats().frames_overwritten, uint64_t(3));
+    r.stop();
+}
+
+TEST_CASE(concurrent_stop_waits_for_the_first_and_shares_its_status) {
+    Rig rig(load("concurrent"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    // sensorStop's write hangs for the whole stop window (300 ms), then fails
+    rig.cli->fail_from_now(FakeCli::Fail::write_hangs);
+    Status a, b;
+    long long ta = 0, tb = 0;
+    const clk::time_point t0 = clk::now();
+    std::thread t1([&] { a = r.stop(); ta = ms_since(t0); });
+    std::thread t2([&] { b = r.stop(); tb = ms_since(t0); });
+    t1.join();
+    t2.join();
+    CHECK(a.code == Code::io_error);
+    CHECK(a == b);
+    CHECK(ta >= 290);  // neither caller returned before the stop had finished
+    CHECK(tb >= 290);
+    CHECK_EQ(rig.cli->count("sensorStop\n"), size_t(2));  // cfg + one stop
+}
+
+TEST_CASE(config_once_per_boot) {
+    auto once = [](json& j) {
+        j["cli"]["port"] = "/dev/fake-cascade-cli";
+        j["board_overrides"] = {{"lifecycle", {{"config_once_per_boot", true}}}};
+    };
+    RadarConfig cfg = load("once", once);
+    Rig rig(cfg);
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    const size_t sent = rig.cli->writes();
+    const Status again = r.configure();
+    CHECK(again.code == Code::already_configured);
+    CHECK_EQ(rig.cli->writes(), sent);  // nothing sent
+    CHECK(static_cast<bool>(r.start()));  // the board still holds the cfg
+    r.stop();
+    // a new Radar on the same port in this process: still nothing sent
+    Rig rig2(cfg);
+    if (!rig2.radar) return;
+    CHECK(rig2.radar->configure().code == Code::already_configured);
+    CHECK_EQ(rig2.cli->writes(), size_t(0));
+}
+
+TEST_CASE(stall_policy) {
+    Rig rig(load("stall", [](json& j) { j["runtime"] = {{"stall_timeout_ms", 200}}; }));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    WarnCapture warns;
+    AdcFrame f;
+    Status why;
+    clk::time_point t0 = clk::now();
+    CHECK(!r.next_adc_frame(f, milliseconds(2000), &why));  // no packets at all
+    CHECK(why.code == Code::stalled);
+    CHECK(ms_since(t0) >= 190 && ms_since(t0) < 1000);
+    CHECK_EQ(r.stats().stalls, uint64_t(1));
+    CHECK(!r.next_adc_frame(f, milliseconds(100), &why));  // same stall: reported once
+    CHECK(why.code == Code::timeout);
+    CHECK_EQ(r.stats().stalls, uint64_t(1));
+    // a frame again (complete on its own), then a second stall
+    rig.send_frame(0, 1);
+    CHECK(r.next_adc_frame(f, milliseconds(2000), &why));
+    t0 = clk::now();
+    CHECK(!r.next_adc_frame(f, milliseconds(2000), &why));
+    CHECK(why.code == Code::stalled);
+    CHECK_EQ(r.stats().stalls, uint64_t(2));
+    size_t stall_warnings = 0;
+    for (const std::string& w : warns.get()) {
+        if (w.find("no ADC frame for 200 ms") != std::string::npos) stall_warnings++;
+    }
+    CHECK_EQ(stall_warnings, size_t(2));
+    r.stop();
+}
+
+TEST_CASE(stall_policy_off_by_default) {
+    Rig rig(load("nostall"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    AdcFrame f;
+    Status why;
+    CHECK(!r.next_adc_frame(f, milliseconds(300), &why));
+    CHECK(why.code == Code::timeout);
+    CHECK_EQ(r.stats().stalls, uint64_t(0));
+    r.stop();
+}
+
+TEST_CASE(write_error_during_stop_does_not_throw_and_closes_files) {
+    Rig rig(load("unplug"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    for (int k = 0; k < 3; k++) rig.send_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+    const clk::time_point t0 = clk::now();
+    while (r.stats().frames < 3 && ms_since(t0) < 3000) std::this_thread::sleep_for(milliseconds(5));
+    rig.cli->fail_from_now(FakeCli::Fail::throw_system_error);  // the radar's USB goes away
+    bool threw = false;
+    Status s;
+    try {
+        s = r.stop();
+    } catch (...) {
+        threw = true;
+    }
+    CHECK(!threw);
+    CHECK(s.code == Code::io_error);
+    CHECK(s.message.find("sensorStop") != std::string::npos);
+    const uint64_t frames = r.stats().frames;
+    CHECK_EQ(frames, uint64_t(3));
+    struct stat sb;
+    CHECK(stat((kRoot + "/unplug/adc_data.bin").c_str(), &sb) == 0);
+    CHECK_EQ(static_cast<uint64_t>(sb.st_size), frames * rig.bytes_per_frame);
+    // destructor after a failed stop: no second stop, no throw
+    try {
+        rig.radar.reset();
+    } catch (...) {
+        threw = true;
+    }
+    CHECK(!threw);
+    CHECK_EQ(rig.cli->count("sensorStop\n"), size_t(2));
+}
+
+TEST_CASE(output_dir_created_on_open) {
+    const std::string dir = kRoot + "/made/on/open";
+    RadarConfig cfg = load("mkdir", [&](json& j) { j["output"]["dir"] = dir; });
+    CHECK(!std::filesystem::exists(dir));
+    Rig rig(cfg);
+    CHECK(std::filesystem::is_directory(dir));
+    CHECK(std::filesystem::exists(dir + "/adc_data.bin"));
+
+    const std::string file = kRoot + "/plain_file";
+    std::ofstream(file) << "x";
+    RadarConfig bad = load("mkdir_bad", [&](json& j) { j["output"]["dir"] = file + "/captures"; });
+    auto r = Radar::open(bad, {std::make_shared<FakeCli>(), std::make_shared<ReplayPacketSource>()});
+    CHECK(!r);
+    CHECK(r.status.code == Code::output_dir);
+    CHECK(r.status.message.find(file + "/captures") != std::string::npos);
+}
+
+TEST_CASE(moved_radar_keeps_working_and_the_source_is_empty) {
+    Rig rig(load("move"));
+    if (!rig.radar) return;
+    Radar moved(std::move(*rig.radar));
+    CHECK(static_cast<bool>(moved.configure()));
+    CHECK(rig.radar->configure().code == Code::invalid_state);  // moved-from
+    CHECK(static_cast<bool>(moved.start()));
+    CHECK(static_cast<bool>(moved.stop()));
+}
+
+TEST_MAIN()

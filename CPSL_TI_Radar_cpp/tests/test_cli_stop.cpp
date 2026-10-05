@@ -4,18 +4,19 @@
 // uncaught boost::system::system_error ("write: Input/output error") and the
 // driver died with SIGABRT before closing its files. CLIController now talks
 // to a cpsl::radar::ByteStream and turns every write/read failure (thrown or
-// returned) into a false return plus io_error(); Runner::stop() runs every
+// returned) into a false return plus io_error(); Radar::stop() runs every
 // step anyway and reports the failure.
 //
-// Part 1 drives CLIController over a fake stream. Part 2 runs a whole Runner
+// Part 1 drives CLIController over a fake stream. Part 2 runs a whole Radar
 // on a fake CLI stream and a loopback fake DCA1000 (127.0.0.2, UDP): no
 // serial port and no real board is opened.
 #include "test_harness.hpp"
 #include "dca_test_support.hpp"
 #include "ByteStream.hpp"
+#include "fake_transports.hpp"
 #include "CLIController.hpp"
 #include "Log.hpp"
-#include "Runner.hpp"
+#include "Radar.hpp"
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -29,123 +30,6 @@
 #include <pty.h>
 #include <mutex>
 #include <thread>
-
-// A scripted CLI: every written line is answered with "Done" + the prompt.
-// After `fail_after` writes, writes fail: by throwing (as boost::asio::write
-// does on an unplugged port), by returning EIO, or by hanging until the
-// write's timeout (a wedged CDC device). reply_delay holds a command's reply
-// back; prompt_error_on drops one command's prompt and fails the next read.
-class FakeCli : public cpsl::radar::ByteStream {
-public:
-    enum class Fail { none, throw_system_error, return_eio, read_eio, no_reply, write_hangs };
-    using clock = std::chrono::steady_clock;
-
-    std::error_code write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) override {
-        std::unique_lock<std::mutex> l(m_);
-        const std::string line(reinterpret_cast<const char*>(data), len);
-        const std::string cmd = line.substr(0, line.size() - 1);
-        attempted.push_back(line);
-        write_timeouts.push_back(timeout);
-        if (fail != Fail::none && writes_ok >= fail_after) {
-            if (fail == Fail::throw_system_error)
-                throw boost::system::system_error(boost::system::error_code(EIO, boost::system::system_category()),
-                                                  "write");
-            if (fail == Fail::return_eio) return std::error_code(EIO, std::system_category());
-            if (fail == Fail::write_hangs) {
-                l.unlock();
-                std::this_thread::sleep_for(timeout);  // never completes: the timeout ends it
-                return std::make_error_code(std::errc::timed_out);
-            }
-            if (fail == Fail::no_reply) { writes_ok++; return {}; }
-            // read_eio: the write lands, the read fails
-            writes_ok++;
-            read_error_ = true;
-            return {};
-        }
-        writes_ok++;
-        auto d = reply_delay.find(cmd);
-        const clock::time_point at = clock::now() + (d == reply_delay.end() ? std::chrono::milliseconds(0) : d->second);
-        if (cmd == prompt_error_on) {
-            pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\n"});
-            prompt_error_ = true;
-        } else {
-            pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\nmmwDemo:/>"});
-        }
-        return {};
-    }
-
-    std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) override {
-        n = 0;
-        std::unique_lock<std::mutex> l(m_);
-        if (read_error_) return std::error_code(EIO, std::system_category());
-        if (pending_.empty()) {
-            if (prompt_error_) {
-                prompt_error_ = false;
-                return std::error_code(EIO, std::system_category());
-            }
-            l.unlock();
-            std::this_thread::sleep_for(std::min(timeout, std::chrono::milliseconds(5)));
-            return std::make_error_code(std::errc::timed_out);
-        }
-        const clock::time_point at = pending_.front().first;
-        if (clock::now() < at) {
-            l.unlock();
-            const auto wait = std::min<clock::duration>(timeout, at - clock::now());
-            std::this_thread::sleep_for(wait);
-            l.lock();
-            if (pending_.empty() || clock::now() < pending_.front().first)
-                return std::make_error_code(std::errc::timed_out);
-        }
-        std::string& front = pending_.front().second;
-        n = std::min(cap, front.size());
-        std::memcpy(buf, front.data(), n);
-        front.erase(0, n);
-        if (front.empty()) pending_.pop_front();
-        return {};
-    }
-
-    void fail_from_now(Fail f) {
-        std::lock_guard<std::mutex> l(m_);
-        fail = f;
-        fail_after = writes_ok;
-    }
-
-    std::vector<std::string> attempted;
-    std::vector<std::chrono::milliseconds> write_timeouts;
-    size_t writes_ok = 0;
-    Fail fail = Fail::none;
-    size_t fail_after = 0;
-    std::map<std::string, std::chrono::milliseconds> reply_delay;
-    std::string prompt_error_on;
-
-private:
-    std::mutex m_;
-    std::deque<std::pair<clock::time_point, std::string>> pending_;
-    bool read_error_ = false;
-    bool prompt_error_ = false;
-};
-
-// Collects warn and error messages while alive.
-class WarnCapture {
-public:
-    WarnCapture() {
-        cpsl::radar::set_log_sink([this](cpsl::radar::LogLevel l, const std::string& m) {
-            if (l == cpsl::radar::LogLevel::warn || l == cpsl::radar::LogLevel::error) {
-                std::lock_guard<std::mutex> lock(m_);
-                lines.push_back(m);
-            }
-        });
-    }
-    ~WarnCapture() { cpsl::radar::set_log_sink(nullptr); }
-    std::vector<std::string> get() {
-        std::lock_guard<std::mutex> lock(m_);
-        return lines;
-    }
-
-private:
-    std::mutex m_;
-    std::vector<std::string> lines;
-};
 
 static SystemConfigReader serial_free_config(const std::string& name) {
     return SystemConfigReader(dca_test::write_system_config(name, dca_test::tmp_dir(), false));
@@ -303,7 +187,7 @@ TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
     close(master);
 }
 
-// ---- Part 2: Runner over a fake CLI and a loopback fake DCA1000 ----
+// ---- Part 2: Radar over a fake CLI and a loopback fake DCA1000 (real UdpPacketSource) ----
 
 class FakeDca {
 public:
@@ -356,11 +240,7 @@ private:
     std::vector<uint16_t> codes;
 };
 
-static int cube_tag(const std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>& c) {
-    return c.empty() ? -1 : c[0][0][0].real();
-}
-
-TEST_CASE(runner_stop_survives_an_unplugged_cli_and_still_closes_the_bin) {
+TEST_CASE(radar_stop_survives_an_unplugged_cli_and_still_closes_the_bin) {
     const int base = 42000 + static_cast<int>(getpid() % 2000) * 2;
     const int cmd_port = base, data_port = base + 1;
     FakeDca dca("127.0.0.2", cmd_port);
@@ -368,23 +248,29 @@ TEST_CASE(runner_stop_survives_an_unplugged_cli_and_still_closes_the_bin) {
     if (!dca.bound) return;
 
     const std::string out = dca_test::tmp_dir() + "/cli_stop_out";
-    mkdir(out.c_str(), 0755);
-    const std::string cfg = dca_test::write_system_config("cli_stop", out, true, "127.0.0.2", cmd_port, data_port);
+    const std::string cfg_path =
+        dca_test::write_system_config("cli_stop", out, true, "127.0.0.2", cmd_port, data_port);
     std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
 
     bool threw = false;
     try {
-        Runner runner(cfg, fake);
-        CHECK(runner.initialized);
-        if (!runner.initialized) return;
-        CHECK(fake->writes_ok > 5);  // the cfg went through the fake CLI
-        runner.start();
-        CHECK(dca.saw(0x5));          // RECORD_START
+        auto cfg = cpsl::radar::RadarConfig::load(cfg_path);
+        CHECK(static_cast<bool>(cfg));
+        if (!cfg) return;
+        cpsl::radar::Transports t;
+        t.cli = fake;  // packets: null = the real UdpPacketSource
+        auto opened = cpsl::radar::Radar::open(*cfg, t);
+        CHECK(static_cast<bool>(opened));
+        if (!opened) return;
+        cpsl::radar::Radar& radar = **opened;
+        CHECK(static_cast<bool>(radar.configure()));
+        CHECK(fake->writes() > 5);  // the cfg went through the fake CLI
+        CHECK(dca.saw(0x3));        // CONFIG_FPGA_GEN
+        CHECK(static_cast<bool>(radar.start()));
+        CHECK(dca.saw(0x5));        // RECORD_START
 
         // stream K frames from the "DCA1000" to the driver's data port
-        SystemConfigReader sys(cfg);
-        RadarConfigReader radar(sys.getRadarConfigPath());
-        const size_t B = radar.get_bytes_per_frame();
+        const size_t B = static_cast<size_t>(cfg->frame_shape().bytes);
         int tx = socket(AF_INET, SOCK_DGRAM, 0);
         sockaddr_in to{};
         to.sin_family = AF_INET;
@@ -397,26 +283,30 @@ TEST_CASE(runner_stop_survives_an_unplugged_cli_and_still_closes_the_bin) {
                 sendto(tx, p.data(), p.size(), 0, reinterpret_cast<sockaddr*>(&to), sizeof to);
                 std::this_thread::sleep_for(std::chrono::microseconds(50));
             }
-            CHECK_EQ(cube_tag(runner.get_next_adc_cube(3000)), k + 1);
+            cpsl::radar::AdcFrame f;
+            CHECK(radar.next_adc_frame(f, std::chrono::milliseconds(3000)));
+            CHECK_EQ(f.index, static_cast<uint64_t>(k));
+            CHECK_EQ(f.data.empty() ? -1 : f.data[0][0][0].real(), k + 1);
         }
         close(tx);
+        CHECK(radar.stats().rcvbuf_bytes > 0);
 
         // the radar's USB goes away: sensorStop's write throws
         fake->fail_from_now(FakeCli::Fail::throw_system_error);
-        const bool stop_ok = runner.stop();
-        CHECK(!stop_ok);
+        const cpsl::radar::Status st = radar.stop();
+        CHECK(st.code == cpsl::radar::Code::io_error);
         CHECK_EQ(fake->attempted.back(), std::string("sensorStop\n"));
         CHECK(dca.saw(0x6));          // RECORD_STOP still sent
-        struct stat st;
-        CHECK(stat((out + "/adc_data.bin").c_str(), &st) == 0);
-        CHECK_EQ(static_cast<long long>(st.st_size), static_cast<long long>(K) * static_cast<long long>(B));
+        struct stat sb;
+        CHECK(stat((out + "/adc_data.bin").c_str(), &sb) == 0);
+        CHECK_EQ(static_cast<long long>(sb.st_size), static_cast<long long>(K) * static_cast<long long>(B));
 
         // idempotent: no second sensorStop
-        const size_t n = fake->attempted.size();
-        CHECK(!runner.stop());
-        CHECK_EQ(fake->attempted.size(), n);
+        const size_t n = fake->writes();
+        CHECK(radar.stop() == st);
+        CHECK_EQ(fake->writes(), n);
     } catch (...) {
-        threw = true;  // includes the Runner destructor
+        threw = true;  // includes the Radar destructor
     }
     CHECK(!threw);
 }
