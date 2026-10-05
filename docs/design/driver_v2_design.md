@@ -169,20 +169,24 @@ class Radar {                              // non-copyable, movable; destructor 
 };
 void set_log_sink(std::function<void(LogLevel, const std::string&)>);   // default: stderr at configured level
 
-struct AdcFrame {                          // contiguous, native LVDS order = adc_data.bin order
+struct AdcFrame {                          // nested [rx][sample][chirp], same type as v1; buffers are pooled and reused
   uint64_t index; std::chrono::steady_clock::time_point completed_at;
   uint32_t missing_bytes; FrameShape shape;
-  std::vector<std::complex<int16_t>> data;                       // [chirp][rx][sample]
-  const std::complex<int16_t>& at(size_t rx, size_t sample, size_t chirp) const;
+  std::vector<std::vector<std::vector<std::complex<int16_t>>>> data;   // [rx][sample][chirp]
 };
 struct PointCloud { uint32_t frame_number; std::vector<Point> points; };  // Point{x,y,z,v,snr_db,noise_db}
 ```
 
-**Why the storage order is [chirp][rx][sample]** (recommended; pending D5). It is the order the 2-lane
-LVDS stream already arrives in, after I/Q pairing (audit (a), file output).
-Conversion becomes one sequential pass, and saving becomes one `write()`. The
-old index order `[rx][sample][chirp]` survives as the `at()` accessor, plus a
-`to_nested()` helper for one release to ease migration.
+**Why the nested `[rx][sample][chirp]` order is kept** (user ruling on D5, 2026-10-05). The user
+wrote a note on this section, summarised here: the nested order was inherited from the IWR1443's
+old notation, and keeping it matters because it affects everything downstream. The user
+maintains several downstream dataset-generator and data-processing repos that depend on it. The
+per-frame allocations the flat layout was meant to remove are removed another way: `AdcFrame`
+buffers come from a pool of reused nested buffers and are still swapped on completion, never
+copied. A flat layout is revisited only if `bench_pipeline` (core-09, core-14) shows the
+converter is a real bottleneck. If a flat layout is ever adopted, the v2 README, the migration
+note and the docs must call out the format change prominently so people migrating can adapt.
+Because the type is unchanged, `CPSL_TI_Radar_ROS` is not broken by this.
 
 **Internal seams for tests.**
 - `PacketSource`: UDP or replay.
@@ -221,14 +225,14 @@ Gains below are **estimates** until measured. Each item is measured two ways:
 |----|--------|----------|--------------------------|---------|
 | P0 | Default `CMAKE_BUILD_TYPE=Release` when unset | audit (a) Build | largest CPU drop on a fresh checkout (`-O0` → `-O2`) | replay CPU ns/byte; harness CPU% |
 | P1 | Place each payload at `byte_count % bytes_per_frame` (frame = `byte_count / bytes_per_frame`); `memcpy` per packet; late or duplicate packets counted, not mis-counted | `FrameAssembler.cpp:84-110` | fixes 3 KNOWN_BUGs; assembly step several times faster than the per-byte loop | replay: frames equal golden, ns/byte |
-| P2 | Pool of pre-zeroed frame buffers; swap on completion instead of copy | audit (a) rows 4, 9, 10 | about 2,000 → 0 allocations/frame; 3 full-frame copies removed | counting allocator |
-| P3 | Single-pass converter into contiguous `AdcFrame` | rows 5–8 | 4 passes and their allocations → 1 sequential pass | replay ns/byte |
+| P2 | Pool of reused nested `[rx][sample][chirp]` frame buffers; swap on completion instead of copy | audit (a) rows 4, 9, 10 | about 2,000 → 0 allocations/frame; 3 full-frame copies removed | counting allocator |
+| P3 | Converter writes in place into the reused nested buffer | rows 5–8 | 4 passes and their allocations → 1 pass over the packed bytes, no per-frame allocation | replay ns/byte |
 | P4 | Pop packets by reference or in batches; notify only when the worker sleeps; atomic stop flag | `DCA1000Socket.cpp:144-160,188`; `Runner.cpp:260-267` | removes copy 2 and about 1 futex per packet | `perf stat` context switches; CPU% |
 | P5 | `recvmmsg` (batch 32) | `DCA1000Socket.cpp:183` | syscalls per packet ÷ up to 32 | `strace -c` / CPU% |
 | P6 | Ring full → stop reading (kernel buffer absorbs); count `SO_RXQ_OVFL` | `DCA1000Socket.cpp:174-179` | fewer drops under transient consumer stalls | harness drops with an injected stall |
 | P7 | Condition-variable frame queue instead of 5 ms polling | `Runner.cpp:320-332` | ≤5 ms → µs consumer latency; no lost-wakeup race | timestamp delta frame complete → consumer |
 | P8 | Serial: read the header, then exactly `totalPacketLen`; reuse buffers; flat `Point` | `SerialStreamer.cpp:344-376`, `TLVProcessing.cpp:40-43` | removes one frame period of latency (50 ms at 20 Hz) | timestamp delta vs frame period on a pty replay |
-| P9 | Contiguous frame written with one `write()`, optionally on a writer thread | `DCA1000Handler.cpp:734-755` | 252k calls → 1 per frame | replay with `save_adc_frames` |
+| P9 | Single-write file output, optionally on a writer thread. With the nested type this may need a flat staging buffer or per-rx writes; decide with bench data | `DCA1000Handler.cpp:734-755` | 252k calls → 1 per frame (or one per rx) | replay with `save_adc_frames` |
 | P10 | No `endl`-flushed prints in per-packet or per-frame paths; periodic stats at `debug` | `FrameAssembler.cpp:85,96`; `DCA1000Handler.cpp:649-659` | removes stdout stalls in drop storms | replay with 1% injected drops |
 | P11 | Configurable affinity and priorities | `DCA1000Socket.cpp:99-104`; `Runner.cpp:231-243` | lower jitter on loaded hosts | harness drops under `stress-ng` load |
 
@@ -457,10 +461,10 @@ Needs: core-13, plus D5 and D10 (and D11 for output files).
 
 **Steps.** One commit per item, in this order:
 1. P10 quiet hot path
-2. P2 frame pool
-3. P3 single-pass converter into contiguous `AdcFrame`
+2. P2 pool of reused nested buffers
+3. P3 converter writes in place into the reused nested buffer
 4. P7 cv frame queue with `frames_overwritten`
-5. P9 single-write file output
+5. P9 single-write file output (may need a flat staging buffer or per-rx writes; decide with bench data)
 
 **Docs step.** ARCHITECTURE "ADC cube layout" and "RX path". Readme output files.
 
@@ -527,27 +531,27 @@ Needs: core-09 and the core-04 `tools/bench/iq_check.py` result (30b3b34).
 
 ## 8. Decisions needed (user)
 
-These are recommendations. §3 and §9 are written as if each one were
-approved and change with the answers.
+The user ruled on 2026-10-05 (source: `plans/history.md`): every recommendation
+was accepted except D5. §3, §5, §7 and §9 reflect the rulings.
 
-| # | Question | Recommendation |
-|---|----------|----------------|
-| D1 | nlohmann_json: vendored submodule or system package? | Keep the pinned submodule as the default (offline, reproducible, Docker-simple). Add `CPSL_USE_SYSTEM_JSON=ON` to use `find_package(nlohmann_json 3.11)`. |
-| D2 | Bump to C++17? | **Yes**, in core-10 after the gate, in its own measured commit: `std::filesystem`, `optional`, `string_view`, `[[nodiscard]]`. GCC 13 on Ubuntu 24.04 and ROS 2 Jazzy are C++17 already. |
-| D3 | Windows support? | **No.** Linux-only (termios2, SCHED_RR, `recvmmsg`, `endian.h`). Keep platform calls behind `PacketSource`/`ByteStream` so a port stays possible. |
-| D4 | Cascade 4-lane raw ADC via DCA1000? | **Defer.** The descriptor reserves `lvds.supported:false`. It needs firmware-loop work, a DCA1000 and cascade hardware that is not on the bench, and a new `layout` decoder. Revisit after core-17. |
-| D5 | Change `AdcFrame` to contiguous `[chirp][rx][sample]`? This breaks the nested-vector API and `CPSL_TI_Radar_ROS`. | **Yes**, with `at()` plus a one-release `to_nested()` shim. Update the ROS package in its own repo. If no, core-14 keeps the nested type and P3/P9 shrink. |
-| D6 | Drop Boost (asio only does serial I/O) for plain termios + `poll`? | **Yes**, in core-16. Removes a system dependency; `termios2` already exists. |
-| D7 | IWR1443 serial (SDK 2) support | Have a Researcher confirm the SDK 2 UART format first (audit (b) hypothesis). Until then, `sdk2` is a load error with a clear message. |
-| D8 | Loading v1 configs | Hard error that names the migration script, not dual-schema reading. |
-| D9 | I/Q check in core-04 | Already partly done: core-04 added `tools/bench/iq_check.py` (30b3b34) and a `numFrames 0` baseline cfg (d7a0a2b). **Recommend** the user runs the reflector capture during the core-04 bench session (about 10 min). It is the only way to settle the I/Q question. |
-| D10 | Frame delivery: change from "latest frame wins" (today; overwritten frames are uncounted) to a drop-oldest queue, default depth 4, with `frames_overwritten` in `Stats`? | **Yes.** Slow consumers see a short backlog instead of silent loss. `runtime.frame_queue_depth: 1` restores latest-wins. |
-| D11 | Make the raw LVDS file (`LVDS_Raw_0.bin`, written on every run with `save_to_file` today) opt-in through `output.save_raw_lvds`? | **Yes.** It doubles disk I/O and is only needed to debug packet loss. `adc_data.bin` stays on with `save_adc_frames`. |
+| # | Question | Recommendation | User ruling (2026-10-05) |
+|---|----------|----------------|---|
+| D1 | nlohmann_json: vendored submodule or system package? | Keep the pinned submodule as the default (offline, reproducible, Docker-simple). Add `CPSL_USE_SYSTEM_JSON=ON` to use `find_package(nlohmann_json 3.11)`. | Accepted as recommended. |
+| D2 | Bump to C++17? | **Yes**, in core-10 after the gate, in its own measured commit: `std::filesystem`, `optional`, `string_view`, `[[nodiscard]]`. GCC 13 on Ubuntu 24.04 and ROS 2 Jazzy are C++17 already. | Accepted as recommended. |
+| D3 | Windows support? | **No.** Linux-only (termios2, SCHED_RR, `recvmmsg`, `endian.h`). Keep platform calls behind `PacketSource`/`ByteStream` so a port stays possible. | Accepted as recommended. |
+| D4 | Cascade 4-lane raw ADC via DCA1000? | **Defer.** The descriptor reserves `lvds.supported:false`. It needs firmware-loop work, a DCA1000 and cascade hardware that is not on the bench, and a new `layout` decoder. Revisit after core-17. | Accepted as recommended. |
+| D5 | Change `AdcFrame` to a flat contiguous chirp-major layout? This breaks the nested-vector API and `CPSL_TI_Radar_ROS`. | **Yes**, with an `at()` accessor and a migration shim; update the ROS package in its own repo. (Not adopted, see the ruling.) | **Overruled: nested `[rx][sample][chirp]` kept.** Downstream dataset and processing repos depend on it (the user's note, §3). Reuse buffers instead of allocating per frame. Revisit a flat layout only if `bench_pipeline` shows the converter is a real bottleneck; then the v2 docs must stress the format change. |
+| D6 | Drop Boost (asio only does serial I/O) for plain termios + `poll`? | **Yes**, in core-16. Removes a system dependency; `termios2` already exists. | Accepted as recommended. |
+| D7 | IWR1443 serial (SDK 2) support | Have a Researcher confirm the SDK 2 UART format first (audit (b) hypothesis). Until then, `sdk2` is a load error with a clear message. | Accepted as recommended. |
+| D8 | Loading v1 configs | Hard error that names the migration script, not dual-schema reading. | Accepted as recommended. |
+| D9 | I/Q check in core-04 | Already partly done: core-04 added `tools/bench/iq_check.py` (30b3b34) and a `numFrames 0` baseline cfg (d7a0a2b). **Recommend** the user runs the reflector capture during the core-04 bench session (about 10 min). It is the only way to settle the I/Q question. | **Recommendation accepted, result partial.** Lane order looks right (single-sided spectrum, commit 6796509), but the ground return peaked near 2.1 m against about 1.0 m expected. A second capture is deferred; the user will verify through the live GUI later. Source: `plans/history.md` 2026-10-05. |
+| D10 | Frame delivery: change from "latest frame wins" (today; overwritten frames are uncounted) to a drop-oldest queue, default depth 4, with `frames_overwritten` in `Stats`? | **Yes.** Slow consumers see a short backlog instead of silent loss. `runtime.frame_queue_depth: 1` restores latest-wins. | Accepted as recommended. |
+| D11 | Make the raw LVDS file (`LVDS_Raw_0.bin`, written on every run with `save_to_file` today) opt-in through `output.save_raw_lvds`? | **Yes.** It doubles disk I/O and is only needed to debug packet loss. `adc_data.bin` stays on with `save_adc_frames`. | Accepted as recommended. |
 
 ## 9. v1 → v2 migration note (draft for `README.md`, landed by core-10)
 
-This draft assumes D5, D8, D10 and D11 are approved as recommended. Edit it to
-match the user's answers before landing.
+This draft reflects the user's rulings on D8, D10 and D11 (accepted) and D5
+(nested layout kept).
 
 
 > **Configs.** v2 system configs carry `"schema_version": 2` and name a board
@@ -570,8 +574,7 @@ match the user's answers before landing.
 > **Library.** `Runner` is replaced by `cpsl::radar::Radar`
 > (`RadarConfig::load` → `Radar::open` → `configure` → `start` → `next_adc_frame` /
 > `next_point_cloud` → `stop`). Calls return `Status` instead of printing.
-> ADC frames are contiguous `[chirp][rx][sample]` (`frame.at(rx, sample, chirp)`;
-> `to_nested()` for one release). Points are `Point{x,y,z,v,snr_db,noise_db}`.
+> ADC frame layout is unchanged (`[rx][sample][chirp]`). Points are `Point{x,y,z,v,snr_db,noise_db}`.
 > Link `CPSL_TI_Radar::driver`.
 >
 > **Output files.** `adc_data.bin` keeps its byte layout but is written to
