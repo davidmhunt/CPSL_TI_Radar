@@ -11,14 +11,14 @@ This file has no prose yet.
 |---|----------------|--------|------------|
 | A1 | `01_build_and_test.md` | Build the driver and run the unit tests (`cmake`, `ctest`) | core-08 (CMake), core-10 (C++17 if D2), core-12 (default build type) |
 | A2 | `02_host_setup.md` | Host setup: `rmem_max`, static IP for the DCA1000, `dialout`, `cap_sys_nice` | core-15 (affinity/priority settings) |
-
-Already written: `rebuild_driver.md`, a one-page repeatable runbook (build, `ctest`, `--validate`, `host_setup.py --apply`). A1 and A2 should link to it rather than repeat its commands.
 | A3 | `03_first_run.md` | First run from a system config, plus `--validate` without hardware | core-10 (schema v2, `--validate`) |
 | A4 | `04_serial_vs_dca1000.md` | Serial TLV point cloud vs DCA1000 raw ADC: when to use which, and the config switches | core-10, core-16 (serial framing) |
 | A5 | `05_reading_adc_data.md` | Read `adc_data.bin` with the `utilities/` notebooks | core-14 (output dir, unchanged layout), D5 (frame layout) |
 | A6 | `06_multiple_radars.md` | Run several radars: one process per radar, ports, output dirs, IPs | core-10 (`output.dir`), core-13 (API) |
 | A7 | `07_troubleshooting.md` | Troubleshooting: no `Done`, timeouts, drops/overruns, cascade power-cycle | core-13 (Status messages), core-15 (drop counters) |
 | A8 | `bench_validation.md` | Bench-validate a board with the core-04 harness (written by **core-06**, linked, not duplicated) | core-04, core-06 |
+
+Already written: `rebuild_driver.md`, a one-page repeatable runbook (build, `ctest`, `--validate`, `host_setup.py --apply`). A1 and A2 should link to it rather than repeat its commands.
 
 ## B. Extending the driver
 
