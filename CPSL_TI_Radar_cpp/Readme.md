@@ -129,14 +129,14 @@ Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TL
 
 `test_board_descriptor` covers the board descriptor files in [`config/boards/`](./config/boards/) (see "Board descriptors" below).
 
-### Replay benchmark (`ctest -L bench`)
+### Replay benchmark (`ctest -C bench -L bench`)
 
-`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) today's `ADCCubeConverter`, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/nav_configs/1843_stress_test.cfg` unless you pass `--cfg`. The plain `ctest` run skips the benchmark; run it explicitly from a Release build:
+`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) today's `ADCCubeConverter`, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/nav_configs/1843_stress_test.cfg` unless you pass `--cfg`. The test is registered with `CONFIGURATIONS bench`, so the plain `ctest` run above never lists or runs it. `-C bench` adds it and `-L bench` runs only it. Use a Release build for numbers you can compare:
 
 ```bash
 cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release -j
-ctest --test-dir build-release -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
+ctest --test-dir build-release -C bench -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
 ```
 
 ## Preparing your hardware

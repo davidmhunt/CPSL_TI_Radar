@@ -158,6 +158,7 @@ are read only when a rule's trigger matches your next action.
 - C++ (hardware-free unit tests, in-tree harness, no extra dependencies):
   `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure`.
   Add a test as `CPSL_TI_Radar_cpp/tests/test_<name>.cpp` plus an `add_driver_test` line in `tests/CMakeLists.txt`; details in `CPSL_TI_Radar_cpp/Readme.md`. Tests pin current behaviour; a bug found is recorded with `KNOWN_BUG(...)`, not fixed in the test pass.
+- C++ replay benchmark (not part of the plain `ctest` run): build with `-DCMAKE_BUILD_TYPE=Release`, then `ctest --test-dir <build> -C bench -L bench --verbose` (`bench_pipeline`; see `CPSL_TI_Radar_cpp/Readme.md`).
 - Python: `uv run pytest` (`pyproject.toml` disables ROS's `launch_testing`/`launch_ros` plugins, so it passes with ROS sourced or not).
 
 ## Command Execution & Approval Policy

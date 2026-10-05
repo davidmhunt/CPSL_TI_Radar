@@ -39,7 +39,8 @@ and reordering, through `FrameAssembler` and an ADC converter. It reports
 frames/s, ns per ADC byte and heap allocations per frame for three converter
 variants: today's `ADCCubeConverter`, and two bench-local kernels (nested with a
 reused buffer, and flat `[chirp][rx][sample]`) kept as data for design D5. The
-default `ctest` run skips it; `ctest -L bench` runs it. Build with
+default `ctest` run never lists it (registered with `CONFIGURATIONS bench`);
+`ctest -C bench -L bench` runs it. Build with
 `-DCMAKE_BUILD_TYPE=Release` for comparable numbers.
 
 ## Component graph

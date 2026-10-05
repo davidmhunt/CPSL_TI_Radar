@@ -71,6 +71,7 @@ descriptor names the decoder so the rest stays data.
 | `cfg_dialect.rx_mask_fields` | [1] | [1] | [1] | [1, 4] |
 | `cfg_dialect.frame_period_field` | 5 | 5 | 5 | 6 |
 | `data_uart.baud` | 921600 | 921600 | 921600 | 3125000 |
+| `data_uart.timeout_ms` | 1000 | 1000 | 1000 | 5000 (tracked cascade JSON; pre-gate keeps behaviour) |
 | `data_uart.header_bytes` / `tlv_dialect` | 36 / sdk2 (to verify) | 40 / sdk3 | 40 / sdk3 | 40 / mcuplus_cascade |
 | `lvds` | 4 lanes, `lane_per_rx`, `i_first` | 2 lanes, `two_lane_iq_pairs`, `q_first`* | same as 1843* | `supported: false` |
 
@@ -271,7 +272,8 @@ directive (core-12).
 - **Sanitizer preset.** A `CMakePresets.json` `asan-ubsan` preset runs the
   whole suite. It catches the TLV out-of-bounds read class of bugs.
 - **Benchmark.** `bench_pipeline` (core-09) is built but not run by default
-  ctest. A `ctest -L bench` label runs it.
+  ctest: it is registered with `CONFIGURATIONS bench`, and
+  `ctest -C bench -L bench` runs it.
 - **Keep the core-04 harness working.** `tools/bench/` (commit `a4ed54a`)
   reads v1 JSON keys (`verbose`, `Streamer`; `bench_run.py:87,154-155`) and
   parses the driver's stdout (`bench_lib.py:47-51`: `SO_RCVBUF granted`,
@@ -364,10 +366,10 @@ Needs: none (pre-gate).
 **Steps.**
 - Add `config/boards/{IWR1443,IWR1843,IWR6843,AWR2243_CASCADE}.json` per §1.
 - `BoardDescriptor::load` with strict validation, and the cfg cross-checks as a function. Not wired into the runtime.
-- Add the `bench_pipeline` replay target. It drives today's `FrameAssembler` and `ADCCubeConverter` with synthetic packets (`ctest -L bench`, not in the default run) and reports frames/s, ns/byte and allocations/frame.
+- Add the `bench_pipeline` replay target. It drives today's `FrameAssembler` and `ADCCubeConverter` with synthetic packets (`ctest -C bench -L bench`, not in the default run) and reports frames/s, ns/byte and allocations/frame.
 - Record the first values in the Log for a Release build.
 
-**Docs step.** ARCHITECTURE "Configuration" gains the descriptor. The Readme lists the board files and `ctest -L bench`.
+**Docs step.** ARCHITECTURE "Configuration" gains the descriptor. The Readme lists the board files and `ctest -C bench -L bench`.
 
 **Verify.**
 - `test_board_descriptor` passes (4 boards + 6 rejection cases).
