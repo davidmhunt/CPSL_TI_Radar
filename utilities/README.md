@@ -1,6 +1,6 @@
 # Utilities
 
-Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Radar_cpp/`).
+Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Radar_cpp/`). The notebooks need `numpy` and `matplotlib` (plus `pyserial` for `determine_serial_ports`), which are not in the uv environment; run them from this directory.
 
 ## Notebooks
 
@@ -8,10 +8,10 @@ Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Rada
 |---|---|---|
 | `process_adc_data.ipynb` | `adc_data.bin` | Load ADC cube, convert to complex, range/Doppler/azimuth FFT analysis |
 | `process_raw_lbds_data.ipynb` | `LVDS_Raw_0.bin` | Decode raw LVDS packet stream, reconstruct complex samples |
-| `print_config.ipynb` | `.cfg` file | Decode radar config and print key parameters |
+| `print_config.ipynb` | `.cfg` file | Parse a radar `.cfg` and print its commands |
 | `determine_serial_ports.ipynb` | — | List available serial/COM ports on the host |
-| `bartlet.ipynb` | — | Angle-of-arrival estimation (Bartlett and Capon beamforming demo) |
 | `test_ethernet_traffic.ipynb` | — | DCA1000 network debugging |
+| `ti_mmwavesdk_parser_scripts/lvds_example.ipynb` | LVDS capture | Example use of TI's SDK LVDS parser (`parser_lvds_demo_captured_file.py`, not tracked: copy it from the TI mmWave SDK into that folder) |
 
 ---
 
