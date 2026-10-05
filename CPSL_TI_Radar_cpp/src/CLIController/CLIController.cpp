@@ -90,8 +90,7 @@ bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
     if(system_config_reader.initialized){
         cli_port = std::make_shared<boost::asio::serial_port>(
             *io_context,system_config_reader.getRadarCliPort());
-        cli_port -> set_option(serial_port_base::baud_rate(115200));
-        initialized = true;
+        initialized = set_serial_baud_rate(*cli_port, system_config_reader.getRadarCliBaudRate());
     } else{
         initialized = false;
         std::cerr << "attempted to initialize cli controller,\
@@ -105,8 +104,10 @@ bool CLIController::initialize(const SystemConfigReader & systemConfigReader){
  * @brief Runs the CLI controller, sends all CLI commands in the config file
  * except for the sensorStart command
  * 
+ * @return true if every command was acknowledged with "Done"
+ * @return false if the file couldn't be opened or any command failed/timed out
  */
-void CLIController::send_config_to_IWR() {
+bool CLIController::send_config_to_IWR() {
 
     if(initialized){
         //get the configuration file path
@@ -116,12 +117,16 @@ void CLIController::send_config_to_IWR() {
         //if the configuration file isn't found
         if (!configFile) {
             cerr << "Failed to open configuration file." << endl;
-            return;
+            return false;
         }
 
         //if the file is found, send it to the device
+        bool all_done = true;
         string command;
         while (getline(configFile, command)) {
+
+            //strip trailing whitespace / CR from Windows-style cfg files
+            command.erase(command.find_last_not_of(" \t\r") + 1);
 
             //skip comments
             if (command.empty() || command[0] == '#' || command[0] == '%') {
@@ -130,11 +135,15 @@ void CLIController::send_config_to_IWR() {
             else if (command.find("sensorStart") == std::string::npos)
             {
                 //send all commands except for the start command
-                CLIController::sendCommand(command);
+                if(!CLIController::sendCommand(command)){
+                    all_done = false;
+                }
             }        
         }
+        return all_done;
     } else{
         std::cerr << "attempted to send commands to IWR, but CLI controller isn't initialized";
+        return false;
     }
 }
 
@@ -142,40 +151,45 @@ void CLIController::send_config_to_IWR() {
  * @brief Send the sensor start command
  * 
  */
-void CLIController::sendStartCommand()
+bool CLIController::sendStartCommand()
 {
-    CLIController::sendCommand("sensorStart");
+    return CLIController::sendCommand("sensorStart");
 }
 
 /**
  * @brief Send the sensor stop command
  * 
  */
-void CLIController::sendStopCommand()
+bool CLIController::sendStopCommand()
 {
-    CLIController::sendCommand("sensorStop");
+    return CLIController::sendCommand("sensorStop");
 }
 
 /**
- * @brief Send a command to the IWR
- * 
- * @param command command to be sent to the board
+ * @brief Read from the CLI port until delim is in the buffer or timeout_ms passes
+ *
+ * @param response buffer to append to (may already hold data read past an earlier delimiter)
+ * @param delim string to wait for
+ * @param timeout_ms how long to wait
+ * @return error code (operation_aborted on timeout)
  */
-void CLIController::sendCommand(const string& command) {
-
-    std::cout << "Sent command: " << command << endl; 
-    
-    //send the command over the serial port
-    write(*cli_port, buffer(command + "\n"));
-
-    //wait to receive confirmation that the command was sent
-    boost::asio::streambuf response;
+boost::system::error_code CLIController::read_until_with_timeout(
+    boost::asio::streambuf & response,
+    const std::string & delim,
+    int timeout_ms)
+{
     boost::system::error_code ec;
     boost::asio::deadline_timer timeout(*io_context);
-    timeout.expires_from_now(boost::posix_time::millisec(100));
+    timeout.expires_from_now(boost::posix_time::millisec(timeout_ms));
 
-    async_read_until(*cli_port, response, "Done", [&ec](const boost::system::error_code& e, size_t bytes_transferred) {
+    async_read_until(*cli_port, response, delim, [&ec, &timeout](const boost::system::error_code& e, size_t) {
         ec = e;
+
+        //stop waiting as soon as delim arrives instead of running out the timer
+        if (!e) {
+            boost::system::error_code cancel_ec;
+            timeout.cancel(cancel_ec);
+        }
     });
 
     timeout.async_wait([this](const boost::system::error_code& e) {
@@ -187,6 +201,34 @@ void CLIController::sendCommand(const string& command) {
     io_context -> run();
     io_context -> reset();
 
+    return ec;
+}
+
+/**
+ * @brief Send a command to the IWR
+ * 
+ * @param command command to be sent to the board
+ * @return true if the board responded with "Done"
+ */
+bool CLIController::sendCommand(const string& command) {
+
+    std::cout << "Sent command: " << command << endl; 
+    
+    //send the command over the serial port
+    write(*cli_port, buffer(command + "\n"));
+
+    //wait to receive confirmation that the command was sent
+    boost::asio::streambuf response;
+    boost::system::error_code ec = read_until_with_timeout(
+        response, "Done", system_config_reader.getRadarCliTimeoutMs());
+
+    //the board prints its prompt after "Done" and drops input while it does
+    //(the AM273x cascade demo loses the first characters of the next command),
+    //so wait for the prompt before returning. Boards without it just time out.
+    if (!ec) {
+        read_until_with_timeout(response, "mmwDemo:/>", 500);
+    }
+
     const char* raw_data = boost::asio::buffer_cast<const char*>(response.data());
     size_t raw_data_size = response.size();
     //TODO: ONly print the part before the "Done" message
@@ -196,12 +238,15 @@ void CLIController::sendCommand(const string& command) {
     //handle error codes
     if (ec == boost::asio::error::operation_aborted) {
         cout << "Timeout while waiting for response. Partial response received." << "\n" << endl;
+        return false;
     } else if (ec) {
         cerr << "Error while reading response: " << ec.message() << "\n" << endl;
-        return;
+        return false;
     } else {
         if (resp.find("Done") == string::npos) {
             cout << "Received partial response. 'Done' message not found." << "\n" << endl;
+            return false;
         }
     }
+    return true;
 }

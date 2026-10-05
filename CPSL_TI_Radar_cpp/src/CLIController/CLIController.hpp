@@ -8,6 +8,7 @@
 #include <bitset>
 #include <memory>
 #include "SystemConfigReader.hpp"
+#include "SerialBaud.hpp"
 
 class CLIController {
 public:
@@ -19,15 +20,19 @@ public:
 
     bool initialize(const SystemConfigReader & systemConfigReader);
 
-    void send_config_to_IWR();
-    void sendStartCommand();
-    void sendStopCommand();
+    bool send_config_to_IWR();
+    bool sendStartCommand();
+    bool sendStopCommand();
 
     bool initialized;
     
 private:
 
-    void sendCommand(const std::string& command);
+    bool sendCommand(const std::string& command);
+    boost::system::error_code read_until_with_timeout(
+        boost::asio::streambuf & response,
+        const std::string & delim,
+        int timeout_ms);
 
     std::shared_ptr<boost::asio::io_context> io_context;
     std::shared_ptr<boost::asio::serial_port> cli_port;

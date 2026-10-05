@@ -12,6 +12,10 @@ SystemConfigReader::SystemConfigReader()
       json_file_path(""),
       radar_cliPort(""),
       radar_dataPort(""),
+      radar_cliBaudRate(115200),
+      radar_cliTimeoutMs(100),
+      radar_dataBaudRate(921600),
+      radar_dataTimeoutMs(1000),
       serial_streaming_enabled(false),
       dca1000_streaming_enabled(false),
       DCA_fpgaIP(""),
@@ -35,6 +39,10 @@ SystemConfigReader::SystemConfigReader(const std::string& jsonFilePath)
       verbose(false), json_file_path(jsonFilePath),
       radar_cliPort(""),
       radar_dataPort(""),
+      radar_cliBaudRate(115200),
+      radar_cliTimeoutMs(100),
+      radar_dataBaudRate(921600),
+      radar_dataTimeoutMs(1000),
       serial_streaming_enabled(false),
       dca1000_streaming_enabled(false),
       DCA_fpgaIP(""),
@@ -59,8 +67,13 @@ SystemConfigReader::SystemConfigReader(const SystemConfigReader & rhs)
     : initialized(rhs.initialized),
       verbose(rhs.verbose),
       json_file_path(rhs.json_file_path),
+      radar_ConfigPath(rhs.radar_ConfigPath),
       radar_cliPort(rhs.radar_cliPort),
       radar_dataPort(rhs.radar_dataPort),
+      radar_cliBaudRate(rhs.radar_cliBaudRate),
+      radar_cliTimeoutMs(rhs.radar_cliTimeoutMs),
+      radar_dataBaudRate(rhs.radar_dataBaudRate),
+      radar_dataTimeoutMs(rhs.radar_dataTimeoutMs),
       serial_streaming_enabled(rhs.serial_streaming_enabled),
       dca1000_streaming_enabled(rhs.dca1000_streaming_enabled),
       DCA_fpgaIP(rhs.DCA_fpgaIP),
@@ -88,6 +101,10 @@ SystemConfigReader & SystemConfigReader::operator=(const SystemConfigReader & rh
         radar_ConfigPath = rhs.radar_ConfigPath;
         radar_cliPort = rhs.radar_cliPort;
         radar_dataPort = rhs.radar_dataPort;
+        radar_cliBaudRate = rhs.radar_cliBaudRate;
+        radar_cliTimeoutMs = rhs.radar_cliTimeoutMs;
+        radar_dataBaudRate = rhs.radar_dataBaudRate;
+        radar_dataTimeoutMs = rhs.radar_dataTimeoutMs;
         serial_streaming_enabled = rhs.serial_streaming_enabled,
         dca1000_streaming_enabled = rhs.dca1000_streaming_enabled,
         DCA_fpgaIP = rhs.DCA_fpgaIP;
@@ -144,6 +161,49 @@ std::string SystemConfigReader::getRadarCliPort() const
 std::string SystemConfigReader::getRadarDataPort() const 
 {
     return radar_dataPort;
+}
+
+/**
+ * @brief Get the CLI port baud rate (CLI_Controller.baud_rate, default 115200)
+ * 
+ * @return unsigned int 
+ */
+unsigned int SystemConfigReader::getRadarCliBaudRate() const 
+{
+    return radar_cliBaudRate;
+}
+
+/**
+ * @brief Get how long to wait for each CLI command's "Done" response
+ * (CLI_Controller.cmd_timeout_ms, default 100)
+ * 
+ * @return int timeout in milliseconds
+ */
+int SystemConfigReader::getRadarCliTimeoutMs() const 
+{
+    return radar_cliTimeoutMs;
+}
+
+/**
+ * @brief Get the serial data port baud rate
+ * (Streamer.serial_streaming.baud_rate, default 921600)
+ * 
+ * @return unsigned int 
+ */
+unsigned int SystemConfigReader::getRadarDataBaudRate() const 
+{
+    return radar_dataBaudRate;
+}
+
+/**
+ * @brief Get how long the serial streamer waits for the next frame before giving up
+ * (Streamer.serial_streaming.timeout_ms, default 1000)
+ * 
+ * @return int timeout in milliseconds
+ */
+int SystemConfigReader::getRadarDataTimeoutMs() const 
+{
+    return radar_dataTimeoutMs;
 }
 
 /**
@@ -304,6 +364,12 @@ void SystemConfigReader::readJsonFile()
     //get the radar CLI interface information
     if (data.contains("CLI_Controller") && data["CLI_Controller"].contains("CLI_port")) {
         radar_cliPort = data["CLI_Controller"]["CLI_port"].get<std::string>();
+        if (data["CLI_Controller"].contains("baud_rate")) {
+            radar_cliBaudRate = data["CLI_Controller"]["baud_rate"].get<unsigned int>();
+        }
+        if (data["CLI_Controller"].contains("cmd_timeout_ms")) {
+            radar_cliTimeoutMs = data["CLI_Controller"]["cmd_timeout_ms"].get<int>();
+        }
     } else{
         initialized = false;
         std::cerr << "SystemConfigReader: Couldn't find CLI_port"<< std::endl;
@@ -374,6 +440,14 @@ void SystemConfigReader::readJsonFile()
                 std::cerr << "SystemConfigReader: Couldn't find serial_streaming data_port"<< std::endl;
                 return;
             }
+            //optional data port baud rate (the AWR2243 cascade demo uses 3125000)
+            if (data["Streamer"]["serial_streaming"].contains("baud_rate")) {
+                radar_dataBaudRate = data["Streamer"]["serial_streaming"]["baud_rate"].get<unsigned int>();
+            }
+            //optional time to wait for each frame (must cover the frame period and sensorStart)
+            if (data["Streamer"]["serial_streaming"].contains("timeout_ms")) {
+                radar_dataTimeoutMs = data["Streamer"]["serial_streaming"]["timeout_ms"].get<int>();
+            }
         }else{
             initialized = false;
             std::cerr << "SystemConfigReader: Couldn't find serial_streaming"<< std::endl;
@@ -392,10 +466,18 @@ void SystemConfigReader::readJsonFile()
         // Board type: prefer explicit board_type field; accept SDK_version as legacy fallback
         if (data["Streamer"].contains("board_type")) {
             board_type = data["Streamer"]["board_type"].get<std::string>();
-            if (board_type != "IWR1843" && board_type != "IWR6843" && board_type != "IWR1443") {
+            if (board_type != "IWR1843" && board_type != "IWR6843" && board_type != "IWR1443" &&
+                board_type != "AWR2243_CASCADE") {
                 initialized = false;
                 std::cerr << "SystemConfigReader: unrecognized board_type \""
-                          << board_type << "\". Valid values: IWR1843, IWR6843, IWR1443" << std::endl;
+                          << board_type << "\". Valid values: IWR1843, IWR6843, IWR1443, AWR2243_CASCADE" << std::endl;
+                return;
+            }
+            // Raw ADC capture from the cascade (4-lane LVDS) isn't supported yet
+            if (board_type == "AWR2243_CASCADE" && dca1000_streaming_enabled) {
+                initialized = false;
+                std::cerr << "SystemConfigReader: DCA1000 streaming isn't supported for AWR2243_CASCADE yet; "
+                          << "set Streamer.DCA1000_streaming.enabled to false" << std::endl;
                 return;
             }
             // Also parse SDK_version if present (kept for any legacy callers)

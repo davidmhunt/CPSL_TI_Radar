@@ -32,6 +32,12 @@ Supported boards:
 | IWR1843 | 2-lane | non-interleaved (SDK 3+) | `"IWR1843"` |
 | IWR6843 | 2-lane | non-interleaved (SDK 3+) | `"IWR6843"` |
 | IWR1443 | 4-lane | interleaved (SDK 2) | `"IWR1443"` |
+| AWR2243 2-chip cascade (AM273x) | — (serial TLV only for now) | — | `"AWR2243_CASCADE"` |
+
+The AWR2243 cascade runs TI's 2-chip cascade DDM demo, built and flashed from the companion
+[`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo. Only the
+UART point cloud is supported (data port at 3,125,000 baud); raw ADC capture through the DCA1000 is not yet supported.
+See `config/system/radar_0_AWR2243_cascade_serial.json`.
 
 ## Firmware
 

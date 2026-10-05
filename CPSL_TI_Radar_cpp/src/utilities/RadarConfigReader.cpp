@@ -209,7 +209,7 @@ std::vector<std::string> RadarConfigReader::get_vec_from_string(std::string text
     std::istringstream iss(text);
     std::string value;
     std::vector<std::string> values;
-    while (std::getline(iss,value,' '))
+    while (iss >> value)
     {
         values.push_back(value);
     }  
@@ -255,16 +255,28 @@ void RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
     frameCfg_chirp_start_idx = (std::stoi(values[1]));
     frameCfg_chirp_end_idx = (std::stoi(values[2]));
     frameCfG_num_loops = (std::stoi(values[3]));
-    frameCfg_frame_period = std::stof(values[5]);
+
+    //the AWR2243 cascade (mmWave MCU+ SDK) inserts <numAdcSamples> before the period:
+    //frameCfg <start> <end> <loops> <frames> <adcSamples> <periodMs> <trigger> <delay> <...>
+    if (values.size() >= 10) {
+        frameCfg_frame_period = std::stof(values[6]);
+    } else {
+        frameCfg_frame_period = std::stof(values[5]);
+    }
 }
 
 /**
  * @brief Decode the channel configuration. Sets rx_antennas by counting
- * set bits in the Rx channel bitmask (values[1]).
+ * set bits in the Rx channel bitmask(s).
  * Format: channelCfg <rxMask> <txMask> <cascading>
+ * Cascade format: channelCfg <rxMaskMaster> <txMaskMaster> <cascading> <rxMaskSlave> <txMaskSlave>
  *
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
 void RadarConfigReader::read_channel_cfg(std::vector<std::string> values){
-    rx_antennas = static_cast<int16_t>(__builtin_popcount(std::stoi(values[1])));
+    int rx = __builtin_popcount(std::stoi(values[1]));
+    if (values.size() >= 6) {
+        rx += __builtin_popcount(std::stoi(values[4]));
+    }
+    rx_antennas = static_cast<int16_t>(rx);
 }

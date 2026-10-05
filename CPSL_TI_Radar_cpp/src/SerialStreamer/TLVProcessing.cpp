@@ -80,3 +80,34 @@ std::vector<float> TLVDetectedPoints::bytes_to_floats(
     
     return out_vector;
 }
+
+/**
+ * @brief Construct a new TLVDetectedPointsSideInfo object
+ * 
+ */
+TLVDetectedPointsSideInfo::TLVDetectedPointsSideInfo():
+    valid_data(false),
+    side_info(){}
+
+void TLVDetectedPointsSideInfo::process(
+    std::vector<uint8_t> & tlv_raw_data_bytes
+){
+    size_t num_points = tlv_raw_data_bytes.size() / 4;
+    side_info = std::vector<std::vector<float>>(
+        num_points,
+        std::vector<float>(2,0.0)
+    );
+
+    for (size_t i = 0; i < num_points; i++)
+    {
+        for (size_t c = 0; c < 2; c++)
+        {
+            uint16_t raw_value;
+            std::memcpy(&raw_value, &tlv_raw_data_bytes[4 * i + 2 * c], sizeof(uint16_t));
+            int16_t value = static_cast<int16_t>(le16toh(raw_value));
+            side_info[i][c] = static_cast<float>(value) * 0.1f;
+        }
+    }
+
+    valid_data = true;
+}

@@ -29,7 +29,11 @@ SerialStreamer::SerialStreamer():
     header_numDetectedObj(0),
     header_numTLVs(0),
     header_subFrameNumber(0),
+    have_previous_frame(false),
+    previous_frame_number(0),
+    missed_frame_count(0),
     tlv_detected_points_processor(),
+    tlv_side_info_processor(),
     VALID_DETECTED_POINTS()
 {}
 
@@ -59,7 +63,11 @@ SerialStreamer::SerialStreamer(const SystemConfigReader & systemConfigReader):
     header_numDetectedObj(0),
     header_numTLVs(0),
     header_subFrameNumber(0),
+    have_previous_frame(false),
+    previous_frame_number(0),
+    missed_frame_count(0),
     tlv_detected_points_processor(),
+    tlv_side_info_processor(),
     VALID_DETECTED_POINTS()
 {    
     initialize(systemConfigReader);
@@ -91,7 +99,11 @@ SerialStreamer::SerialStreamer(const SerialStreamer & rhs):
     header_numDetectedObj(rhs.header_numDetectedObj),
     header_numTLVs(rhs.header_numTLVs),
     header_subFrameNumber(rhs.header_subFrameNumber),
+    have_previous_frame(rhs.have_previous_frame),
+    previous_frame_number(rhs.previous_frame_number),
+    missed_frame_count(rhs.missed_frame_count),
     tlv_detected_points_processor(rhs.tlv_detected_points_processor),
+    tlv_side_info_processor(rhs.tlv_side_info_processor),
     VALID_DETECTED_POINTS(rhs.VALID_DETECTED_POINTS)
 {}
 
@@ -160,8 +172,9 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
     if(system_config_reader.initialized){
         data_port = std::make_shared<boost::asio::serial_port>(
             *io_context,system_config_reader.getRadarDataPort());
-        data_port -> set_option(serial_port_base::baud_rate(921600));
-        initialized = true;
+        initialized = set_serial_baud_rate(*data_port, system_config_reader.getRadarDataBaudRate());
+        have_previous_frame = false;
+        missed_frame_count = 0;
     } else{
         initialized = false;
         std::cerr << "attempted to initialize cli controller,\
@@ -207,8 +220,11 @@ bool SerialStreamer::process_next_message(void){
 
     //process all new TLVs
     tlv_processing_unique_lock.lock();
-    process_TLV_messages();
+    bool tlvs_valid = process_TLV_messages();
     tlv_processing_unique_lock.unlock();
+    if (!tlvs_valid){
+        return true;
+    }
 
     //denote a new frame is available
     new_frame_available_unique_lock.lock();
@@ -271,9 +287,47 @@ std::vector<std::vector<float>> SerialStreamer::tlv_get_latest_detected_points(v
 }
 
 /**
+ * @brief Get the SNR/noise ([snr_dB, noise_dB] per point, same order as the
+ *  detected points) from the latest frame. Empty if the demo doesn't send TLV type 7.
+ * @note Doesn't reset the new_frame_available flag; call it before
+ *  tlv_get_latest_detected_points() to read both for the same frame.
+ * 
+ * @return std::vector<std::vector<float>> 
+ */
+std::vector<std::vector<float>> SerialStreamer::tlv_get_latest_detected_points_side_info(void){
+
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+    return tlv_side_info_processor.side_info;
+}
+
+/**
+ * @brief Get the frame number from the header of the latest valid frame
+ * 
+ * @return uint32_t 
+ */
+uint32_t SerialStreamer::get_latest_frame_number(void){
+
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+    return header_frameNumber;
+}
+
+/**
+ * @brief Get the number of frames skipped (gaps in the header frame number)
+ * since the streamer was initialized
+ * 
+ * @return uint32_t 
+ */
+uint32_t SerialStreamer::get_missed_frame_count(void){
+
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+    return missed_frame_count;
+}
+
+/**
  * @brief Wait for the next complete message (indicated by 
  * receiving a magic word) and save the read data into the 
- * serial_message_data_buffer. Times out after 1s of waiting
+ * serial_message_data_buffer. Times out after the configured
+ * serial_streaming timeout_ms (default 1s)
  * 
  * @return true on successful data capture
  * @return false on error or timeout during data capture
@@ -283,7 +337,8 @@ bool SerialStreamer::get_next_serial_frame(void) {
     boost::system::error_code ec;
 
     // Set the timeout for the asynchronous read
-    timeout.expires_from_now(boost::posix_time::millisec(1000));
+    timeout.expires_from_now(boost::posix_time::millisec(
+        system_config_reader.getRadarDataTimeoutMs()));
 
     // Start asynchronous read until the magic word is found
     async_read_until(*data_port, serial_stream, magic_word, 
@@ -393,6 +448,8 @@ bool SerialStreamer::process_message_header(void){
         header_data[i] = le32toh(header_data[i]);
     }
 
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+
     header_version = uint32ToHex(header_data[0]);
     header_totalPacketLen = header_data[1];
     header_platform = uint32ToHex(header_data[2]);
@@ -407,7 +464,22 @@ bool SerialStreamer::process_message_header(void){
     }
 
     //check to ensure the message is valid
-    return check_valid_message();
+    if (!check_valid_message()){
+        return false;
+    }
+
+    //track gaps in the frame number (dropped/corrupted frames)
+    if (have_previous_frame && header_frameNumber != previous_frame_number + 1){
+        uint32_t missed = header_frameNumber - previous_frame_number - 1;
+        missed_frame_count += missed;
+        std::cout << "SerialStreamer: frame number jumped from " << previous_frame_number
+                  << " to " << header_frameNumber << " (" << missed_frame_count
+                  << " missed in total)" << std::endl;
+    }
+    have_previous_frame = true;
+    previous_frame_number = header_frameNumber;
+
+    return true;
 }
 
 void SerialStreamer::print_status(void){
@@ -452,7 +524,7 @@ bool SerialStreamer::check_valid_message(void){
  *  by calling the process_message_header() function
  * 
  */
-void SerialStreamer::process_TLV_messages(void){
+bool SerialStreamer::process_TLV_messages(void){
 
     //start processing after the header
     size_t tlv_start_byte_idx = 32;
@@ -463,8 +535,19 @@ void SerialStreamer::process_TLV_messages(void){
     size_t start_idx;
     size_t end_idx;
 
+    //clear the previous frame's outputs so frames without a given TLV
+    //(e.g. no detections) don't report stale data
+    tlv_detected_points_processor.detected_points.clear();
+    tlv_side_info_processor.side_info.clear();
+
     for (size_t i = 0; i < header_numTLVs; i++)
     {
+        //make sure the TLV header and payload fit in the received message
+        if (tlv_start_byte_idx + 8 > serial_message_data_buffer.size()){
+            std::cout << "SerialStreamer: TLV header past end of message" << std::endl;
+            return false;
+        }
+
         //get the next TLV type and length
         TLV_type = get_TLV_type(tlv_start_byte_idx);
         TLV_len = get_TLV_len(tlv_start_byte_idx);
@@ -472,6 +555,11 @@ void SerialStreamer::process_TLV_messages(void){
         //create the tlv_data_vector
         start_idx = tlv_start_byte_idx + 8;
         end_idx = start_idx + TLV_len;
+        if (end_idx > serial_message_data_buffer.size()){
+            std::cout << "SerialStreamer: TLV (type " << TLV_type << ") length " << TLV_len
+                      << " runs past end of message" << std::endl;
+            return false;
+        }
         std::vector<uint8_t> tlv_data(
             serial_message_data_buffer.begin() + start_idx,
             serial_message_data_buffer.begin() + end_idx
@@ -482,8 +570,8 @@ void SerialStreamer::process_TLV_messages(void){
         //increment the start byte index to process next tlv packet
         tlv_start_byte_idx += TLV_len + 8;
     }
-    
 
+    return true;
 }
 
 void SerialStreamer::process_TLV(
@@ -499,6 +587,14 @@ void SerialStreamer::process_TLV(
             );
 
             VALID_DETECTED_POINTS = tlv_detected_points_processor.valid_data;
+
+            break;
+
+        case TLVCodes::DETECTED_POINTS_SIDE_INFO:
+
+            tlv_side_info_processor.process(
+                tlv_data
+            );
 
             break;
         

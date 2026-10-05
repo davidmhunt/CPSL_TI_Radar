@@ -89,7 +89,20 @@ void Runner::initialize(const std::string & json_config_file_path){
     }
 
     if (cli_controller.initialized){
-        cli_controller.send_config_to_IWR();
+        bool config_sent = cli_controller.send_config_to_IWR();
+
+        if (!config_sent && system_config_reader.getBoardType() == "AWR2243_CASCADE"){
+            //the cascade demo can't be reconfigured once it has been started (TI known
+            //issue), so a rejected command almost always means the board needs a power-cycle
+            std::cerr << "Runner: the AWR2243 cascade did not acknowledge every config command. "
+                      << "The cascade demo can only be configured once per boot: "
+                      << "power-cycle the EVM and try again." << std::endl;
+            initialized = false;
+            return;
+        } else if (!config_sent){
+            std::cerr << "Runner: warning: not every config command was acknowledged with 'Done'"
+                      << std::endl;
+        }
         initialized = true;
     }else{
         initialized = false;
@@ -117,7 +130,9 @@ void Runner::start(){
     //send start commands
     if(initialized){
         
-        cli_controller.sendStartCommand();
+        if(!cli_controller.sendStartCommand()){
+            std::cerr << "Runner: sensorStart was not acknowledged with 'Done'" << std::endl;
+        }
 
     }else{
         std::cout << "attempted to start, but Runner isn't initialized" <<std::endl;
@@ -198,6 +213,11 @@ void Runner::stop(){
             dca1000_handler.send_recordStop();
         }
         cli_controller.sendStopCommand();
+
+        if (system_config_reader.getBoardType() == "AWR2243_CASCADE"){
+            std::cout << "Runner: power-cycle the AWR2243 cascade EVM before configuring it again"
+                      << std::endl;
+        }
     }
 
     //set running_dca1000 value to false
@@ -348,6 +368,60 @@ std::vector<std::vector<float>> Runner::get_next_tlv_detected_points(
     } else{
         return ret_vector;
     }
+}
+
+/**
+ * @brief Wait for the next frame of TLV detected points
+ * 
+ * @param detected_points filled with the frame's points ([x, y, z, velocity] per row);
+ *  may be empty when the frame had no detections
+ * @param timeout_ms how long to wait for a frame
+ * @return true if a new frame arrived, false on timeout or if serial streaming is disabled
+ */
+bool Runner::get_next_tlv_detected_points(
+    std::vector<std::vector<float>> & detected_points,
+    int timeout_ms
+){
+    detected_points.clear();
+
+    if (!system_config_reader.get_serial_streaming_enabled()){
+        return false;
+    }
+
+    std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+
+    while(!serial_streamer.check_new_frame_available()){
+
+        //sleep for 5 ms before checking again
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        //check to make sure that we haven't timed out
+        if(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start_time).count() > timeout_ms){
+            std::cerr << "runner timed out waiting for next detected_points" << std::endl;
+            return false;
+        }
+    }
+
+    detected_points = serial_streamer.tlv_get_latest_detected_points();
+    return true;
+}
+
+/**
+ * @brief Get the [snr_dB, noise_dB] side info for the latest TLV frame's points
+ * 
+ * @return std::vector<std::vector<float>> empty if the demo doesn't send TLV type 7
+ */
+std::vector<std::vector<float>> Runner::get_latest_tlv_side_info(void){
+    return serial_streamer.tlv_get_latest_detected_points_side_info();
+}
+
+uint32_t Runner::get_latest_tlv_frame_number(void){
+    return serial_streamer.get_latest_frame_number();
+}
+
+uint32_t Runner::get_tlv_missed_frame_count(void){
+    return serial_streamer.get_missed_frame_count();
 }
 
 bool Runner::get_serial_streaming_enabled(void){

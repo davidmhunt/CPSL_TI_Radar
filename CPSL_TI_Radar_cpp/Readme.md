@@ -128,6 +128,12 @@ To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool 
     b. NOTE: additional documentation on the demo firmware can be found in the index.html file located in (ti/mmwave_sdk_03_06_02_00-LTS/packages/ti/demo/xwr18xx/mmw/docs/doxygen/html)
 
 
+#### [AWR2243 2-chip cascade] IWR Demo (serial TLV)
+The cascade EVM (AM273x + 2× AWR2243) runs TI's 2-chip cascade DDM demo. Build and flash it with the
+[`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo
+(`scripts/flash_cascade.sh`, J6 jumper on the bottom pins to flash and on the top pins to run), then check it with
+`scripts/cascade_serial_check.py` before using this driver.
+
 Once the correct firmware is flashed onto your board, power cycle the board and place it into functional mode.
 
 ## Architecture
@@ -182,19 +188,43 @@ The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration 
 
 #### CLI_Controller
 * CLI_port: the address to the serial port used to program the IWR device. If you don't know the serial port, use the [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) notebook to determine them. Usually the CLI port is the smaller number.
+* baud_rate (optional, default `115200`): CLI port baud rate.
+* cmd_timeout_ms (optional, default `100`): how long to wait for each command's `Done` response. The cascade
+  needs more time (its config uses `5000`) because `sensorStart` configures both chips.
 
 #### Streamer
 This part of the JSON file determines where the data is coming from. Only one of the two options should be enabled.
 * serial_streaming: use this when streaming directly from the IWR demo application
+    * data_port: serial port for TLV frames
+    * baud_rate (optional, default `921600`): data port baud rate. The AWR2243 cascade uses `3125000`. Rates
+      that aren't standard termios rates are set through `termios2`/`BOTHER`. The driver reports an error if
+      the USB-UART bridge can't run at that rate.
+    * timeout_ms (optional, default `1000`): how long to wait for each frame. The timeout must be longer than both the
+      frame period and the time between `sensorStart` and the first frame.
 * DCA1000_streaming: use this when streaming from the DCA1000
 * save_to_file: when set to True, this will save the raw ADC data cube information for each frame to a .bin file which can be utilized at a later
-* board_type: specifies the radar board. Valid values: `"IWR1843"`, `"IWR6843"`, `"IWR1443"`. Controls the number of LVDS lanes used by the DCA1000 and the ADC cube interleaving format.
+* board_type: specifies the radar board. Valid values: `"IWR1843"`, `"IWR6843"`, `"IWR1443"`, `"AWR2243_CASCADE"`. Controls the number of LVDS lanes used by the DCA1000 and the ADC cube interleaving format.
 
 | `board_type` | LVDS lanes | ADC format |
 |---|---|---|
 | `"IWR1843"` | 2-lane | non-interleaved (SDK 3+) |
 | `"IWR6843"` | 2-lane | non-interleaved (SDK 3+) |
 | `"IWR1443"` | 4-lane | interleaved (SDK 2) |
+| `"AWR2243_CASCADE"` | not supported yet (serial only) | — |
+
+##### AWR2243 cascade notes
+* Use [`radar_0_AWR2243_cascade_serial.json`](./config/system/radar_0_AWR2243_cascade_serial.json) with
+  [`cascade_shortrange.cfg`](./config/radar/cascade/cascade_shortrange.cfg). Replace the `/dev/ttyUSB*` placeholders
+  with the EVM's `/dev/serial/by-id/...` paths. Use the Application/User UART for the CLI and the other port for data.
+* **Configure only once per boot.** TI doesn't support stopping the cascade demo and sending a new config. Power-cycle
+  the EVM before every run. If any config command isn't acknowledged, the driver doesn't start and prints a
+  power-cycle reminder.
+* `channelCfg` has 5 fields (`<rxMaster> <txMaster> <cascading> <rxSlave> <txSlave>`), so the Rx count is master + slave (8).
+  `frameCfg` adds `<numAdcSamples>` before the frame period.
+* DCA1000 streaming is rejected for this board until 4-lane LVDS capture is added.
+* TI has only tested up to 192 ADC samples, 256 chirps, and 8 Rx channels. BFP compression isn't supported.
+* Like the other boards, a frame is only handed over when the next frame's magic word arrives, so the newest point
+  cloud is one frame period old.
 
 #### Processor: 
 This part is currently not utilized when streaming DCA1000 data

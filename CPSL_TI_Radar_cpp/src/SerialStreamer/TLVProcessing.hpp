@@ -17,6 +17,9 @@ class TLVCodes{
         static const uint32_t STMMWDEMO_OUTPUT_MSG_DETECTED_POINTS_SIDE_INFOATS =7;
         static const uint32_t MMWDEMO_OUTPUT_MSG_AZIMUT_ELEVATION_STATIC_HEAT_MAP =8;
         static const uint32_t MMWDEMO_OUTPUT_MSG_TEMPERATURE_STATS =9;
+        static const uint32_t DETECTED_POINTS_SIDE_INFO =7;
+        static const uint32_t TRACKER =10; //AWR2243 cascade demo
+        static const uint32_t DETECTED_POINTS_COMPACT =104; //AWR2243 cascade demo
 };
 
 class TLVDetectedPoints{
@@ -43,5 +46,22 @@ class TLVDetectedPoints{
 };
 
 
+
+/**
+ * @brief Per-point SNR and noise (TLV type 7). Each row is [snr, noise] in dB
+ * (the demo sends int16 values in 0.1 dB steps).
+ */
+class TLVDetectedPointsSideInfo{
+
+    public:
+        TLVDetectedPointsSideInfo();
+
+        bool valid_data;
+        std::vector<std::vector<float>> side_info;
+
+        void process(
+            std::vector<uint8_t> & tlv_raw_data_bytes
+        );
+};
 
 #endif

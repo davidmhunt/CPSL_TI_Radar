@@ -48,15 +48,44 @@ int main(int argc, char* argv[]){
         runner.start();
 
         while(true){
-            if(
-                (runner.get_next_adc_cube(timeout_ms).size() == 0)
-                && (runner.get_next_tlv_detected_points(timeout_ms).size() == 0)){
-                break;
-            }else{
-                frame_count += 1;
+            bool got_frame = false;
+
+            if(runner.get_dca1000_streaming_enabled() &&
+                runner.get_next_adc_cube(timeout_ms).size() > 0){
+                got_frame = true;
             }
+
+            if(runner.get_serial_streaming_enabled()){
+                std::vector<std::vector<float>> points;
+                if(runner.get_next_tlv_detected_points(points, timeout_ms)){
+                    got_frame = true;
+                    std::cout << "TLV frame " << runner.get_latest_tlv_frame_number()
+                              << ": " << points.size() << " detected points";
+                    if(!points.empty()){
+                        std::cout << " (first: x=" << points[0][0] << " y=" << points[0][1]
+                                  << " z=" << points[0][2] << " v=" << points[0][3] << ")";
+                    }
+                    std::cout << std::endl;
+                }
+            }
+
+            //stop once no stream produces a frame within the timeout
+            if(!got_frame){
+                break;
+            }
+            frame_count += 1;
+        }
+
+        if(runner.get_serial_streaming_enabled()){
+            std::cout << "Received " << frame_count << " frames, "
+                      << runner.get_tlv_missed_frame_count() << " missed" << std::endl;
         }
 
         runner.stop();
+    } else{
+        std::cerr << "Runner failed to initialize" << std::endl;
+        return 1;
     }
+
+    return 0;
 }

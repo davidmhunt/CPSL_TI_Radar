@@ -15,6 +15,7 @@
 
 #include "SystemConfigReader.hpp"
 #include "TLVProcessing.hpp"
+#include "SerialBaud.hpp"
 
 class SerialStreamer {
 
@@ -39,6 +40,9 @@ public:
     //checking for and accessing latest data
     bool check_new_frame_available();
     std::vector<std::vector<float>> tlv_get_latest_detected_points(void);
+    std::vector<std::vector<float>> tlv_get_latest_detected_points_side_info(void);
+    uint32_t get_latest_frame_number(void);
+    uint32_t get_missed_frame_count(void);
 
 private:
 
@@ -68,6 +72,11 @@ private:
     uint32_t header_numDetectedObj;
     uint32_t header_numTLVs;
     uint32_t header_subFrameNumber;
+
+    //frame continuity tracking
+    bool have_previous_frame;
+    uint32_t previous_frame_number;
+    uint32_t missed_frame_count;
     
     //private class functions here
     //processing messages
@@ -78,7 +87,7 @@ private:
 
     //functions processing TLVs
     TLVCodes tlv_codes;
-    void process_TLV_messages(void);
+    bool process_TLV_messages(void);
     void process_TLV(
         std::vector<uint8_t> & tlv_data,
         uint32_t tlv_type);
@@ -87,6 +96,7 @@ private:
 
     //TLV specific processors
     TLVDetectedPoints tlv_detected_points_processor;
+    TLVDetectedPointsSideInfo tlv_side_info_processor;
 
     //TLV valid data flags
     bool VALID_DETECTED_POINTS;
