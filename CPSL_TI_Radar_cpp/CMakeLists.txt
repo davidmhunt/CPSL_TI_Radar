@@ -5,6 +5,21 @@ project(CPSL_TI_Radar_CPP VERSION 0.1.0)
 # find_package(CPSL_TI_Radar) provides CPSL_TI_Radar::driver
 set(PKG_NAME CPSL_TI_Radar)
 
+# Default to an optimized build (core-12). A plain
+# `cmake -S CPSL_TI_Radar_cpp -B build` with no -DCMAKE_BUILD_TYPE gives
+# Release; an explicit type (-DCMAKE_BUILD_TYPE=Debug, the asan-ubsan preset)
+# is left alone. Multi-config generators choose the type at build time.
+get_property(_is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT _is_multi_config AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
+      "Build type (default Release; e.g. Debug, RelWithDebInfo)" FORCE)
+endif()
+if(_is_multi_config)
+  message(STATUS "Build type: multi-config generator (${CMAKE_CONFIGURATION_TYPES}); choose with --config")
+else()
+  message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+endif()
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
