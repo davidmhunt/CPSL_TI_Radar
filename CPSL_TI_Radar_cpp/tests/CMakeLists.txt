@@ -27,3 +27,13 @@ add_driver_test(test_adc_cube_converter    LIBS ADCCubeConverter)
 add_driver_test(test_tlv_processing        LIBS TLVProcessing)
 add_driver_test(test_serial_streamer_frames LIBS SerialStreamer)
 add_driver_test(test_board_descriptor     LIBS BoardDescriptor)
+
+# The driver's --validate path over every tracked system config (and a v1
+# fixture, which must be rejected with the migration hint).
+get_filename_component(REPO_ROOT "${CPP_ROOT}/.." ABSOLUTE)
+add_test(NAME test_validate_all_configs
+         COMMAND ${CMAKE_COMMAND}
+                 -DDRIVER=$<TARGET_FILE:CPSL_TI_Radar_CPP>
+                 -DCONFIG_DIR=${CPP_ROOT}/config
+                 -DV1_FIXTURE=${REPO_ROOT}/tests/fixtures/v1_configs/front_radar_IWR1843_stress_test_baseline.json
+                 -P ${CMAKE_CURRENT_LIST_DIR}/validate_all_configs.cmake)
