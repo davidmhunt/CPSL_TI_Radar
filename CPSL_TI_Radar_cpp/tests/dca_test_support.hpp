@@ -22,7 +22,11 @@ inline const std::string& tmp_dir() {
 
 // Writes <tmp>/<name>.json for an IWR1843 + DCA1000 run of tests/data/radar/iwr1843.cfg
 // (4 rx x 63 samples x 230 chirps, 231840 B/frame) with output.dir = <out_dir>.
-inline std::string write_system_config(const std::string& name, const std::string& out_dir, bool save_adc_frames) {
+// The host side is always 127.0.0.1; a loopback fake DCA1000 can sit on
+// another 127.x address (fpga_ip).
+inline std::string write_system_config(const std::string& name, const std::string& out_dir, bool save_adc_frames,
+                                       const std::string& fpga_ip = "127.0.0.1", int cmd_port = 4096,
+                                       int data_port = 4098) {
     setenv(SystemConfigReader::kBoardsDirEnv, (std::string(CONFIG_DIR) + "/boards").c_str(), 1);
     nlohmann::json j = nlohmann::json::parse(R"({
         "schema_version": 2,
@@ -34,6 +38,9 @@ inline std::string write_system_config(const std::string& name, const std::strin
         "output": { "dir": "", "save_adc_frames": false, "save_raw_lvds": false }
     })");
     j["radar_cfg"] = std::string(TEST_DATA_DIR) + "/radar/iwr1843.cfg";
+    j["dca1000"]["fpga_ip"] = fpga_ip;
+    j["dca1000"]["cmd_port"] = cmd_port;
+    j["dca1000"]["data_port"] = data_port;
     j["output"]["dir"] = out_dir;
     j["output"]["save_adc_frames"] = save_adc_frames;
     const std::string path = tmp_dir() + "/" + name + ".json";

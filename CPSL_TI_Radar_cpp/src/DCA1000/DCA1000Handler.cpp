@@ -151,7 +151,8 @@ bool DCA1000Handler::stop(){
         std::cerr << "DCA1000Handler: error while stopping: " << e.what() << std::endl;
         ok = false;
     }
-    if(!close_output_files()){
+    output_files_ok_ = close_output_files();
+    if(!output_files_ok_){
         ok = false;
     }
     return ok;

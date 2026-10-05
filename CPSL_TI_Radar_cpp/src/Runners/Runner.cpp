@@ -45,14 +45,30 @@ Runner::Runner(const std::string & json_config_file_path):
     initialize(json_config_file_path);
 }
 
+Runner::Runner(const std::string & json_config_file_path,
+               std::shared_ptr<cpsl::radar::ByteStream> cli_stream):
+    Runner()
+{
+    initialize(json_config_file_path, std::move(cli_stream));
+}
+
 Runner::~Runner(){
 
-    //send the stop commands
-    stop();
+    //send the stop commands (stop() catches everything; this is belt and braces,
+    //a destructor must never throw)
+    try {
+        stop();
+    } catch (...) {
+    }
 }
 
 
 void Runner::initialize(const std::string & json_config_file_path){
+    initialize(json_config_file_path, nullptr);
+}
+
+void Runner::initialize(const std::string & json_config_file_path,
+                        std::shared_ptr<cpsl::radar::ByteStream> cli_stream){
 
     initialized = false;
     running_dca1000 = false;
@@ -86,7 +102,11 @@ void Runner::initialize(const std::string & json_config_file_path){
     //setup the CLI handler
     if(dca1000_handler.initialized ||
         serial_streamer.initialized){
-        cli_controller.initialize(system_config_reader);
+        if(cli_stream){
+            cli_controller.initialize(system_config_reader, cli_stream);
+        } else{
+            cli_controller.initialize(system_config_reader);
+        }
     } else{
         return;
     }
@@ -190,21 +210,20 @@ void Runner::start_serial(){
     }
 }
 
-void Runner::stop(){
+bool Runner::stop(){
 
     //idempotent: main() stops explicitly, then the destructor calls stop() again
     if(stop_done.exchange(true)){
-        return;
+        return last_stop_ok;
     }
 
+    bool ok = true;
+
     //set the stop called flag to true
-    std::unique_lock<std::mutex> stop_called_unique_lock(
-        stop_called_mutex,
-        std::defer_lock
-    );
-    stop_called_unique_lock.lock();
-    stop_called = true;
-    stop_called_unique_lock.unlock();
+    {
+        std::lock_guard<std::mutex> lock(stop_called_mutex);
+        stop_called = true;
+    }
 
     //join the run threads (they exit within one packet/read timeout)
     if(run_thread_dca1000.joinable()){
@@ -217,12 +236,30 @@ void Runner::stop(){
     if(initialized){
         std::cout << "runner sending stop commands" << std::endl;
 
-        //DCA1000: RX thread, recordStop, then flush and close adc_data.bin / LVDS_Raw_0.bin
+        //each step runs even if the one before failed: the files must still be
+        //closed when the radar's USB is gone, and sensorStop must still be tried
+        //when the DCA1000 has gone quiet. Nothing here throws.
+
+        //DCA1000: RX thread, recordStop, then flush and close adc_data.bin / LVDS_Raw_0.bin.
+        //An unacknowledged recordStop (e.g. Ethernet pulled) is only a warning;
+        //a file that failed to flush is a failure.
         if (system_config_reader.get_dca1000_streaming_enabled())
         {
             dca1000_handler.stop();
+            if(!dca1000_handler.output_files_ok()){
+                ok = false;
+            }
         }
-        cli_controller.sendStopCommand();
+
+        //sensorStop: an I/O error (radar unplugged) is a failure, a missing "Done" a warning
+        if(!cli_controller.sendStopCommand()){
+            if(cli_controller.io_error()){
+                std::cerr << "Runner: sensorStop could not be sent (radar disconnected?)" << std::endl;
+                ok = false;
+            } else{
+                std::cerr << "Runner: sensorStop was not acknowledged with 'Done'" << std::endl;
+            }
+        }
 
         if (system_config_reader.getBoard().lifecycle.config_once_per_boot){
             std::cout << "Runner: power-cycle the " << system_config_reader.getBoard().name
@@ -233,6 +270,8 @@ void Runner::stop(){
     //set running_dca1000 value to false
     running_dca1000 = false;
     running_serial = false;
+    last_stop_ok = ok;
+    return ok;
 }
 
 /**

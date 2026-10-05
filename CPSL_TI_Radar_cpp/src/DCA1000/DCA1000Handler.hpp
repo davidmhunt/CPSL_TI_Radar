@@ -36,6 +36,8 @@ private:
     //tests only: runs after a frame is converted, before it is published
     std::function<void()> publish_hook_;
 
+    bool output_files_ok_ = true;
+
     //system configuration information
     SystemConfigReader system_config_reader;
 
@@ -108,6 +110,8 @@ public:
     //thread running process_next_packet() has been joined. Idempotent; never throws.
     //Returns false if recordStop was not acknowledged or a file failed to flush.
     bool stop();
+    //false if flushing/closing an output file failed in stop()
+    bool output_files_ok() const { return output_files_ok_; }
 
     //commands to the DCA1000
     bool send_resetFPGA(); //2nd command

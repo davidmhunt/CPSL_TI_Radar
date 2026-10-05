@@ -121,7 +121,8 @@ SerialStreamer & SerialStreamer::operator=(const SerialStreamer & rhs){
             data_port.use_count() == 1 && 
             data_port -> is_open())
         {
-            data_port -> close();
+            boost::system::error_code ec;
+            data_port -> close(ec);
         }
 
         // Copy other members
@@ -153,7 +154,8 @@ SerialStreamer::~SerialStreamer()
     if(data_port.get() != nullptr && 
         data_port.use_count() == 1 &&
         data_port -> is_open()){
-        data_port -> close();
+        boost::system::error_code ec;
+        data_port -> close(ec);  //never throws, even if the device is gone
     }
 }
 
@@ -166,13 +168,26 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
         data_port.use_count() == 1 && 
         data_port -> is_open())
     {
-        data_port -> close();
+        boost::system::error_code ec;
+        data_port -> close(ec);
     }
 
     if(system_config_reader.initialized){
-        data_port = std::make_shared<boost::asio::serial_port>(
-            *io_context,system_config_reader.getRadarDataPort());
-        initialized = set_serial_baud_rate(*data_port, system_config_reader.getRadarDataBaudRate());
+        data_port = std::make_shared<boost::asio::serial_port>(*io_context);
+        boost::system::error_code ec;
+        data_port->open(system_config_reader.getRadarDataPort(), ec);
+        if(ec){
+            std::cerr << "SerialStreamer: cannot open " << system_config_reader.getRadarDataPort()
+                      << ": " << ec.message() << std::endl;
+            initialized = false;
+            return false;
+        }
+        try{
+            initialized = set_serial_baud_rate(*data_port, system_config_reader.getRadarDataBaudRate());
+        } catch(const std::exception& e){
+            std::cerr << "SerialStreamer: cannot set the data port baud rate: " << e.what() << std::endl;
+            initialized = false;
+        }
         have_previous_frame = false;
         missed_frame_count = 0;
     } else{
@@ -348,7 +363,8 @@ bool SerialStreamer::get_next_serial_frame(void) {
     // Set up the timeout to cancel the operation if it takes too long
     timeout.async_wait([this](const boost::system::error_code& e) {
         if (!e) {
-            data_port->cancel();
+            boost::system::error_code cancel_ec;
+            data_port->cancel(cancel_ec);  //must not throw out of io_context::run (unplugged port)
         }
     });
 

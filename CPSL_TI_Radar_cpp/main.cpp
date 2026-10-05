@@ -199,7 +199,12 @@ int main(int argc, char* argv[]){
         if(cpsl::radar::stop_requested()){
             std::cout << "Stop requested (SIGINT/SIGTERM), stopping" << std::endl;
         }
-        runner.stop();
+        //non-zero if the stop hit an I/O error (e.g. the radar's USB was unplugged);
+        //the output files are closed either way
+        if(!runner.stop()){
+            std::cerr << "stopped with errors (see above)" << std::endl;
+            return 1;
+        }
     } else{
         std::cerr << "Runner failed to initialize" << std::endl;
         return 1;

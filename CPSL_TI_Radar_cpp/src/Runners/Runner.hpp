@@ -35,6 +35,7 @@ private:
     bool running_serial;
     bool stop_called;
     std::atomic<bool> stop_done{true};  //stop() already ran since the last initialize()/start()
+    bool last_stop_ok = true;
 
     SystemConfigReader system_config_reader;
     RadarConfigReader radar_config_reader;
@@ -55,6 +56,10 @@ private:
 public:
     Runner();
     Runner(const std::string & json_config_file_path);
+    //cli_stream: an open CLI stream to use instead of opening the cli.port
+    //(tests: a fake cpsl::radar::ByteStream)
+    Runner(const std::string & json_config_file_path,
+           std::shared_ptr<cpsl::radar::ByteStream> cli_stream);
     //NOTE: NOT INCLUDING COPY CONSTRUCTOR TO PREVENT WEIRD BEHAVIOR
     // Runner(const Runner & rhs);
 
@@ -64,14 +69,18 @@ public:
 
     //initialization
     void initialize(const std::string & json_config_file_path);
+    void initialize(const std::string & json_config_file_path,
+                    std::shared_ptr<cpsl::radar::ByteStream> cli_stream);
 
     //stop running
     void start();
     void start_dca1000();
     void start_serial();
     //stop the sensor and the DCA1000, join the threads, flush and close the
-    //output files; idempotent (the destructor calls it again)
-    void stop();
+    //output files; idempotent (the destructor calls it again) and never throws.
+    //Returns false if an I/O error got in the way (radar unplugged, file not
+    //flushed); every step still runs. A missing acknowledgement is only a warning.
+    bool stop();
 
     //wait for and get the next frame
     std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> get_next_adc_cube(
