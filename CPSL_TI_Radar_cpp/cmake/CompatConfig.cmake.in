@@ -1,0 +1,23 @@
+# Deprecated compatibility package: find_package(CPSL_TI_Radar_CPP).
+# Forwards to find_package(CPSL_TI_Radar) and defines the old
+# CPSL_TI_Radar_CPP::<target> names as aliases. Planned for removal after the
+# v2.0 release; switch to find_package(CPSL_TI_Radar) and CPSL_TI_Radar::driver.
+@PACKAGE_INIT@
+
+message(DEPRECATION
+  "find_package(CPSL_TI_Radar_CPP) is deprecated and will be removed after "
+  "one release. Switch to find_package(CPSL_TI_Radar) and link "
+  "CPSL_TI_Radar::driver.")
+
+include(CMakeFindDependencyMacro)
+find_dependency(CPSL_TI_Radar)
+
+foreach(_t nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler
+           ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing
+           DCA1000Commands)
+  if(NOT TARGET CPSL_TI_Radar_CPP::${_t})
+    add_library(CPSL_TI_Radar_CPP::${_t} INTERFACE IMPORTED)
+    target_link_libraries(CPSL_TI_Radar_CPP::${_t} INTERFACE CPSL_TI_Radar::${_t})
+  endif()
+endforeach()
+unset(_t)

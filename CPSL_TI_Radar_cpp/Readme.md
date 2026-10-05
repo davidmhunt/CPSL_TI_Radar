@@ -111,7 +111,9 @@ find_package(CPSL_TI_Radar REQUIRED)
 add_executable(consumer main.cpp)
 target_link_libraries(consumer PRIVATE CPSL_TI_Radar::driver)
 ```
-Configure it with `-DCMAKE_PREFIX_PATH=<install prefix>`. Headers are installed under `<prefix>/include/CPSL_TI_Radar_CPP/<subdir>/` and are reached through the target, so `#include "Runner.hpp"` works without extra include paths.
+Configure it with `-DCMAKE_PREFIX_PATH=<install prefix>`.
+
+**Renamed in v2.0.** The package was previously found as `find_package(CPSL_TI_Radar_CPP)` with targets such as `CPSL_TI_Radar_CPP::Runner`. For one release a deprecated compatibility package of that name is still installed: it calls `find_package(CPSL_TI_Radar)`, defines the old `CPSL_TI_Radar_CPP::<target>` names as aliases and prints a deprecation message. It will be removed after the next release, so switch to `find_package(CPSL_TI_Radar)` and `CPSL_TI_Radar::driver`. Headers are installed under `<prefix>/include/CPSL_TI_Radar_CPP/<subdir>/` and are reached through the target, so `#include "Runner.hpp"` works without extra include paths.
 
 ## Running tests
 

@@ -88,6 +88,25 @@ install(FILES
   DESTINATION lib/cmake/${PKG_NAME}
 )
 
+# One-release compatibility package: find_package(CPSL_TI_Radar_CPP) forwards to
+# CPSL_TI_Radar and aliases the old CPSL_TI_Radar_CPP:: target names (deprecated)
+set(COMPAT_NAME CPSL_TI_Radar_CPP)
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/${COMPAT_NAME}ConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompatConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/${COMPAT_NAME}Config.cmake
+  INSTALL_DESTINATION lib/cmake/${COMPAT_NAME}
+)
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/${COMPAT_NAME}Config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/${COMPAT_NAME}ConfigVersion.cmake
+  DESTINATION lib/cmake/${COMPAT_NAME}
+)
+
 # Set CPACK variables
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

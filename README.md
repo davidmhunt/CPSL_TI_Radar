@@ -75,6 +75,7 @@ v2.0 is a rework and may break v1 interfaces. Removed from the tree (all recover
 - `archived_code/` — the v1 Python DCA1000/serial driver (`CPSL_TI_Radar_py`, `ConfigManager`, conda environments), early C++ prototypes, and the superseded `DCA1000Runner`. Use the C++ driver in `CPSL_TI_Radar_cpp/`; `Runner` replaces `DCA1000Runner`.
 - `MAIN_NO_RUNNER` executable (`main_no_runner.cpp`) — only `CPSL_TI_Radar_CPP` is built now.
 - `utilities/Postprocess_adc_data.py` and `utilities/bartlet.ipynb` — depended on removed v1 modules or v1 capture files. The remaining notebooks no longer import `ConfigManager`; they parse the `.cfg` directly.
+- CMake package renamed: `find_package(CPSL_TI_Radar_CPP)` / `CPSL_TI_Radar_CPP::<target>` is now `find_package(CPSL_TI_Radar)` / `CPSL_TI_Radar::driver`. A deprecated `CPSL_TI_Radar_CPP` compatibility package (old target names as aliases, with a deprecation message) is installed for one release and then removed. See `CPSL_TI_Radar_cpp/Readme.md`.
 - Generated/stray files: `generated_config.json`, `config/radar/IWR_Demos/generated_config.{cfg,json}` and `jsonconfig.json` (outputs of the v1 `ConfigManager`), the empty root `build/`, and the tracked `CPSL_TI_Radar_cpp/.vscode/`.
 - `planning/current_plan.md` — all phases done or superseded; the cascade plans remain in `planning/`.
 
