@@ -35,6 +35,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `lifecycle.config_once_per_boot` | cascade only | `Runner.cpp:94-99,217-218` |
 | `cfg_dialect.rx_mask_fields` | `[1]`; cascade `[1, 4]` | `RadarConfigReader.cpp:285-289` (slave mask when `channelCfg` has 6 or more fields) |
 | `cfg_dialect.frame_period_field` | 5; cascade 6 | `RadarConfigReader.cpp:261-276` (field-count guess) |
+| `cfg_dialect.skip_commands` | `["calibData"]` on IWR1843; others none (key omitted = `[]`) | Optional key (core-10). Every core-04 IWR1843 baseline run logged `'calibData' is not recognized as a CLI command` from the flashed firmware (`tools/bench/runs/*/driver_stdout.log`). No bench evidence for IWR6843 or IWR1443, so they send it as before. The SDK 3.6 18xx demo source (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:1435`) does register `calibData`, so the shipped IWR1843 image predates or differs from it. |
 | `data_uart.baud` | 921600; cascade 3,125,000 | `SystemConfigReader.cpp:17` default; cascade JSON `:15` |
 | `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. Design §1's board table lists the same values (5000 on the cascade, from the tracked cascade JSON). |
 | `data_uart.header_bytes` | 40; IWR1443 36 | 8-byte magic word + 32-byte header (`SerialStreamer.cpp:22`). **IWR1443 36 is a HYPOTHESIS** (audit (b): SDK 2 header has no `subFrameNumber`). |
@@ -45,6 +46,16 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `lvds.iq_order` | `i_first` (IWR1443), `q_first` | Keeps today's behaviour: `ADCCubeConverter.cpp:74-77` (2-lane: first pair is imaginary) and `:93-94` (4-lane: first group is real). **Not settled**, see the audit's I/Q note and D9. core-17 sets the value from a bench capture. The SDK 3.6 demo maps `adcbufCfg` sampleSwap 1 to `DPIF_DATAFORMAT_COMPLEX16_IMRE` (`mss_main.c:1869-1876`). That is consistent with `q_first`, but it describes the ADC buffer, not the LVDS wire order. |
 | `dca1000.packet_bytes`, `packet_delay_us` | 1472, 100 | `DCA1000Handler.cpp:590-591` |
 | `dca1000.fpga_timer_s` | 30 | `DCA1000Handler.cpp:398-399` |
+
+## Skipped cfg commands
+
+`cfg_dialect.skip_commands` (optional, default `[]`) lists cfg commands the board's firmware
+rejects. The driver leaves them in the `.cfg` file and does not send them:
+`filter_cfg_commands` compares each line's first word with the list (exact and case-sensitive,
+as the TI CLI is). Skipped lines are printed at `runtime.log_level: "debug"`, listed by
+`CPSL_TI_Radar_CPP --validate`, and do not count as unacknowledged. Each entry must be one word
+and cannot be the board's start or stop command. A system config can change the list through
+`board_overrides`, for example `{"cfg_dialect": {"skip_commands": []}}` to send everything.
 
 ## Radar .cfg cross-checks
 

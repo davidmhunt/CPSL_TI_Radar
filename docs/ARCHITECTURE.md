@@ -10,10 +10,14 @@ update it as the rework changes structure. Firmware is described in
 ```bash
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
 cmake --build CPSL_TI_Radar_cpp/build -j
-./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP <system config .json>
+./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP <system config .json> [--validate]
 ```
 
-One executable: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial).
+One executable: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial). The
+config argument is required (no argument: usage, exit 2). `--validate` loads
+the config, board descriptor and radar cfg, runs the cross-checks, prints a
+summary and exits 0/1 without opening any port or socket.
+Built as C++17 (`-std=gnu++17`).
 `include/json` (nlohmann/json) is a
 submodule and must be present.
 
@@ -25,8 +29,8 @@ of everything it links and no central include list exists. Tests list only
 target `driver` (links `Runner`), exported with the install as
 `CPSL_TI_Radar::driver`. New libraries get their own subdirectory, are added
 in `src/CMakeLists.txt`, and need no other include wiring. `src/BoardDescriptor/`
-(board descriptor loader, see Configuration) is built and unit-tested but not
-yet linked into `driver`. Downstream use:
+(board descriptor loader, see Configuration) is linked by `Utilities` and
+`ADCCubeConverter`. Downstream use:
 
 ```cmake
 find_package(CPSL_TI_Radar REQUIRED)   # -DCMAKE_PREFIX_PATH=<install prefix>
@@ -48,13 +52,14 @@ default `ctest` run never lists it (registered with `CONFIGURATIONS bench`);
 ```
 main.cpp
   └── Runner
-        ├── SystemConfigReader   (parses JSON system config)
-        ├── RadarConfigReader    (parses TI .cfg, computes bytes_per_frame)
-        ├── CLIController        (serial → radar, sends .cfg commands)
+        ├── SystemConfigReader   (parses JSON system config v2; loads the board)
+        │     └── BoardDescriptor    (board descriptor, cfg cross-checks, cfg command filter)
+        ├── RadarConfigReader    (parses TI .cfg with the board's cfg dialect, bytes_per_frame)
+        ├── CLIController        (serial → radar, sends the filtered .cfg commands)
         ├── DCA1000Handler       (thin coordinator)
         │     ├── DCA1000Socket      (UDP socket, RX thread SCHED_RR 99, ring buffer)
         │     ├── FrameAssembler     (sequence check, frame assembly, drop stats)
-        │     ├── ADCCubeConverter   (interleaved / non-interleaved ADC conversion)
+        │     ├── ADCCubeConverter   (ADC conversion per lvds.layout / lvds.iq_order)
         │     └── DCA1000Commands    (FPGA command protocol)
         └── SerialStreamer        (serial TLV stream → detected points; TLVProcessing)
 ```
@@ -70,10 +75,10 @@ port) lives in `src/utilities/SerialBaud*` (termios2).
   packets into a 512-slot lock-free ring buffer.
 - **Worker thread** (Runner thread): pops packets, checks sequence numbers,
   assembles frames, converts the ADC cube, does file I/O.
-- `SO_RCVBUF` requests 64 MB (needs `net.core.rmem_max` raised); data
-  socket timeout 500 ms.
+- `SO_RCVBUF` requests `dca1000.rcvbuf_bytes` (default 64 MB; needs
+  `net.core.rmem_max` raised); data socket timeout 500 ms.
 - `dropped_packets`, `dropped_packet_events`, `rx_overrun_count` print per
-  frame with `verbose: true`.
+  frame with `runtime.log_level: "debug"`.
 
 Frames are signaled via a mutex-protected `new_frame_available` flag;
 consumers poll `get_next_adc_cube(timeout_ms)`.
@@ -91,36 +96,67 @@ zero-padded. There is no retransmission.
 
 ## ADC cube layout
 
-Indexed `[Rx channel][sample][chirp]` as `complex<int16_t>`. LVDS data
-arrives interleaved or not depending on SDK:
-`update_latest_adc_cube_interleaved()` vs
-`update_latest_adc_cube_noninterleaved()`. With SDK 3+ and a single RX
-channel, use an even number of ADC samples.
+Indexed `[Rx channel][sample][chirp]` as `complex<int16_t>`. The board
+descriptor's `lvds.layout` picks the decoder in `ADCCubeConverter`:
+`lane_per_rx` (interleaved, IWR1443) or `two_lane_iq_pairs`
+(non-interleaved, IWR1843/6843), and `lvds.iq_order` says which component
+comes first. With SDK 3+ and a single RX channel, use an even number of ADC
+samples.
 
 ## Configuration
 
-Two files are always required today:
+Three files describe a run (design §1, §2):
 
-1. **JSON system config** (`CPSL_TI_Radar_cpp/config/system/*.json`):
-   serial ports, DCA1000 IP/ports, streaming mode, save-to-file, and
-   `TI_Radar_config_path` (relative to the JSON file, or absolute).
-2. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): TI chirp config.
+1. **System config** (`CPSL_TI_Radar_cpp/config/system/*.json`, schema v2,
+   read by `SystemConfigReader`): `"schema_version": 2`, `board`,
+   `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
+   `output` (`dir`, `save_adc_frames`, `save_raw_lvds`) and `runtime`
+   (`log_level`; the queue/affinity/priority keys are validated but reserved
+   for core-14/15). Paths resolve against the JSON file's directory. Loading
+   is strict (unknown keys, bad types, repeated keys are errors with a JSON
+   path). A v1 file is rejected with the name of
+   `tools/migrate_config_v1_to_v2.py`. The fields are listed in
+   `CPSL_TI_Radar_cpp/Readme.md`.
+2. **Board descriptor** (`CPSL_TI_Radar_cpp/config/boards/<board>.json`:
+   `IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), named by `board`
+   (a name is looked up in `$CPSL_TI_RADAR_BOARDS_DIR`, else `../boards`
+   next to the system config; a path is used as given). It holds the CLI
+   handshake, cfg dialect (`rx_mask_fields`, `frame_period_field`,
+   `skip_commands`), data-UART format, LVDS layout and DCA1000 settings.
+   `board_overrides` is deep-merged over it before the strict
+   `cpsl::radar::BoardDescriptor::load` validates it. Field sources are in
+   `config/boards/README.md`.
+3. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): the TI chirp config.
    DCA1000 streaming needs `lvdsStreamCfg -1 0 1 0` (ADC only) or
    `lvdsStreamCfg -1 1 1 1` (all data).
 
-A third file, the **board descriptor** (`CPSL_TI_Radar_cpp/config/boards/<board>.json`:
-`IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), holds a board's CLI handshake,
-cfg dialect, UART TLV format, LVDS layout and DCA1000 settings (design §1). It is
-loaded strictly by `cpsl::radar::BoardDescriptor::load` (`src/BoardDescriptor/`), and
-`cross_check_radar_cfg` checks a radar .cfg against it (16-bit complex ADC,
-`adcbufCfg` interleave vs `lvds.layout`, `lvdsStreamCfg` ADC streaming). The runtime
-does not read it yet: core-10 replaces `board_type` with it. Field sources are in
-`config/boards/README.md`.
+When the system config loads, `cross_check_radar_cfg` checks the radar .cfg
+against the board for the enabled streams (16-bit complex ADC, `adcbufCfg`
+interleave vs `lvds.layout`, `lvdsStreamCfg` ADC streaming, no DCA1000 on a
+board without LVDS, no serial on the unconfirmed `sdk2` dialect); an error
+fails the load.
+
+**Dispatch.** No component branches on a board name; each reads descriptor
+fields through `SystemConfigReader::getBoard()`:
+
+| Behaviour | Descriptor field | Used in |
+|-----------|------------------|---------|
+| cfg commands sent | `cli.skip_prefixes`, `cli.start_cmd`, `cfg_dialect.skip_commands` (`filter_cfg_commands`) | `CLIController` |
+| CLI handshake | `cli.baud`, `ack`, `prompt`, `prompt_wait_ms`, `cmd_timeout_ms`, `start_cmd`, `stop_cmd` | `CLIController` |
+| Rx count, frame period | `cfg_dialect.rx_mask_fields`, `frame_period_field` | `RadarConfigReader` |
+| Data UART | `data_uart.baud`, `timeout_ms` | `SerialStreamer` |
+| DCA1000 FPGA setup | `lvds.lanes`, `dca1000.packet_bytes`, `packet_delay_us`, `fpga_timer_s` | `DCA1000Handler` |
+| ADC decoder | `lvds.layout`, `lvds.iq_order` | `ADCCubeConverter` |
+| One cfg per power-up | `lifecycle.config_once_per_boot` | `Runner` |
+
+`cfg_dialect.skip_commands` drops commands the board's firmware rejects
+before they are sent (the IWR1843 skips `calibData`); the `.cfg` files keep
+the line, and a skipped command does not count as unacknowledged.
 
 DCA1000 network defaults: FPGA `192.168.33.180`, host `192.168.33.30/24`,
 command port 4096, data port 4098.
 
-Supported `board_type`s: `IWR1843`, `IWR6843` (2-lane, non-interleaved),
+Supported boards: `IWR1843`, `IWR6843` (2-lane, non-interleaved),
 `IWR1443` (4-lane, interleaved), `AWR2243_CASCADE` (serial TLV only so far;
 data port 3,125,000 baud).
 

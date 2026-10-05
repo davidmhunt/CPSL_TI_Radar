@@ -219,65 +219,81 @@ To run the cpp code, perform the following:
 
 ### 1. Updating the .json config files
 
-The CPSL_TI_Radar_cpp code utilizes .json files to load essential configuration information. All of the configuration files can be found in the [config/system](./config/system/) folder. Here, the essential components of each configuration are as follows 
+The driver reads a **system config** (JSON, schema v2) that names a **board descriptor** and a
+**radar `.cfg`**. The tracked system configs are in [config/system](./config/system/). Loading is
+strict: an unknown key, a wrong type or a repeated key is an error that names the JSON path. A v1
+file (no `"schema_version"`) is rejected with the command that converts it (see the README's
+v1 -> v2 migration section).
 
+```json
+{
+    "schema_version": 2,
+    "board": "IWR1843",
+    "board_overrides": {},
+    "radar_cfg": "../radar/nav_configs/1843_stress_test.cfg",
+    "cli": { "port": "/dev/ttyACM0" },
+    "serial_stream": { "enabled": false, "port": "/dev/ttyACM1" },
+    "dca1000": { "enabled": true, "fpga_ip": "192.168.33.180", "host_ip": "192.168.33.30",
+                 "cmd_port": 4096, "data_port": 4098, "rcvbuf_bytes": 67108864 },
+    "output": { "dir": "out/front_radar", "save_adc_frames": true, "save_raw_lvds": false },
+    "runtime": { "log_level": "info" }
+}
+```
 
-#### TI_Radar_Config_management
-* TI_Radar_config_path: specifies the path to the IWR's .cfg file. Example files are located in the [config/radar](./config/radar/) folder. Be sure the choose the one corresponding to either the DCA1000, or the IWR Demo depending on your use case. Paths can be **relative** (resolved relative to the JSON file's location) or absolute. All included JSON configs use relative paths of the form `../radar/<subdir>/<file>.cfg`, so they work on any machine without editing. 
+| Key | Required | Meaning |
+|-----|----------|---------|
+| `schema_version` | yes | `2` |
+| `board` | yes | A board name (`IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), looked up as `<boards dir>/<name>.json`: the boards dir is `$CPSL_TI_RADAR_BOARDS_DIR` if set, otherwise `../boards` next to the JSON file (the layout of `config/`). Or a path to a descriptor file (relative to the JSON file). |
+| `board_overrides` | no | Deep-merged over the descriptor, then validated like it. Baud rates and timeouts live here, for example `{"cli": {"cmd_timeout_ms": 300}, "data_uart": {"baud": 3125000, "timeout_ms": 5000}}`. |
+| `radar_cfg` | yes | The TI `.cfg` sent to the radar. Relative paths resolve against the JSON file's directory; the tracked configs use `../radar/<subdir>/<file>.cfg`. |
+| `cli.port` | yes | CLI serial port (usually the lower-numbered `/dev/ttyACM*`; [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) lists them). |
+| `serial_stream.enabled`, `.port` | no | TLV point cloud from the demo over the data UART. `port` is required when enabled. The section may be omitted when off. |
+| `dca1000.enabled`, `.fpga_ip`, `.host_ip`, `.cmd_port`, `.data_port` | no | Raw ADC through the DCA1000. The four address fields are required when enabled; the section may be omitted when off. |
+| `dca1000.rcvbuf_bytes` | no | `SO_RCVBUF` requested for the data socket (default 67108864; see the host settings above). |
+| `output.dir` | no | Where `adc_data.bin` and `LVDS_Raw_0.bin` are written, relative to the JSON file. Unset: the current directory. |
+| `output.save_adc_frames` | no | Write every ADC frame to `adc_data.bin` (default `false`). |
+| `output.save_raw_lvds` | no | Write the raw LVDS payload to `LVDS_Raw_0.bin` (default `false`; only needed to debug packet loss). |
+| `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`. `debug` prints the per-frame status lines (the v1 `"verbose": true`) and each skipped cfg command. |
+| `runtime.frame_queue_depth`, `.stall_timeout_ms`, `.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults 4, 0, `null`, `null`, 99, 80) but not applied yet. |
 
-    * Note: If using the mmWave SDK demos (ex: SDK3.5) with the DCA1000 and IWR1843 boost boards, make sure that the lvdsStreamCfg is correctly set (see the mmWave sdk documentation). For example, a viable lbdsStreamCfg setting is featured below. To just stream the ADC samples only, use the following command (disables SW streaming)
+At least one of `serial_stream` and `dca1000` must be enabled.
 
-    ```
-    lvdsStreamCfg -1 0 1 0 
-    ```
+Notes on the radar `.cfg` for DCA1000 streaming with the mmWave SDK demos (for example SDK 3.5 on
+the IWR1843): `lvdsStreamCfg -1 0 1 0` streams ADC samples only. `lvdsStreamCfg -1 1 1 1` also
+enables the LVDS header and SW data, which costs extra processing and streaming time. The
+load-time cross-check requires `dataFmt` (third field) to be 1, ADC.
+With SDK 3+ and a single Rx, use an even number of ADC samples, and use 1, 2 or 4 receivers.
 
-    To stream all available data use this command instead (will require additional processing/streaming time to support this though)
+#### Board descriptors
+[`config/boards/`](./config/boards/) holds one descriptor per board. It gives the board's CLI
+handshake, cfg field layout (`cfg_dialect`), data-UART baud/timeout/TLV format, LVDS lanes,
+layout and I/Q order, DCA1000 packet settings, and whether the demo accepts a cfg only once per
+boot. [`config/boards/README.md`](./config/boards/README.md) cites the source of every value.
+Every board-specific behaviour in the driver comes from these files, so adding or tuning a board
+with a known wire format is a data change, not a rebuild.
 
-    ```
-    lvdsStreamCfg -1 1 1 1
-    ```
+| Board | LVDS lanes | ADC layout | Serial TLV |
+|---|---|---|---|
+| `IWR1843` | 2 | `two_lane_iq_pairs` (non-interleaved, SDK 3+) | yes |
+| `IWR6843` | 2 | `two_lane_iq_pairs` (non-interleaved, SDK 3+) | yes |
+| `IWR1443` | 4 | `lane_per_rx` (interleaved, SDK 2) | rejected until the SDK 2 format is confirmed |
+| `AWR2243_CASCADE` | not supported yet | — | yes (3,125,000 baud) |
 
-    ### Notes:
-    1. Due to the uncertain interleaving behavior with IWR's operating with SDK3+, please use an even number of samples for configurations with only a single rx, and only use configurations with 1,2, or 4 receivers.
-
-#### CLI_Controller
-* CLI_port: the address to the serial port used to program the IWR device. If you don't know the serial port, use the [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) notebook to determine them. Usually the CLI port is the smaller number.
-* baud_rate (optional, default `115200`): CLI port baud rate.
-* cmd_timeout_ms (optional, default `100`): how long to wait for each command's `Done` response. The cascade
-  needs more time (its config uses `5000`) because `sensorStart` configures both chips.
-
-#### Streamer
-This part of the JSON file determines where the data is coming from. Only one of the two options should be enabled.
-* serial_streaming: use this when streaming directly from the IWR demo application
-    * data_port: serial port for TLV frames
-    * baud_rate (optional, default `921600`): data port baud rate. The AWR2243 cascade uses `3125000`. Rates
-      that aren't standard termios rates are set through `termios2`/`BOTHER`. The driver reports an error if
-      the USB-UART bridge can't run at that rate.
-    * timeout_ms (optional, default `1000`): how long to wait for each frame. The timeout must be longer than both the
-      frame period and the time between `sensorStart` and the first frame.
-* DCA1000_streaming: use this when streaming from the DCA1000
-* save_to_file: when set to True, this will save the raw ADC data cube information for each frame to a .bin file which can be utilized at a later
-* board_type: specifies the radar board. Valid values: `"IWR1843"`, `"IWR6843"`, `"IWR1443"`, `"AWR2243_CASCADE"`. Controls the number of LVDS lanes used by the DCA1000 and the ADC cube interleaving format.
-
-| `board_type` | LVDS lanes | ADC format |
-|---|---|---|
-| `"IWR1843"` | 2-lane | non-interleaved (SDK 3+) |
-| `"IWR6843"` | 2-lane | non-interleaved (SDK 3+) |
-| `"IWR1443"` | 4-lane | interleaved (SDK 2) |
-| `"AWR2243_CASCADE"` | not supported yet (serial only) | — |
-
-##### Board descriptors
-[`config/boards/`](./config/boards/) holds one descriptor per board: `IWR1443.json`, `IWR1843.json`, `IWR6843.json` and `AWR2243_CASCADE.json`. Each one gives the board's CLI handshake, cfg dialect, UART TLV format, LVDS layout and DCA1000 settings, and [`config/boards/README.md`](./config/boards/README.md) cites the source of every value. The driver does not read these files yet; `board_type` above still selects the board. A later v2 change replaces `board_type` with them.
+At load time the driver cross-checks the radar `.cfg` against the board (16-bit complex ADC,
+`adcbufCfg` interleave vs the LVDS layout, `lvdsStreamCfg` ADC streaming) and refuses a mismatch
+with a message. `cfg_dialect.skip_commands` lists cfg commands the board's firmware rejects. They
+stay in the `.cfg` file but are never sent: the IWR1843 skips `calibData`.
 
 ##### AWR2243 cascade notes
 * Use [`radar_0_AWR2243_cascade_serial.json`](./config/system/radar_0_AWR2243_cascade_serial.json) with
-  [`cascade_shortrange.cfg`](./config/radar/cascade/cascade_shortrange.cfg). Replace the `/dev/ttyUSB*` placeholders
+  [`cascade_shortrange.cfg`](./config/radar/cascade/cascade_shortrange.cfg). Replace the port paths
   with the EVM's `/dev/serial/by-id/...` paths. Use the Application/User UART for the CLI and the other port for data.
+  The descriptor sets the 5000 ms command timeout and the 3,125,000 baud data port.
 * **Configure only once per boot.** TI doesn't support stopping the cascade demo and sending a new config. Power-cycle
   the EVM before every run. If any config command isn't acknowledged, the driver doesn't start and prints a
-  power-cycle reminder.
+  power-cycle reminder (`lifecycle.config_once_per_boot`).
 * `channelCfg` has 5 fields (`<rxMaster> <txMaster> <cascading> <rxSlave> <txSlave>`), so the Rx count is master + slave (8).
-  `frameCfg` adds `<numAdcSamples>` before the frame period.
+  `frameCfg` adds `<numAdcSamples>` before the frame period. The descriptor's `cfg_dialect` says so.
 * DCA1000 streaming is rejected for this board until 4-lane LVDS capture is added.
 * TI has only tested up to 192 ADC samples, 256 chirps, and 8 Rx channels. BFP compression isn't supported.
 * Like the other boards, a frame is only handed over when the next frame's magic word arrives, so the newest point
@@ -289,18 +305,22 @@ Several sample .cfg files are located in the [config/radar](./config/radar/) fol
 * To understand a particular configuration, there are a few helpful notebooks located in the [utilities](../utilities/) folder including the [print_config](../utilities/print_config.ipynb) notebook which will parse the config and print its commands. 
 
 
-### 2. Run the project
+### 3. Run the project
 
-Run the executable from the build directory. The config file path can be passed as an optional argument:
+The system config path is a required argument:
 
 ```bash
 cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 
-# use the default config (hardcoded in main.cpp)
-./CPSL_TI_Radar_CPP
+# check a config without hardware: loads the board descriptor and radar cfg, runs the
+# cross-checks, prints the board, ports, frame shape, bytes/frame and skipped commands;
+# opens no port or socket; exit 0 if usable, 1 otherwise
+./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --validate
 
-# use a specific config file
-./CPSL_TI_Radar_CPP path/to/config.json
+# run it
+./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json
 ```
 
-The executable prints the config path at startup so you can confirm which file is loaded. A rebuild is only needed after changes to source code — switching configs does not require recompiling.
+Running without an argument prints the usage and exits with status 2. The executable prints the
+config path at startup so you can confirm which file is loaded. A rebuild is only needed after
+changes to source code: switching configs or editing a board descriptor does not require recompiling.
