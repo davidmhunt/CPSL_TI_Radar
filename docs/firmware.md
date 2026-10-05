@@ -14,7 +14,7 @@ Firmware role's source of project facts
 | `firmware_dev/tools/` | Cross-project scripts (`cascade_serial_check.py`, `md_to_pdf.py`) | ″ |
 | `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/`, `prebuilt_binaries/` SBL images + demo.cfg) | ″ |
 | `firmware_dev/projects/ti_stock_demos/` | Stock SDK 3.6 IWR1843/IWR6843 mmw demos, built out of tree (overlay in `build/sdk/`; no TI source tracked) | ″ |
-| `firmware_dev/projects/iwr1843_sar_lvds/` | IWR1843 SDK 3.6 `xwr18xx/mmw` demo copied verbatim into `src/` (pristine baseline commit `bb3a348` in `firmware_dev`), built out of tree; base for the SAR/LVDS firmware | ″ |
+| `firmware_dev/projects/iwr1843_sar_lvds/` | IWR1843 SAR/LVDS raw-ADC firmware from the SDK 3.6 `xwr18xx/mmw` demo (pristine baseline `bb3a348` in `firmware_dev`), built out of tree. Since firmware-07: MSS-only metaimage (DSS `NULL`, DSP halted), DSP chain/TLV/SW session removed, CBUFF HW session streams ADC per chirp, `sensorStop` -> `flushCfg` + cfg -> `sensorStart` without a power cycle (`channelCfg`/`adcCfg`/`lowPower` changes rejected), periodic runtime calibration off; see its README | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/`) | this repo — to be reorganized into the v2.0 shipped-firmware directory |
 
@@ -44,7 +44,7 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 | Build image | `docker compose build` (image `cpsl-ti-radar-firmware-dev:latest`) |
 | Build cascade | `./fw build awr2243_cascade_ddm` → `projects/awr2243_cascade_ddm/build/am273x_cascade.appimage` (`CCS_CONFIG=Debug` for debug) |
 | Build SDK 3.6 stock demos | `./fw build ti_stock_demos [18xx\|68xx]` → `projects/ti_stock_demos/build/iwr{1843,6843}_demo.{bin,elf}` |
-| Build IWR1843 SAR/LVDS project | `./fw build iwr1843_sar_lvds` → `projects/iwr1843_sar_lvds/build/iwr1843_sar_lvds.{bin,elf}` (clean build of `src/` every time; `flash.sh` prints UniFlash steps, exits 3) |
+| Build IWR1843 SAR/LVDS project | `./fw build iwr1843_sar_lvds` → `projects/iwr1843_sar_lvds/build/iwr1843_sar_lvds.{bin,elf}` + `_mss.map` (MSS-only, no DSS outputs; clean build of `src/` every time; `flash.sh` prints UniFlash steps, exits 3) |
 | Flash cascade | `./fw flash awr2243_cascade_ddm <CLI port> [image\|prebuilt]` — success only on `All commands from config file are executed !!!` |
 | Bring-up check | `docker compose run --rm flash python3 /build_context/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
 | Python helpers | `uv run python tools/md_to_pdf.py <file.md>` |
@@ -94,7 +94,7 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
   under `projects/awr2243_cascade_ddm/`, but none are tracked (the build takes the libraries
   from the Radar Toolbox); `prebuilt_binaries/` keeps TI's two SBL `.tiimage` files for
   `flash.sh`. Dropping/relicensing them is still open.
-- `iwr1843_sar_lvds/src/{mss,dss}/*.cfg` (XDC configs) carry TI's old "Restricted rights" header;
+- `iwr1843_sar_lvds/src/mss/mmw_mss.cfg` (XDC config; the DSS one was removed in firmware-07) carries TI's old "Restricted rights" header;
   the SDK software manifest lists `packages\ti\demo` as BSD-3-Clause. Whether that suffices for a
   public release is the user's call. The `ti_stock_demos` `.cfg`/`.pl` copies have no header (also BSD per the manifest).
 - Shipped-firmware directory + publish script with a provenance manifest.
