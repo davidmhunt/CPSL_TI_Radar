@@ -10,6 +10,7 @@
 #include <complex>
 #include <memory>
 #include <mutex>
+#include <functional>
 
 #include "SystemConfigReader.hpp"
 #include "RadarConfigReader.hpp"
@@ -29,9 +30,11 @@ public:
 
 private:
 
-    //mutexes
-    std::mutex new_frame_available_mutex;
-    std::mutex adc_data_cube_mutex;
+    //guards adc_data_cube and new_frame_available together (published as one)
+    std::mutex frame_mutex;
+
+    //tests only: runs after a frame is converted, before it is published
+    std::function<void()> publish_hook_;
 
     //system configuration information
     SystemConfigReader system_config_reader;
@@ -88,6 +91,17 @@ public:
 
     bool initialize(const SystemConfigReader& configReader,
                     const RadarConfigReader& radarConfigReader);
+
+    //configs, output files and frame buffers only: no socket, no DCA1000
+    //commands (initialize() starts with it; hardware-free tests use it alone)
+    bool configure_pipeline(const SystemConfigReader& configReader,
+                            const RadarConfigReader& radarConfigReader);
+
+    //assemble one raw DCA1000 UDP packet (what process_next_packet() pops)
+    void ingest_packet(const uint8_t* data, int len);
+
+    //tests only: called between converting a frame and publishing it
+    void set_publish_hook(std::function<void()> hook);
 
     //commands to the DCA1000
     bool send_resetFPGA(); //2nd command

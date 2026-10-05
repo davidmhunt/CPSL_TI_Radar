@@ -6,8 +6,7 @@
 DCA1000Handler::DCA1000Handler():
     initialized(false),
     new_frame_available(false),
-    new_frame_available_mutex(),
-    adc_data_cube_mutex(),
+    frame_mutex(),
     system_config_reader(),
     radar_config_reader(),
     DCA_fpgaIP(""),
@@ -38,8 +37,7 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
                                 const RadarConfigReader& radarConfigReader):
     initialized(false),
     new_frame_available(false),
-    new_frame_available_mutex(),
-    adc_data_cube_mutex(),
+    frame_mutex(),
     system_config_reader(),
     radar_config_reader(),
     DCA_fpgaIP(""),
@@ -70,8 +68,7 @@ DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
 DCA1000Handler::DCA1000Handler(const DCA1000Handler & rhs):
     initialized(rhs.initialized),
     new_frame_available(rhs.new_frame_available),
-    new_frame_available_mutex(), //mutexes aren't copyable
-    adc_data_cube_mutex(),       //mutexes aren't copyable
+    frame_mutex(), //mutexes aren't copyable
     system_config_reader(rhs.system_config_reader),
     radar_config_reader(rhs.radar_config_reader),
     DCA_fpgaIP(rhs.DCA_fpgaIP),
@@ -150,19 +147,9 @@ bool DCA1000Handler::initialize(
 
     initialized = false;
 
-    //load the system configuration information
-    system_config_reader = systemConfigReader;
-    if(system_config_reader.initialized == false){
+    //config, output files and frame buffers (no device I/O)
+    if(!configure_pipeline(systemConfigReader, radarConfigReader)){
         return false;
-    } else{
-        load_config();
-    }
-
-    //initialize file streaming
-    if(save_adc_frames || save_raw_lvds){
-        if(init_out_file() != true){
-            return false;
-        }
     }
 
     //initialize sockets
@@ -176,18 +163,48 @@ bool DCA1000Handler::initialize(
         return false;
     }
 
-    //load the radar config reader
-    radar_config_reader = radarConfigReader;
-    if(radar_config_reader.initialized == false){
-        return false;
-    }else{
-        init_buffers();
-    }
-
     //set initialization status to true
     initialized = true;
     
     return true;
+}
+
+/**
+ * @brief Load the configs, open the output files and size the frame buffers,
+ * without opening a socket or talking to the DCA1000. initialize() starts
+ * with this; hardware-free tests call it alone and feed ingest_packet().
+ *
+ * @return false if a config is not initialized or an output file can't be opened
+ */
+bool DCA1000Handler::configure_pipeline(
+    const SystemConfigReader& systemConfigReader,
+    const RadarConfigReader& radarConfigReader){
+
+    //load the system configuration information
+    system_config_reader = systemConfigReader;
+    if(system_config_reader.initialized == false){
+        return false;
+    }
+    load_config();
+
+    //initialize file streaming
+    if(save_adc_frames || save_raw_lvds){
+        if(init_out_file() != true){
+            return false;
+        }
+    }
+
+    //load the radar config reader
+    radar_config_reader = radarConfigReader;
+    if(radar_config_reader.initialized == false){
+        return false;
+    }
+    init_buffers();
+    return true;
+}
+
+void DCA1000Handler::set_publish_hook(std::function<void()> hook){
+    publish_hook_ = std::move(hook);
 }
 
 /**
@@ -467,19 +484,28 @@ bool DCA1000Handler::process_next_packet(){
     int received_bytes = 0;
     if (!socket_.pop_packet(pkt_buf, received_bytes, 500)) return false;
 
+    ingest_packet(pkt_buf, received_bytes);
+    return true;
+}
+
+/**
+ * @brief Assemble one raw DCA1000 packet (10-byte header + payload): every
+ * frame it completes is converted, published and saved; the payload also goes
+ * to the raw LVDS file when enabled.
+ */
+void DCA1000Handler::ingest_packet(const uint8_t* data, int len){
+
     // Delegate sequence checking and frame assembly to FrameAssembler; every
     // completed frame reaches save_frame_byte_buffer() through the frame sink
-    assembler_.push_packet(pkt_buf, received_bytes);
+    assembler_.push_packet(data, len);
 
     // Write entire ADC payload to raw LVDS file in one syscall
-    if (save_raw_lvds && received_bytes > 10) {
+    if (save_raw_lvds && len > 10 && raw_lvds_out_file && raw_lvds_out_file->is_open()) {
         raw_lvds_out_file->write(
-            reinterpret_cast<const char*>(pkt_buf + 10),
-            static_cast<std::streamsize>(received_bytes - 10)
+            reinterpret_cast<const char*>(data + 10),
+            static_cast<std::streamsize>(len - 10)
         );
     }
-
-    return true;
 }
 
 /**
@@ -489,19 +515,8 @@ bool DCA1000Handler::process_next_packet(){
  * @return false - a new frame is not available
  */
 bool DCA1000Handler::check_new_frame_available(){
-
-    std::unique_lock<std::mutex> new_frame_available_unique_lock(
-        new_frame_available_mutex,
-        std::defer_lock
-    );
-    bool status;
-
-    //get the status in a thread safe way
-    new_frame_available_unique_lock.lock();
-    status = new_frame_available;
-    new_frame_available_unique_lock.unlock();
-
-    return status;
+    std::lock_guard<std::mutex> lock(frame_mutex);
+    return new_frame_available;
 }
 
 /**
@@ -511,28 +526,11 @@ bool DCA1000Handler::check_new_frame_available(){
  */
 std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler::get_latest_adc_cube()
 {
-
-    std::unique_lock<std::mutex> adc_data_cube_unique_lock(
-        adc_data_cube_mutex,
-        std::defer_lock
-    );
-    std::unique_lock<std::mutex> new_frame_available_unique_lock(
-        new_frame_available_mutex,
-        std::defer_lock
-    );
-
-    //get the latest adc data cube in a thread safe manner
-    adc_data_cube_unique_lock.lock();
-    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> latest_cube = adc_data_cube;
-    adc_data_cube_unique_lock.unlock();
-
-    //reset the new_frame_available flage
-    new_frame_available_unique_lock.lock();
+    //copy the cube and clear the flag under the one lock the producer publishes
+    //with, so a frame published in between is never lost or delivered stale
+    std::lock_guard<std::mutex> lock(frame_mutex);
     new_frame_available = false;
-    new_frame_available_unique_lock.unlock();
-
-    return latest_cube;
-
+    return adc_data_cube;
 }
 
 /**
@@ -547,6 +545,7 @@ void DCA1000Handler::load_config(){
     DCA_dataPort = system_config_reader.getDCADataPort();
     save_adc_frames = system_config_reader.get_save_adc_frames();
     save_raw_lvds = system_config_reader.get_save_raw_lvds();
+    udp_packet_size = system_config_reader.getBoard().dca1000.packet_bytes;
 
     //print key ports
     std::cout << "FPGA IP: " << DCA_fpgaIP << std::endl;
@@ -585,7 +584,6 @@ bool DCA1000Handler::configure_DCA1000(){
 
     //send configure packet data (dca1000.packet_bytes / packet_delay_us; 1472 B / 100 us)
     const cpsl::radar::BoardDescriptor& board = system_config_reader.getBoard();
-    udp_packet_size = board.dca1000.packet_bytes;
     if(send_configPacketData(udp_packet_size,
                              static_cast<uint16_t>(board.dca1000.packet_delay_us)) != true){
         return false;
@@ -673,31 +671,29 @@ void DCA1000Handler::print_status(){
  */
 void DCA1000Handler::save_frame_byte_buffer(bool print_system_status){
 
-    std::unique_lock<std::mutex> new_frame_available_unique_lock(
-        new_frame_available_mutex,
-        std::defer_lock
-    );
-    std::unique_lock<std::mutex> adc_data_cube_unique_lock(
-        adc_data_cube_mutex,
-        std::defer_lock
-    );
-
-    //specify that a new frame is available
-    new_frame_available_unique_lock.lock();
-    new_frame_available = true;
-    new_frame_available_unique_lock.unlock();
-
     //increment the frame tracking
     received_frames += 1;
 
-    adc_data_cube_unique_lock.lock();
-    adc_data_cube = converter_.convert(assembler_.get_frame_bytes());
-    adc_data_cube_unique_lock.unlock();
+    //convert outside the lock, then publish: the cube and its flag change
+    //together under frame_mutex, so the flag is never visible before its cube
+    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> cube =
+        converter_.convert(assembler_.get_frame_bytes());
+
+    if(publish_hook_){
+        publish_hook_();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        adc_data_cube.swap(cube);
+        new_frame_available = true;
+    }
 
     if(print_system_status){
         print_status();
     }
 
+    //only this thread writes adc_data_cube, so reading it here needs no lock
     if(save_adc_frames){
         write_adc_data_cube_to_file();
     }
