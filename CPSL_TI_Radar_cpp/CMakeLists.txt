@@ -9,8 +9,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Specify required C++ version
-set(CMAKE_CXX_STANDARD 14)
+# C++17 (design D2). The code needs no GNU extensions, but CMAKE_CXX_EXTENSIONS
+# stays at its default (-std=gnu++17, as gnu++14 before): strict -std=c++17
+# measured 44% slower on bench_pipeline's flat converter kernel (core-10 Log).
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set a default install prefix if not provided by the user
 # if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
