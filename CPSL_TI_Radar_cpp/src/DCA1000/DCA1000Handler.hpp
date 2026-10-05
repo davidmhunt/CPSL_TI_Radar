@@ -29,9 +29,6 @@
 class DCA1000Handler {
 //variables
 public:
-    //initialization status
-    bool initialized;
-
     bool new_frame_available;
 
     using Cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>;
@@ -103,24 +100,17 @@ private:
 //functions
 public:
     DCA1000Handler();
-    DCA1000Handler( const SystemConfigReader& configReader,
-                    const RadarConfigReader& radarConfigReader);
     DCA1000Handler(const DCA1000Handler & rhs) = delete;
     DCA1000Handler & operator=(const DCA1000Handler & rhs) = delete;
     ~DCA1000Handler();
 
-    //configure_pipeline(), then open and configure the packet source
-    //(`source`, or a UdpPacketSource on the config's addresses)
-    bool initialize(const SystemConfigReader& configReader,
-                    const RadarConfigReader& radarConfigReader,
-                    std::shared_ptr<cpsl::radar::PacketSource> source = nullptr);
-
     //configs, output files and frame buffers only: no socket, no DCA1000
-    //commands (initialize() starts with it; hardware-free tests use it alone)
+    //commands (Radar::open calls it before opening the packet source)
     bool configure_pipeline(const SystemConfigReader& configReader,
                             const RadarConfigReader& radarConfigReader);
 
-    //the source process_next_packet() pops from; the caller opens/configures/starts it
+    //the source process_next_packet() pops from; the caller (Radar) opens,
+    //configures and starts it, and stop() stops it
     void set_packet_source(std::shared_ptr<cpsl::radar::PacketSource> source);
     const std::shared_ptr<cpsl::radar::PacketSource>& packet_source() const { return source_; }
 
@@ -137,9 +127,6 @@ public:
     bool stop();
     //false if flushing/closing an output file failed in stop()
     bool output_files_ok() const { return output_files_ok_; }
-
-    //start the packet source (UDP: recordStart and the RX thread)
-    bool send_recordStart();
 
     //pop one packet (waits up to 500 ms) and ingest it; false if none arrived
     bool process_next_packet();

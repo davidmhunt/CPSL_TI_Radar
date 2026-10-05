@@ -5,7 +5,6 @@ add_subdirectory(utilities)
 add_subdirectory(CLIController)
 add_subdirectory(SerialStreamer)
 add_subdirectory(DCA1000)
-add_subdirectory(Runners)
 add_subdirectory(Radar)   #public API: Radar (uses everything above)
 
 #if a new library is created, give it its own target_include_directories in its
@@ -13,5 +12,5 @@ add_subdirectory(Radar)   #public API: Radar (uses everything above)
 
 #the single target downstream projects link: CPSL_TI_Radar::driver
 add_library(driver INTERFACE)
-target_link_libraries(driver INTERFACE Runner)
+target_link_libraries(driver INTERFACE Radar)
 add_library(${PKG_NAME}::driver ALIAS driver)

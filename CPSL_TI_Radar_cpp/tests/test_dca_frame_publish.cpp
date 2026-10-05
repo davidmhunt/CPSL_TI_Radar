@@ -56,7 +56,7 @@ TEST_CASE(fixture_is_hardware_free_and_configured) {
     CHECK(f.radar.initialized);
     CHECK_EQ(f.B, static_cast<size_t>(231840));
     CHECK(f.h.configure_pipeline(f.sys, f.radar));
-    CHECK(!f.h.initialized);  // no socket, no DCA1000
+    CHECK(f.h.packet_source() == nullptr);  // no socket, no DCA1000
     CHECK(!f.h.check_new_frame_available());
 }
 

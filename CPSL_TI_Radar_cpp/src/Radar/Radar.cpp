@@ -38,7 +38,7 @@ std::set<std::string>& configured_once() {
     return s;
 }
 
-// The DCA worker runs at SCHED_RR 80, as v1's Runner did (configurable in core-15).
+// The DCA worker runs at SCHED_RR 80, as v1's worker did (configurable in core-15).
 void raise_worker_priority() {
     sched_param param{};
     param.sched_priority = 80;

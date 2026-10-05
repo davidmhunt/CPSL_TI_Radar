@@ -8,7 +8,6 @@
  * @brief Default constructor (un-initialized)
  */
 DCA1000Handler::DCA1000Handler():
-    initialized(false),
     new_frame_available(false),
     frame_mutex(),
     system_config_reader(),
@@ -27,18 +26,6 @@ DCA1000Handler::DCA1000Handler():
     adc_data_cube(),
     latest_frame_byte_buffer()
 {}
-
-/**
- * @brief Constructor (initializes handler)
- *
- * @param configReader
- */
-DCA1000Handler::DCA1000Handler( const SystemConfigReader& configReader,
-                                const RadarConfigReader& radarConfigReader):
-    DCA1000Handler()
-{
-    initialize(configReader,radarConfigReader);
-}
 
 /**
  * @brief Destroy the DCA1000Handler::DCA1000Handler object
@@ -106,39 +93,10 @@ bool DCA1000Handler::close_output_files(){
     return ok;
 }
 
-bool DCA1000Handler::initialize(
-    const SystemConfigReader& systemConfigReader,
-    const RadarConfigReader& radarConfigReader,
-    std::shared_ptr<cpsl::radar::PacketSource> source){
-
-    initialized = false;
-
-    //config, output files and frame buffers (no device I/O)
-    if(!configure_pipeline(systemConfigReader, radarConfigReader)){
-        return false;
-    }
-
-    set_packet_source(source ? std::move(source)
-                             : std::make_shared<cpsl::radar::UdpPacketSource>(system_config_reader));
-
-    //open the sockets, then configure the DCA1000
-    cpsl::radar::Status s = source_->open();
-    if(s){
-        s = source_->configure();
-    }
-    if(!s){
-        cpsl::radar::log_error("DCA1000Handler: ", s.message);
-        return false;
-    }
-
-    initialized = true;
-    return true;
-}
-
 /**
  * @brief Load the configs, open the output files and size the frame buffers,
- * without opening a socket or talking to the DCA1000. initialize() starts
- * with this; hardware-free tests call it alone and feed ingest_packet().
+ * without opening a socket or talking to the DCA1000. Radar::open calls it;
+ * hardware-free tests call it alone and feed ingest_packet().
  *
  * @return false if a config is not initialized or an output file can't be opened
  */
@@ -177,17 +135,6 @@ void DCA1000Handler::set_publish_hook(std::function<void()> hook){
 
 void DCA1000Handler::set_packet_source(std::shared_ptr<cpsl::radar::PacketSource> source){
     source_ = std::move(source);
-}
-
-bool DCA1000Handler::send_recordStart(){
-    if(!source_){
-        return false;
-    }
-    const cpsl::radar::Status s = source_->start();
-    if(!s){
-        cpsl::radar::log_error("DCA1000Handler: ", s.message);
-    }
-    return static_cast<bool>(s);
 }
 
 /**

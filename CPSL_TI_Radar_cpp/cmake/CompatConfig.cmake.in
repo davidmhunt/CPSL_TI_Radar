@@ -13,7 +13,7 @@ include(CMakeFindDependencyMacro)
 find_dependency(CPSL_TI_Radar)
 
 foreach(_t nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler
-           ADCCubeConverter FrameAssembler DCA1000Socket Runner TLVProcessing
+           ADCCubeConverter FrameAssembler DCA1000Socket TLVProcessing
            DCA1000Commands)
   if(NOT TARGET CPSL_TI_Radar_CPP::${_t})
     add_library(CPSL_TI_Radar_CPP::${_t} INTERFACE IMPORTED)
