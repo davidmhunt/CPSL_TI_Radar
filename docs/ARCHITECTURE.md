@@ -13,6 +13,12 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP <system config .json> [--validate]
 ```
 
+With no `-DCMAKE_BUILD_TYPE`, the top-level `CMakeLists.txt` sets the type to
+Release in the cache and prints it at configure time. An explicit type
+(`-DCMAKE_BUILD_TYPE=Debug`, or the `asan-ubsan` preset) is left alone.
+`tools/bench` and the host-setup doctor's `build-type` check expect Release,
+so the plain command passes them.
+
 One executable: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial). The
 config argument is required (no argument: usage, exit 2). `--validate` loads
 the config, board descriptor and radar cfg, runs the cross-checks, prints a
@@ -64,7 +70,7 @@ variants: today's `ADCCubeConverter`, and two bench-local kernels (nested with a
 reused buffer, and flat `[chirp][rx][sample]`) kept as data for design D5. The
 default `ctest` run never lists it (registered with `CONFIGURATIONS bench`);
 `ctest -C bench -L bench` runs it. Build with
-`-DCMAKE_BUILD_TYPE=Release` for comparable numbers.
+Release (the default build type) for comparable numbers.
 
 ## Component graph
 

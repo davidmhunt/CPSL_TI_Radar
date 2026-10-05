@@ -107,6 +107,7 @@ cd CPSL_TI_Radar
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
 cmake --build CPSL_TI_Radar_cpp/build -j
 ```
+The build type defaults to Release (optimized), so the command above is all you need, and the configure step prints `Build type: Release`. For a debug build, pass it explicitly: `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build-debug -DCMAKE_BUILD_TYPE=Debug`. An existing build directory keeps the type it was first configured with. `tools/bench` and the `build-type` check in the host-setup doctor expect a Release build, so a plain build passes them.
 
 3. (Optional) Install the libraries and headers, e.g. into a local prefix:
 ```
@@ -150,7 +151,7 @@ cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --pre
 
 ### Replay benchmark (`ctest -C bench -L bench`)
 
-`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) today's `ADCCubeConverter`, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/nav_configs/1843_stress_test.cfg` unless you pass `--cfg`. The test is registered with `CONFIGURATIONS bench`, so the plain `ctest` run above never lists or runs it. `-C bench` adds it and `-L bench` runs only it. Use a Release build for numbers you can compare:
+`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) today's `ADCCubeConverter`, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/nav_configs/1843_stress_test.cfg` unless you pass `--cfg`. The test is registered with `CONFIGURATIONS bench`, so the plain `ctest` run above never lists or runs it. `-C bench` adds it and `-L bench` runs only it. Use a Release build for numbers you can compare (the default build type, so the `-DCMAKE_BUILD_TYPE=Release` below is optional):
 
 ```bash
 cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
