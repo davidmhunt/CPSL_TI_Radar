@@ -294,6 +294,25 @@ TEST_CASE(cross_check_errors_fail_the_load) {
     CHECK(has(reject("v2_1443_serial.json", j), "design D7"));
 }
 
+TEST_CASE(malformed_json_is_an_error_not_an_exception) {
+    // core-02 characterized nlohmann::parse_error escaping; core-10's strict
+    // parser returns it as a load error, pinned here for core-11
+    const char* bad[] = {"{ \"schema_version\": 2, ", "not json", "", "{\"schema_version\": 2,}"};
+    int k = 0;
+    for (const char* text : bad) {
+        SystemConfigReader r;
+        bool threw = false;
+        try {
+            r.initialize(write_text("malformed_" + std::to_string(k++) + ".json", text));
+        } catch (...) {
+            threw = true;
+        }
+        CHECK(!threw);
+        CHECK(!r.initialized);
+        CHECK(!r.get_error().empty());
+    }
+}
+
 TEST_CASE(copy_keeps_state) {
     SystemConfigReader a(write_json("v2_copy.json", base_config()));
     SystemConfigReader b(a);

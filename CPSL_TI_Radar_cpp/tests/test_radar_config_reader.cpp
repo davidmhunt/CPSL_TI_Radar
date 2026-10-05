@@ -109,10 +109,54 @@ TEST_CASE(reinitialize_after_failure) {
     CHECK(!r.initialized);
 }
 
-TEST_CASE(non_numeric_field_throws) {
-    // Characterization: malformed numbers escape as std::invalid_argument
-    // (std::stoi) instead of leaving initialized == false.
-    CHECK_THROWS(RadarConfigReader r(cfg("bad_number.cfg")), std::invalid_argument);
+TEST_CASE(non_numeric_field_is_an_error_not_an_exception) {
+    // core-02 characterized std::invalid_argument escaping; now a load error
+    RadarConfigReader r;
+    r.initialize(cfg("bad_number.cfg"));
+    CHECK(!r.initialized);
+    CHECK(r.get_error().find("line 2") != std::string::npos);
+    CHECK(r.get_error().find("profileCfg") != std::string::npos);
+}
+
+static void check_rejected(const char* file, const char* needle) {
+    RadarConfigReader r;
+    r.initialize(cfg(file));
+    CHECK(!r.initialized);
+    std::cout << "    " << file << ": " << r.get_error() << std::endl;
+    CHECK(r.get_error().find(needle) != std::string::npos);
+}
+
+TEST_CASE(short_lines_are_errors_not_out_of_bounds_reads) {
+    // core-02 UB list: too few fields on profileCfg / chirpCfg / frameCfg
+    check_rejected("short_profilecfg.cfg", "profileCfg has 9 fields");
+    check_rejected("short_chirpcfg.cfg", "chirpCfg has 1 fields");
+    check_rejected("short_framecfg.cfg", "frameCfg");
+}
+
+TEST_CASE(missing_profile_or_frame_cfg_is_an_error) {
+    // core-02 UB list: these used to leave members uninitialized
+    check_rejected("no_profilecfg.cfg", "no profileCfg");
+    check_rejected("no_framecfg.cfg", "no frameCfg");
+    check_rejected("bad_chirp_range.cfg", "not a valid frame");
+}
+
+TEST_CASE(failed_reload_keeps_nothing_from_before) {
+    RadarConfigReader r(cfg("iwr1843.cfg"));
+    CHECK(r.initialized);
+    r.initialize(cfg("no_framecfg.cfg"));
+    CHECK(!r.initialized);
+    CHECK_EQ(r.get_chirps_per_frame(), static_cast<size_t>(0));
+    CHECK_EQ(r.get_bytes_per_frame(), static_cast<size_t>(0));
+    r.initialize(cfg("does_not_exist.cfg"));
+    CHECK(r.get_error().find("cannot open") != std::string::npos);
+}
+
+TEST_CASE(default_constructed_values_are_zero) {
+    RadarConfigReader r;
+    CHECK_EQ(r.get_samples_per_chirp(), static_cast<size_t>(0));
+    CHECK_EQ(r.get_chirps_per_frame(), static_cast<size_t>(0));
+    CHECK_EQ(r.get_bytes_per_frame(), static_cast<size_t>(0));
+    CHECK_EQ(r.get_frame_period_ms(), 0.0f);
 }
 
 TEST_CASE(short_framecfg_is_an_error_not_ub) {

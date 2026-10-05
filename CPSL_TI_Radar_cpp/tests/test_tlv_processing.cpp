@@ -150,4 +150,32 @@ TEST_CASE(side_info_empty_and_partial_point) {
     CHECK_NEAR(s.side_info[0][1], 2.0, 1e-4);
 }
 
+TEST_CASE(detected_points_length_not_multiple_of_4_is_rejected) {
+    // core-02 UB list: bytes_to_floats read (and wrote) past the end here
+    TLVDetectedPoints p;
+    Bytes good;
+    for (int i = 0; i < 4; i++) put_float_le(good, 1.0f);
+    p.process(good);
+    CHECK(p.valid_data);
+    Bytes b;
+    for (int i = 0; i < 4; i++) put_float_le(b, 2.0f);
+    b.push_back(0x7F);  // 17 bytes
+    p.process(b);
+    CHECK(!p.valid_data);
+    CHECK(p.detected_points.empty());
+    Bytes five(5, 0x11);
+    p.process(five);
+    CHECK(!p.valid_data);
+}
+
+TEST_CASE(bytes_to_floats_reads_whole_words_only) {
+    TLVDetectedPoints p;
+    Bytes b{0x00, 0x00, 0x80, 0x3F, 0xAA, 0xBB};  // 1.0f + 2 stray bytes
+    std::vector<float> f = p.bytes_to_floats(b);
+    CHECK_EQ(f.size(), static_cast<size_t>(1));
+    CHECK_EQ(f[0], 1.0f);
+    Bytes three{1, 2, 3};
+    CHECK(p.bytes_to_floats(three).empty());
+}
+
 TEST_MAIN()

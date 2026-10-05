@@ -73,6 +73,18 @@ private:
     uint32_t header_numTLVs;
     uint32_t header_subFrameNumber;
 
+    //header of the frame being parsed (copied to header_* once the frame is valid)
+    struct PendingHeader {
+        std::string version;
+        uint32_t totalPacketLen = 0;
+        std::string platform;
+        uint32_t frameNumber = 0;
+        uint32_t timeCPUCycles = 0;
+        uint32_t numDetectedObj = 0;
+        uint32_t numTLVs = 0;
+        uint32_t subFrameNumber = 0;
+    } pending_;
+
     //frame continuity tracking
     bool have_previous_frame;
     uint32_t previous_frame_number;
@@ -88,9 +100,12 @@ private:
     //functions processing TLVs
     TLVCodes tlv_codes;
     bool process_TLV_messages(void);
-    void process_TLV(
+    bool process_TLV(
         std::vector<uint8_t> & tlv_data,
-        uint32_t tlv_type);
+        uint32_t tlv_type,
+        TLVDetectedPoints & points,
+        TLVDetectedPointsSideInfo & side_info);
+    void commit_frame(TLVDetectedPoints & points, TLVDetectedPointsSideInfo & side_info);
     uint32_t get_TLV_type(size_t tlv_start_byte_idx);
     size_t get_TLV_len(size_t tlv_start_byte_idx);
 

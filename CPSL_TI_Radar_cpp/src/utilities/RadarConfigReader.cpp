@@ -1,6 +1,8 @@
 #include "RadarConfigReader.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <exception>
 
 /**
  * @brief default constructor without initialization
@@ -34,6 +36,7 @@ RadarConfigReader::RadarConfigReader(const std::string& filename,
 RadarConfigReader::RadarConfigReader(const RadarConfigReader & rhs):
     initialized(rhs.initialized),
     cfg_file(rhs.cfg_file),
+    error(rhs.error),
     rx_mask_fields(rhs.rx_mask_fields),
     frame_period_field(rhs.frame_period_field),
     rx_antennas(rhs.rx_antennas),
@@ -69,6 +72,7 @@ RadarConfigReader & RadarConfigReader::operator=(const RadarConfigReader & rhs){
         //assign all variables to the rhs radar config reader
         initialized = rhs.initialized;
         cfg_file = rhs.cfg_file;
+        error = rhs.error;
         rx_mask_fields = rhs.rx_mask_fields;
         frame_period_field = rhs.frame_period_field;
         rx_antennas = rhs.rx_antennas;
@@ -129,11 +133,24 @@ void RadarConfigReader::initialize(const std::string & filename,
     cfg_file -> open(filename);
     if (! cfg_file -> is_open()){
         std::cerr << "RadarConfigReader: error opening file: " << filename << std::endl;
+        error = "cannot open " + filename;
         initialized = false;
     } else{
 
-        //default before parsing — preserved if channelCfg is absent from the .cfg
+        //defaults before parsing (rx 4 is kept if channelCfg is absent from the .cfg);
+        //nothing from an earlier initialize() survives
         rx_antennas = 4;
+        profileCfg_chirp_start_freq_GHz = 0;
+        profileCfg_idle_time_us = 0;
+        profileCfg_ramp_end_time_us = 0;
+        profileCfg_adc_samples = 0;
+        profileCfg_adc_sample_rate_ksps = 0;
+        chirpCfg_start_idx = 0;
+        chirpCfg_end_idx = 0;
+        frameCfg_chirp_start_idx = 0;
+        frameCfg_chirp_end_idx = 0;
+        frameCfG_num_loops = 0;
+        frameCfg_frame_period = 0;
 
         //process the configuration
         error.clear();
@@ -208,30 +225,45 @@ float RadarConfigReader::get_frame_period_ms(){
  */
 bool RadarConfigReader::process_cfg() {
 
-    if(cfg_file.get() != nullptr &&
-        cfg_file -> is_open())
-    {
-        std::string line;
-        while (std::getline(*cfg_file, line)) {
-            std::istringstream iss(line);
-            std::string key;
-            if (std::getline(iss, key, ' ')) {
-                if (key == "channelCfg") {
-                    read_channel_cfg(get_vec_from_string(line));
-                }
-                if (key == "profileCfg") {
-                    read_profile_cfg(get_vec_from_string(line));
-                }
-                if (key == "chirpCfg") {
-                    read_chirp_cfg(get_vec_from_string(line));
-                }
-                if (key == "frameCfg") {
-                    if (!read_frame_cfg(get_vec_from_string(line))) return false;
-                }
-            }
-        }
-    }else{
+    if(cfg_file.get() == nullptr || !cfg_file -> is_open()){
         error = "cfg file isn't open";
+        return false;
+    }
+
+    bool have_profile = false, have_frame = false;
+    std::string line;
+    size_t line_no = 0;
+    while (std::getline(*cfg_file, line)) {
+        line_no++;
+        std::istringstream iss(line);
+        std::string key;
+        if (!std::getline(iss, key, ' ')) continue;
+        if (key != "channelCfg" && key != "profileCfg" && key != "chirpCfg" && key != "frameCfg") continue;
+
+        const std::vector<std::string> values = get_vec_from_string(line);
+        bool ok = false;
+        try {
+            if (key == "channelCfg") ok = read_channel_cfg(values);
+            else if (key == "profileCfg") ok = have_profile = read_profile_cfg(values);
+            else if (key == "chirpCfg") ok = read_chirp_cfg(values);
+            else ok = have_frame = read_frame_cfg(values);
+        } catch (const std::exception&) {
+            //std::stoi / std::stof: not a number, or out of range
+            error = key + " has a field that is not a valid number";
+            ok = false;
+        }
+        if (!ok) {
+            error = "line " + std::to_string(line_no) + ": " + error;
+            return false;
+        }
+    }
+
+    if (!have_profile) {
+        error = "no profileCfg line (samples per chirp unknown)";
+        return false;
+    }
+    if (!have_frame) {
+        error = "no frameCfg line (chirps per frame and frame period unknown)";
         return false;
     }
     return true;
@@ -257,19 +289,35 @@ std::vector<std::string> RadarConfigReader::get_vec_from_string(std::string text
     return values;
 }
 
+// true if the line has fields 1..last_field; otherwise sets error
+bool RadarConfigReader::require_fields(const std::vector<std::string>& values, size_t last_field){
+    if (values.size() > last_field) return true;
+    error = values[0] + " has " + std::to_string(values.size() - 1) + " fields, needs at least " +
+            std::to_string(last_field);
+    return false;
+}
+
 /**
  * @brief Decode the profile configuration from the profile cfg
  * 
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
-void RadarConfigReader::read_profile_cfg(std::vector<std::string> values){
-    
+bool RadarConfigReader::read_profile_cfg(const std::vector<std::string>& values){
+
+    if (!require_fields(values, 11)) return false;
+
     //set the profile config
     profileCfg_chirp_start_freq_GHz = std::stof(values[2]);
     profileCfg_idle_time_us = std::stof(values[3]);
     profileCfg_ramp_end_time_us = std::stof(values[5]);
-    profileCfg_adc_samples = (std::stoi(values[10]));
-    profileCfg_adc_sample_rate_ksps = (std::stoi(values[11]));
+    const int samples = std::stoi(values[10]);
+    if (samples < 1 || samples > INT16_MAX) {
+        error = "profileCfg numAdcSamples " + values[10] + " is out of range";
+        return false;
+    }
+    profileCfg_adc_samples = static_cast<int16_t>(samples);
+    profileCfg_adc_sample_rate_ksps = static_cast<int16_t>(std::stoi(values[11]));
+    return true;
 }
 
 /**
@@ -277,11 +325,14 @@ void RadarConfigReader::read_profile_cfg(std::vector<std::string> values){
  * 
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
-void RadarConfigReader::read_chirp_cfg(std::vector<std::string> values){
-    
+bool RadarConfigReader::read_chirp_cfg(const std::vector<std::string>& values){
+
+    if (!require_fields(values, 2)) return false;
+
     //set the chirp config
-    chirpCfg_start_idx = (std::stoi(values[1]));
-    chirpCfg_end_idx = (std::stoi(values[2]));
+    chirpCfg_start_idx = static_cast<int16_t>(std::stoi(values[1]));
+    chirpCfg_end_idx = static_cast<int16_t>(std::stoi(values[2]));
+    return true;
 }
 
 /**
@@ -289,7 +340,7 @@ void RadarConfigReader::read_chirp_cfg(std::vector<std::string> values){
  *
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
-bool RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
+bool RadarConfigReader::read_frame_cfg(const std::vector<std::string>& values){
 
     //fields 1-3 and the dialect's period field must exist
     const size_t needed = std::max<size_t>(4, static_cast<size_t>(frame_period_field) + 1);
@@ -299,10 +350,18 @@ bool RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
         return false;
     }
 
-    //set the profile config
-    frameCfg_chirp_start_idx = (std::stoi(values[1]));
-    frameCfg_chirp_end_idx = (std::stoi(values[2]));
-    frameCfG_num_loops = (std::stoi(values[3]));
+    //set the frame config
+    const int start = std::stoi(values[1]);
+    const int end = std::stoi(values[2]);
+    const int loops = std::stoi(values[3]);
+    if (start < 0 || end < start || end > INT16_MAX || loops < 1 || loops > INT16_MAX) {
+        error = "frameCfg chirp range " + values[1] + ".." + values[2] + " x " + values[3] +
+                " loops is not a valid frame";
+        return false;
+    }
+    frameCfg_chirp_start_idx = static_cast<int16_t>(start);
+    frameCfg_chirp_end_idx = static_cast<int16_t>(end);
+    frameCfG_num_loops = static_cast<int16_t>(loops);
 
     //the period's field comes from the board's cfg dialect: 5 on the single-chip
     //SDK demos, 6 on the AWR2243 cascade (mmWave MCU+ SDK), which inserts
@@ -322,12 +381,13 @@ bool RadarConfigReader::read_frame_cfg(std::vector<std::string> values){
  *
  * @param values std::vector<std::string>> vector of strings from the corresponding cfg file line
  */
-void RadarConfigReader::read_channel_cfg(std::vector<std::string> values){
+bool RadarConfigReader::read_channel_cfg(const std::vector<std::string>& values){
     int rx = 0;
     for (uint32_t field : rx_mask_fields) {
         if (field < values.size()) {
-            rx += __builtin_popcount(std::stoi(values[field]));
+            rx += __builtin_popcount(static_cast<unsigned>(std::stoi(values[field])));
         }
     }
     rx_antennas = static_cast<int16_t>(rx);
+    return true;
 }

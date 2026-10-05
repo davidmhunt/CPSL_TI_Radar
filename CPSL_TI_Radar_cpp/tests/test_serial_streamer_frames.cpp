@@ -215,15 +215,40 @@ TEST_CASE(tlv_length_past_end_of_message_rejected) {
     CHECK(!tlvs_ok);
 }
 
-TEST_CASE(corrupt_frame_number_is_still_reported_as_latest) {
-    // Bug pinned: header fields are stored before the length check, so
-    // get_latest_frame_number() ("latest valid frame") returns the number
-    // from a rejected frame.
+TEST_CASE(rejected_frame_number_is_never_reported_as_latest) {
+    // core-02 KNOWN_BUG, fixed: header fields were stored before the length
+    // check, so get_latest_frame_number() returned a rejected frame's number
     SerialStreamer s;
     CHECK(feed(s, make_message(3, {})));
     CHECK(!feed(s, make_message(99, {}, +4)));
-    KNOWN_BUG(s.get_latest_frame_number() == 3u,
-              "get_latest_frame_number returns a rejected frame's number");
+    CHECK_EQ(s.get_latest_frame_number(), 3u);
+}
+
+TEST_CASE(frame_with_bad_tlv_publishes_nothing) {
+    // valid header, broken TLV: the previous frame's number and points stay
+    SerialStreamer s;
+    CHECK(feed(s, make_message(5, {points_tlv(2, 1.0f), side_info_tlv(2)})));
+    bool tlvs_ok = true;
+    CHECK(feed(s, make_message(6, {points_tlv(1, 9.0f)}, 0, 3), &tlvs_ok));
+    CHECK(!tlvs_ok);
+    CHECK_EQ(s.get_latest_frame_number(), 5u);
+    CHECK_EQ(s.tlv_get_latest_detected_points().size(), static_cast<size_t>(2));
+    CHECK_EQ(s.tlv_get_latest_detected_points_side_info().size(), static_cast<size_t>(2));
+    // and it is not counted for frame-number gaps: 7 follows 5 with 6 missed
+    CHECK(feed(s, make_message(7, {})));
+    CHECK_EQ(s.get_missed_frame_count(), 1u);
+}
+
+TEST_CASE(points_tlv_length_not_multiple_of_4_rejects_the_frame) {
+    // core-02 UB list: a 6-byte points payload went through bytes_to_floats
+    SerialStreamer s;
+    CHECK(feed(s, make_message(1, {points_tlv(1, 2.0f)})));
+    Tlv odd{TLVCodes::DETECTED_POINTS, Bytes(6, 0x41)};
+    bool tlvs_ok = true;
+    CHECK(feed(s, make_message(2, {odd}), &tlvs_ok));
+    CHECK(!tlvs_ok);
+    CHECK_EQ(s.get_latest_frame_number(), 1u);
+    CHECK_EQ(s.tlv_get_latest_detected_points().size(), static_cast<size_t>(1));
 }
 
 TEST_MAIN()

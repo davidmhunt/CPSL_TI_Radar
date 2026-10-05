@@ -202,11 +202,6 @@ bool SerialStreamer::process_next_message(void){
         std::defer_lock
     );
 
-    std::unique_lock<std::mutex> tlv_processing_unique_lock(
-        tlv_processing_mutex,
-        std::defer_lock
-    );
-
     //get the next serial frame and load it into the serial_message_data_buffer
     if (!get_next_serial_frame()){
         return false;
@@ -218,11 +213,8 @@ bool SerialStreamer::process_next_message(void){
     }
 
 
-    //process all new TLVs
-    tlv_processing_unique_lock.lock();
-    bool tlvs_valid = process_TLV_messages();
-    tlv_processing_unique_lock.unlock();
-    if (!tlvs_valid){
+    //process all new TLVs; a valid frame is committed (under the TLV lock) only here
+    if (!process_TLV_messages()){
         return true;
     }
 
@@ -424,51 +416,36 @@ bool SerialStreamer::process_message_header(void){
         header_data[i] = le32toh(header_data[i]);
     }
 
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-
-    header_version = uint32ToHex(header_data[0]);
-    header_totalPacketLen = header_data[1];
-    header_platform = uint32ToHex(header_data[2]);
-    header_frameNumber = header_data[3];
-    header_timeCPUCycles = header_data[4];
-    header_numDetectedObj = header_data[5];
-    header_numTLVs = header_data[6];
-    header_subFrameNumber = header_data[7];
+    //decode into pending_: nothing a reader can see changes until the whole
+    //frame (header length and every TLV) has been validated
+    pending_.version = uint32ToHex(header_data[0]);
+    pending_.totalPacketLen = header_data[1];
+    pending_.platform = uint32ToHex(header_data[2]);
+    pending_.frameNumber = header_data[3];
+    pending_.timeCPUCycles = header_data[4];
+    pending_.numDetectedObj = header_data[5];
+    pending_.numTLVs = header_data[6];
+    pending_.subFrameNumber = header_data[7];
 
     if(system_config_reader.get_verbose()){
         print_status();
     }
 
     //check to ensure the message is valid
-    if (!check_valid_message()){
-        return false;
-    }
-
-    //track gaps in the frame number (dropped/corrupted frames)
-    if (have_previous_frame && header_frameNumber != previous_frame_number + 1){
-        uint32_t missed = header_frameNumber - previous_frame_number - 1;
-        missed_frame_count += missed;
-        std::cout << "SerialStreamer: frame number jumped from " << previous_frame_number
-                  << " to " << header_frameNumber << " (" << missed_frame_count
-                  << " missed in total)" << std::endl;
-    }
-    have_previous_frame = true;
-    previous_frame_number = header_frameNumber;
-
-    return true;
+    return check_valid_message();
 }
 
 void SerialStreamer::print_status(void){
 
     std::cout <<
-    "frame: " << header_frameNumber << std::endl <<
-    "\tversion: " << header_version << std::endl <<
-    "\ttotal Packet length: " << header_totalPacketLen << " bytes" << std::endl <<
-    "\tplatform: " << header_platform << std::endl <<
-    "\ttime (CPU cycles): " << header_timeCPUCycles << std::endl <<
-    "\tDetected Objects: " <<header_numDetectedObj << std::endl <<
-    "\tNumber of TLVs: " << header_numTLVs <<std::endl <<
-    "\tSubframe number: " << header_subFrameNumber << std::endl;
+    "frame: " << pending_.frameNumber << std::endl <<
+    "\tversion: " << pending_.version << std::endl <<
+    "\ttotal Packet length: " << pending_.totalPacketLen << " bytes" << std::endl <<
+    "\tplatform: " << pending_.platform << std::endl <<
+    "\ttime (CPU cycles): " << pending_.timeCPUCycles << std::endl <<
+    "\tDetected Objects: " << pending_.numDetectedObj << std::endl <<
+    "\tNumber of TLVs: " << pending_.numTLVs << std::endl <<
+    "\tSubframe number: " << pending_.subFrameNumber << std::endl;
 }
 
 /**
@@ -483,7 +460,7 @@ void SerialStreamer::print_status(void){
  * @return false message is invalid
  */
 bool SerialStreamer::check_valid_message(void){
-    if(static_cast<size_t>(header_totalPacketLen) == 
+    if(static_cast<size_t>(pending_.totalPacketLen) == 
         serial_message_data_buffer.size()){
             return true;
         }
@@ -511,12 +488,12 @@ bool SerialStreamer::process_TLV_messages(void){
     size_t start_idx;
     size_t end_idx;
 
-    //clear the previous frame's outputs so frames without a given TLV
-    //(e.g. no detections) don't report stale data
-    tlv_detected_points_processor.detected_points.clear();
-    tlv_side_info_processor.side_info.clear();
+    //decode into fresh processors; a frame without a given TLV (e.g. no
+    //detections) then reports empty, never stale, data
+    TLVDetectedPoints points;
+    TLVDetectedPointsSideInfo side_info;
 
-    for (size_t i = 0; i < header_numTLVs; i++)
+    for (size_t i = 0; i < pending_.numTLVs; i++)
     {
         //make sure the TLV header and payload fit in the received message
         if (tlv_start_byte_idx + 8 > serial_message_data_buffer.size()){
@@ -541,43 +518,74 @@ bool SerialStreamer::process_TLV_messages(void){
             serial_message_data_buffer.begin() + end_idx
         );
 
-        process_TLV(tlv_data,TLV_type);
+        if (!process_TLV(tlv_data, TLV_type, points, side_info)){
+            std::cout << "SerialStreamer: TLV (type " << TLV_type << ") payload of " << TLV_len
+                      << " bytes is malformed" << std::endl;
+            return false;
+        }
 
         //increment the start byte index to process next tlv packet
         tlv_start_byte_idx += TLV_len + 8;
     }
 
+    commit_frame(points, side_info);
     return true;
 }
 
-void SerialStreamer::process_TLV(
+/**
+ * @brief Publish a fully validated frame: header fields, TLV outputs and the
+ * frame-number gap tracking change together under the TLV lock.
+ */
+void SerialStreamer::commit_frame(TLVDetectedPoints & points, TLVDetectedPointsSideInfo & side_info){
+
+    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+
+    header_version = pending_.version;
+    header_totalPacketLen = pending_.totalPacketLen;
+    header_platform = pending_.platform;
+    header_frameNumber = pending_.frameNumber;
+    header_timeCPUCycles = pending_.timeCPUCycles;
+    header_numDetectedObj = pending_.numDetectedObj;
+    header_numTLVs = pending_.numTLVs;
+    header_subFrameNumber = pending_.subFrameNumber;
+
+    tlv_detected_points_processor.detected_points.swap(points.detected_points);
+    tlv_detected_points_processor.valid_data = points.valid_data;
+    VALID_DETECTED_POINTS = points.valid_data;
+    tlv_side_info_processor.side_info.swap(side_info.side_info);
+    tlv_side_info_processor.valid_data = side_info.valid_data;
+
+    //track gaps in the frame number (dropped/corrupted frames)
+    if (have_previous_frame && header_frameNumber != previous_frame_number + 1){
+        uint32_t missed = header_frameNumber - previous_frame_number - 1;
+        missed_frame_count += missed;
+        std::cout << "SerialStreamer: frame number jumped from " << previous_frame_number
+                  << " to " << header_frameNumber << " (" << missed_frame_count
+                  << " missed in total)" << std::endl;
+    }
+    have_previous_frame = true;
+    previous_frame_number = header_frameNumber;
+}
+
+bool SerialStreamer::process_TLV(
     std::vector<uint8_t>  & tlv_data,
-    uint32_t tlv_type){
+    uint32_t tlv_type,
+    TLVDetectedPoints & points,
+    TLVDetectedPointsSideInfo & side_info){
 
         switch (tlv_type)
         {
-        case tlv_codes.DETECTED_POINTS:
-
-            tlv_detected_points_processor.process(
-                tlv_data
-            );
-
-            VALID_DETECTED_POINTS = tlv_detected_points_processor.valid_data;
-
-            break;
+        case TLVCodes::DETECTED_POINTS:
+            points.process(tlv_data);
+            return points.valid_data;
 
         case TLVCodes::DETECTED_POINTS_SIDE_INFO:
+            side_info.process(tlv_data);
+            return side_info.valid_data;
 
-            tlv_side_info_processor.process(
-                tlv_data
-            );
-
-            break;
-        
         default:
-            break;
+            return true;
         }
-
 }
 
 /**

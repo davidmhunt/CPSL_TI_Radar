@@ -40,7 +40,7 @@ class RadarConfigReader{
         //initialization status
         bool initialized;
 
-        //why the last initialize() failed (empty when it succeeded or the file was missing)
+        //why the last initialize() failed (empty when it succeeded)
         const std::string& get_error() const { return error; }
     
     private:
@@ -48,38 +48,41 @@ class RadarConfigReader{
         //reading the file
         std::shared_ptr<std::ifstream> cfg_file;
 
-        //functions to read the cfg file
+        //functions to read the cfg file: each returns false and sets error
+        //on a short line or a value out of range (std::stoi/stof exceptions
+        //are caught in process_cfg)
         bool process_cfg();
         std::string error;
         std::vector<std::string> get_vec_from_string(std::string text);
-        void read_channel_cfg(std::vector<std::string> values);
-        void read_profile_cfg(std::vector<std::string> values);
-        void read_chirp_cfg(std::vector<std::string> values);
-        bool read_frame_cfg(std::vector<std::string> values);
+        bool require_fields(const std::vector<std::string>& values, size_t last_field);
+        bool read_channel_cfg(const std::vector<std::string>& values);
+        bool read_profile_cfg(const std::vector<std::string>& values);
+        bool read_chirp_cfg(const std::vector<std::string>& values);
+        bool read_frame_cfg(const std::vector<std::string>& values);
 
         //cfg dialect (board descriptor cfg_dialect)
         std::vector<uint32_t> rx_mask_fields{1};
         uint32_t frame_period_field = 5;
 
         //number of antennas
-        int16_t rx_antennas;
+        int16_t rx_antennas = 4;
         
         //profileCfg configuration
-        float profileCfg_chirp_start_freq_GHz;
-        float profileCfg_idle_time_us;
-        float profileCfg_ramp_end_time_us;
-        int16_t profileCfg_adc_samples;
-        int16_t profileCfg_adc_sample_rate_ksps;
+        float profileCfg_chirp_start_freq_GHz = 0;
+        float profileCfg_idle_time_us = 0;
+        float profileCfg_ramp_end_time_us = 0;
+        int16_t profileCfg_adc_samples = 0;
+        int16_t profileCfg_adc_sample_rate_ksps = 0;
 
         //chirpCfg config
-        int16_t chirpCfg_start_idx;
-        int16_t chirpCfg_end_idx;
+        int16_t chirpCfg_start_idx = 0;
+        int16_t chirpCfg_end_idx = 0;
 
         //frame config
-        int16_t frameCfg_chirp_start_idx;
-        int16_t frameCfg_chirp_end_idx;
-        int16_t frameCfG_num_loops;
-        float frameCfg_frame_period;
+        int16_t frameCfg_chirp_start_idx = 0;
+        int16_t frameCfg_chirp_end_idx = 0;
+        int16_t frameCfG_num_loops = 0;
+        float frameCfg_frame_period = 0;
 
 };
 

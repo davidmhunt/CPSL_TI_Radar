@@ -41,6 +41,14 @@ TLVDetectedPoints::~TLVDetectedPoints(){}
 void TLVDetectedPoints::process(
     std::vector<uint8_t> & tlv_raw_data_bytes
 ){
+    //the payload is float32 words: a length that is not a multiple of 4 is a
+    //corrupt TLV, rejected (bytes_to_floats would read past the end)
+    if (tlv_raw_data_bytes.size() % 4 != 0){
+        detected_points.clear();
+        valid_data = false;
+        return;
+    }
+
     //convert the byte data into float data
     std::vector<float> float_data = bytes_to_floats(
         tlv_raw_data_bytes
@@ -76,7 +84,8 @@ std::vector<float> TLVDetectedPoints::bytes_to_floats(
 
     std::vector<float> out_vector(bytes.size()/4,0.0);
 
-    for (size_t i = 0; i < bytes.size(); i += 4) {
+    //whole 4-byte words only: a trailing partial word is ignored, never read
+    for (size_t i = 0; i + 4 <= bytes.size(); i += 4) {
         // Extract a 4-byte segment as a uint32_t
         uint32_t raw_value;
         std::memcpy(&raw_value, &bytes[i], sizeof(uint32_t));
