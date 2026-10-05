@@ -9,9 +9,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# C++17 (design D2). The code needs no GNU extensions, but CMAKE_CXX_EXTENSIONS
-# stays at its default (-std=gnu++17, as gnu++14 before): strict -std=c++17
-# measured 44% slower on bench_pipeline's flat converter kernel (core-10 Log).
+# C++17 (design D2). The code needs no GNU extensions; CMAKE_CXX_EXTENSIONS
+# stays at its default (-std=gnu++17, as gnu++14 before) only because nothing
+# needed to change it. Strict -std=c++17 did measure 44% slower on
+# bench_pipeline's flat converter kernel (c) (core-10 Log), but that is not a
+# strict-mode effect: the kernel's asm is identical with and without
+# __STRICT_ANSI__ (core-10 review). It is most likely code layout/alignment on
+# a very short memory-bound loop, so it is no reason to avoid strict mode.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
