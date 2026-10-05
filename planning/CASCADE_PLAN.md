@@ -31,7 +31,7 @@ stock baseline builds and flashes.
 | Both repos cloned, `CPSL_TI_Radar` submodules initialized | ✅ |
 | Git LFS installed, firmware repo PDFs pulled | ✅ |
 | Docker 29.8.1 + Compose, `cpsl` in `docker` group, `hello-world` passes | ✅ |
-| C++ driver builds natively (`CPSL_TI_Radar_CPP`, `MAIN_NO_RUNNER`) | ✅ |
+| C++ driver builds natively (`CPSL_TI_Radar_CPP`) | ✅ |
 | Feature branches created (`cascade-demo-bringup`, `cascade-serial-integration`) | ✅ |
 | Cascade demo source committed (`firmware/cascade/src/demo/src/awr2243/ti/`) | ✅ |
 | `.gitignore` tracks `downloads/download.sh` (`40fdb42`) | ✅ |

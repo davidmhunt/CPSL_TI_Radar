@@ -12,6 +12,17 @@ See **[`CPSL_TI_Radar_cpp/Readme.md`](./CPSL_TI_Radar_cpp/Readme.md)** for:
 - JSON config file format and all available fields
 - How to run the executable and pass a config path
 
+## Repository Layout
+
+- [`CPSL_TI_Radar_cpp/`](./CPSL_TI_Radar_cpp/) — the C++ driver, radar `.cfg` files and system JSON configs
+- [`tools/radar_viewer/`](./tools/radar_viewer/) — live point-cloud viewer for the AWR2243 cascade (seed of the v2.0 GUI)
+- [`utilities/`](./utilities/) — analysis notebooks (see below)
+- [`DCA_Programming/`](./DCA_Programming/) — DCA1000 FPGA reprogramming
+- [`planning/`](./planning/) — cascade plan and hardware bring-up notes
+- [`docs/`](./docs/) — architecture, results and firmware notes
+- [`tests/`](./tests/) — pytest suite (`uv run pytest`)
+- [`readme_images/`](./readme_images/) — IWR boot-mode (SOP) diagrams used by the C++ Readme's flashing instructions
+
 ## DCA1000 Setup
 
 To program or reconfigure the DCA1000 FPGA's network settings (required when running multiple radars simultaneously), see **[`DCA_Programming/README.md`](./DCA_Programming/README.md)**.
@@ -53,17 +64,19 @@ Python notebooks for analyzing C++ output files are in [`utilities/`](./utilitie
 |---|---|
 | `process_adc_data.ipynb` | Load and analyze `adc_data.bin` files written by the C++ `save_to_file` option |
 | `process_raw_lbds_data.ipynb` | Load and decode raw LVDS packet streams (`LVDS_Raw_0.bin`) |
-| `print_config.ipynb` | Decode a radar `.cfg` file and display key parameters |
+| `print_config.ipynb` | Parse a radar `.cfg` file and print its commands |
 | `determine_serial_ports.ipynb` | List available serial ports on the host |
-| `bartlet.ipynb` | Angle-of-arrival estimation demo (Bartlett and Capon beamforming) |
 | `test_ethernet_traffic.ipynb` | DCA1000 network debugging utility |
 
-## Archived Code
+## v1 -> v2 migration
 
-Legacy implementations that have been superseded:
+v2.0 is a rework and may break v1 interfaces. Removed from the tree (all recoverable from git history; the last commit that contained `archived_code/` is `4cc80474927025ff7935ddb1bb1f09ed78e0ca2d`):
 
-- [`archived_code/CPSL_TI_Radar/`](./archived_code/CPSL_TI_Radar/) — Python DCA1000 streaming package (superseded by C++). See `ARCHIVE_NOTE.md` inside for details.
-- [`archived_code/CPP_Development/`](./archived_code/CPP_Development/) — early C++ prototypes used during development.
+- `archived_code/` — the v1 Python DCA1000/serial driver (`CPSL_TI_Radar_py`, `ConfigManager`, conda environments), early C++ prototypes, and the superseded `DCA1000Runner`. Use the C++ driver in `CPSL_TI_Radar_cpp/`; `Runner` replaces `DCA1000Runner`.
+- `MAIN_NO_RUNNER` executable (`main_no_runner.cpp`) — only `CPSL_TI_Radar_CPP` is built now.
+- `utilities/Postprocess_adc_data.py` and `utilities/bartlet.ipynb` — depended on removed v1 modules or v1 capture files. The remaining notebooks no longer import `ConfigManager`; they parse the `.cfg` directly.
+- Generated/stray files: `generated_config.json`, `config/radar/IWR_Demos/generated_config.{cfg,json}` and `jsonconfig.json` (outputs of the v1 `ConfigManager`), the empty root `build/`, and the tracked `CPSL_TI_Radar_cpp/.vscode/`.
+- `planning/current_plan.md` — all phases done or superseded; the cascade plans remain in `planning/`.
 
 ## ROS Integration
 

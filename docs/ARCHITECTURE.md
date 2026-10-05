@@ -13,8 +13,8 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ./CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP <system config .json>
 ```
 
-Two executables: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial)
-and `MAIN_NO_RUNNER` (manual wiring). `include/json` (nlohmann/json) is a
+One executable: `CPSL_TI_Radar_CPP` (uses `Runner`; DCA1000 and serial).
+`include/json` (nlohmann/json) is a
 submodule and must be present.
 
 ## Component graph

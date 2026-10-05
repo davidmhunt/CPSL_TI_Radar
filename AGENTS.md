@@ -111,12 +111,11 @@ shared, not private to one session.
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/` + `iwr_raw_rosnode` submodule); to be reorganized into the v2.0 shipped-firmware directory |
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |
 | `tools/radar_viewer/` | Cascade live point-cloud viewer (stdlib HTTP + pyserial) — seed of the v2.0 GUI |
-| `utilities/` | ADC post-processing notebooks/scripts and TI SDK parsers; some import removed v1 modules |
+| `utilities/` | Notebooks for post-processing driver output (ADC cube, raw LVDS, `.cfg`), serial-port and DCA1000 network debugging, and a TI SDK LVDS parser example |
 | `tests/` | pytest suite (`uv run pytest`); C++ tests run via `ctest` (none yet) |
-| `planning/` | Plans and hardware bring-up notes |
+| `planning/` | Cascade plan and hardware bring-up notes |
 | `docs/` | `ARCHITECTURE.md`, `RESULTS.md`, `firmware.md` |
-| `archived_code/` | Legacy v1 code (Python driver, conda envs); excluded from pytest; removal candidate |
-| `readme_images/` | README figures |
+| `readme_images/` | IWR boot-mode (SOP) diagrams linked from `CPSL_TI_Radar_cpp/Readme.md` |
 | `.friday/active/harness/` | Multi-agent harness: core rules, role definitions, per-rule detail docs, the live dashboard (`status.md` + `status_history.md`, unless `.friday/active/harness/status_history.md` points elsewhere), goals and directives (`plans/`), and the Reviewer/Runner working folders (`review/`, `running/`). |
 | `.friday-project/` | Project-owned harness extensions, tracked in this repo: `roles/<role>.md` for each project specialist (linked into `.friday/active/harness/roles/` by `init_harness.py`). Omit if the project has none. |
 | `docs/research/` | The Researcher's memos — tracked project content, not part of the `.friday/` submodule's generated output. |
