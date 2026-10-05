@@ -16,9 +16,9 @@ This file has no prose yet.
 | A5 | `05_reading_adc_data.md` | Read `adc_data.bin` with the `utilities/` notebooks | core-14 (output dir, unchanged layout), D5 (frame layout) |
 | A6 | `06_multiple_radars.md` | Run several radars: one process per radar, ports, output dirs, IPs | core-10 (`output.dir`), core-13 (API) |
 | A7 | `07_troubleshooting.md` | Troubleshooting: no `Done`, timeouts, drops/overruns, cascade power-cycle | core-13 (Status messages), core-15 (drop counters) |
-| A8 | `bench_validation.md` | Bench-validate a board with the core-04 harness (written by **core-06**, linked, not duplicated) | core-04, core-06 |
+| A8 | `bench_validation.md` | Bench-validate a board with the core-04 harness (written by **core-06**, linked, not duplicated). Draft written; awaits the IWR1843 bench run | core-04, core-06 |
 
-Already written: `rebuild_driver.md`, a one-page repeatable runbook (build, `ctest`, `--validate`, `host_setup.py --apply`). A1 and A2 should link to it rather than repeat its commands.
+Already written: `bench_validation.md` (A8), `rebuild_driver.md`, a one-page repeatable runbook (build, `ctest`, `--validate`, `host_setup.py --apply`). A1 and A2 should link to it rather than repeat its commands.
 
 ## B. Extending the driver
 

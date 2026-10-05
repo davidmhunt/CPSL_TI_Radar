@@ -19,7 +19,7 @@ See **[`CPSL_TI_Radar_cpp/Readme.md`](./CPSL_TI_Radar_cpp/Readme.md)** for:
 - [`utilities/`](./utilities/) — analysis notebooks (see below)
 - [`DCA_Programming/`](./DCA_Programming/) — DCA1000 FPGA reprogramming
 - [`planning/`](./planning/) — cascade plan and hardware bring-up notes
-- [`docs/`](./docs/) — architecture, results and firmware notes
+- [`docs/`](./docs/) — architecture, results and firmware notes; [bench validation](./docs/tutorials/bench_validation.md) and [rebuild runbook](./docs/tutorials/rebuild_driver.md) in `docs/tutorials/`
 - [`tests/`](./tests/) — pytest suite (`uv run pytest`)
 - [`readme_images/`](./readme_images/) — IWR boot-mode (SOP) diagrams used by the C++ Readme's flashing instructions
 
