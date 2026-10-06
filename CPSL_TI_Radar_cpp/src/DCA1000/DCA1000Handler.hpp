@@ -155,7 +155,8 @@ public:
     //false if flushing/closing an output file failed in stop()
     bool output_files_ok() const { return output_files_ok_; }
 
-    //pop one packet (waits up to 500 ms) and ingest it; false if none arrived
+    //take the packets the source has (up to PacketSource::kMaxBatch, waiting
+    //up to 500 ms for the first) and ingest them in place; false if none arrived
     bool process_next_packet();
 
     //true if a frame is queued for take_frame()

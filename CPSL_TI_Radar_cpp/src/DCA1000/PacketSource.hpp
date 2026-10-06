@@ -12,8 +12,9 @@
 //   ReplayPacketSource  packets held in memory (tests, offline replay)
 //
 // Radar calls open() from Radar::open, configure() from Radar::configure,
-// start() from Radar::start, pop() from its DCA worker thread and stop() from
-// Radar::stop. Nothing here throws.
+// start() from Radar::start, acquire()/release() from its DCA worker thread
+// (through DCA1000Handler::process_next_packet) and stop() from Radar::stop.
+// Nothing here throws.
 
 #include <condition_variable>
 #include <cstddef>
@@ -34,6 +35,11 @@ namespace radar {
 class PacketSource {
 public:
     static constexpr size_t kMaxPacketBytes = 1472;
+    // most packets one acquire() hands out (DCA1000Handler's batch)
+    static constexpr size_t kMaxBatch = 32;
+
+    // one packet, read in place: valid until the release() that covers it
+    using PacketView = DCA1000Socket::PacketView;
 
     virtual ~PacketSource() = default;
 
@@ -50,11 +56,21 @@ public:
     // Wait at most `timeout` for one packet; copy it to `buf` (at least
     // kMaxPacketBytes) and set `len`. false: none arrived in time.
     virtual bool pop(uint8_t* buf, int& len, std::chrono::milliseconds timeout) = 0;
+    // Wait at most `timeout` for packets, then hand out up to `max` of them,
+    // oldest first, as views that stay valid until release() (design P4: no
+    // per-packet copy). 0: none arrived in time. release(n) returns the
+    // oldest n acquired packets; call it once per acquire, with its count.
+    // The default reads one packet with pop() into a buffer of this object.
+    virtual size_t acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout);
+    virtual void release(size_t n);
 
     // packets discarded because the RX ring was full
     virtual uint32_t overrun_count() const { return 0; }
     // SO_RCVBUF the kernel granted (0 = not a socket)
     virtual size_t rcvbuf_bytes() const { return 0; }
+
+private:
+    uint8_t one_[kMaxPacketBytes];  // the default acquire()'s packet
 };
 
 // The DCA1000 over UDP, with the addresses, ports and board LVDS settings of
@@ -68,6 +84,8 @@ public:
     Status start() override;
     Status stop() override;
     bool pop(uint8_t* buf, int& len, std::chrono::milliseconds timeout) override;
+    size_t acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout) override;
+    void release(size_t n) override;
     uint32_t overrun_count() const override { return socket_.get_overrun_count(); }
     size_t rcvbuf_bytes() const override { return socket_.get_granted_rcvbuf(); }
 

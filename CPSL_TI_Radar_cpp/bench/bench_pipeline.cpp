@@ -388,7 +388,8 @@ void print_driver_row(const char* scenario, const std::vector<Sample>& runs) {
 
 // The DCA1000Socket half of UdpPacketSource, without the FPGA command
 // protocol (nothing answers on loopback): open() binds the sockets,
-// start()/stop() run the RX thread, pop() reads the packet ring.
+// start()/stop() run the RX thread, acquire()/release() (and pop()) read the
+// packet ring as UdpPacketSource does.
 class LoopbackSource : public cpsl::radar::PacketSource {
 public:
     LoopbackSource(int cmd_port, int data_port, size_t rcvbuf) : cmd_port_(cmd_port), data_port_(data_port), rcvbuf_(rcvbuf) {}
@@ -411,6 +412,12 @@ public:
         delivered_.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
+    size_t acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout) override {
+        const int n = socket_.acquire_packets(out, static_cast<int>(max), static_cast<int>(timeout.count()));
+        delivered_.fetch_add(static_cast<uint64_t>(n), std::memory_order_relaxed);
+        return static_cast<size_t>(n);
+    }
+    void release(size_t n) override { socket_.release_packets(static_cast<int>(n)); }
     uint32_t overrun_count() const override { return socket_.get_overrun_count(); }
     size_t rcvbuf_bytes() const override { return socket_.get_granted_rcvbuf(); }
     uint64_t delivered() const { return delivered_.load(std::memory_order_relaxed); }

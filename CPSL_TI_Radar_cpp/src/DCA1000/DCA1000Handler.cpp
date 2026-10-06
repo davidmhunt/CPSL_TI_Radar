@@ -136,19 +136,21 @@ void DCA1000Handler::set_packet_source(std::shared_ptr<cpsl::radar::PacketSource
 }
 
 /**
- * @brief 
- * 
- * @return true 
- * @return false 
+ * @brief Take the packets the source has (waiting up to 500 ms for the first),
+ * up to PacketSource::kMaxBatch, ingest each in place and release them
+ * (design P4: no per-packet copy, one wake-up per batch).
+ *
+ * @return false if no packet arrived
  */
 bool DCA1000Handler::process_next_packet(){
-
-    // Pop the next packet from the source (UDP: the RX ring buffer; waits up to 500 ms)
-    uint8_t pkt_buf[cpsl::radar::PacketSource::kMaxPacketBytes];
-    int received_bytes = 0;
-    if (!source_ || !source_->pop(pkt_buf, received_bytes, std::chrono::milliseconds(500))) return false;
-
-    ingest_packet(pkt_buf, received_bytes);
+    if (!source_) return false;
+    cpsl::radar::PacketSource::PacketView batch[cpsl::radar::PacketSource::kMaxBatch];
+    const size_t n = source_->acquire(batch, cpsl::radar::PacketSource::kMaxBatch, std::chrono::milliseconds(500));
+    if (n == 0) return false;
+    for (size_t i = 0; i < n; i++) {
+        ingest_packet(batch[i].data, batch[i].len);
+    }
+    source_->release(n);
     return true;
 }
 

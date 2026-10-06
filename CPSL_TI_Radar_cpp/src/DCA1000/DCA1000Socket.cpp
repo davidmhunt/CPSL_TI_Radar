@@ -12,7 +12,8 @@ DCA1000Socket::DCA1000Socket()
       rx_ring_head_(0),
       rx_ring_tail_(0),
       rx_overrun_count_(0),
-      rx_thread_running_(false)
+      rx_thread_running_(false),
+      worker_waiting_(false)
 {}
 
 DCA1000Socket::~DCA1000Socket() {
@@ -142,25 +143,45 @@ bool DCA1000Socket::receive_response(std::vector<uint8_t>& buffer) {
     return true;
 }
 
-bool DCA1000Socket::pop_packet(uint8_t* buf, int& len, int timeout_ms) {
-    {
+int DCA1000Socket::acquire_packets(PacketView* out, int max, int timeout_ms) {
+    const int tail = rx_ring_tail_.load(std::memory_order_relaxed);  // only this thread writes it
+    int head = rx_ring_head_.load(std::memory_order_acquire);
+    if (head == tail) {
+        // about to sleep: say so first, then re-check under the mutex (the
+        // RX thread notifies only when it sees worker_waiting_)
         std::unique_lock<std::mutex> lock(rx_ring_cv_mutex_);
-        rx_ring_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] {
-            return rx_ring_head_.load(std::memory_order_acquire) !=
-                   rx_ring_tail_.load(std::memory_order_relaxed);
+        worker_waiting_.store(true, std::memory_order_seq_cst);
+        rx_ring_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, tail] {
+            return rx_ring_head_.load(std::memory_order_seq_cst) != tail;
         });
+        worker_waiting_.store(false, std::memory_order_relaxed);
+        head = rx_ring_head_.load(std::memory_order_acquire);
+        if (head == tail) return 0;
     }
+    const int available = (head - tail + RX_RING_SIZE) % RX_RING_SIZE;
+    const int n = std::min(max, available);
+    for (int i = 0; i < n; i++) {
+        const RxSlot& slot = rx_ring_[(tail + i) % RX_RING_SIZE];
+        out[i] = PacketView{slot.data.data(), slot.bytes_received};
+    }
+    return n;
+}
 
-    int tail = rx_ring_tail_.load(std::memory_order_relaxed);
-    if (tail == rx_ring_head_.load(std::memory_order_acquire)) {
+void DCA1000Socket::release_packets(int n) {
+    if (n <= 0) return;
+    const int tail = rx_ring_tail_.load(std::memory_order_relaxed);
+    rx_ring_tail_.store((tail + n) % RX_RING_SIZE, std::memory_order_release);
+}
+
+bool DCA1000Socket::pop_packet(uint8_t* buf, int& len, int timeout_ms) {
+    PacketView v{nullptr, 0};
+    if (acquire_packets(&v, 1, timeout_ms) == 0) {
         len = 0;
         return false;
     }
-
-    RxSlot& slot = rx_ring_[tail];
-    len = slot.bytes_received;
-    std::copy(slot.data.begin(), slot.data.begin() + len, buf);
-    rx_ring_tail_.store((tail + 1) % RX_RING_SIZE, std::memory_order_release);
+    len = v.len;
+    std::copy(v.data, v.data + v.len, buf);
+    release_packets(1);
     return true;
 }
 
@@ -186,7 +207,13 @@ void DCA1000Socket::rx_thread_func() {
                              nullptr, nullptr);
         if (n <= 0) continue;
         slot.bytes_received = static_cast<int>(n);
-        rx_ring_head_.store(next_head, std::memory_order_release);
-        rx_ring_cv_.notify_one();
+        rx_ring_head_.store(next_head, std::memory_order_seq_cst);
+        // wake the worker only if it is (about to be) asleep; taking the
+        // mutex first means it is either still before its re-check (and will
+        // see the new head) or already waiting (and gets the notify)
+        if (worker_waiting_.load(std::memory_order_seq_cst)) {
+            { std::lock_guard<std::mutex> lock(rx_ring_cv_mutex_); }
+            rx_ring_cv_.notify_one();
+        }
     }
 }

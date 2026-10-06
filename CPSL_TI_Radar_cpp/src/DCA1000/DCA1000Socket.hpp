@@ -5,15 +5,20 @@
 // plus a dedicated real-time RX thread that drains the data socket into a
 // lock-free ring buffer.
 //
-// Ring buffer protocol: rx_ring_head_ is written by the RX thread (SCHED_RR 99)
-// and read by the worker thread; rx_ring_tail_ is written by the worker and read
-// by the RX thread. Both are std::atomic<int> with acquire/release ordering so
-// no additional locking is needed in the hot path.
+// Ring buffer protocol (single producer, single consumer): rx_ring_head_ is
+// written by the RX thread and read by the worker thread; rx_ring_tail_ is
+// written by the worker and read by the RX thread. The worker reads packets
+// in place (acquire_packets() returns views into the ring slots, no copy) and
+// hands the slots back with release_packets(). Neither side takes a lock in
+// the hot path: the RX thread notifies the worker's condition variable only
+// when the worker has said it is about to sleep (worker_waiting_), so a
+// busy worker costs no futex call per packet (design P4).
 //
 // Usage:
 //   1. Call init() once to create/bind sockets.
 //   2. Call start_rx() when the DCA1000 begins streaming (send_recordStart).
-//   3. Call pop_packet() repeatedly from the worker thread to drain frames.
+//   3. Call acquire_packets() / release_packets() repeatedly from the worker
+//      thread (or pop_packet(), which copies one packet out).
 //   4. Call stop_rx() to join the RX thread (before send_recordStop).
 
 #include <string>
@@ -50,7 +55,22 @@ public:
     // Receives a response from the FPGA on the cmd socket.
     bool receive_response(std::vector<uint8_t>& buffer);
 
-    // Pops one packet from the ring buffer (waits up to timeout_ms).
+    // One received packet, in place in the ring.
+    struct PacketView {
+        const uint8_t* data;
+        int len;
+    };
+
+    // Waits up to timeout_ms for at least one packet, then returns up to
+    // `max` of the oldest unreleased packets as views into the ring, in
+    // order. The views stay valid until release_packets(). 0: none arrived.
+    // Worker thread only.
+    int acquire_packets(PacketView* out, int max, int timeout_ms = 500);
+
+    // Hands the oldest `n` acquired packets' slots back to the RX thread.
+    void release_packets(int n);
+
+    // Copies one packet out of the ring (acquire + copy + release).
     // Returns false if no packet arrives within the timeout.
     bool pop_packet(uint8_t* buf, int& len, int timeout_ms = 500);
 
@@ -74,6 +94,11 @@ private:
     std::atomic<uint32_t> rx_overrun_count_;
     std::atomic<bool>     rx_thread_running_;
     std::thread           rx_thread_;
+    // the worker sleeps on rx_ring_cv_ only after setting worker_waiting_
+    // (seq_cst), and the RX thread reads it (seq_cst) after publishing a new
+    // head, so either the worker sees the packet or the RX thread sees the
+    // flag and notifies
+    std::atomic<bool>       worker_waiting_;
     std::condition_variable rx_ring_cv_;
     std::mutex              rx_ring_cv_mutex_;
 

@@ -9,6 +9,15 @@
 namespace cpsl {
 namespace radar {
 
+size_t PacketSource::acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout) {
+    int len = 0;
+    if (max == 0 || !pop(one_, len, timeout)) return 0;
+    out[0] = PacketView{one_, len};
+    return 1;
+}
+
+void PacketSource::release(size_t) {}
+
 // ---------------------------------------------------------------------------
 // UdpPacketSource
 // ---------------------------------------------------------------------------
@@ -71,6 +80,13 @@ Status UdpPacketSource::stop() {
 bool UdpPacketSource::pop(uint8_t* buf, int& len, std::chrono::milliseconds timeout) {
     return socket_.pop_packet(buf, len, static_cast<int>(timeout.count()));
 }
+
+size_t UdpPacketSource::acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout) {
+    return static_cast<size_t>(
+        socket_.acquire_packets(out, static_cast<int>(max), static_cast<int>(timeout.count())));
+}
+
+void UdpPacketSource::release(size_t n) { socket_.release_packets(static_cast<int>(n)); }
 
 bool UdpPacketSource::command(std::vector<uint8_t> cmd, uint16_t* status_out) {
     if (!socket_.send_command(cmd)) return false;
