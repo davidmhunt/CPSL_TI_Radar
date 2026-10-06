@@ -27,6 +27,7 @@ your task needs, per this index:**
 |-------------|------|
 | Run any script or test | `.friday/active/harness/rules/environment.md` (env, launch pattern) |
 | Launch/check/trust a long-running job or monitor | `.friday/active/harness/rules/monitoring.md` |
+| Read large files, run builds/tests, or review diffs | `.friday/active/harness/rules/context_hygiene.md` (keep context small) |
 | Mutate any canonical data artifact (re-generate, re-render, ground truth) | `.friday/active/harness/rules/data_artifacts.md` — snapshot FIRST |
 | Change driver internals (DCA1000 RX, serial TLV, configs, ADC cube layout) | `docs/ARCHITECTURE.md` |
 | Build, flash, or bring up firmware; touch `firmware_dev/` or a board | `docs/firmware.md` (Firmware role's facts) |

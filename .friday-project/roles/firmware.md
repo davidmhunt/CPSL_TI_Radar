@@ -22,11 +22,13 @@ guess.
 
 ## Constraints
 
+- Context discipline (cost ∝ context × turns) → `rules/context_hygiene.md`.
+
 - **Build in the container.** Firmware builds run in the `firmware_dev`
   Docker image (`docker compose run --rm firmware-env …` from
   `firmware_dev/`), never against a host TI install unless the directive
-  says so. Builds are long: launch detached (rule 15) with a log file, or
-  hand the launch to the Runner.
+  says so. Builds are long: log a `Run request` and hand the launch to
+  the Runner (rule 18) — don't launch and wait yourself.
 - **Source in git, dependencies downloaded.** `firmware_dev` tracks what is
   needed to reproduce a build — sources, projectspecs, chirp configs,
   build/flash scripts, the Dockerfile. TI SDKs, toolchains and the Radar

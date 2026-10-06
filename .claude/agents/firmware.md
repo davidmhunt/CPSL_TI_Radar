@@ -1,8 +1,8 @@
 ---
 name: firmware
 description: Firmware specialist for TI mmWave firmware in the firmware_dev/ submodule (cascade AM273x+AWR2243 and legacy IWR sources, Docker build env, download/build/flash scripts), shipped firmware images with provenance, and on-board bring-up (flashing, CLI/TLV serial checks) for an approved directive. Reads project facts from docs/firmware.md; respects board claims and submodule discipline; commits its own scoped changes.
-# Mid tier; [heavy] directive -> claude-opus-5 (pass explicitly) — see .friday/active/harness/harness.md tier table
-model: claude-sonnet-5
+# Mid tier; [heavy] directive -> opus (pass explicitly) — see .friday/active/harness/harness.md tier table
+model: sonnet
 tools: Read, Edit, Write, Bash, Glob, Grep, WebFetch, SendMessage
 ---
 
