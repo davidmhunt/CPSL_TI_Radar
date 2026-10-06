@@ -20,14 +20,25 @@
       "n_tx": {
         "value": 6,
         "level": "error",
-        "source": "tools/radar_viewer/cfggen.py docstring: 6 TX x 8 RX (2-chip cascade, DDMA)",
-        "confidence": "repo"
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: SYS_CASCADE_NUM_TX_ANTENNAS 6 (syscommon.h:72)",
+        "confidence": "high"
+      },
+      "valid_tx_counts": {
+        "value": [
+          2,
+          3,
+          4,
+          6
+        ],
+        "level": "error",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: DDMA; 1 and 5 give numBandsEmpty=-1 (mss_main.c:4032-4058, rfparserDDMA.c:463-473)",
+        "confidence": "high"
       },
       "n_rx": {
         "value": 8,
         "level": "error",
-        "source": "tools/radar_viewer/cfggen.py docstring: 6 TX x 8 RX",
-        "confidence": "repo"
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: 2 chips x 4 RX; 3-RX per chip rejected by the range DPU",
+        "confidence": "medium"
       },
       "band_ghz": {
         "value": [
@@ -35,26 +46,32 @@
           81.0
         ],
         "level": "error",
-        "source": "tools/radar_viewer/cfggen.py BAND_TOP_GHZ=81; AWR2243 76-81 GHz (datasheet, recalled)",
-        "confidence": "recalled"
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: VCO2 76-81 GHz (rl_sensor.h; datasheet SWRS223D)",
+        "confidence": "high"
       },
       "max_slope_mhz_us": {
-        "value": 100.0,
+        "value": 266.0,
         "level": "error",
-        "source": "tools/radar_viewer/cfggen.py MAX_SLOPE",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: silicon freqSlopeConst +-5510 x 48.28 kHz/us (rl_sensor.h; SWRS223D)",
+        "confidence": "high"
+      },
+      "tested_max_slope_mhz_us": {
+        "value": 100.0,
+        "level": "warning",
+        "source": "tools/radar_viewer/cfggen.py MAX_SLOPE: repo-tested value, not a hardware bound (docs/research/gui_board_limits_cascade_multiprofile.md)",
         "confidence": "repo"
       },
       "max_sample_rate_ksps": {
-        "value": 10000,
-        "level": "warning",
-        "source": "cfggen.py FS_MAX_KSPS; TI's short/long cfgs use 5000/10000",
-        "confidence": "repo"
+        "value": 50000,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: silicon digOutSampleRate 2000..50000 ksps (rl_sensor.h; 20 MHz IF)",
+        "confidence": "high"
       },
       "min_sample_rate_ksps": {
         "value": 2000,
-        "level": "warning",
-        "source": "cfggen.py FS_MIN_KSPS",
-        "confidence": "repo"
+        "level": "error",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: rl_sensor.h digOutSampleRate",
+        "confidence": "high"
       },
       "tested_sample_rates_ksps": {
         "value": [
@@ -62,25 +79,31 @@
           10000
         ],
         "level": "warning",
-        "source": "cfggen.py FS_TESTED_KSPS",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: the rates in TI's shipped cascade cfgs (cfggen.py FS_TESTED_KSPS); max tested 10000",
         "confidence": "repo"
       },
       "min_idle_us": {
         "value": 4.0,
-        "level": "error",
-        "source": "cfggen.py MIN_IDLE_US",
-        "confidence": "repo"
+        "level": "warning",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: no documented minimum found (field 0..524287 x 10 ns); 4 us is cfggen.py MIN_IDLE_US, TI cfgs use 4-5",
+        "confidence": "unverified"
       },
       "max_loops": {
         "value": 255,
-        "level": "warning",
-        "source": "TI mmWave interface control doc numLoops (recalled)",
-        "confidence": "unverified"
+        "level": "error",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: rlFrameCfg numLoops 1..255 in legacy frame mode (rl_sensor.h)",
+        "confidence": "high"
+      },
+      "max_samples_silicon": {
+        "value": 1024,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: ADC buffer 16 kB per chip = 1024 complex samples x 4 RX (rl_sensor.h numAdcSamples)",
+        "confidence": "medium"
       },
       "max_samples": {
         "value": 192,
         "level": "warning",
-        "source": "cfggen.py: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps')",
+        "source": "cfggen.py: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps') (docs/research/gui_board_limits_cascade_multiprofile.md: not firmware-enforced)",
         "confidence": "repo"
       },
       "max_chirps": {

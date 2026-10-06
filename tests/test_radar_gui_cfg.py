@@ -122,23 +122,29 @@ def test_clean_cfg_validates():
     assert rep.ok and not rep.errors and rep.metrics is not None
 
 
-def test_cascade_slope_over_limit_is_error():
-    cfg = _mod(RADAR / "cascade" / "cascade_shortrange.cfg", "0 0 44.41 0 192", "0 0 150 0 192")
+def test_cascade_slope_error_above_silicon_warning_above_tested():
+    cfg = _mod(RADAR / "cascade" / "cascade_shortrange.cfg", "0 0 44.41 0 192", "0 0 300 0 192")
     rep = validate(cfg, "AWR2243_CASCADE")
-    assert not rep.ok and "slope" in codes(rep, "error")
+    assert not rep.ok and "slope" in codes(rep, "error")            # 266 MHz/us silicon limit
+    rep = validate(_mod(RADAR / "cascade" / "cascade_shortrange.cfg", "0 0 44.41 0 192", "0 0 150 0 192"), "AWR2243_CASCADE")
+    assert "slope_untested" in codes(rep, "warning") and "slope" not in codes(rep)   # beyond the tested 100
 
 
-def test_single_chip_slope_over_limit_is_warning_only():
-    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "0 0 80.0 1 63", "0 0 300.0 1 63")
+def test_single_chip_slope_over_limit_is_error():
+    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "0 0 80.0 1 63", "0 0 120.0 1 63")
     rep = validate(cfg, "IWR1843")
     slope = [i for i in rep.issues if i.code == "slope"]
-    assert slope and slope[0].level == "warning" and slope[0].confidence == "unverified"
+    assert slope and slope[0].level == "error" and slope[0].confidence == "high" and "100" in slope[0].message
+    cfg = _mod(RADAR / "nav_configs" / "6843_RadVel_ods_10Hz.cfg", "0 0 80.0 1 63", "0 0 240.0 1 63")
+    assert "slope" not in codes(validate(cfg, "IWR6843"))   # IWR6843 allows 250
 
 
 def test_samples_beyond_adc_buffer_reported():
     cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "1 63 2100", "1 2000 2100")
     rep = validate(cfg, "IWR1843")
-    assert "adc_buffer" in codes(rep) and "sampling_outside_ramp" in codes(rep, "error")
+    assert "adc_buffer_streaming" in codes(rep, "warning") and "sampling_outside_ramp" in codes(rep, "error")
+    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "1 63 2100", "1 2100 2100")   # 33600 B > 32 KB
+    assert "adc_buffer" in codes(validate(cfg, "IWR1843"), "error")
 
 
 def test_cascade_untested_sample_count_warns():
@@ -149,7 +155,8 @@ def test_cascade_untested_sample_count_warns():
 
 def test_idle_below_min_on_cascade_is_error():
     cfg = _mod(RADAR / "cascade" / "cascade_shortrange.cfg", "profileCfg 0 77 5 6 45", "profileCfg 0 77 2 6 45")
-    assert "idle" in codes(validate(cfg, "AWR2243_CASCADE"), "error")
+    rep = validate(cfg, "AWR2243_CASCADE")
+    assert "idle" in codes(rep, "warning") and "idle" not in codes(rep, "error")   # unverified limit: never an error
 
 
 def test_band_overshoot_beyond_tolerance_is_error():
@@ -187,7 +194,7 @@ def test_dca_link_rate_error():
     txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
     txt = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 5 7 55 0 0 20.0 1 600 12000")
     rep = validate(parse_cfg(txt), "IWR1843")
-    assert "lvds_rate" in codes(rep, "warning") and rep.metrics.chirp_avg_rate_mbps == pytest.approx(1280, rel=1e-6)
+    assert "lvds_rate" in codes(rep, "error") and rep.metrics.chirp_avg_rate_mbps == pytest.approx(1280, rel=1e-6)
 
 
 # --- API shape -------------------------------------------------------------------------------------
@@ -206,7 +213,7 @@ def test_every_board_has_limits_with_source_and_confidence():
         for key, v in lim.items():
             if key == "kind":
                 continue
-            assert v.source and v.confidence in ("repo", "recalled", "unverified"), (board, key)
+            assert v.source and v.confidence in ("repo", "high", "medium", "low", "unverified"), (board, key)
             assert v.level in ("error", "warning")
 
 
@@ -477,3 +484,51 @@ def test_generated_text_only_changes_what_depends_on_targets():
     # reproduces TI's short-range design: 192 samples, ~5 Msps, ~44 MHz/us
     assert r.metrics.num_samples == 192 and r.metrics.sample_rate_ksps == 5000
     assert r.metrics.slope_mhz_us == pytest.approx(44.4, rel=0.03)
+
+
+# --- gui-13: per-board limits from the descriptors ---------------------------------------------------
+
+def _prof(path, old, new):
+    return _mod(path, old, new)
+
+
+def test_gui13_limits_come_from_descriptors_with_memo_values():
+    g = lambda b, k: BOARD_LIMITS[b][k].value
+    assert [g(b, "max_slope_mhz_us") for b in ("IWR1443", "IWR1843", "IWR6843")] == [100.0, 100.0, 250.0]
+    assert [g(b, "max_sample_rate_ksps") for b in ("IWR1443", "IWR1843", "IWR6843")] == [18750, 12500, 12500]
+    assert [g(b, "lowpower_max_ksps") for b in ("IWR1443", "IWR1843", "IWR6843")] == [9375, 9375, 12500]
+    assert [g(b, "l3_radar_cube_bytes") for b in ("IWR1443", "IWR1843", "IWR6843")] == [384 * 1024, 1024 * 1024, 768 * 1024]
+    assert [g(b, "min_chirp_cycle_us") for b in ("IWR1443", "IWR1843", "IWR6843")] == [15.0, 15.0, 13.0]
+    c = BOARD_LIMITS["AWR2243_CASCADE"]
+    assert c["max_slope_mhz_us"].value == 266.0 and c["tested_max_slope_mhz_us"].value == 100.0
+    assert c["max_sample_rate_ksps"].value == 50000 and list(c["valid_tx_counts"].value) == [2, 3, 4, 6]
+
+
+def test_lowpower_sample_rate_cap_only_applies_in_low_power_mode():
+    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    assert "lowPower 0 0" in txt
+    fast = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 293 7 44 0 0 60.0 1 63 10000")
+    rep = validate(parse_cfg(fast), "IWR1843")                  # regular ADC mode: 12500 cap
+    assert "sample_rate_lowpower" not in codes(rep) and "sample_rate" not in codes(rep)
+    rep = validate(parse_cfg(fast.replace("lowPower 0 0", "lowPower 0 1")), "IWR1843")
+    assert "sample_rate_lowpower" in codes(rep, "warning")      # 9375 cap in low-power mode
+    rep = validate(parse_cfg(fast.replace("1 63 10000", "1 63 13000")), "IWR1843")
+    assert "sample_rate" in codes(rep, "error")
+
+
+def test_sweep_must_lie_in_one_subband():
+    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    wide = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 76.5 293 7 44 0 0 60.0 1 63 2100")   # 76.5 + 60*44 MHz = 79.1 GHz
+    assert "band_subrange" in codes(validate(parse_cfg(wide), "IWR1843"), "error")
+
+
+def test_chirp_cycle_below_minimum_is_error_and_6843_is_looser():
+    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    short = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 5 7 8 0 0 80.0 1 20 2100")   # 5 + 8 = 13 us
+    assert "chirp_cycle" in codes(validate(parse_cfg(short), "IWR1843"), "error")
+    assert "chirp_cycle" not in codes(validate(parse_cfg(short), "IWR6843"))
+
+
+def test_dca_ceiling_follows_the_packet_delay():
+    from radar_gui.cfg.limits import dca1000_ceiling_mbps
+    assert 100 < dca1000_ceiling_mbps("IWR1843") < 110      # ~105 Mb/s at the driver's 100 us delay

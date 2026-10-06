@@ -13,7 +13,7 @@ files via include/json; gui-04) holds, schema 2:
   templates        {board: cfg path relative to config/}   one per board
   system_enables   {"serial": bool, "dca1000": bool}       what a system JSON for it turns on by default
   limits           {board: {name: {"value", "level", "source", "confidence"}}}
-                   confidence: "repo" | "recalled" | "unverified"; level: "error" | "warning"
+                   confidence: "repo" | "high" | "medium" | "low" | "unverified" ("recalled" is legacy); level: "error" | "warning"
   mimo             {"scheme": "tdm"|"ddma", "bpm": bool, "max_chirps_per_loop": int|null, "subframes": int|null,
                     "source", "confidence", optional "note", optional "boards": {board: {overrides of the above}}}
                    the MIMO scheme is a property of the firmware, not inferred from the board (gui-10 ruling);
@@ -32,7 +32,7 @@ from pathlib import Path
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "CPSL_TI_Radar_cpp" / "config"
 FIRMWARE_DIR = CONFIG_DIR / "firmware"
 BOARDS_DIR = CONFIG_DIR / "boards"
-CONFIDENCES = ("repo", "recalled", "unverified")
+CONFIDENCES = ("repo", "high", "medium", "low", "recalled", "unverified")   # gui-13: memo vocabulary added
 LEVELS = ("error", "warning")
 
 

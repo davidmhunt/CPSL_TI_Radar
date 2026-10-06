@@ -37,7 +37,7 @@ TARGET_KEYS = ("max_range_m", "max_velocity_ms", "range_res_m", "frame_rate_hz",
 
 # Generator design constants (conservative; the validator holds the real per-board limits).
 GEN_MAX_SLOPE = 100.0           # MHz/us: highest slope any shipped cfg reaches (cfggen MAX_SLOPE)
-SINGLE_MIN_IDLE_US = 5.0        # shipped single-chip cfgs use >= 5 us (limits.py min_idle is 2, unverified)
+SINGLE_MIN_IDLE_US = 5.0        # shipped single-chip cfgs use >= 5 us (TI documents a min chirp cycle, not an idle minimum)
 SINGLE_ADC_START_US = 7.0       # shipped single-chip cfgs
 SINGLE_RAMP_MARGIN_US = 2.0     # ramp continues this long after the last sample (shipped: 1.5-8)
 CASCADE_RAMP_MARGIN_US = 0.6    # cfggen RAMP_MARGIN_US
@@ -117,12 +117,13 @@ def _profile(board: str, lim: dict) -> _Prof:
         # TI-tested rates first (cfggen), then the rest ascending; lower fs = lower data rate
         tested = tuple(lim["tested_sample_rates_ksps"].value)
         rest = tuple(f for f in range(int(lim["min_sample_rate_ksps"].value),
-                                      int(lim["max_sample_rate_ksps"].value) + 1, 250) if f not in tested)
+                                      int(max(tested)) + 1, 250) if f not in tested)   # beyond TI-tested rates: never auto-picked
         return _Prof(tested + rest, lim["min_idle_us"].value, CASCADE_RAMP_MARGIN_US, (77.0, 76.0), hi,
                      lambda s: 6.0 if s >= 20 else 3.0)
-    fs_max = int(lim["max_sample_rate_ksps"].value)
+    # the template may select low-power ADC mode (lowPower 0 1), so stay under its cap too
+    fs_max = int(min(lim["max_sample_rate_ksps"].value, lim.get("lowpower_max_ksps", lim["max_sample_rate_ksps"]).value))
     starts = (lo,) if lo >= 60.0 and hi <= 64.0 else (77.0, lo)
-    return _Prof(tuple(range(2000, fs_max + 1, 250)), max(SINGLE_MIN_IDLE_US, lim["min_idle_us"].value),
+    return _Prof(tuple(range(2000, fs_max + 1, 250)), SINGLE_MIN_IDLE_US,
                  SINGLE_RAMP_MARGIN_US, starts, hi, lambda s: SINGLE_ADC_START_US)
 
 

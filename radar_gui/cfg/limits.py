@@ -1,22 +1,28 @@
 """Per-board constraints. Every entry names its source and how far it is trusted.
 
 `confidence`:
-  "repo"       taken from this repo (board descriptor, cfggen.py, docs/firmware.md, docs/RESULTS.md,
-               or the shipped cfgs themselves)
-  "recalled"   a well-known TI datasheet/SDK figure written down from memory; NOT re-checked
-               against the TI document in this session
-  "unverified" best-effort estimate; a violation is only ever a warning
+  "repo"        taken from this repo (board descriptor, cfggen.py, docs/firmware.md, docs/RESULTS.md,
+                or the shipped cfgs themselves)
+  "high" / "medium" / "low"
+                verified against TI documents / SDK sources by the gui-13 memos (docs/research/gui_board_limits_*.md);
+                the memo row is cited in `source`
+  "unverified"  best-effort estimate no source could confirm; a violation is only ever a warning (so is "low")
 
-The values live in CPSL_TI_Radar_cpp/config/firmware/<id>.json (see firmware.py); this module loads them.
-The driver stays the authority; gui-04 makes the C++ driver read the same files.
+Nothing is hard-coded here: board/firmware limits live in CPSL_TI_Radar_cpp/config/firmware/<id>.json (see
+firmware.py) and host-side ones in CPSL_TI_Radar_cpp/config/limits/host.json. The driver stays the authority;
+gui-04 makes the C++ driver read the same files.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 
 from . import firmware as fwmod
 
 CAS = "AWR2243_CASCADE"
+HOST_LIMITS_FILE = fwmod.CONFIG_DIR / "limits" / "host.json"
+SAR_FIRMWARE_FMT2 = "docs/firmware.md: lvdsStreamCfg dataFmt 2 exists only in the iwr1843_sar_lvds firmware"
 
 
 @dataclass(frozen=True)
@@ -24,7 +30,7 @@ class Limit:
     value: object
     level: str          # severity when violated: "error" | "warning"
     source: str
-    confidence: str     # "repo" | "recalled" | "unverified"
+    confidence: str     # see the module docstring
 
 
 def L(value, level, source, confidence):
@@ -48,11 +54,32 @@ def firmware_limits(board: str, firmware: str | None = None) -> dict | None:
 # Default per-board limits (the board's default firmware); validate() takes a firmware to override.
 BOARD_LIMITS = {b: firmware_limits(b) for b in ("IWR1443", "IWR1843", "IWR6843", CAS)}
 
-# Host side, board independent.
-DCA1000_ETHERNET_MBPS = L(1000, "error", "docs/RESULTS.md: NIC 1000 Mb/s link to the DCA1000", "repo")
-DCA1000_ETHERNET_HEADROOM_MBPS = L(800, "warning", "80 % of the 1 Gb/s link; overhead/headroom is a guess", "unverified")
-DUTY_WARN = L(0.9, "warning", "heuristic: little time left for chirp-end processing/output", "unverified")
-SAR_FIRMWARE_FMT2 = "docs/firmware.md: lvdsStreamCfg dataFmt 2 exists only in the iwr1843_sar_lvds firmware"
+
+@lru_cache(maxsize=None)
+def host_limits() -> dict:
+    """Board-independent limits from config/limits/host.json (DCA1000 link/throughput, duty heuristic)."""
+    d = json.loads(HOST_LIMITS_FILE.read_text())
+    if d.get("schema") != 2 or not isinstance(d.get("limits"), dict):
+        raise ValueError(f"{HOST_LIMITS_FILE.name}: bad schema")
+    for k, e in d["limits"].items():
+        if not ({"value", "level", "source", "confidence"} <= set(e) and e["level"] in fwmod.LEVELS
+                and e["confidence"] in fwmod.CONFIDENCES and e["source"]):
+            raise ValueError(f"{HOST_LIMITS_FILE.name}: limits[{k}] needs value/level/source/confidence")
+    return _from_descriptor(d["limits"])
+
+
+def dca1000_params(board: str) -> tuple[int, float]:
+    """(packet_bytes, packet_delay_us) the driver programs for `board` (config/boards/<board>.json dca1000)."""
+    p = json.loads((fwmod.BOARDS_DIR / f"{board}.json").read_text())["dca1000"]
+    return int(p["packet_bytes"]), float(p["packet_delay_us"])
+
+
+def dca1000_ceiling_mbps(board: str) -> float:
+    """Sustainable DCA1000 rate at the board's packet delay: min(TI's 706 Mb/s maximum,
+    packet_bits / (delay + fitted per-packet overhead)). ~105 Mb/s at the shipped 100 us delay."""
+    h = host_limits()
+    pkt, delay = dca1000_params(board)
+    return min(float(h["dca1000_max_mbps"].value), pkt * 8 / (delay + float(h["dca1000_packet_overhead_us"].value)))
 
 
 def limits_dict() -> dict:

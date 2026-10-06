@@ -4,8 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from . import firmware as fwmod
-from .limits import (BOARD_LIMITS, firmware_limits, DCA1000_ETHERNET_HEADROOM_MBPS, DCA1000_ETHERNET_MBPS, DUTY_WARN,
-                     SAR_FIRMWARE_FMT2, Limit)
+from .limits import BOARD_LIMITS, SAR_FIRMWARE_FMT2, Limit, dca1000_ceiling_mbps, dca1000_params, firmware_limits, host_limits
 from .metrics import BOARDS, Metrics, metrics
 from .parse import Cfg, CfgError
 
@@ -20,7 +19,7 @@ class Issue:
     code: str
     message: str
     source: str = ""
-    confidence: str = ""   # of the limit behind it: repo | recalled | unverified
+    confidence: str = ""   # of the limit behind it: repo | high | medium | low | unverified
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -65,10 +64,10 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     def add(key: Limit | str, code: str, msg: str, level: str | None = None):
         if isinstance(key, Limit):
             lv = level or key.level
-            if key.confidence == "unverified" and lv == "error":
+            weak = key.confidence in ("unverified", "low")   # a violation of an unsourced limit is never an error
+            if weak and lv == "error":
                 lv = "warning"
-            issues.append(Issue(lv, code, msg + (" [unverified limit]" if key.confidence == "unverified" else ""),
-                                key.source, key.confidence))
+            issues.append(Issue(lv, code, msg + (f" [{key.confidence} limit]" if weak else ""), key.source, key.confidence))
         else:
             issues.append(Issue(level or "error", code, msg, key))
 
@@ -101,6 +100,9 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
         add(lim["n_rx"], "too_many_rx", f"{m.n_rx} RX enabled, {board} has {lim['n_rx'].value}")
     if m.n_tx > lim["n_tx"].value:
         add(lim["n_tx"], "too_many_tx", f"{m.n_tx} TX used, {board} has {lim['n_tx'].value}")
+    if "valid_tx_counts" in lim and m.n_tx not in lim["valid_tx_counts"].value:
+        add(lim["valid_tx_counts"], "tx_count_invalid",
+            f"{m.n_tx} TX is not a valid DDMA count; the firmware accepts {list(lim['valid_tx_counts'].value)} TX")
 
     # --- RF
     lo, hi = lim["band_ghz"].value
@@ -109,23 +111,50 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     if over_mhz > BAND_TOLERANCE_MHZ:
         add(lim["band_ghz"], "band",
             f"chirp spans {m.start_ghz:g}-{top:.3f} GHz, outside the {lo:g}-{hi:g} GHz band")
-    elif over_mhz > 1e-6:
-        add(lim["band_ghz"], "band_edge",
-            f"chirp spans {m.start_ghz:g}-{top:.4f} GHz, {over_mhz:.2f} MHz past the {lo:g}-{hi:g} GHz band edge "
-            f"(rounding in TI's own cfgs; accepted by the firmware)", "warning")
+    else:
+        if over_mhz > 1e-6:
+            add(lim["band_ghz"], "band_edge",
+                f"chirp spans {m.start_ghz:g}-{top:.4f} GHz, {over_mhz:.2f} MHz past the {lo:g}-{hi:g} GHz band edge "
+                f"(rounding in TI's own cfgs; accepted by the firmware)", "warning")
+        if "band_subranges_ghz" in lim:
+            tol = BAND_TOLERANCE_MHZ / 1e3
+            if not any(a - tol <= m.start_ghz and top <= b + tol for a, b in lim["band_subranges_ghz"].value):
+                add(lim["band_subranges_ghz"], "band_subrange",
+                    f"chirp spans {m.start_ghz:g}-{top:.3f} GHz; a sweep must lie wholly inside one of "
+                    f"{[list(r) for r in lim['band_subranges_ghz'].value]} GHz")
     if m.slope_mhz_us > lim["max_slope_mhz_us"].value:
         add(lim["max_slope_mhz_us"], "slope",
-            f"slope {m.slope_mhz_us:g} MHz/us exceeds {lim['max_slope_mhz_us'].value:g}")
-    if m.sample_rate_ksps > lim["max_sample_rate_ksps"].value:
+            f"slope {m.slope_mhz_us:g} MHz/us exceeds the {board} limit of {lim['max_slope_mhz_us'].value:g}")
+    elif "tested_max_slope_mhz_us" in lim and m.slope_mhz_us > lim["tested_max_slope_mhz_us"].value:
+        add(lim["tested_max_slope_mhz_us"], "slope_untested",
+            f"slope {m.slope_mhz_us:g} MHz/us is above the {lim['tested_max_slope_mhz_us'].value:g} this repo has tested "
+            f"(silicon allows {lim['max_slope_mhz_us'].value:g})")
+    # sample rate: the datasheet caps are for complex 1x; real / complex 2x ADC output formats allow twice that
+    fmt = cfg.first("adcCfg")
+    adc_fmt = int(float(fmt.args[1])) if fmt is not None and len(fmt.args) > 1 else 1
+    adc_factor = 2 if adc_fmt in (0, 2) else 1
+    fs_cap = lim["max_sample_rate_ksps"].value * adc_factor
+    if m.sample_rate_ksps > fs_cap:
         add(lim["max_sample_rate_ksps"], "sample_rate",
-            f"sample rate {m.sample_rate_ksps:g} ksps exceeds {lim['max_sample_rate_ksps'].value:g}")
+            f"sample rate {m.sample_rate_ksps:g} ksps exceeds the {board} maximum of {fs_cap:g}")
+    lp = cfg.first("lowPower")
+    low_power = lp is not None and len(lp.args) > 1 and int(float(lp.args[1])) == 1
+    if low_power and "lowpower_max_ksps" in lim and m.sample_rate_ksps > lim["lowpower_max_ksps"].value * adc_factor:
+        add(lim["lowpower_max_ksps"], "sample_rate_lowpower",
+            f"sample rate {m.sample_rate_ksps:g} ksps exceeds {lim['lowpower_max_ksps'].value * adc_factor:g} ksps, the "
+            f"{board} limit in low-power ADC mode (lowPower 0 1); use lowPower 0 0 or a lower rate")
     if "min_sample_rate_ksps" in lim and m.sample_rate_ksps < lim["min_sample_rate_ksps"].value:
         add(lim["min_sample_rate_ksps"], "sample_rate_low",
             f"sample rate {m.sample_rate_ksps:g} ksps is below {lim['min_sample_rate_ksps'].value:g}")
     if "tested_sample_rates_ksps" in lim and m.sample_rate_ksps not in lim["tested_sample_rates_ksps"].value:
         add(lim["tested_sample_rates_ksps"], "sample_rate_untested",
-            f"sample rate {m.sample_rate_ksps:g} ksps is not one of TI's tested {lim['tested_sample_rates_ksps'].value}")
-    if m.idle_us < lim["min_idle_us"].value:
+            f"sample rate {m.sample_rate_ksps:g} ksps is not one of TI's tested {list(lim['tested_sample_rates_ksps'].value)} "
+            f"(silicon allows {lim['min_sample_rate_ksps'].value:g}-{lim['max_sample_rate_ksps'].value:g})")
+    if "min_chirp_cycle_us" in lim and m.chirp_us < lim["min_chirp_cycle_us"].value:
+        add(lim["min_chirp_cycle_us"], "chirp_cycle",
+            f"chirp cycle (idle {m.idle_us:g} + ramp {m.ramp_us:g} us) = {m.chirp_us:g} us is below the "
+            f"{lim['min_chirp_cycle_us'].value:g} us minimum")
+    if "min_idle_us" in lim and m.idle_us < lim["min_idle_us"].value:
         add(lim["min_idle_us"], "idle", f"idle time {m.idle_us:g} us is below {lim['min_idle_us'].value:g}")
     if m.adc_start_us + m.sampling_us > m.ramp_us:
         add("physics: ADC window must end inside the ramp", "sampling_outside_ramp",
@@ -140,17 +169,37 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     elif m.active_ms > m.frame_period_ms:
         add("physics: chirps cannot take longer than the frame", "frame_too_short",
             f"chirps take {m.active_ms:.2f} ms but the frame period is {m.frame_period_ms:g} ms")
-    elif m.duty_cycle > DUTY_WARN.value:
-        add(DUTY_WARN, "duty", f"duty cycle {m.duty_cycle:.0%}: little time left to process each frame")
+    else:
+        if "min_frame_period_us" in lim and m.frame_period_ms * 1e3 < lim["min_frame_period_us"].value:
+            add(lim["min_frame_period_us"], "frame_period_short",
+                f"frame period {m.frame_period_ms:g} ms is below {lim['min_frame_period_us'].value / 1e3:g} ms")
+        if "max_frame_period_ms" in lim and m.frame_period_ms > lim["max_frame_period_ms"].value:
+            add(lim["max_frame_period_ms"], "frame_period_long",
+                f"frame period {m.frame_period_ms:g} ms exceeds {lim['max_frame_period_ms'].value:g} ms")
+        blank_us = (m.frame_period_ms - m.active_ms) * 1e3
+        if "min_frame_blank_us" in lim and blank_us < lim["min_frame_blank_us"].value:
+            add(lim["min_frame_blank_us"], "frame_blank",
+                f"only {blank_us:.0f} us between the last chirp and the next frame; the radar needs about "
+                f"{lim['min_frame_blank_us'].value:g} us")
+        if m.duty_cycle > host_limits()["duty_warn"].value:
+            add(host_limits()["duty_warn"], "duty", f"duty cycle {m.duty_cycle:.0%}: little time left to process each frame")
+    if "max_samples_silicon" in lim and m.num_samples > lim["max_samples_silicon"].value:
+        add(lim["max_samples_silicon"], "samples_silicon",
+            f"{m.num_samples} samples exceeds the ADC buffer limit of {lim['max_samples_silicon'].value}")
     if "max_samples" in lim and m.num_samples > lim["max_samples"].value:
         add(lim["max_samples"], "samples", f"{m.num_samples} samples exceeds tested {lim['max_samples'].value}")
     if "max_chirps" in lim and m.n_chirps > lim["max_chirps"].value:
         add(lim["max_chirps"], "chirps", f"{m.n_chirps} chirps exceeds tested {lim['max_chirps'].value}")
-    if "adc_buffer_half_bytes" in lim:
+    if "adc_buffer_bytes" in lim:
         chirp_b = m.num_samples * m.n_rx * m.bytes_per_sample
-        if chirp_b > lim["adc_buffer_half_bytes"].value:
-            add(lim["adc_buffer_half_bytes"], "adc_buffer",
-                f"one chirp is {chirp_b} B, larger than the {lim['adc_buffer_half_bytes'].value} B ADC buffer half")
+        if chirp_b > lim["adc_buffer_bytes"].value:
+            add(lim["adc_buffer_bytes"], "adc_buffer",
+                f"one chirp is {chirp_b} B, larger than the {lim['adc_buffer_bytes'].value} B ADC buffer")
+        elif "adc_buffer_streaming_bytes" in lim and chirp_b > lim["adc_buffer_streaming_bytes"].value and \
+                (m.lvds_data_fmt or not _is_demo(cfg)):
+            add(lim["adc_buffer_streaming_bytes"], "adc_buffer_streaming",
+                f"one chirp is {chirp_b} B; when streaming over LVDS only a {lim['adc_buffer_streaming_bytes'].value} B "
+                f"ping/pong half is usable per chirp")
 
     # --- on-chip demo memory (not applicable to raw-ADC cfgs)
     if "l3_radar_cube_bytes" in lim and _is_demo(cfg):
@@ -171,17 +220,35 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
             add(lim["lvds_supported"], "lvds_unsupported", f"lvdsStreamCfg is enabled but {board} has no LVDS output",
                 "warning")
         else:
-            cap = lim["lvds_lanes"].value * lim["lvds_lane_mbps"].value
-            if m.chirp_avg_rate_mbps > cap:
+            lv = cfg.first("lvdsStreamCfg")
+            header_on = lv is not None and len(lv.args) > 1 and int(float(lv.args[1])) != 0
+            if "lvds_min_transfer_bytes" in lim and not header_on and \
+                    m.num_samples * m.n_rx * m.bytes_per_sample < lim["lvds_min_transfer_bytes"].value:
+                add(lim["lvds_min_transfer_bytes"], "lvds_min_transfer",
+                    f"one chirp is {m.num_samples * m.n_rx * m.bytes_per_sample} B, below the {lim['lvds_min_transfer_bytes'].value} B "
+                    f"CBUFF minimum transfer; enable the HSI header in lvdsStreamCfg or use more samples")
+            if "lvds_min_samples" in lim and m.num_samples < lim["lvds_min_samples"].value:
+                add(lim["lvds_min_samples"], "lvds_min_samples",
+                    f"TI supports LVDS streaming of the demo for at least {lim['lvds_min_samples'].value} ADC samples per chirp, cfg has {m.num_samples}")
+            need = m.bytes_per_chirp + lim["lvds_chirp_overhead_bytes"].value
+            align = lim["lvds_chirp_align_bytes"].value
+            need = -(-need // align) * align
+            cap_b = m.chirp_us * lim["lvds_lanes"].value * lim["lvds_lane_mbps"].value / 8
+            if need > cap_b:
                 add(lim["lvds_lane_mbps"], "lvds_rate",
-                    f"per-chirp average {m.chirp_avg_rate_mbps:.0f} Mbps (ADC buffer drained between chirps) exceeds {lim['lvds_lanes'].value} lanes x "
-                    f"{lim['lvds_lane_mbps'].value} Mbps")
-            if m.avg_data_rate_mbps > DCA1000_ETHERNET_MBPS.value:
-                add(DCA1000_ETHERNET_MBPS, "dca_rate",
+                    f"each chirp sends {need} B over LVDS (ADC data + header, rounded up) but a chirp cycle of "
+                    f"{m.chirp_us:g} us carries only {cap_b:.0f} B on {lim['lvds_lanes'].value} lanes x "
+                    f"{lim['lvds_lane_mbps'].value} Mbps; the firmware will not stream this cfg")
+            host = host_limits()
+            ceil = dca1000_ceiling_mbps(board)
+            _, delay = dca1000_params(board)
+            if m.avg_data_rate_mbps > host["dca1000_ethernet_mbps"].value:
+                add(host["dca1000_ethernet_mbps"], "dca_rate",
                     f"average {m.avg_data_rate_mbps:.0f} Mbps exceeds the 1 Gb/s DCA1000 link")
-            elif m.avg_data_rate_mbps > DCA1000_ETHERNET_HEADROOM_MBPS.value:
-                add(DCA1000_ETHERNET_HEADROOM_MBPS, "dca_rate_high",
-                    f"average {m.avg_data_rate_mbps:.0f} Mbps leaves little headroom on the 1 Gb/s link")
+            elif m.avg_data_rate_mbps > ceil:
+                add(host["dca1000_max_mbps"], "dca_rate_high",
+                    f"average {m.avg_data_rate_mbps:.0f} Mbps is above the ~{ceil:.0f} Mbps the DCA1000 sustains at the "
+                    f"driver's {delay:g} us packet delay (config/boards/{board}.json dca1000; lower the delay to raise it)")
         if m.lvds_data_fmt == 2:
             add(SAR_FIRMWARE_FMT2, "lvds_fmt2", "dataFmt 2 needs the iwr1843_sar_lvds firmware",
                 "info" if board == "IWR1843" else "warning")
