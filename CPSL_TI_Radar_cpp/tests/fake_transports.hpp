@@ -56,7 +56,7 @@ public:
             pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\n"});
             prompt_error_ = true;
         } else {
-            pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\nmmwDemo:/>"});
+            pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\n" + prompt});
         }
         return {};
     }
@@ -114,6 +114,7 @@ public:
     size_t fail_after = 0;
     std::map<std::string, std::chrono::milliseconds> reply_delay;
     std::string prompt_error_on;
+    std::string prompt = "mmwDemo:/>";  // what the fake prints after "Done"
 
 private:
     std::mutex m_;

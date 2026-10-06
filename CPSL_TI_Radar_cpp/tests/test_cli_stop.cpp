@@ -392,4 +392,23 @@ TEST_CASE(radar_stop_survives_an_unplugged_cli_and_still_closes_the_bin) {
     CHECK(!threw);
 }
 
+// core-21: the IWR1843 descriptor's prompt is the substring ":/>", so both the
+// stock demo's "mmwDemo:/>" and the SAR image's "mm_sar_lvds:/>" end the
+// prompt wait at once instead of stalling cli.prompt_wait_ms (500 ms).
+TEST_CASE(both_demo_and_sar_prompts_satisfy_the_prompt_wait) {
+    for (const char* p : {"mmwDemo:/>", "mm_sar_lvds:/>"}) {
+        SystemConfigReader sys = serial_free_config("cli_prompts");
+        std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
+        fake->prompt = p;
+        CLIController cli;
+        CHECK(cli.initialize(sys, fake));
+        const auto t0 = std::chrono::steady_clock::now();
+        CHECK(cli.sendStartCommand());
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - t0).count();
+        CHECK(ms < 250);  // a missed prompt would wait the full 500 ms
+        CHECK(!cli.io_error());
+    }
+}
+
 TEST_MAIN()

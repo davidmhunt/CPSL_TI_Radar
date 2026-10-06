@@ -106,7 +106,7 @@ TEST_CASE(loads_IWR1843) {
     CHECK(d.sdk == Sdk::mmwave_sdk_3);
     CHECK_EQ(d.cli.baud, 115200u);
     CHECK_EQ(d.cli.ack, std::string("Done"));
-    CHECK_EQ(d.cli.prompt, std::string("mmwDemo:/>"));
+    CHECK_EQ(d.cli.prompt, std::string(":/>"));  // substring: matches mmwDemo:/> and mm_sar_lvds:/> (core-21)
     CHECK_EQ(d.cli.prompt_wait_ms, 500u);
     CHECK_EQ(d.cli.start_cmd, std::string("sensorStart"));
     CHECK_EQ(d.cli.stop_cmd, std::string("sensorStop"));

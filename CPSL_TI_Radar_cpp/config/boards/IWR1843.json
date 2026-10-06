@@ -6,7 +6,7 @@
     "baud": 115200,
     "ack": "Done",
     "error_tokens": ["Error", "not recognized"],
-    "prompt": "mmwDemo:/>",
+    "prompt": ":/>",
     "prompt_wait_ms": 500,
     "cmd_timeout_ms": 100,
     "stop_timeout_ms": null,
