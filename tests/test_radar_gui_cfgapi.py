@@ -192,3 +192,19 @@ def test_save_uses_firmware_system_enables(client):
 def test_save_refuses_firmware_mismatch_unless_forced(client):
     r = client.post("/api/cfg/save", json=_save_body(client, "mm", board="IWR1443", firmware="cascade_ddm"))
     assert r.status_code == 422
+
+
+def test_direct_mode_ui_served_and_flow(client):
+    """gui-11 step 2: the page has the mode toggle, cfg.js serves, and the seed/edit flow the UI drives works."""
+    html = client.get("/").text
+    assert 'id="cInMode"' in html and "Chirp parameters" in html and 'id="pFields"' in html
+    js = client.get("/js/cfg.js")
+    assert js.status_code == 200 and "/api/cfg/params" in js.text
+    base = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T}).json()["text"]
+    seed = client.post("/api/cfg/params", json={"board": "IWR1843", "base_cfg_text": base, "params": {}}).json()
+    assert seed["params"]["profiles"][0]["slope_mhz_us"] > 0 and "bandwidth_mhz" in seed["params"]["derived"]
+    slope = seed["params"]["profiles"][0]["slope_mhz_us"]
+    r = client.post("/api/cfg/params", json={"board": "IWR1843", "base_cfg_text": base,
+                                             "params": {"profiles": [{"slope_mhz_us": slope / 2}]}}).json()
+    assert r["params"]["derived"]["bandwidth_mhz"] < seed["params"]["derived"]["bandwidth_mhz"] * 0.6
+    assert r["metrics"]["max_range_m"] > 0 and r["text"] != base

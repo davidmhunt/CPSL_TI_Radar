@@ -72,13 +72,18 @@
 <main id="cfgMain" hidden>
   <div class="cfgcol">
     <section class="card">
-      <h2>Radar &amp; targets</h2>
+      <h2>Radar <span class="seg" id="cInMode"><button data-m="targets" class="on">Targets</button><button data-m="direct">Chirp parameters</button></span></h2>
       <div class="controls">
         <div class="grid2">
           <label>Board <select id="cBoard"></select></label>
           <label>Firmware <select id="cFw"></select></label>
         </div>
         <div class="muted" id="cOutputs"></div>
+      </div>
+    </section>
+    <section class="card" id="targetsCard">
+      <h2>Targets</h2>
+      <div class="controls">
         <div class="grid2">
           <label>Max range (m) <input type="number" id="t_max_range_m" value="10" min="0.1" step="any"></label>
           <label>Max velocity (m/s) <input type="number" id="t_max_velocity_ms" value="3" min="0.01" step="any"></label>
@@ -97,6 +102,10 @@
           </div>
         </details>
       </div>
+    </section>
+    <section class="card" id="paramsCard" hidden>
+      <h2>Chirp parameters <span class="muted" id="pNote"></span></h2>
+      <div class="controls" id="pFields"></div>
     </section>
     <section class="card">
       <h2>Load an existing cfg</h2>

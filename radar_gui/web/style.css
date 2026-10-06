@@ -94,4 +94,12 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-
 #cText { margin: 0; padding: 4px 12px 12px; font: 12px/1.35 ui-monospace, Menlo, monospace; color: var(--muted);
   white-space: pre; overflow: auto; }
 #sMsg.bad { color: var(--bad); } #sMsg.ok { color: var(--ok); }
+#cInMode { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.pgroup { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
+label .unit { color: var(--muted); font-size: 11px; opacity: .8; }
+label.err input { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); } label.err { color: var(--bad); }
+label.warn input { border-color: var(--warn); } label.warn { color: var(--warn); }
+.dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.dv { background: var(--bg); border: 1px dashed var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; }
+.dv span { color: var(--muted); display: block; font-size: 11px; } .dv b { font-variant-numeric: tabular-nums; } .dv small { color: var(--muted); }
 @media (max-width: 1100px) { #cfgMain { grid-template-columns: 1fr; height: auto; } }
