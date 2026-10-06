@@ -163,4 +163,156 @@ TEST_CASE(port_error_sets_io_error) {
     CHECK(r.s.io_error());
 }
 
+// ---- framing ----
+
+TEST_CASE(garbage_before_the_magic_word_is_skipped) {
+    Rig r("ss_garbage");
+    Bytes junk(100, 0x55);
+    junk.insert(junk.end(), {0x02, 0x01, 0x04, 0x03, 0x06});  // a cut-off magic word
+    r.port->push(cat({junk, make_frame(4, {points_tlv(1, 3.0f)})}));
+    CHECK(r.s.process_next_message());
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    CHECK(r.take(pts, fn));
+    CHECK_EQ(fn, 4u);
+    CHECK_EQ(pts.size(), static_cast<size_t>(1));
+    CHECK_EQ(r.s.get_rejected_frame_count(), 0u);
+}
+
+TEST_CASE(two_frames_back_to_back_in_one_chunk) {
+    Rig r("ss_b2b");
+    const Bytes a = make_frame(1, {points_tlv(1, 1.0f)});
+    const Bytes b = make_frame(2, {points_tlv(2, 2.0f)});
+    r.port->push(cat({a, b}));
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    CHECK(r.s.process_next_message());
+    CHECK(r.take(pts, fn));
+    CHECK_EQ(fn, 1u);
+    CHECK(r.s.process_next_message());
+    CHECK(r.take(pts, fn));
+    CHECK_EQ(fn, 2u);
+    CHECK_EQ(pts.size(), static_cast<size_t>(2));
+    // reads never ask for more than the rest of the current frame
+    CHECK(r.port->max_cap() <= std::max(a.size(), b.size()));
+}
+
+TEST_CASE(frame_arriving_one_byte_per_read) {
+    Rig r("ss_bytewise", 1);
+    const Bytes f = make_frame(8, {points_tlv(3, 0.0f), side_info_tlv(3)});
+    r.port->push(cat({Bytes(5, 0xAB), f}));
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_latest_frame_number(), 8u);
+    CHECK(r.port->reads() >= f.size());
+}
+
+TEST_CASE(partial_frame_survives_a_timeout) {
+    Rig r("ss_partial", static_cast<size_t>(-1), "IWR1843", 100);
+    const Bytes f = make_frame(2, {points_tlv(4, 0.0f)});
+    r.port->push(Bytes(f.begin(), f.begin() + 50));
+    CHECK(!r.s.process_next_message());  // times out mid-frame
+    CHECK(!r.s.io_error());
+    r.port->push(Bytes(f.begin() + 50, f.end()));
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_latest_frame_number(), 2u);
+}
+
+TEST_CASE(impossible_total_length_resynchronizes) {
+    // a magic word followed by a bogus header (e.g. inside a corrupted
+    // frame): totalPacketLen 0xFFFFFFF0 is dropped, the next frame is found
+    Rig r("ss_resync");
+    Bytes bogus = make_frame(77, {});
+    bogus[12] = 0xF0;
+    bogus[13] = bogus[14] = bogus[15] = 0xFF;
+    r.port->push(cat({bogus, make_frame(5, {points_tlv(1, 0.0f)})}));
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_latest_frame_number(), 5u);
+    CHECK_EQ(r.s.get_rejected_frame_count(), 1u);
+}
+
+TEST_CASE(overstated_length_drops_the_frame_and_finds_the_next) {
+    // a corrupt frame whose totalPacketLen is 32 bytes too long swallows the
+    // start of the next frame; after the rejection the search restarts just
+    // past its magic word, so the next frame is still found
+    Rig r("ss_overstated");
+    FrameOpts longer;
+    longer.total_delta = 32;
+    Tlv odd{TLVCodes::DETECTED_POINTS, Bytes(20, 0)};
+    r.port->push(cat({make_frame(1, {odd}, longer), make_frame(2, {}), make_frame(3, {})}));
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_latest_frame_number(), 2u);
+    CHECK_EQ(r.s.get_rejected_frame_count(), 1u);
+}
+
+TEST_CASE(close_ends_a_read_in_progress) {
+    Rig r("ss_close", static_cast<size_t>(-1), "IWR1843", 5000);
+    std::thread t([&r] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        r.s.close();
+    });
+    const clk::time_point t0 = clk::now();
+    CHECK(!r.s.process_next_message());
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(clk::now() - t0).count();
+    t.join();
+    CHECK(ms < 400);  // not the 5 s timeout
+    CHECK(!r.s.io_error());
+}
+
+TEST_CASE(take_frame_waits_for_a_publish_and_close_wakes_it) {
+    Rig r("ss_wait", static_cast<size_t>(-1), "IWR1843", 2000);
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    clk::time_point at;
+    uint64_t ow = 0;
+    std::thread reader([&r] { r.s.process_next_message(); });
+    std::thread writer([&r] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        r.port->push(make_frame(12, {points_tlv(1, 0.0f)}));
+    });
+    const clk::time_point t0 = clk::now();
+    CHECK(r.s.take_frame(pts, fn, at, ow, t0 + std::chrono::seconds(2)));
+    CHECK(clk::now() - t0 < std::chrono::milliseconds(500));
+    CHECK_EQ(fn, 12u);
+    CHECK(at >= t0);
+    reader.join();
+    writer.join();
+    std::thread closer([&r] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        r.s.close();
+    });
+    const clk::time_point t1 = clk::now();
+    CHECK(!r.s.take_frame(pts, fn, at, ow, t1 + std::chrono::seconds(5)));
+    CHECK(clk::now() - t1 < std::chrono::milliseconds(1000));
+    closer.join();
+}
+
+TEST_CASE(overwritten_frames_are_counted) {
+    Rig r("ss_overwritten");
+    for (uint32_t fn = 1; fn <= 3; fn++) r.port->push(make_frame(fn, {}));
+    for (int i = 0; i < 3; i++) CHECK(r.s.process_next_message());
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    uint64_t ow = 0;
+    CHECK(r.take(pts, fn, &ow));
+    CHECK_EQ(fn, 3u);
+    CHECK_EQ(ow, 2u);
+}
+
+TEST_CASE(point_buffers_are_reused) {
+    // reader work buffer, published buffer and the consumer's: at most 3
+    // distinct allocations over many frames once they have grown
+    Rig r("ss_reuse");
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    std::vector<const cpsl::radar::Point*> seen;
+    for (uint32_t k = 1; k <= 30; k++) {
+        const int n = k <= 3 ? 10 : static_cast<int>(10 - k % 3);  // all three buffers grow first
+        r.port->push(make_frame(k, {points_tlv(n, 0.0f)}));
+        CHECK(r.s.process_next_message());
+        CHECK(r.take(pts, fn));
+        if (k > 3 && std::find(seen.begin(), seen.end(), pts.data()) == seen.end()) seen.push_back(pts.data());
+    }
+    CHECK(seen.size() <= 3u);
+}
+
 TEST_MAIN()
