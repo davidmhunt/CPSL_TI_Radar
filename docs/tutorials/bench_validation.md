@@ -6,9 +6,8 @@ Run every command from the repository root. Only one person at a time may hold t
 
 ## 1. Prerequisites
 
-1. Build the driver (Release; the harness refuses other builds) and apply the host settings by following [`rebuild_driver.md`](rebuild_driver.md). Repeat after every rebuild.
-2. Check the host with `uv run tools/setup/host_setup.py --nic <dca-nic>`: nothing may show MISSING. It needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
-3. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
+1. Build the driver (Release; the harness refuses other builds) and check the host by following [`rebuild_driver.md`](rebuild_driver.md); repeat after every rebuild. Nothing may show MISSING; the host needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
+2. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
 
 ## 2. Hardware setup (IWR1843 + DCA1000)
 
@@ -25,7 +24,7 @@ The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for y
 
 Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
-Copy the example system config and, for DCA runs, set `output.save_adc_frames` to `true` (otherwise there is no `adc_data.bin` size check) before running the harness. Any `runtime.log_level` works: the harness runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
+The commands below use the example config unchanged. To use your own, copy it, and pass the copy's path to both commands. For DCA runs `output.save_adc_frames` must be `true` (the example sets it); otherwise there is no `adc_data.bin` size check. Any `runtime.log_level` works: the harness runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json --validate
@@ -75,7 +74,7 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
 | CPU % mean (guide) | below 10 (see note) | below 3 | about 4 to 5 (current driver, core-20; 2.2 to 5.0 over 6 runs) / 0.5 to 0.6 |
 
-For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The DCA CPU guide of 10 % is about twice the current driver's 4 to 5 % (IWR1843 10 Hz config only, 3 reps with and 3 without `cap_sys_nice`, `docs/results/validation/validation_iwr1843_dca_core16__*`, `ab2_*`). The older drivers measured higher (9 to 10 % core-04, 16 % core-06); the zero-copy pipeline and RX batching (core-14/15) cut CPU since. `cap_sys_nice` makes no measurable difference on the current driver (about 4 % with, 4.8 % without, all drop counters 0), so the default has no real-time priority.
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The DCA CPU guide of 10 % is about twice the current driver's 4 to 5 %, with or without `cap_sys_nice` (IWR1843 10 Hz only, `docs/results/validation/validation_iwr1843_dca_core16__*`, `ab2_*`). Older drivers measured 9 to 10 % (core-04) and 16 % (core-06).
 
 A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 10.
 

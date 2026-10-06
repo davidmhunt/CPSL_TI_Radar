@@ -1,6 +1,6 @@
 # Rebuild the driver (runbook)
 
-Use this after pulling new driver code, or before a bench session. It rebuilds `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP`, runs the hardware-free tests, checks one config, and re-applies the host settings that a rebuild removes.
+Use this after pulling new driver code, or before a bench session. It rebuilds `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP`, runs the hardware-free tests, checks one config, and checks the host settings.
 
 Run every block from the repository root, the folder that contains `pyproject.toml`. This takes about 5 minutes.
 
@@ -37,12 +37,12 @@ Use the config you plan to run. `--validate` prints the board, ports and frame s
 
 ## 4. Check host settings
 
-A rebuild changes no host setting, so this is a check. The tool also makes the 128 MB UDP receive buffer survive reboots, if it doesn't already.
+A rebuild changes no host setting, so this is a check (including that the 128 MB UDP receive buffer survives reboots). Run `--apply` only if the report shows MISSING.
 
 ```bash
 uv run tools/setup/host_setup.py --nic enp3s0                      # report: OK / MISSING / WARN
-uv run tools/setup/host_setup.py --nic enp3s0 --apply --dry-run    # optional: show the exact commands
-uv run tools/setup/host_setup.py --nic enp3s0 --apply              # run them; asks for sudo per command
+uv run tools/setup/host_setup.py --nic enp3s0 --apply --dry-run    # only if MISSING: show the exact commands
+uv run tools/setup/host_setup.py --nic enp3s0 --apply              # only if MISSING: run them; asks for sudo per command
 uv run tools/setup/host_setup.py --nic enp3s0                      # confirm: nothing MISSING (exit 0)
 ```
 
