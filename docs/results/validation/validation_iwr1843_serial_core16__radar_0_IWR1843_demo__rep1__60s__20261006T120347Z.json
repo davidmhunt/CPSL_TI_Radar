@@ -1,0 +1,115 @@
+{
+  "basename": "validation_iwr1843_serial_core16__radar_0_IWR1843_demo__rep1__60s__20261006T120347Z",
+  "board": "IWR1843",
+  "board_overrides": {},
+  "branch": "release/v2.0",
+  "build": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_DEBUG": "-g",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG"
+  },
+  "command_line": [
+    "tools/bench/bench_run.py",
+    "CPSL_TI_Radar_cpp/config/system/radar_0_IWR1843_demo.json",
+    "--seconds",
+    "60",
+    "--tag",
+    "validation_iwr1843_serial_core16",
+    "--out-dir",
+    "docs/results/validation"
+  ],
+  "commit": "8ed1aa29530c29e4bd1b25d699115d073c12460f",
+  "created_utc": "2026-10-06T12:03:47+00:00",
+  "dca1000_enabled": false,
+  "dirty_driver_or_bench_paths": [],
+  "driver_binary": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP",
+  "driver_binary_mtime_utc": "2026-10-06T11:51:04+00:00",
+  "driver_binary_sha256": "2e44b47c3e0718cb592074574d8dfb8775c1f38898e557f19f47e16e8fc1241f",
+  "expected": {
+    "adc_samples": 256,
+    "bytes_per_frame": 131072,
+    "chirps_per_frame": 32,
+    "expected_fps": 10.0,
+    "frame_period_ms": 100.0,
+    "rx_antennas": 4
+  },
+  "host": {
+    "cpu_count": 4,
+    "hostname": "cpsl-gmk-6",
+    "kernel": "7.0.0-34-generic",
+    "machine": "x86_64",
+    "netdev_max_backlog": "1000",
+    "rmem_default": "212992",
+    "rmem_max": "134217728",
+    "uname": "Linux cpsl-gmk-6 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64 x86_64"
+  },
+  "nic": {
+    "note": "DCA1000 path not enabled"
+  },
+  "non_release_override": false,
+  "output_dir": null,
+  "preflight": [
+    {
+      "detail": "net.core.rmem_max: runtime 134217728, persistent 134217728 (from /etc/sysctl.d/99-radar.conf); need >= 134217728",
+      "fix_cmds": [],
+      "manual": [],
+      "name": "sysctl",
+      "notes": [],
+      "status": "OK"
+    },
+    {
+      "detail": "CMAKE_BUILD_TYPE=Release (CPSL_TI_Radar_cpp/build)",
+      "fix_cmds": [],
+      "manual": [],
+      "name": "build-type",
+      "notes": [],
+      "status": "OK"
+    }
+  ],
+  "preflight_overridden": [],
+  "radar_cfg_numFrames": 0,
+  "radar_config": "CPSL_TI_Radar_cpp/config/radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg",
+  "radar_config_sha256": "cd5df1f259274d362fa59f4af09869bfab15c1ac7292ebf791b3b6d7fdb56698",
+  "rep": 1,
+  "result": {
+    "dca_received_frames_cum_at_exit": 0,
+    "driver_warnings_first": [],
+    "granted_so_rcvbuf_bytes": null,
+    "note": "ok",
+    "startup_s": 0.131,
+    "status": "ok",
+    "stop": {
+      "exit_code": 0,
+      "mode": "sigint",
+      "sigint_sent": true
+    },
+    "summary": {
+      "cpu_pct_max": 1.0,
+      "cpu_pct_mean": 0.3,
+      "dca_dropped_packet_events_total": 0,
+      "dca_dropped_packets_total": 0,
+      "dca_fps_max": 0,
+      "dca_fps_mean": 0.0,
+      "dca_fps_min": 0,
+      "dca_frames_total": 0,
+      "dca_packets_total": 0,
+      "dca_rx_overrun_count_final": 0,
+      "seconds": 60,
+      "tlv_fps_max": 11,
+      "tlv_fps_mean": 10.017,
+      "tlv_fps_min": 9,
+      "tlv_frames_total": 601,
+      "tlv_missed_frames_total": 0
+    }
+  },
+  "save_adc_frames": false,
+  "save_raw_lvds": false,
+  "seconds_requested": 60,
+  "serial_enabled": true,
+  "system_config": "CPSL_TI_Radar_cpp/config/system/radar_0_IWR1843_demo.json",
+  "system_config_schema_version": 2,
+  "system_config_sha256": "345db8d5eaa8724990e52d867fb6946390e48248a0f3a7130d6ac72c78e21a3b",
+  "tag": "validation_iwr1843_serial_core16"
+}

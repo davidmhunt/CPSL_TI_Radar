@@ -1,0 +1,135 @@
+{
+  "basename": "core20_iwr1843_dca_default__front_radar_IWR1843_stress_test_baseline__rep3__60s__20261006T134310Z",
+  "board": "IWR1843",
+  "board_overrides": {},
+  "branch": "release/v2.0",
+  "build": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_DEBUG": "-g",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG"
+  },
+  "command_line": [
+    "tools/bench/bench_run.py",
+    "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json",
+    "--seconds",
+    "60",
+    "--rep",
+    "3",
+    "--tag",
+    "core20_iwr1843_dca_default",
+    "--out-dir",
+    "docs/results/validation"
+  ],
+  "commit": "80c99295d956152ba5ab7c47238c6a582ac55db3",
+  "created_utc": "2026-10-06T13:43:10+00:00",
+  "dca1000_enabled": true,
+  "dirty_driver_or_bench_paths": [],
+  "driver_binary": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP",
+  "driver_binary_mtime_utc": "2026-10-06T13:40:42+00:00",
+  "driver_binary_sha256": "09abcbec3537a3c49b494793bd61b77c3e4081cfe5e3eb1b76d6b6448f940a3d",
+  "expected": {
+    "adc_samples": 250,
+    "bytes_per_frame": 504000,
+    "chirps_per_frame": 126,
+    "expected_fps": 10.0,
+    "frame_period_ms": 100.0,
+    "rx_antennas": 4
+  },
+  "host": {
+    "cpu_count": 4,
+    "hostname": "cpsl-gmk-6",
+    "kernel": "7.0.0-34-generic",
+    "machine": "x86_64",
+    "netdev_max_backlog": "1000",
+    "rmem_default": "212992",
+    "rmem_max": "134217728",
+    "uname": "Linux cpsl-gmk-6 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64 x86_64"
+  },
+  "nic": {
+    "driver": "igc",
+    "ethtool_ring": "Ring parameters for enp3s0:\nPre-set maximums:\nRX:\t\t\t4096\nRX Mini:\t\tn/a\nRX Jumbo:\t\tn/a\nTX:\t\t\t4096\nTX push buff len:\tn/a\nCurrent hardware settings:\nRX:\t\t\t256\nRX Mini:\t\tn/a\nRX Jumbo:\t\tn/a\nTX:\t\t\t256\nRX Buf Len:\t\tn/a\nCQE Size:\t\tn/a\nTX Push:\t\toff\nRX Push:\t\toff\nTX push buff len:\tn/a\nTCP data split:\t\tn/a",
+    "interface": "enp3s0",
+    "mtu": "1500",
+    "operstate": "up",
+    "speed_mbps": "1000",
+    "system_ip": "192.168.33.30"
+  },
+  "non_release_override": false,
+  "output_dir": null,
+  "preflight": [
+    {
+      "detail": "net.core.rmem_max: runtime 134217728, persistent 134217728 (from /etc/sysctl.d/99-radar.conf); need >= 134217728",
+      "fix_cmds": [],
+      "manual": [],
+      "name": "sysctl",
+      "notes": [],
+      "status": "OK"
+    },
+    {
+      "detail": "CMAKE_BUILD_TYPE=Release (CPSL_TI_Radar_cpp/build)",
+      "fix_cmds": [],
+      "manual": [],
+      "name": "build-type",
+      "notes": [],
+      "status": "OK"
+    }
+  ],
+  "preflight_overridden": [],
+  "radar_cfg_numFrames": 0,
+  "radar_config": "CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test_baseline_numframes0.cfg",
+  "radar_config_sha256": "394b51637d9d1cd77b520582b45e66667d63dee7cfab833d0f479468e63bc8a3",
+  "rep": 3,
+  "result": {
+    "bin_size_check": {
+      "actual_bytes": 302904000,
+      "expected_bytes": 302904000,
+      "file": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/tools/bench/runs/core20_iwr1843_dca_default__front_radar_IWR1843_stress_test_baseline__rep3__60s__20261006T134310Z/adc_data.bin",
+      "short_by_bytes": 0,
+      "short_by_frames": 0.0,
+      "verdict": "exact"
+    },
+    "dca_received_frames_cum_at_exit": 601,
+    "driver_warnings_first": [],
+    "granted_so_rcvbuf_bytes": 134217728,
+    "lvds_raw_bytes": 302949920,
+    "note": "ok",
+    "output_files_dir": "/home/cpsl/Documents/radar_dev/CPSL_TI_Radar/tools/bench/runs/core20_iwr1843_dca_default__front_radar_IWR1843_stress_test_baseline__rep3__60s__20261006T134310Z",
+    "startup_s": 0.133,
+    "status": "ok",
+    "stop": {
+      "exit_code": 0,
+      "mode": "sigint",
+      "sigint_sent": true
+    },
+    "summary": {
+      "cpu_pct_max": 7.0,
+      "cpu_pct_mean": 5.3,
+      "dca_dropped_packet_events_total": 0,
+      "dca_dropped_packets_total": 0,
+      "dca_fps_max": 11,
+      "dca_fps_mean": 10.017,
+      "dca_fps_min": 9,
+      "dca_frames_total": 601,
+      "dca_kernel_drops_final": 0,
+      "dca_packets_total": 208070,
+      "dca_resyncs_final": 0,
+      "dca_rx_overrun_count_final": 0,
+      "seconds": 60,
+      "tlv_fps_max": 0,
+      "tlv_fps_mean": 0.0,
+      "tlv_fps_min": 0,
+      "tlv_frames_total": 0,
+      "tlv_missed_frames_total": 0
+    }
+  },
+  "save_adc_frames": true,
+  "save_raw_lvds": true,
+  "seconds_requested": 60,
+  "serial_enabled": false,
+  "system_config": "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json",
+  "system_config_schema_version": 2,
+  "system_config_sha256": "faf31ea4a927f1051a4e91ee09a2e49d5821ec741fbd4c6ed591af8a047cc167",
+  "tag": "core20_iwr1843_dca_default"
+}
