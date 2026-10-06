@@ -216,22 +216,22 @@ def flavour(fw: dict, board: str, lvds: bool = False) -> str:
 
 
 def _with_editable(m: dict, d: dict) -> dict:
-    """Add the single 'is MIMO editable here' decision: `editable` (bool) + `editable_reason` (one line, None if editable).
-    Editable = verified TDM on a non-stub firmware; DDMA, unverified or stub entries are view-only."""
+    """Add the single 'what can the GUI do with MIMO here' decision: `editable` (bool), `editable_reason` (one line, None if
+    editable) and `editable_note` (one soft line, else None). View-only = DDMA or a stub firmware; unverified TDM stays
+    editable (checks are warnings only) with `editable_note` set."""
+    reason = note = None
     if d.get("pending"):
         reason = "this firmware is a stub (cfg generation pending); its MIMO scheme is not implemented yet."
     elif m.get("scheme") == "ddma":
         reason = "DDMA: all TX fire every chirp; phase codes are set by the firmware, not the cfg."
     elif m.get("confidence") == "unverified":
-        reason = "the TX pattern rules for this firmware/board are unverified, so the chirp table is not offered."
-    else:
-        reason = None
-    return {**m, "editable": reason is None, "editable_reason": reason}
+        note = "TX-pattern rules for this firmware are unverified \u2014 checks are warnings only."
+    return {**m, "editable": reason is None, "editable_reason": reason, "editable_note": note}
 
 
 def mimo(board: str, fw) -> dict:
     """The MIMO block of firmware `fw` (descriptor or id) for `board`: the firmware-wide values with any
-    per-board override applied. Keys: scheme, bpm, max_chirps_per_loop, subframes, source, confidence[, note], editable, editable_reason."""
+    per-board override applied. Keys: scheme, bpm, max_chirps_per_loop, subframes, source, confidence[, note], editable, editable_reason, editable_note."""
     d = get(fw) if isinstance(fw, str) else fw
     if d is None:
         raise KeyError(f"unknown firmware {fw!r}")

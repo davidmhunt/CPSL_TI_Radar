@@ -544,11 +544,16 @@ def test_mimo_editable_flag():
             assert (m["editable_reason"] is None) == m["editable"]
             if not m["editable"]:
                 assert m["editable_reason"] and "\n" not in m["editable_reason"]
-            exp = not (fw.get("pending") or m["scheme"] == "ddma" or m["confidence"] == "unverified")
+                assert m["editable_note"] is None
+            exp = not (fw.get("pending") or m["scheme"] == "ddma")
             assert m["editable"] is exp, (fw["id"], b)
+            if m["editable"] and m["confidence"] == "unverified":
+                assert m["editable_note"] and "unverified" in m["editable_note"] and "\n" not in m["editable_note"]
+            elif m["editable"]:
+                assert m["editable_note"] is None
     assert fwmod.mimo("IWR1843", "demo")["editable"] and fwmod.mimo("IWR6843", "demo")["editable"]
-    assert not fwmod.mimo("IWR1443", "demo")["editable"]
+    assert fwmod.mimo("IWR1443", "demo")["editable"] and fwmod.mimo("IWR1443", "demo")["editable_note"]
     assert not fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")["editable"]
-    assert not fwmod.mimo("IWR1843", "dca1000_raw")["editable"]
+    assert fwmod.mimo("IWR1843", "dca1000_raw")["editable"] and fwmod.mimo("IWR1843", "dca1000_raw")["editable_note"]
     ids = {f["id"]: f for f in fwmod.summary()}
     assert ids["cascade_ddm"]["mimo"]["editable"] is False and ids["demo"]["mimo"]["editable"] is True

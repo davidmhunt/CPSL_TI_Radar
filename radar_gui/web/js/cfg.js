@@ -295,14 +295,15 @@ function mrow(label, value, unit, d, cls, labelNote) {
 // no descriptor mimo block (or none selected) falls back to read-only unless the analysed scheme is TDM.
 function mimoEditState(m) {
   const f = curFw(), mm = (f && f.mimo) || C.fwMimo;
-  if (mm && typeof mm.editable === 'boolean') return { editable: mm.editable, reason: mm.editable_reason };
-  if (m && m.scheme === 'ddma') return { editable: false, reason: 'DDMA: all TX fire every chirp; phase codes are set by the firmware, not the cfg.' };
-  return { editable: !!(mm && mm.scheme === 'tdm'), reason: 'this firmware has no MIMO descriptor.' };
+  if (mm && typeof mm.editable === 'boolean') return { editable: mm.editable, reason: mm.editable_reason, note: mm.editable_note || null };
+  if (m && m.scheme === 'ddma') return { editable: false, reason: 'DDMA: all TX fire every chirp; phase codes are set by the firmware, not the cfg.', note: null };
+  return { editable: !!(mm && mm.scheme === 'tdm'), reason: 'this firmware has no MIMO descriptor.', note: null };
 }
 function renderMimo(m) {
   const list = $('mDerived'); list.replaceChildren();
   const es = mimoEditState(m), ro = $('mRo');
   ro.hidden = es.editable || !(m && m.scheme); ro.textContent = es.editable ? '' : 'MIMO editing disabled \u2014 ' + (es.reason || 'not supported for this firmware.');
+  const nt = $('mEditNote'); nt.hidden = !(es.editable && es.note && m && m.scheme); nt.textContent = nt.hidden ? '' : es.note;
   if (!m || !m.scheme) { $('mBadge').textContent = ''; $('mDiagram').innerHTML = ''; $('mCaption').textContent = ''; $('mNote').textContent = ''; return; }
   const ddma = m.scheme === 'ddma', D = m.derivations || {}, tc = m.chirp_us;
   C.mLast = m; C.tbl = ddma ? null : { masks: (m.chirp_sequence || []).map(c => c.tx_mask), bpm: !!m.bpm_enabled }; drawTable();
