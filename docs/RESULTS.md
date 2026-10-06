@@ -109,3 +109,34 @@ Pre-rework, unplugging the radar USB aborted the driver (SIGABRT, `.bin` short; 
 ### Caveats
 
 One board, one config (10 Hz baseline), IWR1843 only; other frame rates, boards and hosts are unmeasured. At most 3 reps per condition, so the CPU spread above is not characterized. The sdk2 and serial dialects and the I/Q lane order are still unconfirmed (core-17 is parked until the GUI exists).
+
+## IWR1843 SAR LVDS firmware (`iwr1843_sar_lvds`), firmware-10 Set A + 10-min no-reflector soak
+
+Bench run 2026-10-06, one IWR1843BOOST with DCA1000, example cfg (`sar_example_2ms.cfg`, default gain and HPF, `analogMonitor`/CQRxSat on), no reflector in the scene. Every value is read from the firmware-10 directive Log (Set A table and soak entry; `.friday/active/harness/plans/directives/firmware-10.md`) and from the soak artifacts `/tmp/bench_run/soak_summary.txt` and `/tmp/bench_run/soak_summary.json` (capture `/tmp/bench_run/soak.cap`, `/tmp/bench_run/soak.cap.sarstats.json`; not tracked in the repo). Set A rows use `/tmp/bench_run/long.cap`, `bytes.cap`, `bsize*.cap`, `fmt1.cap`, `fmt4.cap` and the like in the same folder. Firmware_dev commits: flash image built at `946f48d`; Set A run at `314ec2e`; soak run at `778f806`.
+
+**Verdict: firmware-10 Set A + 10-min no-reflector soak: GO on G1, G2, G5 and the G7 non-reflector rows; G3 phase continuity, G4 tuned point/SNR/ADC bits, G6 boundary/Tb, saturation-vs-gain, I/Q order are NOT EVALUATED (firmware-18).**
+
+| Item | Measured |
+|---|---|
+| Flash (`./fw flash`, DSLite) | rc=0, `Flashed (DSLite rc=0)`, no trailing `Can't Run Target CPU`; board booted to `mmwDemo:/>`; image sha256 `53948f4d...4267a`, 152132 B |
+| 60 s capture (`long.cap`) | 30090 chirps, 0 sequence gaps, 0 wholly missing; checks 1, 2, 4 pass, check 3 deferred (tail hole 336 B); in-frame dt 2000.00 us, boundary dt 2300.54 us |
+| 10 min soak (`soak_summary.txt`) | 299880 chirps, 2745055 datagrams, 3996.8 MB, 6.66 MB/s; 0 UDP gaps, 0 wholly missing, 1 invalid record (the tail hole); parser checks 1-4 accepted |
+| Soak timing | in-frame dt mean 2000.00 us, p99.9 deviation 3.03 us; boundary dt mean 2300.51 us, max deviation 0.77 us; late 0 |
+| Soak counters | `chirps` = `chirpStartIsr` = `chirpAvail` = 299880, 1176 frames; `lateIsr`, `missedChirpIsr`, `frameResync`, `availResync` all 0 |
+| Packet sizes | 13328 B header on, 13264 B header off (Ns 3300); 13328 B at Ns 3302 (H 56); `dataFmt 4` CQ on 13616 B / 13392 B |
+| `satRefLag` (soak, 9 polls) | lag 2 in 298702 records (99.61%), lag 1 in 1175 (0.39%, frame starts only); `SAT_VALID=0` on 2 records; saturation counters recorded without a target: firmware 0, parser 0 |
+| Other-slot regime | k+1 |
+| Restart without power cycle | 4 cycles x 30 s, each clean |
+| `channelCfg` change | rejected at `sensorStart` with a clean CLI error |
+| Finite `numFrames`, `sensorStart 0` | both pass |
+| `dataFmt 1` regression | 137058 datagrams, 0 gaps, LVDS frames 59 = sent, restart back to `dataFmt 2` clean |
+
+Not measured (firmware-18, needs a placed reflector): tuned gain/HPF point; clipped-chirp count; ADC bits; phase step at boundaries (G3); minimum clean Tb (G6); saturation-vs-gain sweep; I/Q order. The soak entry lists these as `NOT EVALUATED`.
+
+### Caveats
+
+- The soak and the 60 s capture each contain 1 invalid record, the tail hole where the capture stops mid-packet. The pass criteria tolerate it; it is not a mid-stream loss (0 UDP gaps, 0 wholly missing).
+- dt was measured with no reflector placed and default gain/HPF, so it says nothing about timing under a tuned or saturating scene.
+- Set A was measured on the pre-firmware-17 image (sha256 `53948f4d...4267a`); the image is not re-verified after firmware-17.
+- Phase-like numbers taken from reflector-less data are indicative only and are not reported here.
+- The `dataFmt 4` block contents (CP, sigImg, satMon) are not parsed; only packet size, HSI id, gaps and counters were checked.
