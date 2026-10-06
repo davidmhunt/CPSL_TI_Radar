@@ -61,7 +61,7 @@ dialect starts a frame with the same 8-byte magic word, has a `{type, length}` T
 | `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade (CASCADE_PLAN). TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
 | `sdk2` | IWR1443 (mmWave SDK 1.x/2.x xWR14xx demo) | 36 B (no `subFrameNumber`) | `{u16 count, u16 xyzQFormat}`, then 12 B per point: int16 x, y, z in meters x 2^xyzQFormat (decoded per frame), plus range/Doppler bin indices and peak value | not sent | format confirmed from TI's SDK 2.1 source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); **not yet run against a real IWR1443** |
 
-**Documented compromise (`sdk2`), pending user confirmation:** the SDK 2 demo sends no velocity, SNR or noise per point.
+**Documented compromise (`sdk2`), approved by the user 2026-10-06 for now; to be improved (compute velocity from the radar .cfg, SNR/noise from firmware if it exposes them):** the SDK 2 demo sends no velocity, SNR or noise per point.
 The driver sets `Point::v`, `snr_db` and `noise_db` to NaN (not a number) on this dialect, so
 code that uses them must check with `std::isnan`. The demo does send a signed Doppler bin
 index, and `v` could be computed as bin x Doppler resolution, but the driver does not derive the

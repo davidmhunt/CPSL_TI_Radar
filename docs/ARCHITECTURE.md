@@ -274,7 +274,7 @@ tracking restart at the first of the four, the four are replayed, and
 `resyncs` goes up by one. The first frame of the new stream is whole when
 the restart's first packets arrive in order.
 
-**Documented compromise, pending user confirmation.** A restart is
+**Documented compromise, accepted by the user 2026-10-06.** A restart is
 detected only once its packets lie more than W behind the oldest open
 frame, so not before the old stream is about two frames in (692 packets
 at the IWR1843 baseline); a restart in the first 64 packets also looks
@@ -381,7 +381,7 @@ Without a TLV 7, `snr_db` and `noise_db` are 0 on `sdk3` and
 `mcuplus_cascade`. A frame without a TLV 1 (no detections, or detected
 objects turned off in `guiMonitor`) is an empty cloud.
 
-**Documented compromise (`sdk2`), pending user confirmation.** The SDK 2 demo sends no velocity, SNR or
+**Documented compromise (`sdk2`), approved by the user 2026-10-06 for now; to be improved (compute velocity from the radar .cfg, SNR/noise from firmware if it exposes them).** The SDK 2 demo sends no velocity, SNR or
 noise, so on the IWR1443 `Point::v`, `snr_db` and `noise_db` are NaN; check
 them with `std::isnan`. The demo does send a signed Doppler bin index, and
 `v` could be the bin times the Doppler resolution, but the driver does not
