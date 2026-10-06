@@ -143,3 +143,5 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 .btn.mini { padding: 1px 6px; font-size: 11px; }
 .btn.mini:disabled { opacity: .4; cursor: not-allowed; }
 .ctbl .chint { font-size: 11px; }
+.mro { background: rgba(255,170,0,.12); border: 1px solid var(--warn); color: var(--warn); border-radius: 4px; padding: 5px 9px; margin: 4px 0 8px; font-size: 12.5px; font-weight: 600; }
+.mro[hidden] { display: none; }

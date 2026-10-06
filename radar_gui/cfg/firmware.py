@@ -215,15 +215,29 @@ def flavour(fw: dict, board: str, lvds: bool = False) -> str:
     return "lvds" if (lvds and o["lvds"]) else "tlv"
 
 
+def _with_editable(m: dict, d: dict) -> dict:
+    """Add the single 'is MIMO editable here' decision: `editable` (bool) + `editable_reason` (one line, None if editable).
+    Editable = verified TDM on a non-stub firmware; DDMA, unverified or stub entries are view-only."""
+    if d.get("pending"):
+        reason = "this firmware is a stub (cfg generation pending); its MIMO scheme is not implemented yet."
+    elif m.get("scheme") == "ddma":
+        reason = "DDMA: all TX fire every chirp; phase codes are set by the firmware, not the cfg."
+    elif m.get("confidence") == "unverified":
+        reason = "the TX pattern rules for this firmware/board are unverified, so the chirp table is not offered."
+    else:
+        reason = None
+    return {**m, "editable": reason is None, "editable_reason": reason}
+
+
 def mimo(board: str, fw) -> dict:
     """The MIMO block of firmware `fw` (descriptor or id) for `board`: the firmware-wide values with any
-    per-board override applied. Keys: scheme, bpm, max_chirps_per_loop, subframes, source, confidence[, note]."""
+    per-board override applied. Keys: scheme, bpm, max_chirps_per_loop, subframes, source, confidence[, note], editable, editable_reason."""
     d = get(fw) if isinstance(fw, str) else fw
     if d is None:
         raise KeyError(f"unknown firmware {fw!r}")
     m = {k: v for k, v in d["mimo"].items() if k != "boards"}
     m.update(d["mimo"].get("boards", {}).get(board, {}))
-    return m
+    return _with_editable(m, d)
 
 
 def summary(board: str | None = None) -> list[dict]:
@@ -232,7 +246,7 @@ def summary(board: str | None = None) -> list[dict]:
     fws = for_board(board) if board else list(load_all().values())
     return [{"id": d["id"], "description": d["description"], "boards": boards_of(d),
              "outputs": d["outputs"][board] if board else d["outputs"],
-             "mimo": mimo(board, d) if board else {k: v for k, v in d["mimo"].items()},
+             "mimo": mimo(board, d) if board else _with_editable({k: v for k, v in d["mimo"].items()}, d),
              "system_enables": d["system_enables"], "pending": d.get("pending"),
              "default": bool(board and fws and d is fws[0]),
              "template": d["templates"].get(board) if board else None} for d in fws]

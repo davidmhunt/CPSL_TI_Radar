@@ -532,3 +532,23 @@ def test_chirp_cycle_below_minimum_is_error_and_6843_is_looser():
 def test_dca_ceiling_follows_the_packet_delay():
     from radar_gui.cfg.limits import dca1000_ceiling_mbps
     assert 100 < dca1000_ceiling_mbps("IWR1843") < 110      # ~105 Mb/s at the driver's 100 us delay
+
+
+def test_mimo_editable_flag():
+    """mimo.editable / editable_reason: the one decision the GUI uses to show the 'editing disabled' blurb."""
+    from radar_gui.cfg import firmware as fwmod
+    for fw in fwmod.load_all().values():
+        for b in fw["templates"]:
+            m = fwmod.mimo(b, fw["id"])
+            assert isinstance(m["editable"], bool)
+            assert (m["editable_reason"] is None) == m["editable"]
+            if not m["editable"]:
+                assert m["editable_reason"] and "\n" not in m["editable_reason"]
+            exp = not (fw.get("pending") or m["scheme"] == "ddma" or m["confidence"] == "unverified")
+            assert m["editable"] is exp, (fw["id"], b)
+    assert fwmod.mimo("IWR1843", "demo")["editable"] and fwmod.mimo("IWR6843", "demo")["editable"]
+    assert not fwmod.mimo("IWR1443", "demo")["editable"]
+    assert not fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")["editable"]
+    assert not fwmod.mimo("IWR1843", "dca1000_raw")["editable"]
+    ids = {f["id"]: f for f in fwmod.summary()}
+    assert ids["cascade_ddm"]["mimo"]["editable"] is False and ids["demo"]["mimo"]["editable"] is True

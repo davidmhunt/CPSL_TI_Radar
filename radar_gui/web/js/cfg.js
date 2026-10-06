@@ -291,8 +291,18 @@ function mrow(label, value, unit, d, cls, labelNote) {
     (d ? `<code>${esc(labelNote || d.formula)}</code><span class="sch">${esc(d.scheme)}</span>${unv}` : '');
   return r;
 }
+// The one "is MIMO editable" helper: reads the descriptor's mimo block (backend-derived `editable`/`editable_reason`);
+// no descriptor mimo block (or none selected) falls back to read-only unless the analysed scheme is TDM.
+function mimoEditState(m) {
+  const f = curFw(), mm = (f && f.mimo) || C.fwMimo;
+  if (mm && typeof mm.editable === 'boolean') return { editable: mm.editable, reason: mm.editable_reason };
+  if (m && m.scheme === 'ddma') return { editable: false, reason: 'DDMA: all TX fire every chirp; phase codes are set by the firmware, not the cfg.' };
+  return { editable: !!(mm && mm.scheme === 'tdm'), reason: 'this firmware has no MIMO descriptor.' };
+}
 function renderMimo(m) {
   const list = $('mDerived'); list.replaceChildren();
+  const es = mimoEditState(m), ro = $('mRo');
+  ro.hidden = es.editable || !(m && m.scheme); ro.textContent = es.editable ? '' : 'MIMO editing disabled \u2014 ' + (es.reason || 'not supported for this firmware.');
   if (!m || !m.scheme) { $('mBadge').textContent = ''; $('mDiagram').innerHTML = ''; $('mCaption').textContent = ''; $('mNote').textContent = ''; return; }
   const ddma = m.scheme === 'ddma', D = m.derivations || {}, tc = m.chirp_us;
   C.mLast = m; C.tbl = ddma ? null : { masks: (m.chirp_sequence || []).map(c => c.tx_mask), bpm: !!m.bpm_enabled }; drawTable();
@@ -324,17 +334,18 @@ function renderMimo(m) {
 const TX_PRESETS = [['SIMO (1 TX)', [1], 'simo'], ['2-TX TDM', [1, 4], 'tdm2'], ['3-TX with elevation (1,4,2)', [1, 4, 2], 'tdm3'], ['BPM (2 TX)', null, 'bpm']];
 const TBL_CODES = new Set(['tx_pattern_invalid', 'tx_not_in_channelcfg', 'bpm_unsupported', 'tx_order_convention', 'tx_pattern_not_periodic',
   'simo_multi_tx', 'too_many_tx', 'chirps', 'channel_cfg_layout', 'frame_cfg_layout', 'params', 'tx_mask_from_chirps', 'cascade_chirp_mask_ignored']);
+const viewOnly = () => !mimoEditState(C.metrics || C.mLast).editable;
 const isDdma = () => { const f = curFw(); return !!(f && f.mimo && f.mimo.scheme === 'ddma') || !!(C.metrics && C.metrics.scheme === 'ddma'); };
 function tableParams(sd) {
   const t = C.tbl, out = {};
-  if (!t || !C.tblDirty || isDdma() || !Array.isArray(sd.chirp_tx_masks) || sd.chirp_tx_masks.some(x => typeof x !== 'number')) return out;
+  if (!t || !C.tblDirty || isDdma() || viewOnly() || !Array.isArray(sd.chirp_tx_masks) || sd.chirp_tx_masks.some(x => typeof x !== 'number')) return out;
   const sameMasks = JSON.stringify(t.masks) === JSON.stringify(sd.chirp_tx_masks);
   if (t.bpm !== !!sd.bpm) { out.bpm = t.bpm; if (!t.bpm && !sameMasks) out.chirp_tx_masks = t.masks; }   // BPM on: the backend sets masks [5,5]
   else if (!t.bpm && !sameMasks) out.chirp_tx_masks = t.masks;
   return out;
 }
 async function tableEdit(masks, bpm) {
-  if (isDdma()) return;
+  if (isDdma() || viewOnly()) return;
   if (C.mode !== 'direct') await setMode('direct');   // editing the table = direct mode (seeds from the current cfg)
   C.tbl = { masks, bpm }; C.tblDirty = true; drawTable(); schedule();
 }
@@ -344,9 +355,9 @@ function drawTable() {
   if (!m || !m.scheme) return;
   const ddma = m.scheme === 'ddma' || mm.scheme === 'ddma';
   const t = C.tbl || { masks: (m.chirp_sequence || []).map(c => c.tx_mask), bpm: !!m.bpm_enabled };
-  const max = mm.max_chirps_per_loop || 16, wrap = el('div', 'ctbl' + (ddma ? ' ro' : ''));
+  const max = mm.max_chirps_per_loop || 16, wrap = el('div', 'ctbl' + (ddma || !mimoEditState(m).editable ? ' ro' : ''));
   wrap.append(el('div', 'pgroup', `Chirp table <span class="muted">${t.masks.length}${ddma ? '' : '/' + max} chirp${t.masks.length === 1 ? '' : 's'}/loop</span>`));
-  const lock = ddma || t.bpm;
+  const ro = !mimoEditState(m).editable, lock = ddma || ro || t.bpm;
   if (ddma) {
     const n = Math.max(1, Math.min(m.n_tx || 3, 12));
     for (const [k, c] of (m.chirp_sequence || []).slice(0, 4).entries()) {
@@ -375,10 +386,10 @@ function drawTable() {
   const add = el('button', 'btn mini', '+ Add chirp'); add.disabled = lock || t.masks.length >= max;
   add.title = t.masks.length >= max ? `the firmware accepts at most ${max} chirps per loop` : '';
   add.onclick = () => tableEdit([...t.masks, 2], false); act.append(add);
-  wrap.append(act);
+  if (!ro) wrap.append(act);
   const pre = el('div', 'cacts');
   for (const [label, masks, id] of TX_PRESETS) {
-    if (id === 'bpm' && !mm.bpm) continue;   // BPM only where the firmware descriptor allows it
+    if (ro || (id === 'bpm' && !mm.bpm)) continue;   // BPM only where the firmware descriptor allows it
     const b = el('button', 'btn mini', label); b.onclick = () => tableEdit(masks || [5, 5], id === 'bpm'); pre.append(b);
   }
   wrap.append(pre);
