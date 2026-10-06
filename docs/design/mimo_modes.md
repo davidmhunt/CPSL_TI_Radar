@@ -1,8 +1,8 @@
 # MIMO modes: TDM vs DDMA
 
-Reference the GUI/cfg code follows (gui-21, #59); each firmware descriptor names its scheme in a `mimo` block. Restates `docs/research/gui_multichirp_tdm.md` (**M1**) and `docs/research/gui_board_limits_cascade_multiprofile.md` (**M2**); no new research. Source refs: `RP` = SDK 3.6 `demo/utils/mmwdemo_rfparser.c`; `CAS` = `firmware_dev/projects/awr2243_cascade_ddm/src/ti/`. Other cfg formulas: [`cfg_formulas.md`](cfg_formulas.md), which links here for `n_TX`/`vmax`.
+Reference the GUI/cfg code follows (gui-21, #59); each firmware descriptor names its scheme in a `mimo` block. Restates `docs/research/gui_multichirp_tdm.md` (**M1**) and `docs/research/gui_board_limits_cascade_multiprofile.md` (**M2**). Source refs: `RP` = SDK 3.6 `demo/utils/mmwdemo_rfparser.c`; `CAS` = `firmware_dev/projects/awr2243_cascade_ddm/src/ti/`. Other formulas: [`cfg_formulas.md`](cfg_formulas.md).
 
-Symbols: `Tc` full chirp period = idle + ramp (us); `cpl` chirps per loop (frameCfg `end-start+1`); `L` loops; `N = cpl*L` chirps per frame; `n_RX` enabled RX (cascade: 8 = 2 chips x 4); `lambda = c/fc = 3.893 mm` at 77 GHz, rounded to 3.9 mm below. **`n_TX` = number of TX time slots per loop**, i.e. the interval at which one TX is sampled is `n_TX*Tc`; it is **not** `cpl` and not the popcount of a mask. Rule: one TX per chirp -> distinct azimuth TX (TX1/TX3), +1 if a TX2 (elevation) chirp exists; BPM (mask 5 + `bpmCfg` on) -> 2; SIMO (multi-TX mask, no `bpmCfg`) -> 1. Masks: bit0 = TX1, bit1 = TX2, bit2 = TX3 (5 = TX1+TX3).
+Symbols: `Tc` full chirp period = idle + ramp (us); `cpl` chirps per loop (frameCfg `end-start+1`); `L` loops; `N = cpl*L` chirps per frame; `n_RX` enabled RX (cascade: 8 = 2 chips x 4); `lambda = c/fc = 3.893 mm` at 77 GHz, rounded to 3.9 mm below. **`n_TX` = number of TX time slots per loop**, i.e. the interval at which one TX is sampled is `n_TX*Tc`; not `cpl`, not a mask popcount. Rule: one TX per chirp -> distinct azimuth TX (TX1/TX3), +1 if a TX2 (elevation) chirp exists; BPM (mask 5 + `bpmCfg` on) -> 2; SIMO (multi-TX mask, no `bpmCfg`) -> 1. Masks: bit0 = TX1, bit1 = TX2, bit2 = TX3 (5 = TX1+TX3).
 
 ## 1. Side by side
 
@@ -27,14 +27,14 @@ TX2    : .  .  # | .  .  #
 TX3    : .  #  . | .  #  .
 ```
 
-**TDM, 2 TX BPM (opt-in), mask 5 on both chirps, `cpl = 2`.** `bpmCfg` flips the sign of one TX on alternate chirps (sign pattern is the BPM concept, not read from source here). A chirp pair is the decode unit: combining the two chirps separates TX1 from TX3, so each TX gets one sample per pair, i.e. `n_TX = 2`, interval `2*Tc`.
+**TDM, 2 TX BPM (opt-in), mask 5 on both chirps, `cpl = 2`.** `bpmCfg` flips the sign of one TX on alternate chirps. Combining each chirp pair separates TX1 from TX3, so `n_TX = 2`, interval `2*Tc`.
 ```
 chirp  : 0  1 | 2  3
 TX1    : #  # | #  #
 TX3    : #  # | #  #     (sign pattern, e.g. +,+ then +,-: unverified)
 ```
 
-**DDMA, 6 TX, `cpl = 8`.** All six TX fire on every chirp; TX of rank `r` gets phase `phi = k*r/n_bands` turns on chirp `k` (M2 s3), so the Doppler spectrum splits into `n_bands = 8` sub-bands, one per TX, 2 left empty. Which rank/bands are empty is not established here.
+**DDMA, 6 TX, `cpl = 8`.** All six TX fire on every chirp; TX of rank `r` gets phase `phi = k*r/n_bands` turns on chirp `k` (M2 s3), so the Doppler spectrum splits into `n_bands = 8` sub-bands, one per TX, 2 left empty.
 ```
 Doppler: -vmax                                    +vmax    (vmax = lambda/(4 Tc))
          | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 |        each band = 1/8 of the span
@@ -51,7 +51,7 @@ Doppler: -vmax                                    +vmax    (vmax = lambda/(4 Tc)
 
 **SIMO (multi-TX mask on every chirp, no `bpmCfg`):** accepted, `n_TX = 1`, both TX transmit together, virtual `= n_RX` (4), not 8 (`RP:608-616`). `cpl = 1`: `vmax = 3.9e-3/(4*1*50e-6) = 19.5 m/s`.
 
-**DDMA 6 TX, `cpl = 8`, `L = 32` (TI `cascade_shortrange`):** `N = 256`; `dv = 3.9e-3/(2*256*50e-6) = 0.152 m/s`; full span `+-3.9e-3/(4*50e-6) = +-19.5 m/s`; each TX's own range `+-3.9e-3/(4*8*50e-6) = +-2.44 m/s`; sub-band bins `256/8 = 32`. **Why the headline is the full span.** The 2 empty bands break the cyclic symmetry of the 6 TX peaks: for each Doppler sub-bin the DSP takes the band with the max DDMA metric as the start of the TX block, cyclically (`findMaxIdx`, wrap-around copy, `dopplerprochwaDDMA.c:340-470`), so TX1's zero-phase peak is identified and target Doppler is resolved modulo the full span. Established in source: that per-sub-bin metric/rotation step, and the header comment "empty subband based DDMA" (`dopplerprocDDMAcommon.h:98-105`). Not established in source: that the reported Doppler index/velocity uses the rotation (the max index is stored in `dopMaxSubBandMat` but nothing else reads it), and the behaviour above 2.44 m/s. If identification fails (e.g. overlapping targets in one range bin, or a target faster than the per-TX band) the TX is misattributed (wrong virtual-array phase) and `+-2.44 m/s` is the safe limit. HYPOTHESIS / bench check: move a target above 2.44 m/s (below 19.5) and check reported velocity and angle.
+**DDMA 6 TX, `cpl = 8`, `L = 32` (TI `cascade_shortrange`):** `N = 256`; `dv = 3.9e-3/(2*256*50e-6) = 0.152 m/s`; full span `+-3.9e-3/(4*50e-6) = +-19.5 m/s`; each TX's own range `+-3.9e-3/(4*8*50e-6) = +-2.44 m/s`; sub-band bins `256/8 = 32`. **Why the headline is the full span (source-established).** The 2 empty bands break the cyclic symmetry of the 6 TX peaks, so per Doppler sub-bin the DSP takes the max-metric band as the start of the TX block (`findMaxIdx`, `dopplerprochwaDDMA.c:340-470`; "empty subband based DDMA", `dopplerprocDDMAcommon.h:98-105`) and stores it in `dopMaxSubBandMat`. That buffer is re-read as `dopSubMaxMat` (`:634`); `subBandIdx = dopSubMaxMat[DopIdxCurr]` and `dopIdxActual = DopIdxCurr + subBandIdx*numDopplerBinsPerSubBand`, wrapped by `numDopplerBins` (`:703-708`; the test is `>` not `>=`, a possible off-by-one at exactly `numDopplerBins`). `objectdetection.c:707-713` (and `:1247-1253`) converts `dopIdxActual` to the reported velocity, so it is unwrapped over the full span. HYPOTHESIS / bench check (source cannot settle): max-metric pick correctness at high speed / low SNR, overlapping targets in one range bin, and the angle/phase effect of a wrong pick; `+-2.44 m/s` is the safe limit until then.
 
 ## 4. What you can edit
 
