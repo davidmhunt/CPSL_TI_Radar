@@ -3,14 +3,6 @@
 **Date:** 2026-10-06
 **Memo:** docs/research/iwr1843_headless_flash_2026-10-06.md
 
-## Question as asked
-
-Directive firmware-13: how to flash `iwr1843_sar_lvds.bin` (SDK 3.6 meta image, 152132 B) to the
-IWR1843BOOST QSPI from a headless Linux host over the XDS110 UART port, or whether it cannot be done
-without the GUI. Covers UniFlash version and Linux install, the exact CLI, other routes, display need,
-and risks. No hardware touched, nothing installed; the host and the firmware Docker image were inspected
-read-only. User feedback: UniFlash may already be on this host; installing it is acceptable.
-
 ## TL;DR
 
 UniFlash is **not installed** on this host. TI's UniFlash ships a command-line flasher (`dslite.sh`) whose
@@ -26,14 +18,12 @@ only, not of UniFlash.
 
 ### 1. Host state (read-only, 2026-10-06)
 
-- No `uniflash`/`dslite` on `PATH`; no `~/ti`, `/opt/ti`, `~/.ti`, `/usr/local/ti` on the host; a
-  filesystem search found only SDK 2.1 test logs. Only CCS and SDK installers are in
+- No `uniflash`/`dslite` on `PATH`; no `~/ti`, `/opt/ti`, `~/.ti`, `/usr/local/ti` on the host. Only CCS and SDK installers are in
   `firmware_dev/downloads/`. A full TI toolchain (CCS 12.8.1, SDK 3.6.02.00) exists **inside** image
   `cpsl-ti-radar-firmware-dev:latest` under `/opt/ti`.
-- User `cpsl` is in `dialout` and `plugdev`; `/dev/ttyACM0,1` are `root:plugdev rw`, so no extra
-  permission step. `/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.05__Embed_with_CMSIS-DAP_R2101050-if00`
+- User `cpsl` is in `dialout` and `plugdev`; `/dev/ttyACM0,1` are `root:plugdev rw`. `/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.05__Embed_with_CMSIS-DAP_R2101050-if00`
   (CLI/UART) and `-if03` are enumerated now (a board is plugged in). Not opened.
-- `DISPLAY=localhost:10.0` is set in this shell (an SSH-X11-style value); no local display. Free disk 194 GB.
+- `DISPLAY=localhost:10.0` is set in this shell (an SSH-X11-style value); no local display.
 
 ### 2. UniFlash version and Linux install
 
@@ -48,9 +38,6 @@ only, not of UniFlash.
   `./uniflash_sl.*.run --help` first. A Linux report needed `sudo ln -sf /lib/x86_64-linux-gnu/libudev.so.1
   /lib/x86_64-linux-gnu/libusb-0.1.so.4` for the XDS110 side `hackmd_iwr1642_linux`; that is the debug probe,
   which a UART flash does not use (HYPOTHESIS: not needed).
-- Placement: the installer is a download like the others (`download.sh`); install it to a path outside git
-  (e.g. under `firmware_dev/downloads/` ignored, or an image layer for the `flash` service). Docker needs
-  `/dev` passthrough, which the `flash` service already bind-mounts.
 
 ### 3. The CLI for xWR18xx serial flash
 
@@ -115,7 +102,7 @@ flasher `ti_e2e_856044` `ti_swra551`.
   mode is SOP0 only; the SDK guide lists the same `ti_mmwave_sdk_ug`. FAQ: after a failed attempt,
   re-power, re-plug, kill a stale `DSLite` or `Python` process `ti_e2e_856044`; 5 V ~3 A supply.
 - **Port:** use the XDS110 "Application/User UART", on Linux the `-if00` by-id link (the SDK guide
-  names it as the Windows "XDS110 Class Application/User UART") `ti_mmwave_sdk_ug`. Permissions already fine.
+  names it as the Windows "XDS110 Class Application/User UART") `ti_mmwave_sdk_ug`.
 - **Nothing else may hold the port** (serial driver, viewer); claim it in `status.md`.
 
 ## Applicability to CPSL TI Radar
@@ -126,8 +113,6 @@ flasher `ti_e2e_856044` `ti_swra551`.
 (HYPOTHESIS; the log's "correct header for AWR1843" check is the discriminator).
 
 ## Recommended Experiment
-
-Numbered recommendation (install tool, command, fallback):
 
 1. Ask the user: install UniFlash 9.6.0 on this host (decision for firmware-14). Download the `.run` with
    `curl -L -O -C -` (no login), run `--help`, install headless (`--mode unattended --prefix ...` if offered).
