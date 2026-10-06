@@ -190,11 +190,18 @@ uint32_t DCA1000Socket::get_overrun_count() const {
 }
 
 void DCA1000Socket::rx_thread_func() {
+    // recvmmsg straight into the free ring slots (design P5): one syscall
+    // takes up to kRecvBatch datagrams. MSG_WAITFORONE blocks (up to the
+    // socket's SO_RCVTIMEO, 500 ms, so stop_rx() stays bounded) for the
+    // first datagram only, then takes whatever else is already queued.
+    std::array<mmsghdr, kRecvBatch> msgs{};
+    std::array<iovec, kRecvBatch> iov{};
     while (rx_thread_running_.load(std::memory_order_relaxed)) {
-        int cur_head = rx_ring_head_.load(std::memory_order_relaxed);
-        int next_head = (cur_head + 1) % RX_RING_SIZE;
+        const int head = rx_ring_head_.load(std::memory_order_relaxed);
+        const int tail = rx_ring_tail_.load(std::memory_order_acquire);
+        const int free_slots = (tail - head - 1 + RX_RING_SIZE) % RX_RING_SIZE;
 
-        if (next_head == rx_ring_tail_.load(std::memory_order_acquire)) {
+        if (free_slots == 0) {
             // Ring full: drain socket to prevent kernel buffer overflow
             rx_overrun_count_.fetch_add(1, std::memory_order_relaxed);
             uint8_t discard[1472];
@@ -202,12 +209,23 @@ void DCA1000Socket::rx_thread_func() {
             continue;
         }
 
-        RxSlot& slot = rx_ring_[cur_head];
-        ssize_t n = recvfrom(data_socket_, slot.data.data(), slot.data.size(), 0,
-                             nullptr, nullptr);
-        if (n <= 0) continue;
-        slot.bytes_received = static_cast<int>(n);
-        rx_ring_head_.store(next_head, std::memory_order_seq_cst);
+        // free slots from head up to the end of the array (no wrap in one call)
+        const int n = std::min({free_slots, RX_RING_SIZE - head, kRecvBatch});
+        for (int i = 0; i < n; i++) {
+            RxSlot& slot = rx_ring_[head + i];
+            iov[i].iov_base = slot.data.data();
+            iov[i].iov_len = slot.data.size();
+            msgs[i].msg_hdr = msghdr{};
+            msgs[i].msg_hdr.msg_iov = &iov[i];
+            msgs[i].msg_hdr.msg_iovlen = 1;
+            msgs[i].msg_len = 0;
+        }
+        const int got = recvmmsg(data_socket_, msgs.data(), static_cast<unsigned>(n), MSG_WAITFORONE, nullptr);
+        if (got <= 0) continue;  // timeout (stop check) or EINTR
+        for (int i = 0; i < got; i++) {
+            rx_ring_[head + i].bytes_received = static_cast<int>(msgs[i].msg_len);
+        }
+        rx_ring_head_.store((head + got) % RX_RING_SIZE, std::memory_order_seq_cst);
         // wake the worker only if it is (about to be) asleep; taking the
         // mutex first means it is either still before its re-check (and will
         // see the new head) or already waiting (and gets the notify)

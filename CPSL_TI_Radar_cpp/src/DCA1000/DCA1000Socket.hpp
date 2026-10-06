@@ -3,7 +3,8 @@
 
 // Manages the two UDP sockets used to communicate with the DCA1000 FPGA board,
 // plus a dedicated real-time RX thread that drains the data socket into a
-// lock-free ring buffer.
+// lock-free ring buffer, up to kRecvBatch datagrams per recvmmsg() call,
+// received straight into the ring slots.
 //
 // Ring buffer protocol (single producer, single consumer): rx_ring_head_ is
 // written by the RX thread and read by the worker thread; rx_ring_tail_ is
@@ -83,6 +84,8 @@ public:
 
 private:
     static constexpr int RX_RING_SIZE = 512;
+    // datagrams one recvmmsg() call may take (design P5)
+    static constexpr int kRecvBatch = 32;
     struct RxSlot {
         std::array<uint8_t, 1472> data;
         int bytes_received;

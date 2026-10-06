@@ -4,6 +4,8 @@
 //
 //   P4  packets are read in place (views into the ring, no copy), in order,
 //       in batches; a sleeping worker is woken by the RX thread.
+//   P5  the RX thread takes a queued backlog with recvmmsg, in order, across
+//       the end of the ring array; stop_rx() stays bounded by SO_RCVTIMEO.
 #include "test_harness.hpp"
 #include "DCA1000Socket.hpp"
 
@@ -175,6 +177,38 @@ TEST_CASE(a_sleeping_worker_is_woken_by_the_rx_thread) {
     }
     std::cout << "    slowest wake-up " << worst_ms << " ms (packet sent 20 ms after the worker slept)" << std::endl;
     CHECK(worst_ms < 1000);
+}
+
+TEST_CASE(a_queued_backlog_is_taken_in_order) {
+    Loopback lb;
+    CHECK(lb.ok);
+    if (!lb.ok) return;
+    // 400 packets wait in the kernel buffer before the RX thread starts, so
+    // its recvmmsg calls find full batches; 3 rounds wrap the 512-slot ring
+    uint32_t next = 0, bad = 0;
+    DCA1000Socket::PacketView v[32];
+    for (int round = 0; round < 3; round++) {
+        for (uint32_t i = 0; i < 400; i++) CHECK(lb.send_packet(round * 400 + i, 64 + (i % 7)));
+        if (round == 0) lb.sock.start_rx();
+        const uint32_t want = (round + 1) * 400;
+        const Clock::time_point until = Clock::now() + std::chrono::seconds(10);
+        while (next < want && Clock::now() < until) {
+            const int n = lb.sock.acquire_packets(v, 32, 200);
+            for (int i = 0; i < n; i++, next++)
+                if (!packet_ok(v[i].data, v[i].len, next, 64 + ((next % 400) % 7))) bad++;
+            lb.sock.release_packets(n);
+        }
+    }
+    CHECK_EQ(next, 1200u);
+    CHECK_EQ(bad, 0u);
+    CHECK_EQ(lb.sock.get_overrun_count(), 0u);
+    // the RX thread is blocked in recvmmsg with nothing to read: stop_rx()
+    // returns within the 500 ms SO_RCVTIMEO
+    const Clock::time_point t0 = Clock::now();
+    lb.sock.stop_rx();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - t0).count();
+    std::cout << "    stop_rx() took " << ms << " ms" << std::endl;
+    CHECK(ms < 1500);
 }
 
 TEST_MAIN()
