@@ -27,13 +27,33 @@
 //
 // Compare two builds with tools/bench/pipeline_gate.py (the perf gate).
 //
+// --udp (loopback mode, directive core-15) replaces the three measurements
+// above with one run of the real RX path: a sender thread replays the clean
+// synthetic stream over 127.0.0.1 into a real DCA1000Socket (its RX thread
+// and packet ring), and a worker thread runs DCA1000Handler::process_next_packet
+// as Radar's DCA worker does. No DCA1000 command is sent. It prints one
+// "udp ..." key=value row: frames (golden or not), packets sent / delivered,
+// user-space discards (the socket's overrun count), kernel drops (the
+// socket's drops column in /proc/net/udp), CPU ns per payload byte and
+// context switches of the RX + worker threads (getrusage, minus the sender
+// and main threads). --stall-ms N stalls the worker once at frame N/2 (or
+// every --stall-every K frames) to model a slow consumer.
+//
 // Usage: bench_pipeline [--cfg <radar .cfg>] [--frames N] [--reps N]
 //                       [--log-level error|warn|info|debug] [--tmp-dir DIR]
+//        bench_pipeline --udp [--cfg <radar .cfg>] [--frames N] [--udp-rate PKT_PER_S|max]
+//                       [--stall-ms N [--stall-every K]] [--udp-rcvbuf BYTES]
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdlib.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
 #include <sys/utsname.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -45,9 +65,11 @@
 #include <new>
 #include <streambuf>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "DCA1000Handler.hpp"
+#include "DCA1000Socket.hpp"
 #include "FrameAssembler.hpp"
 #include "Log.hpp"
 #include "RadarConfigReader.hpp"
@@ -55,17 +77,17 @@
 #include "converter_kernels.hpp"
 
 // ---------------------------------------------------------------------------
-// Counting allocator (single-threaded bench: a plain counter is enough)
+// Counting allocator (atomic: --udp runs the driver's RX and worker threads)
 // ---------------------------------------------------------------------------
-static uint64_t g_allocs = 0;
+static std::atomic<uint64_t> g_allocs{0};
 
 void* operator new(std::size_t n) {
-    ++g_allocs;
+    g_allocs.fetch_add(1, std::memory_order_relaxed);
     if (void* p = std::malloc(n ? n : 1)) return p;
     throw std::bad_alloc();
 }
 void* operator new[](std::size_t n) {
-    ++g_allocs;
+    g_allocs.fetch_add(1, std::memory_order_relaxed);
     if (void* p = std::malloc(n ? n : 1)) return p;
     throw std::bad_alloc();
 }
@@ -297,7 +319,7 @@ struct DriverResult {
     uint64_t log_messages = 0;
 };
 
-uint64_t g_log_messages = 0;
+std::atomic<uint64_t> g_log_messages{0};
 
 DriverResult replay_driver(const DriverRig& rig, const PacketStream& ps) {
     DriverResult r;
@@ -360,6 +382,269 @@ void print_driver_row(const char* scenario, const std::vector<Sample>& runs) {
                 s.median.allocs_per_frame, "-");
 }
 
+// ---------------------------------------------------------------------------
+// --udp: loopback replay through the real DCA1000Socket and the DCA worker path
+// ---------------------------------------------------------------------------
+
+// The DCA1000Socket half of UdpPacketSource, without the FPGA command
+// protocol (nothing answers on loopback): open() binds the sockets,
+// start()/stop() run the RX thread, pop() reads the packet ring.
+class LoopbackSource : public cpsl::radar::PacketSource {
+public:
+    LoopbackSource(int cmd_port, int data_port, size_t rcvbuf) : cmd_port_(cmd_port), data_port_(data_port), rcvbuf_(rcvbuf) {}
+    cpsl::radar::Status open() override {
+        if (!socket_.init("127.0.0.1", "127.0.0.1", cmd_port_, data_port_, rcvbuf_))
+            return cpsl::radar::Status(cpsl::radar::Code::open_failed, "cannot bind the loopback sockets");
+        return cpsl::radar::Status::ok();
+    }
+    cpsl::radar::Status configure() override { return cpsl::radar::Status::ok(); }
+    cpsl::radar::Status start() override {
+        socket_.start_rx();
+        return cpsl::radar::Status::ok();
+    }
+    cpsl::radar::Status stop() override {
+        socket_.stop_rx();
+        return cpsl::radar::Status::ok();
+    }
+    bool pop(uint8_t* buf, int& len, std::chrono::milliseconds timeout) override {
+        if (!socket_.pop_packet(buf, len, static_cast<int>(timeout.count()))) return false;
+        delivered_.fetch_add(1, std::memory_order_relaxed);
+        return true;
+    }
+    uint32_t overrun_count() const override { return socket_.get_overrun_count(); }
+    size_t rcvbuf_bytes() const override { return socket_.get_granted_rcvbuf(); }
+    uint64_t delivered() const { return delivered_.load(std::memory_order_relaxed); }
+
+private:
+    int cmd_port_, data_port_;
+    size_t rcvbuf_;
+    DCA1000Socket socket_;
+    std::atomic<uint64_t> delivered_{0};
+};
+
+// a free UDP port on 127.0.0.1 (bound to port 0, read back, closed)
+int free_udp_port() {
+    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) return -1;
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    a.sin_port = 0;
+    socklen_t n = sizeof(a);
+    int port = -1;
+    if (bind(fd, reinterpret_cast<sockaddr*>(&a), sizeof(a)) == 0 &&
+        getsockname(fd, reinterpret_cast<sockaddr*>(&a), &n) == 0)
+        port = ntohs(a.sin_port);
+    close(fd);
+    return port;
+}
+
+// the drops column of 127.0.0.1:<port> in /proc/net/udp (-1: not found)
+long long kernel_drops(int port) {
+    std::ifstream f("/proc/net/udp");
+    std::string line;
+    char want[32];
+    std::snprintf(want, sizeof want, "0100007F:%04X", port);
+    std::getline(f, line);  // header
+    while (std::getline(f, line)) {
+        if (line.find(want) == std::string::npos) continue;
+        // sl local rem st tx:rx tr:tm retrnsmt uid timeout inode ref pointer drops
+        std::vector<std::string> tok;
+        size_t i = 0;
+        while (i < line.size()) {
+            while (i < line.size() && line[i] == ' ') i++;
+            size_t j = i;
+            while (j < line.size() && line[j] != ' ') j++;
+            if (j > i) tok.push_back(line.substr(i, j - i));
+            i = j;
+        }
+        if (tok.size() >= 13 && tok[1] == want) return std::strtoll(tok.back().c_str(), nullptr, 10);
+    }
+    return -1;
+}
+
+double cpu_ns(const rusage& r) {
+    return (r.ru_utime.tv_sec + r.ru_stime.tv_sec) * 1e9 + (r.ru_utime.tv_usec + r.ru_stime.tv_usec) * 1e3;
+}
+
+struct ThreadUsage {
+    double ns = 0;
+    long vcsw = 0, ivcsw = 0;
+};
+
+ThreadUsage usage_delta(const rusage& a, const rusage& b) {
+    return {cpu_ns(b) - cpu_ns(a), b.ru_nvcsw - a.ru_nvcsw, b.ru_nivcsw - a.ru_nivcsw};
+}
+
+struct UdpOptions {
+    double rate = 3460;  // packets/s, 0 = max; 3460 = the core-04 IWR1843 baseline
+    uint32_t stall_ms = 0;
+    uint32_t stall_every = 0;
+    size_t rcvbuf = 64 * 1024 * 1024;  // dca1000.rcvbuf_bytes default
+};
+
+int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const UdpOptions& o,
+            const std::string& tmp_base) {
+    const int cmd_port = free_udp_port(), data_port = free_udp_port();
+    if (cmd_port <= 0 || data_port <= 0 || cmd_port == data_port) {
+        std::fprintf(stderr, "cannot find two free UDP ports on 127.0.0.1\n");
+        return 1;
+    }
+    std::string tmp_dir = tmp_base + "/bench_pipeline_XXXXXX";
+    if (mkdtemp(&tmp_dir[0]) == nullptr) {
+        std::fprintf(stderr, "cannot create a temp dir under %s\n", tmp_base.c_str());
+        return 1;
+    }
+    DriverRig rig;
+    if (!make_driver_rig(rig, cfg, tmp_dir, false, tmp_dir + "/udp.json") ||
+        rig.radar.get_bytes_per_frame() != bytes_per_frame) {
+        std::fprintf(stderr, "cannot build the driver rig for %s\n", cfg.c_str());
+        return 1;
+    }
+    const size_t tail = FrameAssembler::kDefaultReorderSlackPackets + 1;
+    const PacketStream ps = make_stream("udp", bytes_per_frame, frames, 0, 0, 0, 1, tail);
+    const uint64_t frame_payload = static_cast<uint64_t>(bytes_per_frame) * frames;
+
+    auto src = std::make_shared<LoopbackSource>(cmd_port, data_port, o.rcvbuf);
+    if (!src->open()) {
+        std::fprintf(stderr, "cannot bind 127.0.0.1:%d/%d\n", cmd_port, data_port);
+        return 1;
+    }
+    DCA1000Handler h;
+    if (!h.configure_pipeline(rig.sys, rig.radar)) {
+        std::fprintf(stderr, "FAIL: DCA1000Handler::configure_pipeline\n");
+        return 1;
+    }
+    h.set_packet_source(src);
+    // consumer stall: the worker sleeps in the publish hook
+    std::atomic<uint64_t> stalls{0};
+    uint64_t published = 0;
+    if (o.stall_ms > 0) {
+        const uint64_t every = o.stall_every, once = std::max<uint64_t>(1, frames / 2);
+        h.set_publish_hook([&, every, once] {
+            published++;
+            if (every ? published % every == 0 : published == once) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(o.stall_ms));
+                stalls.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
+    }
+
+    rusage self0{}, main0{};
+    getrusage(RUSAGE_SELF, &self0);
+    getrusage(RUSAGE_THREAD, &main0);
+    src->start();
+    std::atomic<bool> stop{false};
+    std::thread worker([&] {
+        while (!stop.load(std::memory_order_relaxed)) h.process_next_packet();
+    });
+
+    // sender: the stream at o.rate packets/s (0 = as fast as send() goes)
+    ThreadUsage sender_use;
+    uint64_t sent = 0, send_errors = 0;
+    double send_s = 0;
+    std::thread sender([&] {
+        rusage r0{}, r1{};
+        getrusage(RUSAGE_THREAD, &r0);
+        const int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        sockaddr_in to{};
+        to.sin_family = AF_INET;
+        to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        to.sin_port = htons(static_cast<uint16_t>(data_port));
+        connect(fd, reinterpret_cast<sockaddr*>(&to), sizeof(to));
+        const Clock::time_point t0 = Clock::now();
+        const uint8_t* base = ps.buf.data();
+        for (size_t i = 0; i < ps.off.size(); i++) {
+            if (o.rate > 0) {
+                // pace by schedule: catch up in bursts, sleep when ahead
+                const Clock::time_point due = t0 + std::chrono::nanoseconds(static_cast<int64_t>(i * 1e9 / o.rate));
+                const Clock::time_point now = Clock::now();
+                if (due > now + std::chrono::microseconds(50)) std::this_thread::sleep_until(due);
+            }
+            if (send(fd, base + ps.off[i], ps.len[i], 0) == static_cast<ssize_t>(ps.len[i])) sent++;
+            else send_errors++;
+        }
+        send_s = std::chrono::duration<double>(Clock::now() - t0).count();
+        close(fd);
+        getrusage(RUSAGE_THREAD, &r1);
+        sender_use = usage_delta(r0, r1);
+    });
+    sender.join();
+
+    // wait until every frame is in, or nothing has moved for 1 s
+    uint64_t last = ~uint64_t(0);
+    Clock::time_point moved = Clock::now();
+    for (;;) {
+        const uint64_t d = src->delivered();
+        if (h.get_stats().frames >= frames && d >= sent) break;
+        if (d != last) {
+            last = d;
+            moved = Clock::now();
+        } else if (Clock::now() - moved > std::chrono::seconds(1)) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    stop.store(true);
+    worker.join();
+    const long long kdrops = kernel_drops(data_port);  // before the socket closes
+    h.stop();                                          // joins the RX thread
+    rusage self1{}, main1{};
+    getrusage(RUSAGE_THREAD, &main1);
+    getrusage(RUSAGE_SELF, &self1);
+
+    const ThreadUsage all = usage_delta(self0, self1), main_use = usage_delta(main0, main1);
+    const double ns = all.ns - sender_use.ns - main_use.ns;
+    const long vcsw = all.vcsw - sender_use.vcsw - main_use.vcsw;
+    const long ivcsw = all.ivcsw - sender_use.ivcsw - main_use.ivcsw;
+    const DCA1000Handler::Stats st = h.get_stats();
+    const uint64_t delivered = src->delivered();
+    const uint64_t discards = src->overrun_count();
+    const uint64_t kd = kdrops > 0 ? static_cast<uint64_t>(kdrops) : 0;
+    const long long unaccounted = static_cast<long long>(sent) - static_cast<long long>(delivered) -
+                                  static_cast<long long>(discards) - static_cast<long long>(kd);
+    const bool golden = st.frames == frames && st.assembler.incomplete_frames == 0 &&
+                        st.assembler.skipped_frames == 0 && st.assembler.dropped_packets == 0;
+    char rate[32];
+    if (o.rate > 0) std::snprintf(rate, sizeof rate, "%.0f", o.rate);
+    else std::snprintf(rate, sizeof rate, "max");
+
+    std::printf("  udp loopback: 127.0.0.1 data port %d, SO_RCVBUF requested %zu granted %zu, rate %s packets/s "
+                "(achieved %.0f), stall %u ms %s\n",
+                data_port, o.rcvbuf, src->rcvbuf_bytes(), rate, sent / std::max(send_s, 1e-9), o.stall_ms,
+                o.stall_ms == 0 ? "(none)"
+                : o.stall_every ? ("every " + std::to_string(o.stall_every) + " frames").c_str()
+                                : "once, mid-run");
+    std::printf("udp frames=%llu of=%zu golden=%s sent=%llu delivered=%llu discards=%llu kernel_drops=%lld "
+                "unaccounted=%lld stalls=%llu cpu_ns_per_byte=%.3f cpu_ms=%.1f vol_cs=%ld invol_cs=%ld "
+                "cs_per_packet=%.3f dropped=%u incomplete=%u skipped=%u late=%u rate=%s\n",
+                static_cast<unsigned long long>(st.frames), frames, golden ? "yes" : "no",
+                static_cast<unsigned long long>(sent), static_cast<unsigned long long>(delivered),
+                static_cast<unsigned long long>(discards), kdrops, unaccounted,
+                static_cast<unsigned long long>(stalls.load()), ns / static_cast<double>(frame_payload), ns * 1e-6,
+                vcsw, ivcsw, sent ? static_cast<double>(vcsw + ivcsw) / static_cast<double>(sent) : 0.0,
+                st.assembler.dropped_packets, st.assembler.incomplete_frames, st.assembler.skipped_frames,
+                st.assembler.late_packets, rate);
+    std::printf("\n  cpu_ns_per_byte / vol_cs / invol_cs: the RX and worker threads only (process getrusage minus\n"
+                "  the sender and main threads), per frame payload byte. discards: packets the RX thread threw\n"
+                "  away (DCA1000Socket overrun count). kernel_drops: the socket's drops column in /proc/net/udp.\n"
+                "  unaccounted = sent - delivered - discards - kernel_drops (0 when every loss is counted).\n"
+                "  golden: every frame complete, nothing dropped.\n");
+    std::error_code ec;
+    std::filesystem::remove_all(tmp_dir, ec);
+    if (send_errors > 0) std::fprintf(stderr, "note: %llu send() errors\n", static_cast<unsigned long long>(send_errors));
+    // a run that lost data is fine only if every lost packet was counted
+    if (!golden && unaccounted != 0) {
+        std::fprintf(stderr, "FAIL: frames not golden and %lld packets unaccounted\n", unaccounted);
+        return 1;
+    }
+    if (!golden && discards == 0 && kd == 0) {
+        std::fprintf(stderr, "FAIL: frames not golden with no counted loss\n");
+        return 1;
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -367,6 +652,8 @@ int main(int argc, char** argv) {
     size_t frames = 40;
     size_t reps = 7;
     std::string log_level = "info";
+    bool udp = false;
+    UdpOptions udp_opt;
     std::string tmp_base = std::filesystem::is_directory("/dev/shm") && access("/dev/shm", W_OK) == 0 ? "/dev/shm"
                                                                                                        : "/tmp";
     for (int i = 1; i < argc; i++) {
@@ -376,11 +663,24 @@ int main(int argc, char** argv) {
         else if (a == "--reps" && i + 1 < argc) reps = std::strtoul(argv[++i], nullptr, 10);
         else if (a == "--log-level" && i + 1 < argc) log_level = argv[++i];
         else if (a == "--tmp-dir" && i + 1 < argc) tmp_base = argv[++i];
+        else if (a == "--udp") udp = true;
+        else if (a == "--udp-rate" && i + 1 < argc) {
+            const std::string v = argv[++i];
+            udp_opt.rate = v == "max" ? 0 : std::strtod(v.c_str(), nullptr);
+            if (v != "max" && !(udp_opt.rate > 0)) {
+                std::fprintf(stderr, "--udp-rate must be packets/s > 0 or max\n");
+                return 2;
+            }
+        } else if (a == "--stall-ms" && i + 1 < argc) udp_opt.stall_ms = std::strtoul(argv[++i], nullptr, 10);
+        else if (a == "--stall-every" && i + 1 < argc) udp_opt.stall_every = std::strtoul(argv[++i], nullptr, 10);
+        else if (a == "--udp-rcvbuf" && i + 1 < argc) udp_opt.rcvbuf = std::strtoull(argv[++i], nullptr, 10);
         else {
             std::fprintf(stderr,
                          "usage: %s [--cfg <radar .cfg>] [--frames N] [--reps N] [--log-level error|warn|info|debug]"
-                         " [--tmp-dir DIR]\n",
-                         argv[0]);
+                         " [--tmp-dir DIR]\n"
+                         "       %s --udp [--cfg <radar .cfg>] [--frames N] [--udp-rate PKT_PER_S|max]"
+                         " [--stall-ms N [--stall-every K]] [--udp-rcvbuf BYTES]\n",
+                         argv[0], argv[0]);
             return 2;
         }
     }
@@ -446,6 +746,15 @@ int main(int argc, char** argv) {
                 shape.rx, shape.samples, shape.chirps, B, (B + kPacketBytes - kHeader - 1) / (kPacketBytes - kHeader),
                 kPacketBytes, cfg.c_str());
     std::printf("  layout     : two_lane_iq_pairs, q_first (IWR1843/IWR6843 path)\n");
+    if (udp) {
+        std::printf("  mode       : --udp loopback (sender thread -> 127.0.0.1 -> DCA1000Socket RX thread -> DCA worker)\n");
+        cpsl::radar::set_log_level(level);
+        cpsl::radar::set_log_sink([](cpsl::radar::LogLevel, const std::string&) { ++g_log_messages; });
+        const int rc = run_udp(cfg, frames, B, udp_opt, tmp_base);
+        cpsl::radar::set_log_sink(nullptr);
+        return rc;
+    }
+
     std::printf("  method     : %zu frames per rep, 1 warm-up + %zu timed reps, variants interleaved per rep;\n"
                 "               median rep shown, best rep in [brackets]; single thread\n",
                 frames, reps);
