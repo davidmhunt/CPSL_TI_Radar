@@ -80,9 +80,10 @@ class SystemConfigReader {
         // true at log_level "debug" (the v1 "verbose": per-frame status lines)
         bool get_verbose() const { return log_level == LogLevel::debug; }
 
-        // runtime.* values: frame_queue_depth and stall_timeout_ms are applied
-        // (DCA1000Handler frame queue, Radar stall policy); rx_cpu, worker_cpu,
-        // rx_priority, worker_priority are validated but reserved (core-15)
+        // runtime.* values: frame_queue_depth (DCA1000Handler frame queue),
+        // stall_timeout_ms (Radar stall policy), rx_cpu / rx_priority (the
+        // DCA1000 RX thread) and worker_cpu / worker_priority (the DCA worker
+        // thread; ThreadPlacement.hpp)
         uint32_t get_frame_queue_depth() const { return frame_queue_depth; }
         uint32_t get_stall_timeout_ms() const { return stall_timeout_ms; }
         int get_rx_cpu() const { return rx_cpu; }          // -1 = null (not pinned)

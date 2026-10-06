@@ -9,12 +9,14 @@
 //   P6  a full ring makes the RX thread stop reading (no user-space
 //       discard); the socket buffer absorbs the backlog, and what overflows
 //       it is counted as kernel drops.
+//   P11 runtime.rx_cpu pins the RX thread (rx_cpu 0 -> affinity {0}).
 #include "test_harness.hpp"
 #include "DCA1000Socket.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sched.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -276,6 +278,32 @@ TEST_CASE(overflowing_the_socket_buffer_is_counted_as_kernel_drops) {
     for (size_t i = 1; i < got.size(); i++) increasing = increasing && got[i] > got[i - 1];
     CHECK(increasing);
     CHECK_EQ(tail.size(), static_cast<size_t>(10));
+}
+
+TEST_CASE(rx_cpu_pins_the_rx_thread) {
+    cpu_set_t mine;
+    CPU_ZERO(&mine);
+    CHECK_EQ(sched_getaffinity(0, sizeof(mine), &mine), 0);
+    for (const int cpu : {0, -1}) {
+        Loopback lb;
+        CHECK(lb.ok);
+        if (!lb.ok) return;
+        lb.sock.start_rx({cpu, 0});
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CHECK_EQ(pthread_getaffinity_np(lb.sock.rx_thread_handle(), sizeof(set), &set), 0);
+        if (cpu == 0) {
+            CHECK_EQ(CPU_COUNT(&set), 1);
+            CHECK(CPU_ISSET(0, &set));
+        } else {
+            CHECK(CPU_EQUAL(&set, &mine));  // null: today's behaviour, not pinned
+        }
+        // and it still receives
+        CHECK(lb.send_packet(1, 100));
+        DCA1000Socket::PacketView v{nullptr, 0};
+        CHECK_EQ(lb.sock.acquire_packets(&v, 1, 2000), 1);
+        lb.sock.release_packets(1);
+    }
 }
 
 TEST_MAIN()

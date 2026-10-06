@@ -37,12 +37,14 @@
 // socket's drops column in /proc/net/udp), CPU ns per payload byte and
 // context switches of the RX + worker threads (getrusage, minus the sender
 // and main threads). --stall-ms N stalls the worker once at frame N/2 (or
-// every --stall-every K frames) to model a slow consumer.
+// every --stall-every K frames) to model a slow consumer. --rx-cpu and
+// --worker-cpu pin the two threads as runtime.rx_cpu / worker_cpu do.
 //
 // Usage: bench_pipeline [--cfg <radar .cfg>] [--frames N] [--reps N]
 //                       [--log-level error|warn|info|debug] [--tmp-dir DIR]
 //        bench_pipeline --udp [--cfg <radar .cfg>] [--frames N] [--udp-rate PKT_PER_S|max]
 //                       [--stall-ms N [--stall-every K]] [--udp-rcvbuf BYTES]
+//                       [--rx-cpu N] [--worker-cpu N]
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdlib.h>
@@ -70,6 +72,7 @@
 
 #include "DCA1000Handler.hpp"
 #include "DCA1000Socket.hpp"
+#include "ThreadPlacement.hpp"
 #include "FrameAssembler.hpp"
 #include "Log.hpp"
 #include "RadarConfigReader.hpp"
@@ -392,7 +395,8 @@ void print_driver_row(const char* scenario, const std::vector<Sample>& runs) {
 // packet ring as UdpPacketSource does.
 class LoopbackSource : public cpsl::radar::PacketSource {
 public:
-    LoopbackSource(int cmd_port, int data_port, size_t rcvbuf) : cmd_port_(cmd_port), data_port_(data_port), rcvbuf_(rcvbuf) {}
+    LoopbackSource(int cmd_port, int data_port, size_t rcvbuf, cpsl::radar::ThreadPlacement rx)
+        : cmd_port_(cmd_port), data_port_(data_port), rcvbuf_(rcvbuf), rx_(rx) {}
     cpsl::radar::Status open() override {
         if (!socket_.init("127.0.0.1", "127.0.0.1", cmd_port_, data_port_, rcvbuf_))
             return cpsl::radar::Status(cpsl::radar::Code::open_failed, "cannot bind the loopback sockets");
@@ -400,7 +404,7 @@ public:
     }
     cpsl::radar::Status configure() override { return cpsl::radar::Status::ok(); }
     cpsl::radar::Status start() override {
-        socket_.start_rx();
+        socket_.start_rx(rx_);
         return cpsl::radar::Status::ok();
     }
     cpsl::radar::Status stop() override {
@@ -427,6 +431,7 @@ public:
 private:
     int cmd_port_, data_port_;
     size_t rcvbuf_;
+    cpsl::radar::ThreadPlacement rx_;
     DCA1000Socket socket_;
     std::atomic<uint64_t> delivered_{0};
 };
@@ -490,6 +495,9 @@ struct UdpOptions {
     uint32_t stall_ms = 0;
     uint32_t stall_every = 0;
     size_t rcvbuf = 64 * 1024 * 1024;  // dca1000.rcvbuf_bytes default
+    // runtime.rx_cpu / worker_cpu (-1: not pinned) and the RX thread's
+    // SCHED_RR priority as the driver asks for it (99; a warning without cap_sys_nice)
+    int rx_cpu = -1, worker_cpu = -1;
 };
 
 int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const UdpOptions& o,
@@ -514,7 +522,8 @@ int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const
     const PacketStream ps = make_stream("udp", bytes_per_frame, frames, 0, 0, 0, 1, tail);
     const uint64_t frame_payload = static_cast<uint64_t>(bytes_per_frame) * frames;
 
-    auto src = std::make_shared<LoopbackSource>(cmd_port, data_port, o.rcvbuf);
+    auto src = std::make_shared<LoopbackSource>(cmd_port, data_port, o.rcvbuf,
+                                                cpsl::radar::ThreadPlacement{o.rx_cpu, 99});
     if (!src->open()) {
         std::fprintf(stderr, "cannot bind 127.0.0.1:%d/%d\n", cmd_port, data_port);
         return 1;
@@ -545,6 +554,7 @@ int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const
     src->start();
     std::atomic<bool> stop{false};
     std::thread worker([&] {
+        cpsl::radar::apply_thread_placement(pthread_self(), {o.worker_cpu, 0}, "bench worker");
         while (!stop.load(std::memory_order_relaxed)) h.process_next_packet();
     });
 
@@ -620,11 +630,12 @@ int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const
     else std::snprintf(rate, sizeof rate, "max");
 
     std::printf("  udp loopback: 127.0.0.1 data port %d, SO_RCVBUF requested %zu granted %zu, rate %s packets/s "
-                "(achieved %.0f), stall %u ms %s\n",
+                "(achieved %.0f), stall %u ms %s, rx_cpu %d, worker_cpu %d\n",
                 data_port, o.rcvbuf, src->rcvbuf_bytes(), rate, sent / std::max(send_s, 1e-9), o.stall_ms,
                 o.stall_ms == 0 ? "(none)"
                 : o.stall_every ? ("every " + std::to_string(o.stall_every) + " frames").c_str()
-                                : "once, mid-run");
+                                : "once, mid-run",
+                o.rx_cpu, o.worker_cpu);
     std::printf("udp frames=%llu of=%zu golden=%s sent=%llu delivered=%llu discards=%llu kernel_drops=%lld "
                 "unaccounted=%lld stalls=%llu cpu_ns_per_byte=%.3f cpu_ms=%.1f vol_cs=%ld invol_cs=%ld "
                 "cs_per_packet=%.3f dropped=%u incomplete=%u skipped=%u late=%u rate=%s driver_kernel_drops=%u "
@@ -687,12 +698,14 @@ int main(int argc, char** argv) {
         } else if (a == "--stall-ms" && i + 1 < argc) udp_opt.stall_ms = std::strtoul(argv[++i], nullptr, 10);
         else if (a == "--stall-every" && i + 1 < argc) udp_opt.stall_every = std::strtoul(argv[++i], nullptr, 10);
         else if (a == "--udp-rcvbuf" && i + 1 < argc) udp_opt.rcvbuf = std::strtoull(argv[++i], nullptr, 10);
+        else if (a == "--rx-cpu" && i + 1 < argc) udp_opt.rx_cpu = std::atoi(argv[++i]);
+        else if (a == "--worker-cpu" && i + 1 < argc) udp_opt.worker_cpu = std::atoi(argv[++i]);
         else {
             std::fprintf(stderr,
                          "usage: %s [--cfg <radar .cfg>] [--frames N] [--reps N] [--log-level error|warn|info|debug]"
                          " [--tmp-dir DIR]\n"
                          "       %s --udp [--cfg <radar .cfg>] [--frames N] [--udp-rate PKT_PER_S|max]"
-                         " [--stall-ms N [--stall-every K]] [--udp-rcvbuf BYTES]\n",
+                         " [--stall-ms N [--stall-every K]] [--udp-rcvbuf BYTES] [--rx-cpu N] [--worker-cpu N]\n",
                          argv[0], argv[0]);
             return 2;
         }

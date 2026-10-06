@@ -277,8 +277,8 @@ bool SystemConfigReader::load() {
         if (o.contains("save_raw_lvds") && !r.boolean(o, "save_raw_lvds", p, save_raw_lvds)) return failed();
     }
 
-    // runtime: optional; log_level, stall_timeout_ms and frame_queue_depth are
-    // applied, the affinity/priority keys are reserved (validated, not applied yet; core-15)
+    // runtime: optional; every key is applied (rx_cpu, worker_cpu, rx_priority
+    // and worker_priority since core-15: ThreadPlacement.hpp)
     if (data.contains("runtime")) {
         const json& rt = data.at("runtime");
         const std::string p = "/runtime";

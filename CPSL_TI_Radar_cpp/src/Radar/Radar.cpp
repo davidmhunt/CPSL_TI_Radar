@@ -16,6 +16,7 @@
 #include "CLIController.hpp"
 #include "DCA1000Handler.hpp"
 #include "SerialStreamer.hpp"
+#include "ThreadPlacement.hpp"
 
 namespace cpsl {
 namespace radar {
@@ -36,18 +37,6 @@ std::mutex& once_mutex() {
 std::set<std::string>& configured_once() {
     static std::set<std::string> s;
     return s;
-}
-
-// The DCA worker runs at SCHED_RR 80, as v1's worker did (configurable in core-15).
-void raise_worker_priority() {
-    sched_param param{};
-    param.sched_priority = 80;
-    const int r = pthread_setschedparam(pthread_self(), SCHED_RR, &param);
-    if (r != 0) {
-        log_warn("Radar: could not set the DCA worker thread to SCHED_RR 80: ", std::strerror(r));
-    } else {
-        log_debug("Radar: DCA worker thread at SCHED_RR 80");
-    }
 }
 
 }  // namespace
@@ -289,7 +278,11 @@ Status Radar::start() {
             const Status s = m.packets->start();  // UDP: recordStart, then the RX thread
             if (!s) return s;
             m.dca_worker = std::thread([&m] {
-                raise_worker_priority();
+                // runtime.worker_cpu / worker_priority (default: any CPU,
+                // SCHED_RR 80); a failure is a warning (design P11)
+                apply_thread_placement(pthread_self(),
+                                       {m.cfg.system().get_worker_cpu(), m.cfg.system().get_worker_priority()},
+                                       "DCA worker");
                 m.guarded(m.dca_failure, "the DCA1000", [&m] {
                     while (!m.stop_flag.load(std::memory_order_relaxed)) {
                         m.dca.process_next_packet();  // waits up to 500 ms for a packet

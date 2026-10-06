@@ -118,7 +118,7 @@ bool DCA1000Socket::init(const std::string& fpga_ip, const std::string& system_i
     return true;
 }
 
-void DCA1000Socket::start_rx() {
+void DCA1000Socket::start_rx(const cpsl::radar::ThreadPlacement& placement) {
     rx_ring_head_.store(0, std::memory_order_relaxed);
     rx_ring_tail_.store(0, std::memory_order_relaxed);
     rx_overrun_count_.store(0, std::memory_order_relaxed);
@@ -129,12 +129,8 @@ void DCA1000Socket::start_rx() {
     kernel_drops_seen_.store(kernel_drops_base_.load(std::memory_order_relaxed), std::memory_order_relaxed);
     rx_thread_running_.store(true, std::memory_order_relaxed);
     rx_thread_ = std::thread(&DCA1000Socket::rx_thread_func, this);
-    struct sched_param sp;
-    sp.sched_priority = 99;
-    if (pthread_setschedparam(rx_thread_.native_handle(), SCHED_RR, &sp) != 0) {
-        cpsl::radar::log_warn("[DCA1000] could not set RX thread to SCHED_RR 99 ",
-                              "(run as root or grant cap_sys_nice)");
-    }
+    // runtime.rx_cpu / rx_priority (design P11); a failure is a warning
+    cpsl::radar::apply_thread_placement(rx_thread_.native_handle(), placement, "DCA1000 RX");
 }
 
 void DCA1000Socket::stop_rx() {

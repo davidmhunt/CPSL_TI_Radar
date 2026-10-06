@@ -1,8 +1,9 @@
 find_package(Threads REQUIRED)
 
-#the log sink and Status/Result (Log.hpp, Status.hpp): no dependencies, so the
-#hot-path libraries (FrameAssembler, DCA1000Socket) can log without json
-add_library(Log Log.cpp)
+#the log sink, Status/Result and thread placement (Log.hpp, Status.hpp,
+#ThreadPlacement.hpp): no json dependency, so the hot-path libraries
+#(FrameAssembler, DCA1000Socket) can use them
+add_library(Log Log.cpp ThreadPlacement.cpp)
 
 #create the utilities library
 add_library(Utilities SystemConfigReader.cpp RadarConfigReader.cpp SerialBaud.cpp SerialBaudTermios2.cpp
@@ -16,6 +17,7 @@ foreach(lib Log Utilities)
 endforeach()
 
 #link libraries as needed
+target_link_libraries(Log PUBLIC Threads::Threads)
 target_link_libraries(Utilities PUBLIC Log
                                 PUBLIC nlohmann_json::nlohmann_json
                                 PUBLIC BoardDescriptor

@@ -7,9 +7,11 @@
 #include "fake_transports.hpp"
 #include "Radar.hpp"
 
+#include <sched.h>
 #include <sys/stat.h>
 
 #include <atomic>
+#include <mutex>
 #include <filesystem>
 #include <stdexcept>
 #include <fstream>
@@ -508,6 +510,58 @@ TEST_CASE(moved_radar_keeps_working_and_the_source_is_empty) {
     CHECK(rig.radar->configure().code == Code::invalid_state);  // moved-from
     CHECK(static_cast<bool>(moved.start()));
     CHECK(static_cast<bool>(moved.stop()));
+}
+
+// core-15 P11: runtime.worker_cpu pins the DCA worker thread. The packet
+// source's pop() runs on that thread, so it records the thread's affinity.
+class AffinityRecordingSource : public ReplayPacketSource {
+public:
+    bool pop(uint8_t* buf, int& len, std::chrono::milliseconds timeout) override {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        if (sched_getaffinity(0, sizeof(set), &set) == 0) {
+            std::lock_guard<std::mutex> l(m_);
+            cpus_ = CPU_COUNT(&set);
+            on_cpu0_ = CPU_ISSET(0, &set);
+        }
+        return ReplayPacketSource::pop(buf, len, timeout);
+    }
+    int cpus() const { std::lock_guard<std::mutex> l(m_); return cpus_; }
+    bool on_cpu0() const { std::lock_guard<std::mutex> l(m_); return on_cpu0_; }
+
+private:
+    mutable std::mutex m_;
+    int cpus_ = -1;
+    bool on_cpu0_ = false;
+};
+
+TEST_CASE(worker_cpu_pins_the_dca_worker_thread) {
+    for (const bool pin : {true, false}) {
+        const RadarConfig cfg = load(pin ? "worker_cpu0" : "worker_cpu_null", [pin](json& j) {
+            j["runtime"] = {{"worker_cpu", pin ? json(0) : json(nullptr)}, {"worker_priority", 10}};
+        });
+        auto cli = std::make_shared<FakeCli>();
+        auto src = std::make_shared<AffinityRecordingSource>();
+        auto opened = Radar::open(cfg, {cli, src});
+        CHECK(static_cast<bool>(opened));
+        if (!opened) return;
+        Radar& r = **opened;
+        CHECK(static_cast<bool>(r.configure()));
+        CHECK(static_cast<bool>(r.start()));  // SCHED_RR 10 without cap_sys_nice: a warning, not an error
+        const clk::time_point t0 = clk::now();
+        while (src->cpus() < 0 && ms_since(t0) < 3000) std::this_thread::sleep_for(milliseconds(5));
+        CHECK(static_cast<bool>(r.stop()));
+        if (pin) {
+            CHECK_EQ(src->cpus(), 1);
+            CHECK(src->on_cpu0());
+        } else {
+            // null keeps today's behaviour: the worker may run on every CPU the process may
+            cpu_set_t mine;
+            CPU_ZERO(&mine);
+            sched_getaffinity(0, sizeof(mine), &mine);
+            CHECK_EQ(src->cpus(), CPU_COUNT(&mine));
+        }
+    }
 }
 
 TEST_MAIN()

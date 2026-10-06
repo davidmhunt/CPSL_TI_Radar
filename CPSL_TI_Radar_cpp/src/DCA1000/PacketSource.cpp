@@ -145,7 +145,7 @@ float UdpPacketSource::send_readFPGAVersion() {
 
 bool UdpPacketSource::send_recordStart() {
     if (!command(DCA1000Commands::construct_command(DCA1000Commands::RECORD_START))) return false;
-    socket_.start_rx();
+    socket_.start_rx({config_.get_rx_cpu(), config_.get_rx_priority()});
     return true;
 }
 

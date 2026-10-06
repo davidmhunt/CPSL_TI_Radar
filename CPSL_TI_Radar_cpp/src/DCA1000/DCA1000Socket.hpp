@@ -37,6 +37,9 @@
 #include <cstddef>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+
+#include "ThreadPlacement.hpp"
 
 class DCA1000Socket {
 public:
@@ -48,8 +51,13 @@ public:
               int cmd_port, int data_port,
               size_t rcvbuf_bytes = 64 * 1024 * 1024);
 
-    // Resets the ring buffer and spawns the SCHED_RR 99 RX thread.
-    void start_rx();
+    // Resets the ring buffer and spawns the RX thread, pinned and at the
+    // SCHED_RR priority in `placement` (runtime.rx_cpu / rx_priority;
+    // default: any CPU, SCHED_RR 99). Failing to apply either is a warning.
+    void start_rx(const cpsl::radar::ThreadPlacement& placement = {-1, 99});
+
+    // the RX thread (valid between start_rx() and stop_rx(); tests)
+    pthread_t rx_thread_handle() { return rx_thread_.native_handle(); }
 
     // Signals the RX thread to exit and joins it.
     void stop_rx();
