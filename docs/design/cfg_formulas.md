@@ -26,7 +26,7 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 | Range resolution | `dR = c / (2 B)` | `range_res` |
 | Max range | `Rmax = 0.9 * c * fs / (2 slope)` (halved if `fmt 0`) | `ideal`, `USABLE_IF` |
 | Velocity resolution | `dv = lambda / (2 * n_chirps * Tc)` | `vel_res` |
-| Max velocity | `n_TX`, `T_loop`, Doppler bins/step and `vmax` per MIMO scheme: see `mimo_modes.md` (source). Reports `vmax_full_ms` (= `max_velocity_ms`) and `vmax_per_tx_ms`; GUI headline pending user ruling | `max_v`, `vmax_full_ms`, `vmax_per_tx_ms` |
+| Max velocity | `n_TX`, `T_loop`, Doppler bins/step and `vmax` per MIMO scheme: see `mimo_modes.md` (source). Reports `vmax_full_ms` (= `max_velocity_ms`) and `vmax_per_tx_ms`; GUI headline for DDMA = `vmax_full_ms` (user ruling, mimo_modes.md s3) | `max_v`, `vmax_full_ms`, `vmax_per_tx_ms` |
 | Azimuth resolution | `dTheta = 2 / N_az` rad (`degrees()` for deg) | `az_res` |
 | Frame rate | `rate = 1000 / period` Hz | `frame_layout()` |
 | Active time, duty | `active = n_chirps * Tc * 1e-3` (ms); `duty = active / period` | `active_ms`, `duty_cycle` |

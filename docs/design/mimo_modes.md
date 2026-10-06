@@ -12,7 +12,7 @@ Symbols: `Tc` full chirp period = idle + ramp (us); `cpl` chirps per loop (frame
 | Loop structure | `cpl <= 32` chirps; pattern repeats with period `n_TX` (M1 s1) | `cpl` identical chirps (TI: 8); TX separation is by Doppler band (M2 s3) |
 | Doppler FFT | over `N/n_TX` chirps per virtual antenna, bins = next pow2 (`RP:885-906`) | over all `N` chirps, bins = valid FFT size (M2 s4); per-TX sub-band = bins/8 |
 | Doppler step / resolution | step `= lambda/(2*bins*n_TX*Tc)`; `dv = lambda/(2*N*Tc)` | step `= lambda/(2*bins*Tc)`; `dv = lambda/(2*N*Tc)` |
-| `vmax` | `lambda/(4*n_TX*Tc)` (user ruling; = `RP:902-904`) | Two numbers: full Doppler span `+-lambda/(4*Tc)` (what the firmware/`metrics` reports), and each TX's own unambiguous range `+-lambda/(4*n_bands*Tc)`, `n_bands` = 8 (6 TX + 2 empty). See s3. GUI headline: pending user ruling |
+| `vmax` | `lambda/(4*n_TX*Tc)` (= `RP:902-904`) | **Headline (user ruling): full span `+-lambda/(4*Tc)`** (= firmware/`metrics`). Secondary: per-TX band `+-lambda/(4*n_bands*Tc)`, `n_bands` = 8 (6 TX + 2 empty), the limit only if TX1 identification fails (s3) |
 | Virtual array | `n_TX*n_RX` | `n_TX*n_RX` = 6 x 8 = 48 |
 | Cfg that sets it | `channelCfg`, `chirpCfg` (per-chirp TX mask), `frameCfg`, `bpmCfg` (opt-in), `advFrameCfg` (stock only; subframes may each use a different pattern; not SAR) | `channelCfg` (TX count 2,3,4 or 6), `frameCfg`; `chirpCfg txEnable` is overwritten by the parser (`CAS/.../mmwdemo_rfparserDDMA.c:717-733`); no `advFrameCfg` (`mss_main.c:3888-3891`) |
 | Phase codes | none (BPM sign is switched by the demo when `bpmCfg` is on) | firmware only: `rlRfSetPhaseShiftConfig` per chirp, `txAntMaskEnable=63` hard-coded (`mss_main.c:3796-3850`); not a cfg command |
@@ -34,7 +34,7 @@ TX1    : #  # | #  #
 TX3    : #  # | #  #     (sign pattern, e.g. +,+ then +,-: unverified)
 ```
 
-**DDMA, 6 TX, `cpl = 8`.** All six TX fire on every chirp; TX of rank `r` gets phase `phi = k*r/n_bands` turns on chirp `k` (M2 s3), so the Doppler spectrum splits into `n_bands = 8` sub-bands, one per TX, 2 left empty. The per-chirp step `360*r/8 = 45*r` degrees is my derivation from that form, not quoted from M2; whether `r` runs 0..5 or 1..6, and which bands are empty, is not established here.
+**DDMA, 6 TX, `cpl = 8`.** All six TX fire on every chirp; TX of rank `r` gets phase `phi = k*r/n_bands` turns on chirp `k` (M2 s3), so the Doppler spectrum splits into `n_bands = 8` sub-bands, one per TX, 2 left empty. Which rank/bands are empty is not established here.
 ```
 Doppler: -vmax                                    +vmax    (vmax = lambda/(4 Tc))
          | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 |        each band = 1/8 of the span
@@ -47,11 +47,11 @@ Doppler: -vmax                                    +vmax    (vmax = lambda/(4 Tc)
 
 **TDM `[1,4,1,4]` repeat, `cpl = 4`, `L = 32`:** `n_TX = 2` (distinct azimuth TX), not 4. `vmax = 3.9e-3/(4*2*50e-6) = 9.75 m/s`; code using `cpl*Tc` would give 4.875 m/s (M1 s4 item 3).
 
-**BPM, mask 5 on both chirps, `cpl = 2`, `L = 64`:** `N = 128`, `n_TX = 2`, 64 Doppler chirps per TX; `vmax = 9.75 m/s`; `dv = 3.9e-3/(2*128*50e-6) = 0.305 m/s`. Virtual 8 (n_RX = 4). Non-power-of-2 case: `[1,4,2]` with `L = 50` gives `N = 150`, 50 chirps per antenna, so 64 bins (next pow2) and the step shrinks to `lambda/(2*64*3*Tc)`.
+**BPM, mask 5 on both chirps, `cpl = 2`, `L = 64`:** `N = 128`, `n_TX = 2`, 64 Doppler chirps per TX; `vmax = 9.75 m/s`; `dv = 3.9e-3/(2*128*50e-6) = 0.305 m/s`. Virtual 8 (n_RX = 4).
 
 **SIMO (multi-TX mask on every chirp, no `bpmCfg`):** accepted, `n_TX = 1`, both TX transmit together, virtual `= n_RX` (4), not 8 (`RP:608-616`). `cpl = 1`: `vmax = 3.9e-3/(4*1*50e-6) = 19.5 m/s`.
 
-**DDMA 6 TX, `cpl = 8`, `L = 32` (TI `cascade_shortrange`):** `N = 256`; `dv = 3.9e-3/(2*256*50e-6) = 0.152 m/s`; full span `+-3.9e-3/(4*50e-6) = +-19.5 m/s`; each TX's own range `+-3.9e-3/(4*8*50e-6) = +-2.44 m/s` (a band is 4.9 m/s wide); sub-band bins `256/8 = 32`. A target faster than 2.44 m/s lands in a neighbouring TX's band, so it is attributed to the wrong TX (wrong virtual-array phase) unless the firmware resolves it. Established (M2 s3): the 2 empty bands exist as slack for this, and TI's `gtrack` line carries 19.41 (= the full span). HYPOTHESIS: the empty bands let the firmware disambiguate TX identity beyond 2.44 m/s; the algorithm was not read here (test: move a known target above 2.44 m/s and check angle coherence).
+**DDMA 6 TX, `cpl = 8`, `L = 32` (TI `cascade_shortrange`):** `N = 256`; `dv = 3.9e-3/(2*256*50e-6) = 0.152 m/s`; full span `+-3.9e-3/(4*50e-6) = +-19.5 m/s`; each TX's own range `+-3.9e-3/(4*8*50e-6) = +-2.44 m/s`; sub-band bins `256/8 = 32`. **Why the headline is the full span.** The 2 empty bands break the cyclic symmetry of the 6 TX peaks: for each Doppler sub-bin the DSP takes the band with the max DDMA metric as the start of the TX block, cyclically (`findMaxIdx`, wrap-around copy, `dopplerprochwaDDMA.c:340-470`), so TX1's zero-phase peak is identified and target Doppler is resolved modulo the full span. Established in source: that per-sub-bin metric/rotation step, and the header comment "empty subband based DDMA" (`dopplerprocDDMAcommon.h:98-105`). Not established in source: that the reported Doppler index/velocity uses the rotation (the max index is stored in `dopMaxSubBandMat` but nothing else reads it), and the behaviour above 2.44 m/s. If identification fails (e.g. overlapping targets in one range bin, or a target faster than the per-TX band) the TX is misattributed (wrong virtual-array phase) and `+-2.44 m/s` is the safe limit. HYPOTHESIS / bench check: move a target above 2.44 m/s (below 19.5) and check reported velocity and angle.
 
 ## 4. What you can edit
 
