@@ -35,7 +35,7 @@ namespace radar {
 // keep reusing the same AdcFrame: after the first frames nothing is
 // allocated per frame.
 struct AdcFrame {
-    uint64_t index = 0;                                 // stream offset / bytes per frame
+    uint64_t index = 0;                                 // stream offset / bytes per frame; increases by one per frame, also across a DCA1000 resync
     std::chrono::steady_clock::time_point completed_at;  // when the last byte was placed
     uint32_t missing_bytes = 0;                          // zero-filled bytes (lost packets)
     FrameShape shape;

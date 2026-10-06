@@ -53,7 +53,7 @@ sudo usermod -a -G dialout $USER
 
 #### 4. System settings for high-rate DCA1000 streaming
 
-At high ADC sampling rates, the default Linux UDP receive buffer (~128 KB) is too small and causes packet drops. Raise the system-wide cap with:
+At high ADC sampling rates, the default Linux UDP receive buffer (~128 KB) is too small and causes packet drops. The driver never discards a packet itself: when its 512-packet ring is full (the consumer or the worker fell behind) the RX thread stops reading and the socket's receive buffer holds the backlog. So that buffer is what absorbs a stall, and what overflows it shows up as `kernel_drops` in `--stats`. The driver asks for `dca1000.rcvbuf_bytes` (default 64 MB), and the kernel caps that at `net.core.rmem_max` (the granted size, twice the capped value, is the `rcvbuf=` stat and the `SO_RCVBUF granted` line). Keep `rmem_max` at least `rcvbuf_bytes`. At the IWR1843 baseline (~3460 packets/s, ~5 MB/s), 64 MB holds over 10 s of data, so a stall of a few hundred ms loses nothing. Raise the system-wide cap with:
 ```bash
 sudo sysctl -w net.core.rmem_max=134217728
 ```
@@ -64,7 +64,7 @@ echo 'net.core.rmem_max=134217728' | sudo tee /etc/sysctl.d/99-radar.conf
 sudo sysctl -p /etc/sysctl.d/99-radar.conf
 ```
 
-The DCA1000 RX thread runs at real-time priority (SCHED_RR 99). To allow this without running as root, either grant the executable the capability after building:
+The DCA1000 RX thread asks for real-time priority SCHED_RR 99 and the DCA worker thread for SCHED_RR 80 (`runtime.rx_priority` / `worker_priority`). Without permission the driver prints one warning per thread, with the fix (`uv run tools/setup/host_setup.py --apply`), and runs them at normal priority. To allow this without running as root, either grant the executable the capability after building:
 ```bash
 sudo setcap cap_sys_nice+ep ./build/CPSL_TI_Radar_CPP
 ```
@@ -77,6 +77,8 @@ Or add the following to `/etc/security/limits.conf` (replace `<username>` with y
 The capability is stored on the binary file, so a rebuild removes it; grant it again after each build. `uv run tools/setup/host_setup.py` reports whether it is set (see "Quick setup" above). An existing `rtprio` limit below 99, such as PipeWire's `@pipewire - rtprio 95`, is not enough for the RX thread.
 
 The pre-rework IWR1843 baseline (core-04) ran without `cap_sys_nice`, so the RX thread did not get real-time priority. Any later hardware performance comparison must say whether the capability was set.
+
+**Choosing CPUs** (`runtime.rx_cpu`, `runtime.worker_cpu`, optional). By default neither thread is pinned. On a loaded host, pinning keeps the RX thread from being pushed off its CPU while packets arrive: put the RX thread and the DCA worker on two different cores that the rest of your pipeline does not saturate (for example `"rx_cpu": 2, "worker_cpu": 3` on a 4-core machine, leaving 0 and 1 to the system and your consumer). Avoid CPU 0 if it takes most interrupts on your host (`/proc/interrupts`); IRQ affinity of the NIC is not set by the driver. A CPU the process may not use (out of range or outside its cpuset) is a warning and the thread stays unpinned. `bench_pipeline --udp --rx-cpu N --worker-cpu N` measures a placement over loopback.
 
 ## Building CPSL_TI_Radar_cpp
 
@@ -161,6 +163,17 @@ uv run tools/bench/pipeline_gate.py runs/p3_{before,after}_{default,aligned}_{1,
 ```
 
 It prints a table per build (the runs' median ns/byte, Δ of the mean, allocs/frame) and fails (exit 1) only if a row is more than 5% slower in **both** builds, if allocations/frame rise, or if an "after" run is not golden. A shift in one build only is reported as layout noise.
+
+**Loopback RX path (`--udp`).** `bench_pipeline --udp` runs the real receive path with no hardware: a sender thread replays the clean synthetic stream over 127.0.0.1 into a `DCA1000Socket` (RX thread, packet ring) and a worker thread runs `DCA1000Handler::process_next_packet`, as the driver's DCA worker does. No DCA1000 command is sent. It prints one `udp ...` line of `key=value` pairs: frames and whether they are golden, packets sent and delivered, `discards` (user-space, the RX ring's overrun count), `kernel_drops` (the socket's drops column in `/proc/net/udp`) and `driver_kernel_drops` (the same count as `Stats::kernel_drops` sees it), `ring_full`, CPU ns per payload byte and the voluntary/involuntary context switches of the RX and worker threads (`getrusage`). It exits 1 only if frames are lost and no counter accounts for them.
+
+```bash
+build-release/bench/bench_pipeline --udp --frames 100                          # IWR1843 baseline rate, 3460 packets/s
+build-release/bench/bench_pipeline --udp --frames 400 --udp-rate max           # as fast as the sender goes
+build-release/bench/bench_pipeline --udp --frames 100 --stall-ms 200           # one 200 ms consumer stall mid-run: 0 discards, 0 kernel drops
+build-release/bench/bench_pipeline --udp --frames 100 --stall-ms 1000 --udp-rcvbuf 200000   # a stall beyond the buffer: counted kernel drops
+```
+
+`--stall-every K` repeats the stall every K frames; `--rx-cpu` / `--worker-cpu` pin the threads. The paced rate sends packets evenly, so each packet wakes both threads (about 2 context switches per packet); that CPU figure is mostly wake-up cost and moves with the host's idle state, so compare it before/after on one quiet host, interleaved.
 
 ## Preparing your hardware
 
@@ -291,7 +304,8 @@ v1 -> v2 migration section).
 | `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`: the least severe message printed. `debug` adds a DCA1000 counter line once a second (the v1 `"verbose": true` printed a block per frame), every CLI command and reply, and each skipped cfg command. |
 | `runtime.stall_timeout_ms` | no | `0` (default) is off. Above 0: when no frame arrives for that many ms while streaming, the driver warns and the run stops (instead of after 2 s without frames). |
 | `runtime.frame_queue_depth` | no | Completed ADC frames waiting for `next_adc_frame` (1-1024, default 4). When the queue is full the oldest frame is dropped and counted in `frames_overwritten` (`overwritten=` in `--stats`); `1` keeps only the latest frame. Each slot holds one frame buffer, allocated when the radar is opened. Dropped frames are still in `adc_data.bin`. |
-| `runtime.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults `null`, `null`, 99, 80) but not applied yet. |
+| `runtime.rx_cpu`, `.worker_cpu` | no | Pin the DCA1000 RX thread / the DCA worker thread to one CPU (0-1023; default `null`: not pinned). See "Choosing CPUs" above; a CPU that cannot be used is a warning. |
+| `runtime.rx_priority`, `.worker_priority` | no | SCHED_RR priority (1-99) requested for the RX thread (default 99) and the DCA worker (default 80). Needs `cap_sys_nice` or an `rtprio` limit; without it, one warning and normal priority. |
 
 At least one of `serial_stream` and `dca1000` must be enabled.
 
@@ -365,7 +379,7 @@ cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 | Flag | Effect |
 |------|--------|
 | `--validate` | Check the config as above, then exit. |
-| `--stats` | Print a `stats v1 dca ...` / `stats v1 serial ...` line per stream every second and once after the stop: frames, packets, drops, late and duplicate packets, overruns, overwritten frames, stalls, granted `SO_RCVBUF` (format in `docs/ARCHITECTURE.md`). `tools/bench` reads these lines. |
+| `--stats` | Print a `stats v1 dca ...` / `stats v1 serial ...` line per stream every second and once after the stop: frames, packets, drops, late and duplicate packets, user-space discards (`overrun`, always 0 since core-15), overwritten frames, stalls, granted `SO_RCVBUF`, kernel drops, ring-full waits, implausible packets and resyncs (format and meanings in `docs/ARCHITECTURE.md`). `tools/bench` reads these lines. |
 | `--frames N` | Stop after N completed frames (DCA1000 frames if enabled, otherwise TLV frames). |
 | `--duration S` | Stop after S seconds of streaming. |
 

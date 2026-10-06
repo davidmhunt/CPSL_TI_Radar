@@ -7,7 +7,8 @@ prints one line per enabled stream with counters cumulative since start::
 
     stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n>
         duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n>
-        stalls=<n> rcvbuf=<bytes>                                 (one line)
+        stalls=<n> rcvbuf=<bytes> kernel_drops=<n> ring_full=<n>
+        implausible=<n> resyncs=<n>                               (one line)
     stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
 
 Any other line is only scanned for warning words. Nothing here imports the
@@ -205,6 +206,10 @@ def summarize(rows: list, events: list | None = None) -> dict:
             out["dca_dropped_packets_total"] = dca.get("dropped", 0)
             out["dca_dropped_packet_events_total"] = dca.get("drop_events", 0)
             out["dca_rx_overrun_count_final"] = dca.get("overrun", 0)
+            # since core-15: the RX path never discards (overrun stays 0);
+            # a backlog the socket buffer could not hold is a kernel drop
+            out["dca_kernel_drops_final"] = dca.get("kernel_drops", 0)
+            out["dca_resyncs_final"] = dca.get("resyncs", 0)
         if ser:
             out["tlv_frames_total"] = ser.get("frames", 0)
             out["tlv_missed_frames_total"] = ser.get("missed", 0)

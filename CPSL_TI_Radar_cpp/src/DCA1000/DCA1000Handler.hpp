@@ -97,7 +97,7 @@ private:
     //one pooled frame buffer and the frame it holds
     struct Slot {
         Cube cube;                 //indexed by [Rx channel, sample, chirp]
-        uint64_t index = 0;        //stream offset / bytes_per_frame
+        uint64_t index = 0;        //stream offset / bytes_per_frame (+ an offset after a resync)
         size_t missing = 0;        //zero-filled bytes
         std::chrono::steady_clock::time_point completed_at{};
     };

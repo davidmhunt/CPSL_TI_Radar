@@ -112,7 +112,7 @@ converting that file.
 | `Streamer.board_type` | `board` | names a descriptor; the v1 `SDK_version` fallback (2.x -> IWR1443, 3.x -> IWR1843) is applied by the script |
 | `Streamer.SDK_version` | removed | the descriptor carries the SDK |
 | `Processor`, `ROS`, `Listeners` | removed | never read by the driver |
-| — | `runtime.*` | new; `log_level`, `stall_timeout_ms` and `frame_queue_depth` are applied, the affinity/priority keys are reserved (core-15) |
+| — | `runtime.*` | new; `log_level`, `stall_timeout_ms`, `frame_queue_depth`, and the affinity/priority keys `rx_cpu`, `worker_cpu`, `rx_priority`, `worker_priority` (core-15) |
 
 Behaviour changes that come with v2 configs:
 

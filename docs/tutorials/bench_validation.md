@@ -68,19 +68,21 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | Frames per second mean (`dca_fps_mean` / `tlv_fps_mean`) | 10.0 +/- 0.1 (`expected.expected_fps`) | same | 10.0, 10.0, 10.017 / 9.983, 10.0, 10.0 |
 | Per-second min / max (guide) | 9 to 11 | 9 to 10 | 9 / 11 (DCA), 9 / 10 (TLV) |
 | Dropped packets (`dca_dropped_packets_total`) | 0 | n/a | 0 |
-| Rx overruns (`dca_rx_overrun_count_final`) | 0 | n/a | 0 |
+| Rx overruns (`dca_rx_overrun_count_final`; user-space discards, always 0 since core-15) | 0 | n/a | 0 |
+| Kernel drops (`dca_kernel_drops_final`, `kernel_drops=` in `--stats`; since core-15) | 0 | n/a | not measured (pre-core-15) |
+| Resyncs (`dca_resyncs_final`; since core-15) | 0 | n/a | not measured |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
 | CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (core-04, pre-rework driver), 16.1 to 16.3 (v2 driver, binary sha256 `3ecd94cd…`, with `cap_sys_nice`; core-06) / 0.5 to 0.6 |
 
 For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The 20 % CPU guide comes from the core-06 runs of the reworked driver (16.1 to 16.3 % over 4 reps); the core-04 baseline used the pre-rework driver (9 to 10 %). The cause of the difference is not isolated, since the driver code and the real-time priority (`cap_sys_nice`) both changed; an A/B run with and without `cap_sys_nice` would settle it.
 
-A DCA run that is `INCOMPLETE`, shows any drop or overrun, or exits nonzero is a fail: record it and see section 10.
+A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 10.
 
 ## 8. Record results
 
 1. Keep the CSV and JSON in `docs/results/validation/` (or `baseline/` for a new reference) and commit them; `tools/bench/runs/` is not tracked.
-2. Add a row to `docs/RESULTS.md` under a heading for the board, following the baseline tables: fps mean/min/max, dropped packets, `rx_overrun_count`, CPU, the sidecar basename, and the driver sha256 and commit. Record failures and caveats too.
+2. Add a row to `docs/RESULTS.md` under a heading for the board, following the baseline tables: fps mean/min/max, dropped packets, `rx_overrun_count`, kernel drops, CPU, the sidecar basename, and the driver sha256 and commit. Record failures and caveats too.
 3. Delete the large `adc_data.bin` and `LVDS_Raw_0.bin` in `tools/bench/runs/<basename>/` when done.
 
 ## 9. Per-board differences
@@ -107,6 +109,11 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 | `no frame received before start timeout` (`FAILED`, exit 2) | Check board mode (SOP jumpers), USB ports, DCA1000 power and cable, and the ping in section 2. For the cascade, power-cycle first. Read `driver_stdout.log`. |
 | `sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Fixed in core-13: `sensorStop` now waits `max(cli.cmd_timeout_ms, frame period + 200 ms)` (`cli.stop_timeout_ms` overrides it). Seen now, the board did not answer within that window; harmless if `status` is `ok` and the `.bin` is `exact`. |
 | `not every config command was acknowledged` | Harmless if only `calibData` is rejected. Otherwise the cfg has a command the firmware does not know. |
-| Dropped packets or overruns | `rmem_max` below 128 MB, no `cap_sys_nice`, or a slow NIC. Re-run `host_setup.py`; confirm `granted_so_rcvbuf_bytes` in the sidecar is 134217728. |
+| `dropped` > 0 with `kernel_drops` > 0 | The socket buffer overflowed: the consumer or the worker stalled longer than `SO_RCVBUF` holds (`ring_full` > 0 says the RX ring filled first). Check `rcvbuf=` (134217728 expected; `rmem_max` below 128 MB lowers it), a slow consumer, or CPU load; pin the threads (`runtime.rx_cpu` / `worker_cpu`, see `CPSL_TI_Radar_cpp/Readme.md` "Choosing CPUs"). |
+| `dropped` > 0 with `kernel_drops` = 0 | Lost before the host socket: the NIC, its ring or the cable/DCA1000 (no retransmission). Check `ethtool -S <dca-nic>` for rx drops and the link speed. |
+| `overrun` > 0 | Not possible since core-15 (the RX thread never discards); an old driver binary. Rebuild. |
+| `drop_events` > 0 with `dropped` = 0 | Not possible since core-15 (a reordered gap that fills in takes its event back); an old driver binary. |
+| `resyncs` > 0 (and a `frame assembly resynchronised` warning) | The DCA1000 restarted its byte count mid-capture (power glitch, a second recordStart from another tool) or sent a corrupt header. The stream recovers by itself; the frames open at the time are dropped (`skipped`). `implausible` > 0 alone means single packets with a wild byte count were discarded. |
+| Warning `could not set SCHED_RR ... (no cap_sys_nice)` | Run `uv run tools/setup/host_setup.py --apply` (a rebuild removes the capability). The run continues at normal priority. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |
 | Non-zero exit after a USB unplug | The driver now exits 1 with `sensorStop could not be sent` (core-11) instead of crashing. Reconnect, power-cycle, rerun. |

@@ -236,7 +236,7 @@ Gains below are **estimates** until measured. Each item is measured two ways:
 | P8 | Serial: read the header, then exactly `totalPacketLen`; reuse buffers; flat `Point` | `SerialStreamer.cpp:344-376`, `TLVProcessing.cpp:40-43` | removes one frame period of latency (50 ms at 20 Hz) | timestamp delta vs frame period on a pty replay |
 | P9 | Single-write file output, optionally on a writer thread. With the nested type this may need a flat staging buffer or per-rx writes; decide with bench data | `DCA1000Handler.cpp:734-755` | 252k calls → 1 per frame (or one per rx) | replay with `save_adc_frames` |
 | P10 | No `endl`-flushed prints in per-packet or per-frame paths; periodic stats at `debug` | `FrameAssembler.cpp:85,96`; `DCA1000Handler.cpp:649-659` | removes stdout stalls in drop storms | replay with 1% injected drops |
-| P11 | Configurable affinity and priorities | `DCA1000Socket.cpp:99-104`; `Runner.cpp:231-243` | lower jitter on loaded hosts | harness drops under `stress-ng` load |
+| P11 | Configurable affinity and priorities (**landed in core-15**) | `DCA1000Socket.cpp` (`start_rx`); `Radar.cpp` (DCA worker start, was `raise_worker_priority`; was `Runner.cpp`); `src/utilities/ThreadPlacement.cpp` | lower jitter on loaded hosts | harness drops under `stress-ng` load |
 
 **Ordering.** Every item lands after the core-04 gate, one commit per item,
 each with a `bench_pipeline` before/after row (§7 measurement rule).

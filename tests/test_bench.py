@@ -78,6 +78,14 @@ def test_aggregate_deltas_and_cpu():
     assert s["dca_dropped_packets_total"] == 4 and s["dca_packets_total"] == 700
     assert s["dca_fps_min"] == 1 and s["dca_rx_overrun_count_final"] == 2
     assert s["tlv_frames_total"] == 14 and s["tlv_missed_frames_total"] == 1
+    assert s["dca_kernel_drops_final"] == 0 and s["dca_resyncs_final"] == 0  # keys absent: 0
+
+
+def test_summary_reads_kernel_drops_and_resyncs():
+    p = lib.Parser()
+    feed(p, [(1.0, dca_line(1.0, 10, 3450) + " kernel_drops=7 ring_full=3 implausible=1 resyncs=2")])
+    s = lib.summarize([{c: 0 for c in lib.CSV_COLUMNS}], p.events)
+    assert s["dca_kernel_drops_final"] == 7 and s["dca_resyncs_final"] == 2
 
 
 def test_first_interval_counts_reach_the_totals():
@@ -151,7 +159,7 @@ def test_driver_stats_format_still_in_source():
     main = (REPO / "CPSL_TI_Radar_cpp/main.cpp").read_text()
     assert '"stats v1 dca t="' in main and '"stats v1 serial t="' in main
     for key in ('" frames="', '" packets="', '" dropped="', '" drop_events="', '" overrun="',
-                '" rcvbuf="', '" missed="'):
+                '" rcvbuf="', '" missed="', '" kernel_drops="', '" resyncs="'):
         assert key in main, key
 
 

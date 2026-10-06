@@ -38,7 +38,7 @@ sink.
 | `RadarConfig::load(path)` | `Result<RadarConfig>`: system JSON + board descriptor (with `board_overrides`) + parsed radar cfg, cross-checked; `board()`, `frame_shape()`, `commands()` |
 | `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets, data}` swaps in a fake CLI `ByteStream`, a `ReplayPacketSource` or a fake serial data `ByteStream` |
 | `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured` |
-| `start()` | `recordStart` and the RX thread, the DCA worker (SCHED_RR 80) and serial reader threads, then `sensorStart` |
+| `start()` | `recordStart` and the RX thread, the DCA worker and serial reader threads (CPUs and priorities from `runtime.*`, see "DCA1000 RX path"), then `sensorStart` |
 | `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
 | `stop()` | see below; the destructor calls it |
@@ -75,17 +75,27 @@ off, and `main` keeps its 2 s no-frame exit.
 **Stats lines.** `--stats` prints, once a second and once more after
 `stop()`, one line per enabled stream, counters cumulative since `start()`
 and `t` in seconds since `start()`. `tools/bench` reads only these lines;
-the format is versioned (`v1`), and a change to its keys needs a new version:
+the format is versioned (`v1`): keys may be appended (readers skip keys
+they do not know; core-15 appended `kernel_drops` … `resyncs`), but
+renaming or removing a key needs a new version:
 
 ```
-stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n> duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n> stalls=<n> rcvbuf=<bytes>
+stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n> duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n> stalls=<n> rcvbuf=<bytes> kernel_drops=<n> ring_full=<n> implausible=<n> resyncs=<n>
 stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
 ```
 
 `frames` counts completed frames (DCA: the frames in `adc_data.bin`;
 serial: valid TLV frames). `packets` … `skipped` are the `FrameAssembler`
 counters (see "DCA1000 UDP packet format"), sampled at each completed frame
-and at stop. `overrun` is `rx_overrun_count` (RX ring full), `overwritten`
+and at stop (`drop_events` counts only gaps that stayed missing since
+core-15; a reorder is no longer one). `overrun` counts packets discarded in
+user space because the RX ring was full; since core-15 the RX thread never
+discards, so it stays 0 (kept so the key keeps its meaning). `kernel_drops`
+counts packets the kernel dropped because the data socket's `SO_RCVBUF`
+was full, the one place a slow consumer loses data now, and `ring_full` how
+often the RX thread found its ring full and stopped reading (back-pressure,
+not a loss). `implausible` and `resyncs` are the `FrameAssembler`
+plausibility counters (see "DCA1000 UDP packet format"). `overwritten`
 counts frames dropped before `next_*` took them (DCA: the oldest frame of a
 full frame queue, see "DCA1000 RX path"; serial: the previous TLV frame),
 `rcvbuf` is the `SO_RCVBUF` the kernel granted, `missed` counts gaps in the
@@ -144,8 +154,10 @@ main.cpp (CLI)
   Log, Status                   (every library; Log has no dependencies)
 ```
 
-`Radar::start()` spawns a DCA worker thread (SCHED_RR 80) and a serial
-reader thread; `DCA1000Socket` adds the RX thread. Both serial ports are a
+`Radar::start()` spawns a DCA worker thread (`runtime.worker_cpu` /
+`worker_priority`, default any CPU at SCHED_RR 80) and a serial reader
+thread; `DCA1000Socket` adds the RX thread (`runtime.rx_cpu` /
+`rx_priority`, default any CPU at SCHED_RR 99). Both serial ports are a
 `SerialPortStream` (`src/utilities/ByteStream`): a non-blocking descriptor in
 raw mode whose every read and write is bounded by `poll()`. Baud rates go
 through `src/utilities/SerialBaud*`: termios for the standard rates,
@@ -153,21 +165,52 @@ termios2/`BOTHER` for others (the cascade's 3,125,000 baud data port).
 
 ## DCA1000 RX path
 
-- **RX thread** (SCHED_RR 99): tight `recvfrom` loop pushing raw 1472-byte
-  packets into a 512-slot lock-free ring buffer.
-- **Worker thread** (`Radar`'s DCA worker): pops packets, places them by byte
-  offset (`FrameAssembler`), converts the ADC cube into a pooled buffer,
-  queues it for the consumer, then writes `adc_data.bin`. An exception in
-  the loop ends the stream, not the process: it is logged and
-  `next_adc_frame` returns `Code::io_error` with the reason.
-- `SO_RCVBUF` requests `dca1000.rcvbuf_bytes` (default 64 MB; needs
-  `net.core.rmem_max` raised); data socket timeout 500 ms.
-- `dropped_packets`, `dropped_packet_events`, `late packets`, `duplicate
-  packets`, `incomplete frames`, `skipped frames` and `rx_overrun_count`
-  are in `stats()` and the `stats v1` lines, and with
+- **RX thread** (`DCA1000Socket`): `recvmmsg` straight into the free slots
+  of a 512-slot single-producer/single-consumer ring of 1472-byte packets,
+  up to 32 datagrams per call (design P5). `MSG_WAITFORONE` blocks only for
+  the first datagram, bounded by the data socket's 500 ms `SO_RCVTIMEO`, so
+  `stop_rx()` returns within about 0.5 s. One head publish per batch.
+- **Back-pressure** (design P6): when the ring is full the RX thread stops
+  reading and waits for the worker to free a slot. Nothing is discarded in
+  user space (`rx_overrun` stays 0); the backlog waits in the socket's
+  `SO_RCVBUF` (`dca1000.rcvbuf_bytes`, default 64 MB, capped by
+  `net.core.rmem_max`). Only when that buffer is full does the kernel drop,
+  and those drops are counted: `SO_RXQ_OVFL` delivers the socket's drop
+  count with each datagram, and `SO_MEMINFO` completes it in `stats()` and
+  at stop (`kernel_drops`). At the IWR1843 baseline rate (~3460 packets/s)
+  a 200 ms consumer stall is ~700 packets, a few MB of buffer at most
+  (`bench_pipeline --udp --stall-ms 200`: 0 discards, 0 kernel drops).
+- **Worker thread** (`Radar`'s DCA worker, `DCA1000Handler::process_next_packet`):
+  takes up to 32 packets at once as views into the ring (no per-packet
+  copy) and hands their slots back after ingesting them (design P4). The
+  RX thread notifies the worker's condition variable only when the worker
+  has flagged that it is about to sleep, so a busy worker costs no futex
+  call per packet. The worker places each payload by byte offset
+  (`FrameAssembler`), converts the ADC cube into a pooled buffer, queues it
+  for the consumer, then writes `adc_data.bin`. An exception in the loop
+  ends the stream, not the process: it is logged and `next_adc_frame`
+  returns `Code::io_error` with the reason.
+- **Placement** (design P11): `runtime.rx_cpu` / `worker_cpu` pin the RX /
+  worker thread to one CPU (`null`, the default: not pinned);
+  `runtime.rx_priority` / `worker_priority` (defaults 99 / 80) are the
+  SCHED_RR priorities requested. Without `cap_sys_nice` the request fails
+  with one warning naming `tools/setup/host_setup.py --apply`, and the
+  thread runs at normal priority; a CPU that cannot be used is also only a
+  warning (`src/utilities/ThreadPlacement`).
+- **Resync**: a DCA1000 restart (byte counts back to 0) or a wild byte
+  count no longer leaves the stream dead; see "DCA1000 UDP packet format".
+  `DCA1000Handler` logs one warning per resync (at most one a second).
+- Counters in `stats()` and the `stats v1` lines: `dropped_packets`,
+  `dropped_packet_events`, `late`, `duplicate`, `incomplete` and `skipped`
+  frames, `implausible`, `resyncs` (all `FrameAssembler`), `kernel_drops`,
+  `ring_full` and `rx_overrun` (always 0). With
   `runtime.log_level: "debug"` one `DCA1000: frames ...` line logs them at
   most once a second. Nothing on the per-packet or per-frame path logs or
   prints (design P10).
+
+`bench_pipeline --udp` runs this whole path over loopback (a sender thread
+in place of the DCA1000) and reports discards, kernel drops, CPU and context
+switches; see `CPSL_TI_Radar_cpp/Readme.md`.
 
 **Frame queue** (core-14 P7, design D10). Completed frames wait in a
 drop-oldest single-producer queue of `runtime.frame_queue_depth` frames
@@ -211,9 +254,30 @@ packet is `duplicate` if already seen, else `late`, and a late packet that
 fills a gap takes its drop back. Once every packet of a gap has arrived
 late, the gap's event is taken back too (core-15): `dropped_packet_events`
 counts gaps that end with packets missing, so a reorder is not a drop
-event (bench `dup_reorder`: 695 events before, 0 after). Data for an already-emitted frame is dropped and
-counted late. `incomplete_frames` / `skipped_frames` count frames emitted
-with zeros / never emitted.
+event (bench `dup_reorder`: 695 events before, 0 after). Data for an
+already-emitted frame is dropped and counted late. `incomplete_frames` /
+`skipped_frames` count frames emitted with zeros / never emitted.
+
+**Plausibility and resync** (core-15, core-11 review S1). Once the stream
+has started, a packet is *implausible* when its byte count is more than
+one frame (the window W) past the furthest payload, beyond what its
+sequence number explains (each sequence number it moves on allows one more
+payload), or when its whole payload lies more than W behind the oldest open
+frame. An implausible packet ahead is discarded (`implausible`), so one
+wild byte count costs only its own payload; one behind is late, as before.
+Four consecutive implausible packets whose payloads follow each other byte
+for byte (a DCA1000 restart that starts the count at 0 again, or the real
+stream after a wild count that was accepted) trigger a *resync*: the open
+frames are dropped (counted in `skipped_frames`), assembly and sequence
+tracking restart at the first of the four, the four are replayed, and
+`resyncs` goes up by one. The first frame of the new stream is whole.
+Sequence duplicates never count toward a resync, so a restart within the
+first 64 packets of a capture (sequence numbers still in the duplicate
+window) is not detected; that is under one frame at every shipped cfg.
+Legitimate losses keep a sequence gap that matches the byte gap and are
+placed exactly as before. Frame indices keep increasing across a resync
+(the next index follows the dropped frames), so after one an index is no
+longer byte offset / `bytes_per_frame`.
 
 ## ADC cube layout
 
@@ -330,8 +394,8 @@ Three files describe a run (design §1, §2):
    read by `SystemConfigReader`): `"schema_version": 2`, `board`,
    `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
    `output` (`dir`, `save_adc_frames`, `save_raw_lvds`) and `runtime`
-   (`log_level`, `stall_timeout_ms`, `frame_queue_depth` are applied; the
-   affinity/priority keys are validated but reserved for core-15). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
+   (`log_level`, `stall_timeout_ms`, `frame_queue_depth`, and since core-15
+   `rx_cpu`, `worker_cpu`, `rx_priority`, `worker_priority`; all applied). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
    is strict (unknown keys, bad types, repeated keys are errors with a JSON
    path). A v1 file is rejected with the name of
    `tools/migrate_config_v1_to_v2.py`. The fields are listed in
@@ -384,5 +448,7 @@ data port 3,125,000 baud).
 ## Host prerequisites
 
 See `CPSL_TI_Radar_cpp/Readme.md`: raise `net.core.rmem_max` to
-134217728, and grant `cap_sys_nice` (or `rtprio 99`) for the SCHED_RR 99
-RX thread. Serial ports need the `dialout` group.
+134217728 (at least `dca1000.rcvbuf_bytes`: the kernel caps the request
+at `rmem_max` and reports twice the capped value, the `rcvbuf` stat), and grant
+`cap_sys_nice` (or `rtprio 99`) so the RX and worker threads get their
+SCHED_RR priorities (`tools/setup/host_setup.py --apply` does both). Serial ports need the `dialout` group.
