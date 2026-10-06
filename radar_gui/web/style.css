@@ -129,3 +129,17 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 
 .lvdshint { font-size: 12px; margin-top: 2px; }
 .warnline { font-size: 12px; color: var(--warn, #e0a030); }
+
+/* gui-16 chirp table */
+.ctbl { border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; gap: 3px; }
+.ctbl.err { border-color: var(--bad); } .ctbl.warn { border-color: var(--warn); }
+.crow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px; }
+.crow.err { outline: 1px solid var(--bad); border-radius: 4px; }
+.crow .ci { width: 16px; color: var(--muted); text-align: right; }
+.crow label.tx { display: inline-flex; align-items: center; gap: 2px; margin: 0; font-size: 11px; }
+.crow label.tx input { width: auto; margin: 0; }
+.crow .lit { background: var(--accent); color: var(--bg); border-radius: 3px; padding: 0 3px; font-size: 10px; }
+.ctbl .cacts { display: flex; gap: 4px; flex-wrap: wrap; }
+.btn.mini { padding: 1px 6px; font-size: 11px; }
+.btn.mini:disabled { opacity: .4; cursor: not-allowed; }
+.ctbl .chint { font-size: 11px; }

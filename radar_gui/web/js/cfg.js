@@ -39,7 +39,6 @@ const PF = [
   ['hpf2', 'HPF2 corner (code)', '', 'Profile (chirp)', 'p'],
   ['rx_mask', 'RX mask', 'bitmask', 'Antennas', 't'], ['tx_mask', 'TX mask', 'bitmask', 'Antennas', 't'],
   ['rx_mask2', 'RX mask (chip 2)', 'bitmask', 'Antennas', 't'], ['tx_mask2', 'TX mask (chip 2)', 'bitmask', 'Antennas', 't'],
-  ['chirp_tx_masks', 'TX mask per chirp', 'comma list', 'Antennas', 'm'],
   ['n_loops', 'Loops (chirp sets/frame)', '', 'Frame', 't'], ['frame_period_ms', 'Frame period', 'ms', 'Frame', 't'],
   ['frames', 'Frames (0 = forever)', '', 'Frame', 't'],
 ];
@@ -54,9 +53,9 @@ const DV = [
 const ISSUE_FIELDS = {
   slope: ['slope_mhz_us'], idle: ['idle_us'], sample_rate: ['sample_rate_ksps'], sample_rate_low: ['sample_rate_ksps'],
   sample_rate_untested: ['sample_rate_ksps'], samples: ['num_samples'], adc_buffer: ['num_samples'], radar_cube: ['num_samples', 'n_loops'],
-  chirps: ['n_loops', 'chirp_tx_masks'], loops: ['n_loops'], frame_period: ['frame_period_ms', 'n_loops'], frame_too_short: ['frame_period_ms', 'n_loops'],
+  chirps: ['n_loops'], loops: ['n_loops'], frame_period: ['frame_period_ms', 'n_loops'], frame_too_short: ['frame_period_ms', 'n_loops'],
   sampling_outside_ramp: ['adc_start_us', 'ramp_us', 'num_samples', 'sample_rate_ksps'], band: ['start_ghz', 'slope_mhz_us', 'ramp_us'],
-  band_edge: ['start_ghz', 'slope_mhz_us', 'ramp_us'], too_many_rx: ['rx_mask'], too_many_tx: ['tx_mask', 'chirp_tx_masks'],
+  band_edge: ['start_ghz', 'slope_mhz_us', 'ramp_us'], too_many_rx: ['rx_mask'], too_many_tx: ['tx_mask'],
   lvds_rate: ['sample_rate_ksps', 'rx_mask'], dca_rate: ['sample_rate_ksps', 'rx_mask'], dca_rate_high: ['sample_rate_ksps', 'rx_mask'],
   duty: ['frame_period_ms'], channel_cfg_layout: ['rx_mask', 'tx_mask'], frame_cfg_layout: ['n_loops'],
 };
@@ -87,7 +86,7 @@ function fillParams(p) {   // p: a params dict from the endpoint -> inputs + der
     lab.hidden = v == null;
     $(pid(k)).value = v == null ? '' : kind === 'm' ? v.join(', ') : +(+v).toPrecision(8);
   }
-  C.seed = JSON.parse(JSON.stringify(p));
+  C.seed = JSON.parse(JSON.stringify(p)); C.tbl = null; C.tblDirty = false;
   const lv = p.lvds_stream;
   if (lv) { $('l_subframe').value = lv.subframe; $('l_data_fmt').value = lv.data_fmt; $('l_header').checked = !!lv.header; $('l_sw').checked = !!lv.sw; }
   lvdsVis();
@@ -107,6 +106,7 @@ function collectParams() {
     if (kind === 'p') prof[k] = v; else out[k] = v;
   }
   if (Object.keys(prof).length) out.profiles = [prof];
+  Object.assign(out, tableParams(sd));
   const slv = sd.lvds_stream;
   if (slv && !$('lvdsParams').hidden) {
     const cur = { subframe: +$('l_subframe').value, data_fmt: +$('l_data_fmt').value, header: $('l_header').checked ? 1 : 0, sw: $('l_sw').checked ? 1 : 0 };
@@ -194,7 +194,8 @@ function render(j) {
       tile('Duty cycle', fmt(m.duty_cycle * 100, 0), '%', `${fmt(m.avg_data_rate_mbps, 0)} Mbps avg ADC`),
     );
   } else tiles.append(el('div', 'muted', 'No metrics (see the issues).'));
-  const issues = j.issues || [], ne = issues.filter(i => i.level === 'error').length, nw = issues.filter(i => i.level === 'warning').length;
+  const issues = j.issues || []; C.lastIssues = issues;
+  const ne = issues.filter(i => i.level === 'error').length, nw = issues.filter(i => i.level === 'warning').length;
   const v = $('cVerdict');
   v.className = 'badge ' + (ne ? 'bad' : nw ? 'warn' : 'ok');
   v.textContent = ne ? `${ne} error${ne > 1 ? 's' : ''}` : nw ? `fits, ${nw} warning${nw > 1 ? 's' : ''}` : 'fits the board';
@@ -210,7 +211,7 @@ function render(j) {
       `<span class="code">${esc(i.code)}</span>`;
     ul.append(li);
   }
-  renderMimo(m); lvdsWarn();
+  renderMimo(m); flagTable(); lvdsWarn();
   $('cText').textContent = j.text || '';
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
@@ -294,6 +295,7 @@ function renderMimo(m) {
   const list = $('mDerived'); list.replaceChildren();
   if (!m || !m.scheme) { $('mBadge').textContent = ''; $('mDiagram').innerHTML = ''; $('mCaption').textContent = ''; $('mNote').textContent = ''; return; }
   const ddma = m.scheme === 'ddma', D = m.derivations || {}, tc = m.chirp_us;
+  C.mLast = m; C.tbl = ddma ? null : { masks: (m.chirp_sequence || []).map(c => c.tx_mask), bpm: !!m.bpm_enabled }; drawTable();
   $('mBadge').textContent = schemeName(m);
   $('mNote').textContent = ddma ? `${m.n_bands} Doppler bands, ${m.n_tx} TX` : `${m.n_tx} TX, ${m.chirps_per_loop} chirp${m.chirps_per_loop > 1 ? 's' : ''}/loop` + (m.bpm_enabled ? ', BPM on' : '');
   $('mDiagram').innerHTML = diagram(m);
@@ -315,6 +317,79 @@ function renderMimo(m) {
   ].filter(Boolean);
   for (const r of rows) list.append(mrow(...r));
   if (sub) list.append(el('div', 'muted', `advFrameCfg: ${m.subframes.length} subframes (display only).`));
+}
+
+// ---------- TDM chirp table (gui-16 step 2): one row per chirp, TX1..TX3 checkboxes, presets ----------
+// C.tbl = {masks, bpm} mirrors the loop as last analysed (renderMimo) or as just edited; collectParams sends only its difference from the seed.
+const TX_PRESETS = [['SIMO (1 TX)', [1], 'simo'], ['2-TX TDM', [1, 4], 'tdm2'], ['3-TX with elevation (1,4,2)', [1, 4, 2], 'tdm3'], ['BPM (2 TX)', null, 'bpm']];
+const TBL_CODES = new Set(['tx_pattern_invalid', 'tx_not_in_channelcfg', 'bpm_unsupported', 'tx_order_convention', 'tx_pattern_not_periodic',
+  'simo_multi_tx', 'too_many_tx', 'chirps', 'channel_cfg_layout', 'frame_cfg_layout', 'params', 'tx_mask_from_chirps', 'cascade_chirp_mask_ignored']);
+const isDdma = () => { const f = curFw(); return !!(f && f.mimo && f.mimo.scheme === 'ddma') || !!(C.metrics && C.metrics.scheme === 'ddma'); };
+function tableParams(sd) {
+  const t = C.tbl, out = {};
+  if (!t || !C.tblDirty || isDdma() || !Array.isArray(sd.chirp_tx_masks) || sd.chirp_tx_masks.some(x => typeof x !== 'number')) return out;
+  const sameMasks = JSON.stringify(t.masks) === JSON.stringify(sd.chirp_tx_masks);
+  if (t.bpm !== !!sd.bpm) { out.bpm = t.bpm; if (!t.bpm && !sameMasks) out.chirp_tx_masks = t.masks; }   // BPM on: the backend sets masks [5,5]
+  else if (!t.bpm && !sameMasks) out.chirp_tx_masks = t.masks;
+  return out;
+}
+async function tableEdit(masks, bpm) {
+  if (isDdma()) return;
+  if (C.mode !== 'direct') await setMode('direct');   // editing the table = direct mode (seeds from the current cfg)
+  C.tbl = { masks, bpm }; C.tblDirty = true; drawTable(); schedule();
+}
+function drawTable() {
+  const box = $('mChirpTable'); box.replaceChildren();
+  const f = curFw(), mm = (f && f.mimo) || C.fwMimo || {}, m = C.metrics || C.mLast;
+  if (!m || !m.scheme) return;
+  const ddma = m.scheme === 'ddma' || mm.scheme === 'ddma';
+  const t = C.tbl || { masks: (m.chirp_sequence || []).map(c => c.tx_mask), bpm: !!m.bpm_enabled };
+  const max = mm.max_chirps_per_loop || 16, wrap = el('div', 'ctbl' + (ddma ? ' ro' : ''));
+  wrap.append(el('div', 'pgroup', `Chirp table <span class="muted">${t.masks.length}${ddma ? '' : '/' + max} chirp${t.masks.length === 1 ? '' : 's'}/loop</span>`));
+  const lock = ddma || t.bpm;
+  if (ddma) {
+    const n = Math.max(1, Math.min(m.n_tx || 3, 12));
+    for (const [k, c] of (m.chirp_sequence || []).slice(0, 4).entries()) {
+      const r = el('div', 'crow'); r.append(el('span', 'ci', String(k + 1)));
+      for (let l = 0; l < n; l++) r.append(el('span', 'lit', 'TX' + (l + 1)));
+      wrap.append(r);
+    }
+    if ((m.chirp_sequence || []).length > 4) wrap.append(el('div', 'muted', `+${m.chirp_sequence.length - 4} more chirps`));
+    wrap.append(el('div', 'muted chint', `DDMA: all ${n} TX fire on every chirp, ${m.n_bands || 8} Doppler bands. Phase shifts are set by firmware, not cfg.`));
+    box.append(wrap); flagTable(); return;
+  }
+  t.masks.forEach((mask, i) => {
+    const r = el('div', 'crow' + (mask === 0 ? ' err' : '')); r.append(el('span', 'ci', String(i + 1)));
+    for (let l = 0; l < 3; l++) {
+      const lab = el('label', 'tx'), cb = el('input'); cb.type = 'checkbox'; cb.checked = !!((mask >> l) & 1); cb.disabled = lock;
+      cb.addEventListener('change', () => { const ms = t.masks.slice(); ms[i] = (ms[i] & ~(1 << l)) | (cb.checked ? 1 << l : 0); tableEdit(ms, false); });
+      lab.append(cb, document.createTextNode('TX' + (l + 1))); r.append(lab);
+    }
+    const btn = (txt, title, fn, dis) => { const b = el('button', 'btn mini', txt); b.title = title; b.disabled = !!dis; b.onclick = fn; return b; };
+    const mv = d => () => { const ms = t.masks.slice(); [ms[i], ms[i + d]] = [ms[i + d], ms[i]]; tableEdit(ms, false); };
+    r.append(btn('▲', 'move up', mv(-1), lock || i === 0), btn('▼', 'move down', mv(1), lock || i === t.masks.length - 1),
+      btn('✕', 'remove chirp', () => tableEdit(t.masks.filter((_, j) => j !== i), false), lock || t.masks.length <= 1));
+    wrap.append(r);
+  });
+  const act = el('div', 'cacts');
+  const add = el('button', 'btn mini', '+ Add chirp'); add.disabled = lock || t.masks.length >= max;
+  add.title = t.masks.length >= max ? `the firmware accepts at most ${max} chirps per loop` : '';
+  add.onclick = () => tableEdit([...t.masks, 2], false); act.append(add);
+  wrap.append(act);
+  const pre = el('div', 'cacts');
+  for (const [label, masks, id] of TX_PRESETS) {
+    if (id === 'bpm' && !mm.bpm) continue;   // BPM only where the firmware descriptor allows it
+    const b = el('button', 'btn mini', label); b.onclick = () => tableEdit(masks || [5, 5], id === 'bpm'); pre.append(b);
+  }
+  wrap.append(pre);
+  if (t.bpm) wrap.append(el('div', 'muted chint', 'BPM: TX1+TX3 on both chirps, phase-coded +/-. Choose another preset to leave BPM.'));
+  box.append(wrap); flagTable();
+}
+function flagTable() {   // issue codes that concern the chirp pattern flag the whole table (the issues carry no row index)
+  const w = document.querySelector('#mChirpTable .ctbl'); if (!w) return;
+  const bad = (C.lastIssues || []).filter(i => TBL_CODES.has(i.code));
+  w.classList.toggle('err', bad.some(i => i.level === 'error')); w.classList.toggle('warn', !bad.some(i => i.level === 'error') && bad.length > 0);
+  w.title = bad.map(i => i.code).join(', ');
 }
 
 // Best firmware for a loaded cfg's flavour among the board's list (falls back to the default).

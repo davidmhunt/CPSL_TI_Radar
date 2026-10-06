@@ -51,3 +51,16 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 
 Tests: `uv run pytest tests/test_radar_gui_skeleton.py tests/test_radar_gui_cfgapi.py` (the driver `--validate` test
 skips when `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` is absent).
+
+## MIMO panel and chirp table (gui-16)
+
+The Configure tab's MIMO card shows the scheme badge (TDM / TDM+BPM / DDMA), a loop timing diagram and each derived number with its
+formula, all read from `metrics` (`scheme`, `chirp_sequence`, `derivations`, ...). Under the diagram, the **chirp table** lists one row per
+chirp of the loop with TX1/TX2/TX3 checkboxes, add / remove / move-up / move-down (up to the firmware descriptor's
+`mimo.max_chirps_per_loop`) and presets: SIMO (1 TX), 2-TX TDM (1,4), 3-TX with elevation (1,4,2), and BPM (2 TX), the last shown only where
+`mimo.bpm` is true. Editing the table switches to the chirp-parameter mode and posts only the difference from the seed to
+`POST /api/cfg/params`: `chirp_tx_masks` (list of ints), or `{"bpm": true}` for the BPM preset (the backend writes masks `[5, 5]` and enables
+`bpmCfg`; `{"bpm": false}` leaves BPM). Warnings and errors come back in `issues` (e.g. `tx_pattern_invalid`, `bpm_unsupported`); chirp-pattern
+codes outline the table. On the cascade (DDMA) the table is read-only: all TX lit, and "phase shifts are set by firmware, not cfg"
+(`chirp_tx_masks` edits there are ignored with `cascade_chirp_mask_ignored`). `tests/test_radar_gui_cfgapi.py::test_chirp_table_payloads`
+pins the payload shapes (no browser harness).

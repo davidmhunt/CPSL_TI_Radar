@@ -255,3 +255,34 @@ def test_save_warns_on_cfg_lvds_vs_dca1000_mismatch(client):
     assert len(warns(off, True, "w3")) == 1
     assert warns(on, True, "w4") == [] and warns(off, False, "w5") == []
     assert warns(off, True, "w6", fw="dca1000_raw") == []     # raw firmware: LVDS is not a cfg choice
+
+
+def test_chirp_table_payloads(client):
+    """gui-16 step 2: the payloads the chirp table / presets post (cfg.js tableParams) and the fields it redraws from."""
+    js = client.get("/js/cfg.js").text
+    assert 'id="mChirpTable"' in client.get("/").text and "chirp_tx_masks" in js and "bpm" in js
+
+    def post(board, fw, base, params):
+        return client.post("/api/cfg/params", json={"board": board, "firmware": fw, "base_cfg_text": base, "params": params}).json()
+
+    for board, bpm_ok in (("IWR1443", False), ("IWR1843", True)):
+        fw = client.get("/api/cfg/firmware", params={"board": board}).json()["firmware"][0]
+        assert fw["mimo"]["bpm"] is bpm_ok and fw["mimo"]["max_chirps_per_loop"] != 0   # table shows the BPM preset only when true
+    base = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T, "firmware": "demo"}).json()["text"]
+    seed = post("IWR1843", "demo", base, {})
+    assert seed["params"]["bpm"] is False and all(isinstance(x, int) for x in seed["params"]["chirp_tx_masks"])
+    for masks in ([1], [1, 4], [1, 4, 2], [1, 4, 2, 2]):            # SIMO / 2-TX / 3-TX presets / an added row
+        r = post("IWR1843", "demo", base, {"chirp_tx_masks": masks})
+        assert r["metrics"] and [c["tx_mask"] for c in r["metrics"]["chirp_sequence"]] == masks
+        assert r["params"]["chirp_tx_masks"] == masks and r["metrics"]["scheme"] == "tdm" and not r["metrics"]["bpm_enabled"]
+    r = post("IWR1843", "demo", base, {"bpm": True})                  # BPM preset: only the flag is sent
+    assert r["metrics"]["bpm_enabled"] and r["params"]["bpm"] is True and r["params"]["chirp_tx_masks"] == [5, 5]
+    assert not any(i["level"] == "error" for i in r["issues"] if i["code"] == "params")
+    back = post("IWR1843", "demo", r["text"], {"bpm": False, "chirp_tx_masks": [1, 4]})
+    assert back["params"]["bpm"] is False and back["params"]["chirp_tx_masks"] == [1, 4]
+    b14 = client.post("/api/cfg/generate", json={"board": "IWR1443", "targets": T}).json()["text"]
+    rej = post("IWR1443", "demo", b14, {"bpm": True})
+    assert any(i["code"] == "params" and i["level"] == "error" for i in rej["issues"])
+    cas = client.post("/api/cfg/generate", json={"board": "AWR2243_CASCADE", "targets": T, "firmware": "cascade_ddm"}).json()
+    r = post("AWR2243_CASCADE", "cascade_ddm", cas["text"], {"chirp_tx_masks": [1, 2, 4]})
+    assert "cascade_chirp_mask_ignored" in [i["code"] for i in r["issues"]] and r["metrics"]["scheme"] == "ddma"
