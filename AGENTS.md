@@ -33,6 +33,7 @@ your task needs, per this index:**
 | Build, flash, or bring up firmware; touch `firmware_dev/` or a board | `docs/firmware.md` (Firmware role's facts) |
 | Configure a host for DCA1000 streaming or serial ports | `CPSL_TI_Radar_cpp/Readme.md` (system prerequisites) |
 | Plan v2.0 work on the cascade | `planning/CASCADE_PLAN.md`, `planning/CASCADE_HARDWARE_SETUP.md` |
+| Open, comment on, or close a tracker issue (rule 13) | AGENTS.md "Tracker credentials" below |
 | Drive the harness (as the user) | `.friday/active/harness/USER_GUIDE.md` |
 | Act as an assigned agent role | `.friday/active/harness/harness.md` (core rules) + `.friday/active/harness/roles/<your-role>.md` only |
 
@@ -74,6 +75,14 @@ constraint is real hardware: boards, serial ports and the DCA1000 are
 single-user, flashing and power-cycling need a human at the bench, and the
 cascade demo accepts a cfg only once per power-up. ROS 2 Jazzy is sourced
 on the dev host, so its `PYTHONPATH` is visible inside `uv` environments.
+
+## Tracker credentials
+
+A gitignored, mode-600 `.env` at the repo root holds the credential `gh issue` needs; `gh` itself is not logged in. Run from the repo root:
+`(set -a; . ./.env; set +a; gh issue list --limit 3)`.
+Never print or read the token: no `cat`/`grep` of `.env`, no `env`/`set` dumps, no `gh auth token`.
+If `gh` returns 401, tell the user — do not hunt for other credentials.
+`.env` must stay gitignored (`git check-ignore -v .env`).
 
 ## Session Continuity
 
