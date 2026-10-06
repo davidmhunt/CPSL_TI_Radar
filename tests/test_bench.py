@@ -50,31 +50,59 @@ def test_parser_reads_only_stats_lines():
 
 def test_aggregate_deltas_and_cpu():
     p = lib.Parser()
-    # driver lines once a second (arrival jitter +-0.2 s), plus the final line after
-    # the stop; 3 frames in second 1, 2 in second 2 (4 dropped in 1 event), 0 in 3
+    # driver lines once a second (driver t, host arrival 9.0 s later +- 0.2 s), then
+    # the final line after the stop. The first line already counts 1 frame.
     feed(p, [(10.0, dca_line(1.0, 1, 100)),
              (11.2, dca_line(2.0, 4, 400)),
-             (11.8, dca_line(3.0, 6, 600, 4, 1, 2)),
+             (11.8, dca_line(2.95, 6, 600, 4, 1, 2)),  # printed early: still ends row 3
              (13.1, dca_line(4.0, 6, 600, 4, 1, 2)),
              (13.3, dca_line(4.2, 7, 700, 4, 1, 2)),  # final line, after the stop
+             (10.0, "stats v1 serial t=1.000 frames=0 missed=0 overwritten=0 stalls=0"),
              (11.0, "stats v1 serial t=2.000 frames=5 missed=0 overwritten=0 stalls=0"),
              (12.0, "stats v1 serial t=3.000 frames=14 missed=1 overwritten=0 stalls=0")])
     t0 = lib.first_frame_time(p.events)
-    assert t0 == 10.0
-    samples = [(t0 + k, 50 * k, 100, 2048) for k in range(4)]  # 50% CPU
-    rows = lib.aggregate(p.events, samples, t0, 3)
-    assert [r["dca_frames"] for r in rows] == [3, 2, 1]
-    assert [r["dca_dropped_packets"] for r in rows] == [0, 4, 0]
-    assert [r["dca_dropped_packet_events"] for r in rows] == [0, 1, 0]
-    assert [r["dca_rx_overrun_count_cum"] for r in rows] == [0, 2, 2]
-    assert [r["dca_packets"] for r in rows] == [300, 200, 100]
-    assert [r["tlv_frames"] for r in rows] == [5, 9, 0]
-    assert [r["tlv_missed_frames"] for r in rows] == [0, 1, 0]
+    assert t0 == 9.0  # the driver's start(): arrival of the t=1.0 line minus 1.0 s
+    samples = [(t0 + k, 50 * k, 100, 2048) for k in range(5)]  # 50% CPU
+    rows = lib.aggregate(p.events, samples, t0, 4)
+    # row 1 is measured from zero; the last row runs to the final line
+    assert [r["dca_frames"] for r in rows] == [1, 3, 2, 1]
+    assert [r["dca_dropped_packets"] for r in rows] == [0, 0, 4, 0]
+    assert [r["dca_dropped_packet_events"] for r in rows] == [0, 0, 1, 0]
+    assert [r["dca_rx_overrun_count_cum"] for r in rows] == [0, 0, 2, 2]
+    assert [r["dca_packets"] for r in rows] == [100, 300, 200, 100]
+    assert [r["tlv_frames"] for r in rows] == [0, 5, 9, 0]
+    assert [r["tlv_missed_frames"] for r in rows] == [0, 0, 1, 0]
     assert all(r["cpu_pct"] == 50.0 for r in rows)
-    s = lib.summarize(rows)
-    assert s["dca_frames_total"] == 6 and s["dca_dropped_packets_total"] == 4
+    s = lib.summarize(rows, p.events)
+    assert s["dca_frames_total"] == 7 == sum(r["dca_frames"] for r in rows)
+    assert s["dca_dropped_packets_total"] == 4 and s["dca_packets_total"] == 700
     assert s["dca_fps_min"] == 1 and s["dca_rx_overrun_count_final"] == 2
-    assert lib.last_stats(p.events, "dca_stats")["frames"] == 7
+    assert s["tlv_frames_total"] == 14 and s["tlv_missed_frames_total"] == 1
+
+
+def test_first_interval_counts_reach_the_totals():
+    """Frames and drops on the first stats line are in row 1 and in the totals."""
+    p = lib.Parser()
+    feed(p, [(5.0, dca_line(1.0, 10, 3450, 5, 2)),   # a startup drop burst, then none
+             (6.0, dca_line(2.0, 20, 6900, 5, 2)),
+             (6.3, dca_line(2.3, 23, 7935, 5, 2))])  # final line
+    t0 = lib.first_frame_time(p.events)
+    assert t0 == 4.0
+    rows = lib.aggregate(p.events, [], t0, 2)
+    assert [r["dca_frames"] for r in rows] == [10, 13]
+    assert [r["dca_dropped_packets"] for r in rows] == [5, 0]
+    s = lib.summarize(rows, p.events)
+    assert s["dca_dropped_packets_total"] == 5 and s["dca_dropped_packet_events_total"] == 2
+    assert s["dca_frames_total"] == 23  # = the frames in adc_data.bin
+
+
+def test_slow_start_anchors_on_the_first_second_with_a_frame():
+    p = lib.Parser()
+    feed(p, [(1.0, dca_line(1.0, 0, 0)), (2.0, dca_line(2.0, 0, 0)),
+             (3.0, dca_line(3.0, 8, 2760)), (4.0, dca_line(4.0, 18, 6210))])
+    assert lib.first_frame_time(p.events) == 2.0
+    rows = lib.aggregate(p.events, [], 2.0, 2)
+    assert [r["dca_frames"] for r in rows] == [8, 10]
 
 
 def test_parse_proc_stat_with_spaces_in_comm():
@@ -204,7 +232,9 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     side = json.loads(sides[0].read_text())
     r = side["result"]
     assert r["status"] == "ok" and r["granted_so_rcvbuf_bytes"] == 134217728
-    assert 20 <= r["summary"]["dca_frames_total"] <= 33  # ~10 Hz for 3 s
+    assert 20 <= r["summary"]["dca_frames_total"] <= 45  # ~10 Hz for 3 s, plus start and stop
+    assert r["summary"]["dca_frames_total"] == r["dca_received_frames_cum_at_exit"]
+    assert 0 <= r["startup_s"] <= 1.0  # launch -> the fake's start (its t=0)
     chk = r["bin_size_check"]
     assert chk["verdict"] == "exact"  # fake driver flushes; real-driver SIGINT tail is classified separately
     for k in ("commit", "system_config", "board", "host", "nic", "expected"):

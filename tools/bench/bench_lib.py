@@ -79,10 +79,18 @@ class Parser:
 
 
 def first_frame_time(events: list) -> float | None:
-    """Arrival time of the first stats line reporting a frame (t0 of the run)."""
+    """Host time at which the first second with a frame began (t0 of the run).
+
+    That is the arrival of the first stats line reporting a frame, minus the
+    driver-clock interval it covers (its t= minus the previous line's t=, or
+    minus 0 when it is the first line). On a normal start this is the
+    driver's start(); row 1 then covers start() to that line.
+    """
+    prev = {}
     for e in events:
         if e.get("frames", 0) > 0:
-            return e["t"]
+            return e["t"] - (e.get("t_driver", 0.0) - prev.get(e["kind"], 0.0))
+        prev[e["kind"]] = e.get("t_driver", 0.0)
     return None
 
 
@@ -95,34 +103,55 @@ def last_stats(events: list, kind: str, t: float | None = None) -> dict | None:
     return last
 
 
-def aggregate(events: list, cpu_samples: list, t0: float, seconds: int) -> list:
-    """Per-second rows from the cumulative stats lines.
+def _first_frame_line(events: list) -> dict | None:
+    for e in events:
+        if e.get("frames", 0) > 0:
+            return e
+    return None
 
-    Row k is the change between the last line before t0+k+0.5 and the last
-    line before t0+k-0.5. The driver prints once a second, so the half-second
-    margins keep arrival jitter from moving a line into the wrong row; its
-    final line (printed after the stop) lands in the last row.
-    cpu_samples: [(t, cpu_ticks_total, clk_tck, rss_kb)] sampled at/near each
-    boundary; the first sample must be at t0.
+
+def aggregate(events: list, cpu_samples: list, t0: float, seconds: int) -> list:
+    """Per-second rows from the cumulative stats lines, on the driver's clock.
+
+    Rows follow the lines' own t= values: the first line reporting a frame
+    (driver time T1) closes row 1, which is measured from zero, so nothing
+    counted before it is lost. Row k ends at the last line with
+    t <= T1 + k - 0.5 (the half second absorbs print jitter), and the last
+    row runs to the final line, printed after the stop. The rows therefore
+    add up to the final line's counters.
+    cpu_samples: [(t, cpu_ticks_total, clk_tck, rss_kb)] sampled at/near
+    t0 + k on the host clock (t0 from first_frame_time).
     """
-    def delta(kind, key, lo, hi):
-        a, b = last_stats(events, kind, lo), last_stats(events, kind, hi)
+    first = _first_frame_line(events)
+    t1 = first.get("t_driver", 0.0) if first else 0.0
+
+    def upto(kind, hi):
+        last = None
+        for e in events:
+            if e["kind"] == kind and e.get("t_driver", 0.0) <= hi:
+                last = e
+        return last
+
+    def delta(kind, key, k):
+        hi = float("inf") if k == seconds else t1 + k - 0.5
+        b = upto(kind, hi)
         if b is None:
             return 0
+        a = upto(kind, t1 + k - 1.5) if k > 1 else None
         return b.get(key, 0) - (a.get(key, 0) if a else 0)
 
     rows = []
     for k in range(1, seconds + 1):
-        lo, hi = t0 + k - 0.5, t0 + k + 0.5
         row = {c: 0 for c in CSV_COLUMNS}
         row["second"] = k
-        row["dca_frames"] = delta("dca_stats", "frames", lo, hi)
-        row["dca_packets"] = delta("dca_stats", "packets", lo, hi)
-        row["dca_dropped_packets"] = delta("dca_stats", "dropped", lo, hi)
-        row["dca_dropped_packet_events"] = delta("dca_stats", "drop_events", lo, hi)
-        row["dca_rx_overrun_count_cum"] = (last_stats(events, "dca_stats", hi) or {}).get("overrun", 0)
-        row["tlv_frames"] = delta("serial_stats", "frames", lo, hi)
-        row["tlv_missed_frames"] = delta("serial_stats", "missed", lo, hi)
+        row["dca_frames"] = delta("dca_stats", "frames", k)
+        row["dca_packets"] = delta("dca_stats", "packets", k)
+        row["dca_dropped_packets"] = delta("dca_stats", "dropped", k)
+        row["dca_dropped_packet_events"] = delta("dca_stats", "drop_events", k)
+        hi = float("inf") if k == seconds else t1 + k - 0.5
+        row["dca_rx_overrun_count_cum"] = (upto("dca_stats", hi) or {}).get("overrun", 0)
+        row["tlv_frames"] = delta("serial_stats", "frames", k)
+        row["tlv_missed_frames"] = delta("serial_stats", "missed", k)
         row["cpu_pct"], row["rss_kb"] = _cpu_for_second(cpu_samples, k)
         rows.append(row)
     return rows
@@ -146,7 +175,11 @@ def parse_proc_stat(text: str):
     return utime + stime, rss_pages
 
 
-def summarize(rows: list) -> dict:
+def summarize(rows: list, events: list | None = None) -> dict:
+    """Run summary. Rates (fps) come from the rows; with `events`, the totals
+    and the final overrun count come from the driver's final stats lines
+    (printed after its stop), so they match adc_data.bin even for a run that
+    ended early."""
     n = len(rows)
     out = {"seconds": n}
     if not n:
@@ -164,6 +197,17 @@ def summarize(rows: list) -> dict:
     out["dca_packets_total"] = sum(col("dca_packets"))
     out["dca_rx_overrun_count_final"] = rows[-1]["dca_rx_overrun_count_cum"]
     out["tlv_missed_frames_total"] = sum(col("tlv_missed_frames"))
+    if events:
+        dca, ser = last_stats(events, "dca_stats"), last_stats(events, "serial_stats")
+        if dca:
+            out["dca_frames_total"] = dca.get("frames", 0)
+            out["dca_packets_total"] = dca.get("packets", 0)
+            out["dca_dropped_packets_total"] = dca.get("dropped", 0)
+            out["dca_dropped_packet_events_total"] = dca.get("drop_events", 0)
+            out["dca_rx_overrun_count_final"] = dca.get("overrun", 0)
+        if ser:
+            out["tlv_frames_total"] = ser.get("frames", 0)
+            out["tlv_missed_frames_total"] = ser.get("missed", 0)
     cpu = col("cpu_pct")
     if cpu:
         out["cpu_pct_mean"] = round(sum(cpu) / len(cpu), 1)

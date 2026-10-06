@@ -267,8 +267,12 @@ def main(argv=None) -> int:
     # wait for the first frame
     t_wait_end = time.monotonic() + args.start_timeout
     t0 = None
+    pre_samples = []  # (t, ticks, rss_kb) while waiting: t0 lies ~1 s before it is known
     while t0 is None and time.monotonic() < t_wait_end and not state["done"]:
         drain(time.monotonic() + 0.1)
+        s = sample_proc(proc.pid)
+        if s is not None:
+            pre_samples.append((time.monotonic(), s[0], s[1]))
         t0 = lib.first_frame_time(parser.events)
     result_note, sigint_sent = "ok", False
     cpu_samples = []
@@ -276,7 +280,11 @@ def main(argv=None) -> int:
         result_note = "no frame received before start timeout / driver exit"
     else:
         tck = os.sysconf("SC_CLK_TCK")
-        for k in range(0, args.seconds + 1):
+        # sample 0: the one taken while waiting that is nearest t0 (t0 is in the past by now)
+        near = min(pre_samples, key=lambda p: abs(p[0] - t0), default=None)
+        if near is not None:
+            cpu_samples.append((near[0], near[1], tck, near[2]))
+        for k in range(1 if near is not None else 0, args.seconds + 1):
             wait_until = t0 + k
             while time.monotonic() < wait_until and not state["done"]:
                 drain(wait_until)
@@ -313,7 +321,7 @@ def main(argv=None) -> int:
 
     nsec = min(args.seconds, max(0, len(cpu_samples) - 1))
     rows = lib.aggregate(parser.events, cpu_samples, t0, nsec)
-    summary = lib.summarize(rows)
+    summary = lib.summarize(rows, parser.events)
     # the driver's last stats line comes after its stop: every frame in adc_data.bin
     final = lib.last_stats(parser.events, "dca_stats")
     received = final["frames"] if final else 0
@@ -321,6 +329,8 @@ def main(argv=None) -> int:
     if proc.returncode != 0:  # surface the driver's exit code (e.g. exit=1 after an unplug)
         status = f"exit={proc.returncode}"
         result_note += f"; driver exit code {proc.returncode}"
+    # startup_s: launch -> start of the first second with a frame (normally the driver's
+    # start(); the pre-rework baselines used the first frame, about one frame period later)
     result = {"status": status,
               "note": result_note, "startup_s": round(t0 - launched, 3),
               "stop": {"mode": args.stop_mode, "sigint_sent": sigint_sent,
