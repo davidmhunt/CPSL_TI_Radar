@@ -1,6 +1,8 @@
 #include "UartFrame.hpp"
 
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace cpsl {
@@ -12,6 +14,7 @@ namespace {
 
 constexpr uint32_t kTlvDetectedPoints = 1;
 constexpr uint32_t kTlvSideInfo = 7;
+constexpr uint32_t kTlvCascadeCompactPoints = 12;  // mcuplus_cascade, guiMonitor detectedObjects 3
 constexpr size_t kNone = static_cast<size_t>(-1);
 
 Status bad(const std::string& why) { return Status(Code::malformed_frame, "UART frame: " + why); }
@@ -51,6 +54,43 @@ Status decode_points_sdk3(const uint8_t* p, uint32_t len, uint32_t num_obj, Uart
     return Status::ok();
 }
 
+// TLV 1, sdk2 layout (docs/research/sdk2_uart_format_2026-10-05.md): a
+// descriptor {u16 numDetetedObj, u16 xyzQFormat}, then 12 B per object
+// {u16 rangeIdx, i16 dopplerIdx, u16 peakVal, i16 x, i16 y, i16 z};
+// meters = int16 / 2^xyzQFormat. No velocity, SNR or noise is sent: v,
+// snr_db and noise_db are NaN (an approved compromise, docs/ARCHITECTURE.md).
+Status decode_points_sdk2(const uint8_t* p, uint32_t len, uint32_t num_obj, UartFrame& out) {
+    if (len < 4) {
+        return bad("sdk2 points TLV length " + std::to_string(len) + " is shorter than its 4-byte descriptor");
+    }
+    const uint32_t n = static_cast<uint32_t>(p[0] | (p[1] << 8));
+    const int q = p[2] | (p[3] << 8);
+    if (len != 4 + 12 * n) {
+        return bad("sdk2 points TLV length " + std::to_string(len) + " does not match its descriptor's " +
+                   std::to_string(n) + " objects (4 + 12 x n bytes)");
+    }
+    if (n != num_obj) {
+        return bad("sdk2 points TLV holds " + std::to_string(n) + " objects but numDetectedObj is " +
+                   std::to_string(num_obj));
+    }
+    if (q > 31) {
+        return bad("sdk2 xyzQFormat " + std::to_string(q) + " is out of range");
+    }
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    out.points.resize(n);
+    for (uint32_t i = 0; i < n; i++) {
+        const uint8_t* r = p + 4 + 12 * static_cast<size_t>(i);
+        Point& pt = out.points[i];
+        pt.x = std::ldexp(static_cast<float>(le_i16(r + 6)), -q);
+        pt.y = std::ldexp(static_cast<float>(le_i16(r + 8)), -q);
+        pt.z = std::ldexp(static_cast<float>(le_i16(r + 10)), -q);
+        pt.v = nan;
+        pt.snr_db = nan;
+        pt.noise_db = nan;
+    }
+    return Status::ok();
+}
+
 // TLV 7: int16 {snr, noise} per point in 0.1 dB (4 B)
 Status decode_side_info(const uint8_t* p, uint32_t len, UartFrame& out) {
     if (len % 4 != 0) {
@@ -83,10 +123,8 @@ size_t find_uart_magic(const uint8_t* data, size_t len) {
 Status parse_uart_frame(const uint8_t* data, size_t len, TlvDialect dialect, UartFrame& out) {
     out.points.clear();
     out.has_side_info = false;
+    out.compact_points_skipped = false;
     out.header = UartHeader();
-    if (dialect == TlvDialect::sdk2) {
-        return bad("tlv_dialect sdk2 is not supported");
-    }
     const size_t hdr = uart_header_bytes(dialect);
     if (data == nullptr || len < hdr) {
         return bad("truncated header: " + std::to_string(len) + " of " + std::to_string(hdr) + " bytes");
@@ -139,17 +177,22 @@ Status parse_uart_frame(const uint8_t* data, size_t len, TlvDialect dialect, Uar
             if (points_at != kNone) return bad("two detected-points TLVs (type 1)");
             points_at = off + 8;
             points_len = length;
-        } else if (type == kTlvSideInfo) {
+        } else if (type == kTlvSideInfo && dialect != TlvDialect::sdk2) {  // SDK 2 has no type 7
             if (side_at != kNone) return bad("two side info TLVs (type 7)");
             side_at = off + 8;
             side_len = length;
+        } else if (type == kTlvCascadeCompactPoints && dialect == TlvDialect::mcuplus_cascade) {
+            out.compact_points_skipped = true;
         }
         off += 8 + static_cast<size_t>(length);
     }
     // bytes from `off` to `total` are padding
 
     if (points_at != kNone) {
-        Status s = decode_points_sdk3(data + points_at, points_len, h.num_detected_obj, out);
+        // sdk3 and mcuplus_cascade share the type 1 and 7 layouts
+        Status s = dialect == TlvDialect::sdk2
+                       ? decode_points_sdk2(data + points_at, points_len, h.num_detected_obj, out)
+                       : decode_points_sdk3(data + points_at, points_len, h.num_detected_obj, out);
         if (!s) {
             out.points.clear();
             return s;

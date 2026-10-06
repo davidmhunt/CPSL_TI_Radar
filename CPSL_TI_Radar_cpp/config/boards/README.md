@@ -13,7 +13,7 @@ layout and I/Q order, and the once-per-boot rule.
 
 | File | SDK | LVDS (DCA1000) | Serial TLV |
 |------|-----|----------------|------------|
-| `IWR1443.json` | `mmwave_sdk_2` | 4 lanes, `lane_per_rx`, `i_first` | `sdk2`: **unconfirmed, rejected for serial use** (D7) |
+| `IWR1443.json` | `mmwave_sdk_2` | 4 lanes, `lane_per_rx`, `i_first` | `sdk2`: format confirmed from TI source (D7, [memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); not yet run on the bench |
 | `IWR1843.json` | `mmwave_sdk_3` | 2 lanes, `two_lane_iq_pairs`, `q_first` | `sdk3` |
 | `IWR6843.json` | `mmwave_sdk_3` | same as IWR1843 | `sdk3` |
 | `AWR2243_CASCADE.json` | `mmwave_mcuplus` | `supported: false` (D4) | `mcuplus_cascade`, 3,125,000 baud |
@@ -39,14 +39,34 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `cfg_dialect.skip_commands` | `["calibData"]` on IWR1843; others none (key omitted = `[]`) | Optional key (core-10). Every core-04 IWR1843 baseline run logged `'calibData' is not recognized as a CLI command` from the flashed firmware (`tools/bench/runs/*/driver_stdout.log`). No bench evidence for IWR6843 or IWR1443, so they send it as before. The SDK 3.6 18xx demo source (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:1435`) does register `calibData`, so the shipped IWR1843 image predates or differs from it. |
 | `data_uart.baud` | 921600; cascade 3,125,000 | `SystemConfigReader.cpp:17` default; cascade JSON `:15` |
 | `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. Design §1's board table lists the same values (5000 on the cascade, from the tracked cascade JSON). |
-| `data_uart.header_bytes` | 40; IWR1443 36 | 8-byte magic word + 32-byte header (`SerialStreamer.cpp:22`). **IWR1443 36 is a HYPOTHESIS** (audit (b): SDK 2 header has no `subFrameNumber`). |
-| `data_uart.tlv_dialect` | `sdk3`, `mcuplus_cascade`, `sdk2` | `TLVProcessing.hpp:11-21`. The cascade TLV codes 10 and 104 are defined but not parsed. **`sdk2` is unconfirmed (D7)**: the file loads, but `cross_check_radar_cfg` rejects serial streaming with it. |
+| `data_uart.header_bytes` | 40; IWR1443 36 | 8-byte magic word + 32-byte header; 36 on SDK 2, whose header has no `subFrameNumber` (confirmed, [SDK 2 memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)). Must match `tlv_dialect` (36 for `sdk2`, else 40): a mismatch is a load error. |
+| `data_uart.tlv_dialect` | `sdk3`, `mcuplus_cascade`, `sdk2` | Selects the frame decoder in `parse_uart_frame` (`src/SerialStreamer/UartFrame.cpp`, core-16). `sdk2` is confirmed from TI source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)). See "TLV dialects" below. |
 | `lvds.supported` | cascade `false` | `SystemConfigReader.cpp:476-482`; D4 |
 | `lvds.lanes` | 4 (IWR1443), 2 | `DCA1000Handler.cpp:377-387` (CONFIG_FPGA_GEN byte 1) |
 | `lvds.layout` | `lane_per_rx` (IWR1443), `two_lane_iq_pairs` | `ADCCubeConverter.cpp:24-27`; TI SWRA581B §5/§6 |
 | `lvds.iq_order` | `i_first` (IWR1443), `q_first` | Keeps today's behaviour: `ADCCubeConverter.cpp:74-77` (2-lane: first pair is imaginary) and `:93-94` (4-lane: first group is real). **Not settled**, see the audit's I/Q note and D9. core-17 sets the value from a bench capture. The SDK 3.6 demo maps `adcbufCfg` sampleSwap 1 to `DPIF_DATAFORMAT_COMPLEX16_IMRE` (`mss_main.c:1869-1876`). That is consistent with `q_first`, but it describes the ADC buffer, not the LVDS wire order. |
 | `dca1000.packet_bytes`, `packet_delay_us` | 1472, 100 | `DCA1000Handler.cpp:590-591` |
 | `dca1000.fpga_timer_s` | 30 | `DCA1000Handler.cpp:398-399` |
+
+## TLV dialects
+
+`data_uart.tlv_dialect` tells the driver how the on-chip demo lays out its serial frames.
+`parse_uart_frame` (`src/SerialStreamer/UartFrame.cpp`) picks its decoder from it. Every
+dialect starts a frame with the same 8-byte magic word, has a `{type, length}` TLV header whose
+`length` excludes those 8 bytes, and pads `totalPacketLen` to a multiple of 32 bytes.
+
+| Dialect | Boards | Header | Detected points (TLV 1) | SNR / noise (TLV 7) | Status |
+|---------|--------|--------|-------------------------|---------------------|--------|
+| `sdk3` | IWR1843, IWR6843 (mmWave SDK 3.x demo) | 40 B | float x, y, z (m), v (m/s); 16 B per point | int16 per point, 0.1 dB steps | in use since v1 |
+| `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade (CASCADE_PLAN). TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
+| `sdk2` | IWR1443 (mmWave SDK 1.x/2.x xWR14xx demo) | 36 B (no `subFrameNumber`) | `{u16 count, u16 xyzQFormat}`, then 12 B per point: int16 x, y, z in meters x 2^xyzQFormat (decoded per frame), plus range/Doppler bin indices and peak value | not sent | format confirmed from TI's SDK 2.1 source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); **not yet run against a real IWR1443** |
+
+**Approved compromise (`sdk2`):** the SDK 2 demo sends no velocity, SNR or noise per point.
+The driver sets `Point::v`, `snr_db` and `noise_db` to NaN (not a number) on this dialect, so
+code that uses them must check with `std::isnan`. The demo does send a signed Doppler bin
+index, and `v` could be computed as bin x Doppler resolution, but the driver does not derive the
+Doppler resolution from the radar cfg yet, so it leaves `v` as NaN rather than guess. `peakVal`
+is a log magnitude, not a dB SNR, so it is not reported as `snr_db` either.
 
 ## Skipped cfg commands
 

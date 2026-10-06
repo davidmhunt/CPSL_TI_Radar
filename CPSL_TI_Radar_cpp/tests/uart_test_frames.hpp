@@ -72,6 +72,30 @@ inline Tlv side_info_tlv(int n) {
     return t;
 }
 
+// SDK 2 (xWR14xx) detected object: 12 B on the wire
+struct Sdk2Obj {
+    uint16_t range_idx;
+    int16_t doppler_idx;
+    uint16_t peak_val;
+    int16_t x, y, z;  // Q-format meters
+};
+
+// SDK 2 TLV 1: {u16 numDetetedObj, u16 xyzQFormat} + 12 B per object
+inline Tlv sdk2_points_tlv(const std::vector<Sdk2Obj>& objs, uint16_t q) {
+    Tlv t{TLVCodes::DETECTED_POINTS, {}};
+    put_u16(t.payload, static_cast<uint16_t>(objs.size()));
+    put_u16(t.payload, q);
+    for (const Sdk2Obj& o : objs) {
+        put_u16(t.payload, o.range_idx);
+        put_i16(t.payload, o.doppler_idx);
+        put_u16(t.payload, o.peak_val);
+        put_i16(t.payload, o.x);
+        put_i16(t.payload, o.y);
+        put_i16(t.payload, o.z);
+    }
+    return t;
+}
+
 // the point count a TLV list implies for numDetectedObj (sdk3: 16 B per
 // point; sdk2: from the descriptor)
 inline int64_t implied_num_obj(const std::vector<Tlv>& tlvs, bool sdk2) {

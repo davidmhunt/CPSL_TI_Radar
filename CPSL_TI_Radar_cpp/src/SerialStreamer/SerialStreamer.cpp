@@ -45,6 +45,7 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader,
     timeout_ms_ = system_config_reader.getRadarDataTimeoutMs();
     rx_len_ = 0;
     synced_ = false;
+    warned_compact_ = false;
     {
         std::lock_guard<std::mutex> l(m_);
         published_points_.clear();
@@ -114,6 +115,12 @@ bool SerialStreamer::process_next_message(void){
             cpsl::radar::log_warn("SerialStreamer: dropped a frame: ", s.message);
             discard(1);  //search again from just past this magic word
             continue;
+        }
+        if(work_.compact_points_skipped && !warned_compact_){
+            warned_compact_ = true;
+            cpsl::radar::log_warn("SerialStreamer: the cascade demo sends compact points (TLV 12, guiMonitor ",
+                                  "detectedObjects 3), which the driver does not decode: point clouds stay ",
+                                  "empty. Set detectedObjects to 1 (points + SNR/noise) or 2 in the radar cfg.");
         }
         if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
             const cpsl::radar::UartHeader & h = work_.header;

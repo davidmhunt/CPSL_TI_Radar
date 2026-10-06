@@ -7,6 +7,19 @@
 // never throws. SerialStreamer frames the byte stream (magic word, header,
 // then exactly totalPacketLen bytes) and hands each frame to it.
 //
+// The board descriptor's data_uart.tlv_dialect selects the layout:
+//
+//   sdk3             mmWave SDK 3.x demos (IWR1843, IWR6843): 40-byte header;
+//                    TLV 1 = float {x, y, z, v} per point (16 B);
+//                    TLV 7 = int16 {snr, noise} in 0.1 dB per point (4 B).
+//   mcuplus_cascade  AWR2243 cascade (AM273x MCU+ demo): as sdk3. Its TLVs
+//                    10 (tracker), 11 (RANSAC mask) and 12 (compact points,
+//                    guiMonitor detectedObjects 3) are skipped.
+//   sdk2             mmWave SDK 1.x/2.x xWR14xx demo (IWR1443): 36-byte
+//                    header (no subFrameNumber); TLV 1 = {u16 numObj,
+//                    u16 xyzQFormat} + 12 B per object with int16 Q-format
+//                    x/y/z; no TLV 7 (docs/research/sdk2_uart_format_2026-10-05.md).
+//
 // Frame layout (little-endian), shared by every dialect:
 //
 //   magic word  02 01 04 03 06 05 08 07                       8 B
@@ -31,8 +44,9 @@ namespace cpsl {
 namespace radar {
 
 // One detected point. Which fields a demo fills depends on the TLV dialect
-// (docs/ARCHITECTURE.md, "Serial TLV path"): sdk3 sends all six (snr_db and
-// noise_db are 0 when the frame has no side info TLV).
+// (docs/ARCHITECTURE.md, "Serial TLV path"): sdk3 and mcuplus_cascade send
+// all six (snr_db and noise_db are 0 when the frame has no side info TLV);
+// sdk2 sends x, y, z only, and v, snr_db and noise_db are NaN.
 struct Point {
     float x = 0, y = 0, z = 0;  // m
     float v = 0;                // radial velocity, m/s
@@ -57,6 +71,9 @@ struct UartFrame {
     UartHeader header;
     std::vector<Point> points;
     bool has_side_info = false;  // a TLV 7 filled snr_db/noise_db
+    // mcuplus_cascade only: the frame carried compact points (TLV 12), which
+    // are not decoded (set guiMonitor detectedObjects to 1 or 2 for TLV 1)
+    bool compact_points_skipped = false;
 };
 
 // The magic word that starts every frame.
@@ -88,9 +105,10 @@ inline uint32_t uart_le32(const uint8_t* data, size_t off) {
 //   - totalPacketLen shorter than the header or above kUartMaxPacketBytes;
 //   - a TLV header or payload past totalPacketLen, or numTLVs that cannot fit;
 //   - two TLVs of type 1, or of type 7;
-//   - a points payload that is not a whole number of points, or whose point
-//     count differs from numDetectedObj; side info whose count differs from
-//     the points'.
+//   - a points payload that is not a whole number of points (sdk3: 16 B
+//     each; sdk2: 4 + 12 x the descriptor's count), or whose point count
+//     differs from numDetectedObj; side info whose count differs from the
+//     points'.
 Status parse_uart_frame(const uint8_t* data, size_t len, TlvDialect dialect, UartFrame& out);
 
 // The same, returning a new UartFrame (convenient in tests; allocates).

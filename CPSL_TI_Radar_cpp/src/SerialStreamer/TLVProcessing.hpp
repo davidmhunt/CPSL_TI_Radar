@@ -18,8 +18,11 @@ class TLVCodes{
         static const uint32_t MMWDEMO_OUTPUT_MSG_AZIMUT_ELEVATION_STATIC_HEAT_MAP =8;
         static const uint32_t MMWDEMO_OUTPUT_MSG_TEMPERATURE_STATS =9;
         static const uint32_t DETECTED_POINTS_SIDE_INFO =7;
-        static const uint32_t TRACKER =10; //AWR2243 cascade demo
-        static const uint32_t DETECTED_POINTS_COMPACT =104; //AWR2243 cascade demo
+        //AWR2243 cascade (AM273x MCU+) demo, firmware_dev mmw_output.h
+        static const uint32_t TRACKER =10;
+        static const uint32_t RANSAC_FILTER_MASK =11;
+        static const uint32_t DETECTED_POINTS_COMPACT =12;
+        static const uint32_t SNR_COMPACT =13;
 };
 
 #endif

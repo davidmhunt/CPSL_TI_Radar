@@ -286,6 +286,13 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
             !r.uint(u, "timeout_ms", p, 1, 600000, d.data_uart.timeout_ms)) {
             return false;
         }
+        // the header length follows from the dialect: SDK 2 has no subFrameNumber
+        const uint32_t want = d.data_uart.tlv_dialect == TlvDialect::sdk2 ? 36u : 40u;
+        if (d.data_uart.header_bytes != want) {
+            return r.fail(p + "/header_bytes", "must be " + std::to_string(want) + " for tlv_dialect " +
+                                                   to_string(d.data_uart.tlv_dialect) +
+                                                   " (36 for sdk2, 40 for sdk3 and mcuplus_cascade)");
+        }
     }
 
     // lvds: {"supported": false} alone, or the full block
@@ -490,11 +497,6 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
     auto err = [&](const std::string& m) { res.errors.push_back(cfg_path + ": " + m); };
     auto note = [&](const std::string& m) { res.notes.push_back(cfg_path + ": " + m); };
 
-    if (streams.serial && b.data_uart.tlv_dialect == TlvDialect::sdk2) {
-        err("board " + b.name +
-            " uses tlv_dialect sdk2, whose UART frame format is unconfirmed (design D7); "
-            "serial streaming is unsupported until it is verified");
-    }
     if (streams.dca1000 && !b.lvds.supported) {
         err("board " + b.name + " has lvds.supported false: DCA1000 raw-ADC streaming is not supported");
     }

@@ -98,6 +98,7 @@ private:
     std::vector<uint8_t> rx_;
     size_t rx_len_ = 0;
     bool synced_ = false;  //a frame was published: bytes skipped from here on are a resync
+    bool warned_compact_ = false;  //the cascade compact-points warning was logged
     cpsl::radar::UartFrame work_;  //the frame being parsed (reader thread only)
 
     //the published frame and the counters, under m_

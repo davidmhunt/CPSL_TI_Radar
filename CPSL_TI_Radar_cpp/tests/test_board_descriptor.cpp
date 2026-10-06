@@ -248,10 +248,22 @@ TEST_CASE(rejects_dca1000_on_cascade) {
     CHECK(check(d, cfg, false, true).ok());
 }
 
-TEST_CASE(rejects_serial_with_unconfirmed_sdk2_dialect) {
+TEST_CASE(serial_with_sdk2_dialect_is_accepted) {
+    // core-16: the SDK 2 frame format is confirmed (docs/research/sdk2_uart_format_2026-10-05.md)
     BoardDescriptor d = must_load("IWR1443");
     std::string cfg = write_cfg("bd_1443_serial.cfg", "adcCfg 2 1\nadcbufCfg 0 1 0 1\n");
-    CHECK(any_has(check(d, cfg, false, true).errors, "design D7"));
+    CHECK(check(d, cfg, false, true).ok());
+}
+
+TEST_CASE(header_bytes_must_match_the_tlv_dialect) {
+    CHECK(has(reject("IWR1843", [](json& j) { j["data_uart"]["header_bytes"] = 36; }),
+              "/data_uart/header_bytes: must be 40 for tlv_dialect sdk3"));
+    CHECK(has(reject("IWR1443", [](json& j) { j["data_uart"]["header_bytes"] = 40; }),
+              "must be 36 for tlv_dialect sdk2"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["data_uart"]["tlv_dialect"] = "sdk2"; }),
+              "must be 36 for tlv_dialect sdk2"));
+    CHECK(has(reject("AWR2243_CASCADE", [](json& j) { j["data_uart"]["header_bytes"] = 32; }),
+              "must be 40 for tlv_dialect mcuplus_cascade"));
 }
 
 TEST_CASE(rejects_adc_not_16_bit_and_missing_adccfg) {

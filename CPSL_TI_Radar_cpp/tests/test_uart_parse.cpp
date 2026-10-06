@@ -275,6 +275,176 @@ TEST_CASE(reused_frame_keeps_its_buffer) {
     CHECK(f.points.empty());
 }
 
+// ---- mcuplus_cascade (AWR2243 cascade, AM273x MCU+ demo) ----
+//
+// Layout from the demo's transmit code (firmware_dev
+// projects/awr2243_cascade_ddm/.../mss/mss_main.c, MmwDemo_transmitProcessedOutput):
+// platform 0x2243, TLVs 1 and 7 as SDK 3 (guiMonitor detectedObjects 1),
+// then 2 range profile, 6 stats, 9 temperature, 10 tracker, 11 RANSAC mask
+// (1 B per point, so later TLVs are unaligned), padded to 32. With
+// detectedObjects 3 the points come as TLV 12 (8 B per point) instead.
+
+TEST_CASE(cascade_golden_frame) {
+    FrameOpts o;
+    o.platform = 0x2243;
+    Tlv stats{TLVCodes::STATS, Bytes(24, 0x01)};
+    Tlv temp{TLVCodes::MMWDEMO_OUTPUT_MSG_TEMPERATURE_STATS, Bytes(28, 0x02)};
+    Tlv mask{TLVCodes::RANSAC_FILTER_MASK, Bytes{1, 0, 1}};
+    Tlv tracker{TLVCodes::TRACKER, Bytes(40, 0x03)};
+    const Bytes f = make_frame(300, {points_tlv(3, -1.0f), side_info_tlv(3), stats, temp, mask, tracker}, o);
+    CHECK_EQ(f.size() % 32, static_cast<size_t>(0));
+    auto r = parse_uart_frame(f, TlvDialect::mcuplus_cascade);
+    CHECK(static_cast<bool>(r));
+    if (!r) return;
+    CHECK_EQ(r->header.platform, 0x2243u);
+    CHECK_EQ(r->header.frame_number, 300u);
+    CHECK_EQ(r->points.size(), static_cast<size_t>(3));
+    CHECK_EQ(r->points[0].x, -1.0f);
+    CHECK_EQ(r->points[2].v, 10.0f);
+    CHECK_NEAR(r->points[2].noise_db, -4.0, 1e-4);
+    CHECK(!r->compact_points_skipped);
+    // TLVs after an odd-length mask (unaligned) are still found: put the mask first
+    const Bytes g = make_frame(301, {mask, points_tlv(3, 0.0f), side_info_tlv(3)}, o);
+    auto r2 = parse_uart_frame(g, TlvDialect::mcuplus_cascade);
+    CHECK(static_cast<bool>(r2));
+    if (r2) CHECK_EQ(r2->points.size(), static_cast<size_t>(3));
+}
+
+TEST_CASE(cascade_compact_points_are_skipped_and_flagged) {
+    FrameOpts o;
+    o.platform = 0x2243;
+    o.num_obj = 4;
+    Tlv compact{TLVCodes::DETECTED_POINTS_COMPACT, Bytes(4 * 8, 0x05)};
+    Tlv mask{TLVCodes::RANSAC_FILTER_MASK, Bytes(4, 1)};
+    const Bytes f = make_frame(5, {compact, mask}, o);
+    auto r = parse_uart_frame(f, TlvDialect::mcuplus_cascade);
+    CHECK(static_cast<bool>(r));
+    if (!r) return;
+    CHECK(r->points.empty());
+    CHECK(r->compact_points_skipped);
+    // other dialects do not know type 12
+    auto r3 = parse_uart_frame(f, TlvDialect::sdk3);
+    CHECK(static_cast<bool>(r3));
+    if (r3) CHECK(!r3->compact_points_skipped);
+}
+
+// ---- sdk2 (IWR1443, mmWave SDK 1.x/2.x xWR14xx demo) ----
+
+TEST_CASE(sdk2_golden_frame_from_literal_bytes) {
+    // docs/research/sdk2_uart_format_2026-10-05.md, "Recommended Experiment":
+    // 36-byte header, TLV 1 with 2 objects at xyzQFormat 7, a TLV 6, zero
+    // padding to a multiple of 32. 36 + 36 + 32 = 104 bytes, padded to 128.
+    const Bytes f = {
+        0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 0x08, 0x07,  // magic
+        0x04, 0x00, 0x01, 0x02,                          // version 2.1.0.4
+        0x80, 0x00, 0x00, 0x00,                          // totalPacketLen 128
+        0x43, 0x14, 0x0A, 0x00,                          // platform 0xA1443
+        0x07, 0x00, 0x00, 0x00,                          // frameNumber 7
+        0x00, 0x10, 0x00, 0x00,                          // timeCpuCycles
+        0x02, 0x00, 0x00, 0x00,                          // numDetectedObj 2
+        0x02, 0x00, 0x00, 0x00,                          // numTLVs 2 (no subFrameNumber)
+        0x01, 0x00, 0x00, 0x00, 0x1C, 0x00, 0x00, 0x00,  // TLV 1, length 28 = 4 + 2 x 12
+        0x02, 0x00, 0x07, 0x00,                          // numDetetedObj 2, xyzQFormat 7
+        0x0A, 0x00, 0xFD, 0xFF, 0xF4, 0x01,              // rangeIdx 10, dopplerIdx -3, peakVal 500
+        0x80, 0x00, 0xC0, 0xFF, 0x00, 0x01,              // x 128, y -64, z 256 -> 1.0, -0.5, 2.0 m
+        0x14, 0x00, 0x05, 0x00, 0x58, 0x02,              // rangeIdx 20, dopplerIdx 5, peakVal 600
+        0x00, 0x00, 0x40, 0x01, 0xFF, 0xFF,              // x 0, y 320, z -1 -> 0, 2.5, -0.0078125 m
+        0x06, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00,  // TLV 6 (stats), length 24
+        0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+        0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+        0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+        0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5,  // 24 pad bytes (uninitialized on the radar)
+        0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5,
+        0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5,
+    };
+    CHECK_EQ(f.size(), static_cast<size_t>(128));
+    auto r = parse_uart_frame(f, TlvDialect::sdk2);
+    CHECK(static_cast<bool>(r));
+    if (!r) return;
+    CHECK_EQ(r->header.version, 0x02010004u);
+    CHECK_EQ(r->header.total_packet_len, 128u);
+    CHECK_EQ(r->header.platform, 0x000A1443u);
+    CHECK_EQ(r->header.frame_number, 7u);
+    CHECK_EQ(r->header.num_detected_obj, 2u);
+    CHECK_EQ(r->header.num_tlvs, 2u);
+    CHECK_EQ(r->header.sub_frame_number, 0u);
+    CHECK_EQ(r->points.size(), static_cast<size_t>(2));
+    CHECK_EQ(r->points[0].x, 1.0f);
+    CHECK_EQ(r->points[0].y, -0.5f);
+    CHECK_EQ(r->points[0].z, 2.0f);
+    CHECK_EQ(r->points[1].x, 0.0f);
+    CHECK_EQ(r->points[1].y, 2.5f);
+    CHECK_EQ(r->points[1].z, -0.0078125f);
+    for (const auto& p : r->points) {
+        CHECK(std::isnan(p.v));
+        CHECK(std::isnan(p.snr_db));
+        CHECK(std::isnan(p.noise_db));
+    }
+    CHECK(!r->has_side_info);
+    // the test builder makes the same TLV bytes
+    const Bytes built = make_frame(7, {sdk2_points_tlv({{10, -3, 500, 128, -64, 256}, {20, 5, 600, 0, 320, -1}}, 7),
+                                       {6, Bytes(24, 0x11)}},
+                                   FrameOpts(), true);
+    CHECK_EQ(built.size(), f.size());
+    CHECK(std::equal(built.begin() + 28, built.begin() + 104, f.begin() + 28));
+    // the same bytes are not an SDK 3 frame (no subFrameNumber shifts every TLV)
+    CHECK(!parse_uart_frame(f, TlvDialect::sdk3));
+}
+
+TEST_CASE(sdk2_q_format_is_per_frame) {
+    // xyzQFormat follows the cfg's range resolution; decode it every frame
+    for (uint16_t q : {0, 5, 9, 15}) {
+        const Bytes f = make_frame(1, {sdk2_points_tlv({{1, 0, 1, 1000, -1000, 0}}, q)}, FrameOpts(), true);
+        auto r = parse_uart_frame(f, TlvDialect::sdk2);
+        CHECK(static_cast<bool>(r));
+        if (!r) continue;
+        CHECK_EQ(r->points[0].x, std::ldexp(1000.0f, -q));
+        CHECK_EQ(r->points[0].y, std::ldexp(-1000.0f, -q));
+    }
+}
+
+TEST_CASE(sdk2_zero_detections_send_no_points_tlv) {
+    // the demo sends no type 1 when numObjOut is 0 (only the stats TLV, or none)
+    auto r = parse_uart_frame(make_frame(2, {{6, Bytes(24, 0)}}, FrameOpts(), true), TlvDialect::sdk2);
+    CHECK(static_cast<bool>(r));
+    if (r) CHECK(r->points.empty());
+    auto r0 = parse_uart_frame(make_frame(3, {}, FrameOpts(), true), TlvDialect::sdk2);
+    CHECK(static_cast<bool>(r0));
+}
+
+TEST_CASE(sdk2_malformed_points_are_rejected) {
+    const Sdk2Obj o{1, 0, 1, 1, 2, 3};
+    // length not 4 + 12 n (a 12-byte record cut short)
+    Tlv cut = sdk2_points_tlv({o, o}, 7);
+    cut.payload.resize(cut.payload.size() - 2);
+    FrameOpts two;
+    two.num_obj = 2;
+    CHECK(rejected(make_frame(1, {cut}, two, true), "does not match its descriptor", TlvDialect::sdk2));
+    // descriptor shorter than 4 bytes
+    CHECK(rejected(make_frame(1, {{1, Bytes{1, 0}}}, two, true), "shorter than its 4-byte descriptor",
+                   TlvDialect::sdk2));
+    // numDetectedObj disagrees with the descriptor
+    FrameOpts three;
+    three.num_obj = 3;
+    CHECK(rejected(make_frame(1, {sdk2_points_tlv({o, o}, 7)}, three, true), "numDetectedObj is 3",
+                   TlvDialect::sdk2));
+    // xyzQFormat out of range
+    CHECK(rejected(make_frame(1, {sdk2_points_tlv({o}, 40)}, FrameOpts(), true), "xyzQFormat 40",
+                   TlvDialect::sdk2));
+    // an SDK 3 frame read as sdk2 never yields points: its subFrameNumber
+    // word is taken for a TLV type and the real points TLV is never reached
+    auto wrong = parse_uart_frame(make_frame(1, {points_tlv(2, 0.0f)}), TlvDialect::sdk2);
+    CHECK(!wrong || wrong->points.empty());
+}
+
+TEST_CASE(sdk2_type_7_is_not_side_info) {
+    // SDK 2 defines no type 7: it is skipped like any unknown type
+    const Bytes f = make_frame(1, {sdk2_points_tlv({{1, 0, 1, 128, 0, 0}}, 7), {7, Bytes(6, 0)}}, FrameOpts(), true);
+    auto r = parse_uart_frame(f, TlvDialect::sdk2);
+    CHECK(static_cast<bool>(r));
+    if (r) CHECK(std::isnan(r->points[0].snr_db));
+}
+
 TEST_CASE(header_bytes_per_dialect) {
     CHECK_EQ(cpsl::radar::uart_header_bytes(TlvDialect::sdk3), static_cast<size_t>(40));
     CHECK_EQ(cpsl::radar::uart_header_bytes(TlvDialect::mcuplus_cascade), static_cast<size_t>(40));

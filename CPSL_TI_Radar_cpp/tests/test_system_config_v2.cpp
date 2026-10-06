@@ -285,13 +285,15 @@ TEST_CASE(cross_check_errors_fail_the_load) {
     CHECK(has(e, "radar cfg does not fit board AWR2243_CASCADE"));
     CHECK(has(e, "lvds.supported false"));
 
-    // serial on the IWR1443 (sdk2 TLV dialect unconfirmed, design D7)
+    // serial on the IWR1443 is accepted since core-16 (sdk2 dialect confirmed)
     j = base_config();
     j["board"] = "IWR1443";
     j["radar_cfg"] = kData + "/radar/iwr1443.cfg";
     j["dca1000"]["enabled"] = false;
     j["serial_stream"]["enabled"] = true;
-    CHECK(has(reject("v2_1443_serial.json", j), "design D7"));
+    SystemConfigReader r(write_json("v2_1443_serial.json", j));
+    CHECK(r.initialized);
+    CHECK(r.get_error().empty());
 }
 
 TEST_CASE(malformed_json_is_an_error_not_an_exception) {

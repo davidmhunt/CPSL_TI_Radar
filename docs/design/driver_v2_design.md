@@ -53,8 +53,8 @@ descriptor names the decoder so the rest stays data.
 | `lifecycle.config_once_per_boot` | bool. If true, `configure()` refuses a second cfg in one process and `stop()` prints the power-cycle note | `Runner.cpp:94-101,217-220` |
 | `cfg_dialect.rx_mask_fields` | `channelCfg` field indices whose set bits are summed into the Rx count | `RadarConfigReader.cpp:285-289` |
 | `cfg_dialect.frame_period_field` | `frameCfg` field index of the period (5, or 6 on the cascade) | field-count guess `RadarConfigReader.cpp:270-274` |
-| `data_uart.header_bytes` | 40 (SDK 3, MCU+) or 36 (SDK 2, **HYPOTHESIS**, audit (b)) | fixed 32+8 |
-| `data_uart.tlv_dialect` | `sdk3` (type 1 = float x/y/z/v, type 7 = int16 SNR/noise) \| `sdk2` (Q-format objects) \| `mcuplus_cascade` (sdk3 plus types 10/11/12) | `TLVProcessing.*`. Parsed and validated, but not used for dispatch until core-16 |
+| `data_uart.header_bytes` | 40 (SDK 3, MCU+) or 36 (SDK 2, confirmed: `docs/research/sdk2_uart_format_2026-10-05.md`) | fixed 32+8 |
+| `data_uart.tlv_dialect` | `sdk3` (type 1 = float x/y/z/v, type 7 = int16 SNR/noise) \| `sdk2` (Q-format objects) \| `mcuplus_cascade` (sdk3 plus types 10/11/12) | `TLVProcessing.*`. Selects the decoder in `parse_uart_frame` since core-16 |
 | `lvds.supported` | bool | cascade DCA1000 rejection `SystemConfigReader.cpp:477-482` |
 | `lvds.lanes` | 2 \| 4 (sent in `CONFIG_FPGA_GEN`) | `DCA1000Handler.cpp:381-391` |
 | `lvds.layout` | `two_lane_iq_pairs` (SWRA581B §6) \| `lane_per_rx` (SWRA581B §5 4-lane) | `ADCCubeConverter.cpp:24-31` |
@@ -72,7 +72,7 @@ descriptor names the decoder so the rest stays data.
 | `cfg_dialect.frame_period_field` | 5 | 5 | 5 | 6 |
 | `data_uart.baud` | 921600 | 921600 | 921600 | 3125000 |
 | `data_uart.timeout_ms` | 1000 | 1000 | 1000 | 5000 (tracked cascade JSON; pre-gate keeps behaviour) |
-| `data_uart.header_bytes` / `tlv_dialect` | 36 / sdk2 (to verify) | 40 / sdk3 | 40 / sdk3 | 40 / mcuplus_cascade |
+| `data_uart.header_bytes` / `tlv_dialect` | 36 / sdk2 (confirmed, memo 2026-10-05) | 40 / sdk3 | 40 / sdk3 | 40 / mcuplus_cascade |
 | `lvds` | 4 lanes, `lane_per_rx`, `i_first` | 2 lanes, `two_lane_iq_pairs`, `q_first`* | same as 1843* | `supported: false` |
 
 \* `q_first` keeps today's behaviour. The core-04 bench check (audit, I/Q

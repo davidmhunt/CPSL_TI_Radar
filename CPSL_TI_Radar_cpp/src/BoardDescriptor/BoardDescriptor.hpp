@@ -148,7 +148,6 @@ struct CfgCheckResult {
 
 // Cross-check a TI radar .cfg against the board for the enabled streams:
 //   - DCA1000 requested on a board with lvds.supported == false
-//   - serial requested with the unconfirmed sdk2 TLV dialect (design D7)
 //   - DCA1000: adcCfg must be 16-bit and complex; adcbufCfg must be complex
 //     and its chanInterleave must match lvds.layout; lvdsStreamCfg must
 //     stream ADC data only (dataFmt 1)

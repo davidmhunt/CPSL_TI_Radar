@@ -8,13 +8,41 @@
 #include "SerialStreamer.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <memory>
+#include <mutex>
 #include <thread>
+
+#include "Log.hpp"
 
 using namespace uart_test;
 using clk = std::chrono::steady_clock;
 
 namespace {
+
+// counts warn/error lines while alive
+class WarnLines {
+public:
+    WarnLines() {
+        cpsl::radar::set_log_sink([this](cpsl::radar::LogLevel l, const std::string& m) {
+            if (l == cpsl::radar::LogLevel::warn || l == cpsl::radar::LogLevel::error) {
+                std::lock_guard<std::mutex> g(m_);
+                lines_.push_back(m);
+            }
+        });
+    }
+    ~WarnLines() { cpsl::radar::set_log_sink(nullptr); }
+    size_t count(const std::string& part) {
+        std::lock_guard<std::mutex> g(m_);
+        size_t n = 0;
+        for (const std::string& l : lines_) n += l.find(part) != std::string::npos ? 1 : 0;
+        return n;
+    }
+
+private:
+    std::mutex m_;
+    std::vector<std::string> lines_;
+};
 
 struct Rig {
     std::shared_ptr<FakeDataPort> port;
@@ -161,6 +189,44 @@ TEST_CASE(port_error_sets_io_error) {
     r.port->fail();
     CHECK(!r.s.process_next_message());
     CHECK(r.s.io_error());
+}
+
+// ---- dialects: data_uart.tlv_dialect picks the decoder ----
+
+TEST_CASE(iwr1443_uses_the_sdk2_dialect) {
+    Rig r("ss_sdk2", static_cast<size_t>(-1), "IWR1443");
+    r.port->push(cat({Bytes(3, 0), make_frame(4, {sdk2_points_tlv({{5, 1, 9, 64, 128, -64}}, 6)}, FrameOpts(), true),
+                      make_frame(5, {}, FrameOpts(), true)}));
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    CHECK(r.s.process_next_message());
+    CHECK(r.take(pts, fn));
+    CHECK_EQ(fn, 4u);
+    CHECK_EQ(pts.size(), static_cast<size_t>(1));
+    CHECK_EQ(pts[0].x, 1.0f);
+    CHECK_EQ(pts[0].y, 2.0f);
+    CHECK_EQ(pts[0].z, -1.0f);
+    CHECK(std::isnan(pts[0].v));
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_missed_frame_count(), 0u);
+}
+
+TEST_CASE(cascade_compact_points_warn_once) {
+    Rig r("ss_cascade", static_cast<size_t>(-1), "AWR2243_CASCADE");
+    WarnLines warns;
+    FrameOpts o;
+    o.num_obj = 2;
+    o.platform = 0x2243;
+    for (uint32_t k = 1; k <= 3; k++) {
+        r.port->push(make_frame(k, {{TLVCodes::DETECTED_POINTS_COMPACT, Bytes(16, 0)}}, o));
+    }
+    r.port->push(make_frame(4, {points_tlv(2, 0.0f), side_info_tlv(2)}, o));
+    for (int i = 0; i < 4; i++) CHECK(r.s.process_next_message());
+    CHECK_EQ(warns.count("TLV 12"), static_cast<size_t>(1));
+    std::vector<cpsl::radar::Point> pts;
+    uint32_t fn = 0;
+    CHECK(r.take(pts, fn));
+    CHECK_EQ(pts.size(), static_cast<size_t>(2));
 }
 
 // ---- framing ----
