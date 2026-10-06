@@ -141,7 +141,8 @@ printing or throwing; messages go to a log sink filtered by `runtime.log_level`.
 layout is unchanged (`[rx][sample][chirp]`, the same nested `std::vector` type). Delivery changed:
 `next_adc_frame` swaps a pooled buffer into your `AdcFrame` (no copy) and hands out every frame in
 order from a queue of `runtime.frame_queue_depth` (default 4; `1` keeps only the newest frame,
-as v1 did); frames dropped from a full queue are counted in `frames_overwritten`. Points are `Point{x,y,z,v,snr_db,noise_db}`. Link
+as v1 did); frames dropped from a full queue are counted in `frames_overwritten`. Points are `Point{x,y,z,v,snr_db,noise_db}`, and a
+point cloud is now handed over as soon as its frame has arrived (v1 delivered it one frame period late). Link
 `CPSL_TI_Radar::driver`. [`CPSL_TI_Radar_ROS`](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
 still uses `Runner` and does not build against v2.0 until it moves to `Radar`.
 

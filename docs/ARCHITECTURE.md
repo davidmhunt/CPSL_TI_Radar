@@ -36,10 +36,10 @@ sink.
 | Call | Does |
 |------|------|
 | `RadarConfig::load(path)` | `Result<RadarConfig>`: system JSON + board descriptor (with `board_overrides`) + parsed radar cfg, cross-checked; `board()`, `frame_shape()`, `commands()` |
-| `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets}` swaps in a fake `ByteStream` or a `ReplayPacketSource` |
+| `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets, data}` swaps in a fake CLI `ByteStream`, a `ReplayPacketSource` or a fake serial data `ByteStream` |
 | `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured` |
 | `start()` | `recordStart` and the RX thread, the DCA worker (SCHED_RR 80) and serial reader threads, then `sensorStart` |
-| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` of `Point{x,y,z,v,snr_db,noise_db}`. false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
+| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
 | `stop()` | see below; the destructor calls it |
 | `set_log_sink(fn)`, `set_log_level(l)` | process-wide; default sink: one line per message to stderr, `warning: `/`error: ` prefixes |
@@ -49,8 +49,8 @@ sink.
 `main` checks it on every pass of its loop, leaves the loop and calls `Radar::stop()`, then
 returns normally. `stop()` is idempotent and safe from several threads: one
 lifecycle mutex, so a second caller waits for the first and gets the same
-`Status`. It first wakes a consumer blocked in `next_adc_frame`
-(`Code::stopped`), then joins the worker threads, then `DCA1000Handler::stop()`
+`Status`. It first wakes a consumer blocked in `next_adc_frame` or
+`next_point_cloud` (`Code::stopped`) and ends the serial reader's read, then joins the worker threads, then `DCA1000Handler::stop()`
 (packet source: RX thread, `recordStop`; then flush and close
 `adc_data.bin` / `LVDS_Raw_0.bin`), then `sensorStop`. Every step runs even
 if an earlier one failed. `CLIController` sends over a
@@ -101,7 +101,7 @@ submodule and must be present.
 
 CMake structure: each library's `src/<dir>/CMakeLists.txt` declares its own
 `target_include_directories` (PUBLIC, build and install interfaces) and calls
-`find_package` for what it uses (Threads, Boost), so a target gets the headers
+`find_package` for what it uses (Threads), so a target gets the headers
 of everything it links and no central include list exists. Tests list only
 `LIBS` in `add_driver_test`. `src/CMakeLists.txt` also defines the interface
 target `driver` (links `Radar`), exported with the install as
@@ -139,14 +139,17 @@ main.cpp (CLI)
         │     ├── PacketSource       (UdpPacketSource: DCA1000Socket + DCA1000Commands; or ReplayPacketSource)
         │     ├── FrameAssembler     (sequence check, frame assembly, drop stats)
         │     └── ADCCubeConverter   (ADC conversion per lvds.layout / lvds.iq_order)
-        └── SerialStreamer        (serial TLV stream → detected points; TLVProcessing)
+        └── SerialStreamer        (serial TLV frames → PointCloud, over a ByteStream)
+              └── TLVProcessing      (parse_uart_frame in UartFrame.cpp: one frame per TLV dialect; TLV codes)
   Log, Status                   (every library; Log has no dependencies)
 ```
 
 `Radar::start()` spawns a DCA worker thread (SCHED_RR 80) and a serial
-reader thread; `DCA1000Socket` adds the RX thread. Serial baud handling
-(including the cascade's 3,125,000 baud data port) lives in
-`src/utilities/SerialBaud*` (termios2).
+reader thread; `DCA1000Socket` adds the RX thread. Both serial ports are a
+`SerialPortStream` (`src/utilities/ByteStream`): a non-blocking descriptor in
+raw mode whose every read and write is bounded by `poll()`. Baud rates go
+through `src/utilities/SerialBaud*`: termios for the standard rates,
+termios2/`BOTHER` for others (the cascade's 3,125,000 baud data port).
 
 ## DCA1000 RX path
 
@@ -245,6 +248,74 @@ after the frame is queued, so the consumer does not wait for the disk. With
 `output.save_raw_lvds`, `LVDS_Raw_0.bin` gets every packet's payload as it
 arrives (no reordering or zero fill). `stop()` flushes and closes both.
 
+## Serial TLV path
+
+The on-chip demo sends one frame per radar frame on the data UART. Every
+dialect shares the framing: an 8-byte magic word (`02 01 04 03 06 05 08 07`),
+a header (`version`, `totalPacketLen`, `platform`, `frameNumber`,
+`timeCpuCycles`, `numDetectedObj`, `numTLVs`, and `subFrameNumber` except on
+SDK 2), then `numTLVs` x `{u32 type, u32 length, payload}` where `length`
+excludes the 8-byte TLV header, then zero to 31 padding bytes
+(`totalPacketLen` is a multiple of 32).
+
+**Framing (core-16, P8).** `SerialStreamer` (reader thread, `Radar`'s serial
+worker) reads from a `ByteStream`: it finds the magic word (skipping any
+bytes before it), reads the header, then reads **exactly** the rest of
+`totalPacketLen`, parses, and publishes at once. It never waits for the
+next frame's magic word, which v1 did, so v1 delivered every frame one frame
+period late (50 ms at 20 Hz). `bench/bench_serial_latency` writes frames to
+a pty at the frame period and measures last byte written ->
+`next_point_cloud` return: 52.6 ms median before, 0.17 ms after (core-16
+Log); its short run is the ctest test `test_serial_latency_pty`. A frame
+cut off by `data_uart.timeout_ms` keeps its bytes for the next call. A
+`totalPacketLen` outside [header, 1 MiB] or a frame that fails parsing is
+dropped with a warning and the search restarts one byte after its magic
+word; a frame that fails parsing never changes the published frame or the
+`missed` count.
+
+**`UartFrame` and `parse_uart_frame`** (`src/SerialStreamer/UartFrame.{hpp,cpp}`).
+`parse_uart_frame(bytes, len, dialect, out)` is pure: no I/O, no logging,
+no exceptions, no read outside `[bytes, bytes + len)`. It fills
+`UartFrame{header, points, has_side_info, compact_points_skipped}` and
+returns a `Status` (`Code::malformed_frame` with the reason) on: a short
+header or frame, no magic word, `totalPacketLen` shorter than the header or
+above 1 MiB, `numTLVs` that cannot fit, a TLV header or payload past
+`totalPacketLen`, two type-1 or two type-7 TLVs, a points payload that is
+not a whole number of points, a point count different from
+`numDetectedObj`, or side info whose count differs from the points'. All
+other TLV types are skipped by their length. This is the seam for a new TLV
+type: decode it here, add a golden frame to `tests/test_uart_parse.cpp`.
+
+**Dialects.** The board descriptor's `data_uart.tlv_dialect` picks the
+decoder (`config/boards/README.md`, "TLV dialects", has the details and
+sources):
+
+| `tlv_dialect` | Boards | Header | TLV 1 (points) | TLV 7 (side info) | Other |
+|---------------|--------|--------|----------------|-------------------|-------|
+| `sdk3` | IWR1843, IWR6843 | 40 B | float x, y, z, v (16 B) | int16 snr, noise, 0.1 dB (4 B) | |
+| `mcuplus_cascade` | AWR2243 cascade | 40 B | as `sdk3` | as `sdk3` | TLV 12 (compact points, `guiMonitor` detectedObjects 3) is not decoded: the driver warns once |
+| `sdk2` | IWR1443 | 36 B | `{u16 n, u16 xyzQFormat}` + 12 B per point, x, y, z = int16 / 2^xyzQFormat m | none | v, snr_db, noise_db are NaN |
+
+Without a TLV 7, `snr_db` and `noise_db` are 0 on `sdk3` and
+`mcuplus_cascade`. A frame without a TLV 1 (no detections, or detected
+objects turned off in `guiMonitor`) is an empty cloud.
+
+**Approved compromise (`sdk2`).** The SDK 2 demo sends no velocity, SNR or
+noise, so on the IWR1443 `Point::v`, `snr_db` and `noise_db` are NaN; check
+them with `std::isnan`. The demo does send a signed Doppler bin index, and
+`v` could be the bin times the Doppler resolution, but the driver does not
+compute the Doppler resolution from the radar cfg, so it reports NaN rather
+than guess. The format comes from TI's SDK 2.1 source
+(`docs/research/sdk2_uart_format_2026-10-05.md`); no IWR1443 has run it yet.
+
+**Buffers.** The receive buffer, the parsed frame's points, the published
+points and the consumer's `PointCloud::points` are reused: `take_frame`
+swaps the published vector with the caller's, so a consumer that reuses one
+`PointCloud` costs no allocation per frame. Only the newest frame waits; a
+frame replaced before it was taken counts in `serial_overwritten`.
+`next_point_cloud` blocks on a condition variable (no polling) and `stop()`
+wakes it.
+
 ## Configuration
 
 Three files describe a run (design §1, §2):
@@ -275,8 +346,9 @@ Three files describe a run (design §1, §2):
 When the system config loads, `cross_check_radar_cfg` checks the radar .cfg
 against the board for the enabled streams (16-bit complex ADC, `adcbufCfg`
 interleave vs `lvds.layout`, `lvdsStreamCfg` ADC streaming, no DCA1000 on a
-board without LVDS, no serial on the unconfirmed `sdk2` dialect); an error
-fails the load.
+board without LVDS); an error fails the load. Loading a descriptor also
+checks that `data_uart.header_bytes` matches `tlv_dialect` (36 for `sdk2`,
+40 otherwise).
 
 **Dispatch.** No component branches on a board name; each reads descriptor
 fields through `SystemConfigReader::getBoard()`:
@@ -286,7 +358,7 @@ fields through `SystemConfigReader::getBoard()`:
 | cfg commands sent | `cli.skip_prefixes`, `cli.start_cmd`, `cfg_dialect.skip_commands` (`filter_cfg_commands`) | `CLIController` |
 | CLI handshake | `cli.baud`, `ack`, `prompt`, `prompt_wait_ms`, `cmd_timeout_ms`, `stop_timeout_ms`, `start_cmd`, `stop_cmd` | `CLIController` |
 | Rx count, frame period | `cfg_dialect.rx_mask_fields`, `frame_period_field` | `RadarConfigReader` |
-| Data UART | `data_uart.baud`, `timeout_ms` | `SerialStreamer` |
+| Data UART | `data_uart.baud`, `timeout_ms`, `tlv_dialect` (and the matching `header_bytes`) | `SerialStreamer`, `parse_uart_frame` |
 | DCA1000 FPGA setup | `lvds.lanes`, `dca1000.packet_bytes`, `packet_delay_us`, `fpga_timer_s` | `UdpPacketSource` |
 | ADC decoder | `lvds.layout`, `lvds.iq_order` | `ADCCubeConverter` |
 | One cfg per power-up | `lifecycle.config_once_per_boot` | `Radar` |
@@ -299,7 +371,8 @@ DCA1000 network defaults: FPGA `192.168.33.180`, host `192.168.33.30/24`,
 command port 4096, data port 4098.
 
 Supported boards: `IWR1843`, `IWR6843` (2-lane, non-interleaved),
-`IWR1443` (4-lane, interleaved), `AWR2243_CASCADE` (serial TLV only so far;
+`IWR1443` (4-lane, interleaved; serial `sdk2` confirmed from TI source but
+not yet run on the board), `AWR2243_CASCADE` (serial TLV only so far;
 data port 3,125,000 baud).
 
 ## Host prerequisites

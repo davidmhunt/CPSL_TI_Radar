@@ -59,7 +59,7 @@ std::shared_ptr<SerialPortStream> SerialPortStream::open(const std::string& port
     }
     std::shared_ptr<SerialPortStream> s(new SerialPortStream(fd));
 
-    // raw mode, as boost::asio::serial_port::open set it before core-16:
+    // raw mode, as the asio serial_port::open set it before core-16:
     // cfmakeraw, ignore parity errors, receiver on, modem lines ignored
     termios tio{};
     if (::tcgetattr(fd, &tio) != 0) {

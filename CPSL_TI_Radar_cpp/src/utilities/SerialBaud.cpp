@@ -12,7 +12,7 @@ bool set_custom_baud_termios2(int fd, unsigned int baud_rate, unsigned int & act
 
 namespace {
 
-// the termios constant for a standard rate (the same table boost::asio used), or B0
+// the termios constant for a standard rate (the same table the pre-core-16 asio port used), or B0
 speed_t standard_speed(unsigned int baud){
     switch(baud){
         case 50: return B50;

@@ -55,4 +55,4 @@ uv run tools/setup/host_setup.py --nic enp3s0                      # confirm: no
 - `--validate` exits 0 for your config.
 - The final `host_setup.py` report shows no MISSING line.
 
-For first-time machine setup (CMake, Boost, the DCA1000 static IP, the `dialout` group), see `CPSL_TI_Radar_cpp/Readme.md`.
+For first-time machine setup (compiler, CMake, the DCA1000 static IP, the `dialout` group), see `CPSL_TI_Radar_cpp/Readme.md`.

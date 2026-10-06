@@ -4,9 +4,11 @@
 
 ### Pre-requisite packages
 Before building and installing this package, you must first have the following software installed:
-1. C++ compiler (supporting at least C++ 11)
-2. C++ boost libraries
-3. CMake
+1. C++ compiler (supporting C++ 17)
+2. CMake
+
+The driver has no other library dependency: nlohmann/json is a git submodule (`include/json`), and
+the serial ports use the Linux termios and `poll` calls directly.
 
 The following installation instructions will work for linux devices, but should be similar for Windows and Mac devices as well.
 
@@ -15,7 +17,7 @@ The following installation instructions will work for linux devices, but should 
 ```
 g++ --version
 ```
-If this returns at least version 4.8.1, you can move onto the next step
+If this returns at least version 7 (the first with C++17), you can move onto the next step
 
 2. If you don't have c++ installed or if your c++ version is out of date, run the following command to install c++ (for linux).
 ```
@@ -23,19 +25,7 @@ sudo apt update
 sudo apt install build-essential
 ```
 
-#### 2. Install boost libraries
-1. Next, check to see if the C++ boost libraries are installed on your system. To do this, run the following command (in linux):
-```
-dpkg -s libboost-dev | grep Version
-```
-
-2. If you don't have the boost libraries installed, run the following command to install the requisite packages (for debian based systems including Ubuntu)
-```
-sudo apt update
-sudo apt install libboost-all-dev
-```
-
-#### 3. Install CMake
+#### 2. Install CMake
 1. Next, confirm that CMake is installed. To do this, run the following command:
 ```
 cmake --version
@@ -46,7 +36,7 @@ sudo apt update
 sudo apt install cmake
 ```
 
-> **Quick setup.** Steps 4 and 5, and the DCA1000 static IP under "Preparing your hardware", are checked by one command. Run it from the repository root:
+> **Quick setup.** Steps 3 and 4, and the DCA1000 static IP under "Preparing your hardware", are checked by one command. Run it from the repository root:
 > ```bash
 > uv run tools/setup/host_setup.py --nic <dca-nic>                    # read-only report: OK / MISSING / WARN / N-A, with the fix for each
 > uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # print the exact commands and file contents, run nothing
@@ -54,14 +44,14 @@ sudo apt install cmake
 > ```
 > `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. `cap_sys_nice` is lost on every rebuild of the driver, so re-run the tool after building. Add `--udev` for stable `/dev/radar/<serial>-cli` and `-data` names when more than one XDS110 board is connected. The manual commands below still work if you'd rather do it by hand.
 
-#### 4. Allow access to serial ports
+#### 3. Allow access to serial ports
 1. Finally, to ensure that your system has access to the serial ports to connect to the radar, run the following command
 ```
 sudo usermod -a -G dialout $USER
 ```
 2. To allow the command to take effect, simply reboot or log out and then log back in on your system
 
-#### 5. System settings for high-rate DCA1000 streaming
+#### 4. System settings for high-rate DCA1000 streaming
 
 At high ADC sampling rates, the default Linux UDP receive buffer (~128 KB) is too small and causes packet drops. Raise the system-wide cap with:
 ```bash
@@ -116,7 +106,7 @@ cmake --install CPSL_TI_Radar_cpp/build --prefix ~/cpsl_install
 
 ### Using the driver from another CMake project
 
-The install provides one CMake package, `CPSL_TI_Radar`, exporting one target, `CPSL_TI_Radar::driver`. Linking it brings in all driver libraries, their include directories and their dependencies (Threads, Boost, nlohmann_json):
+The install provides one CMake package, `CPSL_TI_Radar`, exporting one target, `CPSL_TI_Radar::driver`. Linking it brings in all driver libraries, their include directories and their dependencies (Threads, nlohmann_json):
 ```cmake
 cmake_minimum_required(VERSION 3.11)
 project(consumer CXX)
@@ -138,7 +128,7 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering and the frame queue, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); no test opens a serial port. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering and the frame queue, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); `test_radar_serial_fake` runs one on a fake serial data port, and `test_uart_parse` checks the serial frame parser on golden and malformed frames (fixtures in `tests/uart_test_frames.hpp`). No test opens a real serial port; `test_cli_stop` and `test_serial_latency_pty` use a pseudo-terminal. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
 
 To run the same suite under AddressSanitizer and UndefinedBehaviorSanitizer (any report fails the test), use the `asan-ubsan` preset from `CPSL_TI_Radar_cpp/` (it builds in `build-asan-ubsan/`):
 
@@ -158,6 +148,7 @@ cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release -j
 ctest --test-dir build-release -C bench -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
 build-release/bench/bench_latency                              # frame complete -> next_adc_frame return, µs
+build-release/bench/bench_serial_latency --period-ms 50       # serial frame over a pty -> next_point_cloud return, µs
 ```
 
 The `drv_*` rows (variant `(d)`) replay the same kind of stream through the driver's own `DCA1000Handler` (assembler, converter, frame publish and, for `drv_save`, `adc_data.bin`), the code the DCA worker thread runs. `drv_save` writes to a temp directory (`--tmp-dir`, default `/dev/shm`). Driver log messages go to a counting sink at `--log-level` (default `info`); the count per rep is in the "replay input" notes.
@@ -196,7 +187,7 @@ To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool 
 
 #### [IWR1843] DCA Streaming and IWR Demos
 1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../readme_images/IWR1843_SOP_nodes.png)
-2. For the IWR1843 (or any radar that can run the mmWave SDK boost, you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.)
+2. For the IWR1843 (or any radar that can run the mmWave SDK demo), you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.
 
     a.We developed this pipeline using mmWave 3.6. Using a different pipeline may require slight changes in the code.
     b. NOTE: additional documentation on the demo firmware can be found in the index.html file located in (ti/mmwave_sdk_03_06_02_00-LTS/packages/ti/demo/xwr18xx/mmw/docs/doxygen/html)
@@ -244,7 +235,14 @@ frame is swapped into `frame.data`, not copied, and the buffer it held goes back
 pool, so reuse one `AdcFrame` (as above) and nothing is allocated per frame. Calling `stop()` from
 another thread wakes a waiting `next_adc_frame` at once.
 
-`next_point_cloud` does the same for the serial TLV stream. `docs/ARCHITECTURE.md` lists every
+`next_point_cloud` does the same for the serial TLV stream, except that only the newest frame
+waits (a frame you did not take in time is counted in `stats().serial_overwritten`). A frame is
+handed over as soon as its last byte has been read (well under a millisecond after the radar sends
+it, measured on a pty), its points are swapped into `PointCloud::points` like `frame.data`, and
+`PointCloud::completed_at` says when it arrived. Which `Point` fields are filled depends on the
+board's TLV dialect: on the IWR1443 (`sdk2`) `v`, `snr_db` and `noise_db` are NaN, because its demo
+does not send them ([config/boards/README.md](./config/boards/README.md), "TLV dialects").
+`docs/ARCHITECTURE.md` lists every
 call, the stop sequence, the stall policy and the threads, and the `adc_data.bin` layout ("Output
 files").
 
@@ -315,7 +313,7 @@ with a known wire format is a data change, not a rebuild.
 |---|---|---|---|
 | `IWR1843` | 2 | `two_lane_iq_pairs` (non-interleaved, SDK 3+) | yes |
 | `IWR6843` | 2 | `two_lane_iq_pairs` (non-interleaved, SDK 3+) | yes |
-| `IWR1443` | 4 | `lane_per_rx` (interleaved, SDK 2) | rejected until the SDK 2 format is confirmed |
+| `IWR1443` | 4 | `lane_per_rx` (interleaved, SDK 2) | yes (`sdk2`: x, y, z only; format confirmed from TI source, not yet run on the board) |
 | `AWR2243_CASCADE` | not supported yet | — | yes (3,125,000 baud) |
 
 At load time the driver cross-checks the radar `.cfg` against the board (16-bit complex ADC,
@@ -335,8 +333,8 @@ stay in the `.cfg` file but are never sent: the IWR1843 skips `calibData`.
   `frameCfg` adds `<numAdcSamples>` before the frame period. The descriptor's `cfg_dialect` says so.
 * DCA1000 streaming is rejected for this board until 4-lane LVDS capture is added.
 * TI has only tested up to 192 ADC samples, 256 chirps, and 8 Rx channels. BFP compression isn't supported.
-* Like the other boards, a frame is only handed over when the next frame's magic word arrives, so the newest point
-  cloud is one frame period old.
+* With `guiMonitor` detectedObjects 3 (TI's default) the demo sends compact points (TLV 12), which the driver does
+  not decode: point clouds stay empty and the driver warns once. The driver's `cascade_shortrange.cfg` uses 1.
 
 ### 2. Radar .cfg file
 
