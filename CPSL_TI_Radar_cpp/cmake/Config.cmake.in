@@ -2,6 +2,5 @@
 
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
-find_dependency(Boost)
 
 include("${CMAKE_CURRENT_LIST_DIR}/CPSL_TI_RadarTargets.cmake")

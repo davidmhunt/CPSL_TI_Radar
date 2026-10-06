@@ -5,13 +5,13 @@
 
 #include <algorithm>
 #include <atomic>
-#include <boost/system/system_error.hpp>
 #include <chrono>
 #include <cstring>
 #include <deque>
 #include <map>
 #include <mutex>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -20,7 +20,7 @@
 
 // A scripted CLI: every written line is answered with "Done" + the prompt.
 // After `fail_after` writes, writes fail: by throwing (as boost::asio::write
-// does on an unplugged port), by returning EIO, or by hanging until the
+// did on an unplugged port before core-16), by returning EIO, or by hanging until the
 // write's timeout (a wedged CDC device). reply_delay holds a command's reply
 // back; prompt_error_on drops one command's prompt and fails the next read.
 class FakeCli : public cpsl::radar::ByteStream {
@@ -36,8 +36,7 @@ public:
         write_timeouts.push_back(timeout);
         if (fail != Fail::none && writes_ok >= fail_after) {
             if (fail == Fail::throw_system_error)
-                throw boost::system::system_error(boost::system::error_code(EIO, boost::system::system_category()),
-                                                  "write");
+                throw std::system_error(std::error_code(EIO, std::system_category()), "write");
             if (fail == Fail::return_eio) return std::error_code(EIO, std::system_category());
             if (fail == Fail::write_hangs) {
                 l.unlock();

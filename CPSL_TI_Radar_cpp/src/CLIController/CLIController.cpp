@@ -109,10 +109,13 @@ bool CLIController::send_config_to_IWR() {
         for (const string& command : plan.send) {
             if(!CLIController::sendCommand(command, system_config_reader.getRadarCliTimeoutMs())){
                 all_done = false;
+                any_io_error = any_io_error || io_error_;
             }
-            any_io_error = any_io_error || io_error_;
+            //an acknowledged command whose prompt read failed is only a
+            //warning (logged by sendCommand), not an I/O error of the cfg
+            //(core-13 review S3)
         }
-        //for the whole cfg, io_error() says whether any command hit an I/O error
+        //for the whole cfg, io_error() says whether a command that failed hit an I/O error
         io_error_ = any_io_error;
         return all_done;
     } else{
@@ -248,7 +251,7 @@ bool CLIController::sendCommand(const string& command, int timeout_ms) {
         }
         return true;
     } catch (const std::exception& e) {
-        //a ByteStream that throws (e.g. boost::system::system_error after an unplug)
+        //a ByteStream that throws (e.g. std::system_error after an unplug)
         io_error_ = true;
         cpsl::radar::log_error("CLIController: '", command, "' failed: ", e.what());
         return false;

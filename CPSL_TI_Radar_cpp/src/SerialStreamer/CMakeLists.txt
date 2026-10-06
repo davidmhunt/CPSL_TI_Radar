@@ -1,6 +1,5 @@
 #declare packages and dependencies
 find_package(Threads REQUIRED)
-find_package(Boost REQUIRED)
 
 #add libraries
 #TLVProcessing: the pure frame parser (parse_uart_frame) and the TLV type codes
@@ -19,6 +18,5 @@ target_include_directories(SerialStreamer PUBLIC
 #link libraries
 target_link_libraries(TLVProcessing PUBLIC BoardDescriptor PUBLIC Log)
 target_link_libraries(SerialStreamer PUBLIC Utilities
-                                    PUBLIC Boost::boost
                                     PUBLIC Threads::Threads
                                     PUBLIC TLVProcessing)

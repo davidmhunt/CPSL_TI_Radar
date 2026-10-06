@@ -1,8 +1,7 @@
-find_package(Boost REQUIRED)
 find_package(Threads REQUIRED)
 
 #the log sink and Status/Result (Log.hpp, Status.hpp): no dependencies, so the
-#hot-path libraries (FrameAssembler, DCA1000Socket) can log without Boost/json
+#hot-path libraries (FrameAssembler, DCA1000Socket) can log without json
 add_library(Log Log.cpp)
 
 #create the utilities library
@@ -20,5 +19,4 @@ endforeach()
 target_link_libraries(Utilities PUBLIC Log
                                 PUBLIC nlohmann_json::nlohmann_json
                                 PUBLIC BoardDescriptor
-                                PUBLIC Boost::boost
                                 PUBLIC Threads::Threads)

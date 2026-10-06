@@ -36,7 +36,9 @@ public:
 
     //true if the last command hit a write or read error (not a mere missing
     //"Done"); cleared at the start of every command. A prompt-read error
-    //after a "Done" sets it but does not fail that command.
+    //after a "Done" sets it but does not fail that command. After
+    //send_config_to_IWR(): true only if a command that failed hit an I/O
+    //error (an acknowledged command's prompt-read error is a warning).
     bool io_error() const { return io_error_; }
 
     //frame period of the radar cfg, for the computed stop timeout

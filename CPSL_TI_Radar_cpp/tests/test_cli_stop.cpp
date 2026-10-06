@@ -21,11 +21,12 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include <atomic>
-#include <boost/system/system_error.hpp>
 #include <deque>
+#include <future>
 #include <map>
 #include <pty.h>
 #include <mutex>
@@ -163,7 +164,9 @@ TEST_CASE(write_that_never_completes_returns_within_the_timeout) {
 }
 
 // The real SerialPortStream: a pty whose master never reads fills up and
-// blocks the writer; the timed write must give up.
+// blocks the writer; the timed write must give up. The write runs on a
+// thread with a 5 s deadline, so an unbounded write fails this test instead
+// of hanging ctest (core-13 review S7): closing the master then ends it.
 TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
     int master = -1, slave = -1;
     char name[256] = {0};
@@ -176,7 +179,16 @@ TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
     if (port) {
         const std::vector<uint8_t> big(8 * 1024 * 1024, 'x');
         const auto t0 = std::chrono::steady_clock::now();
-        const std::error_code ec = port->write(big.data(), big.size(), std::chrono::milliseconds(300));
+        std::future<std::error_code> f = std::async(std::launch::async, [&] {
+            return port->write(big.data(), big.size(), std::chrono::milliseconds(300));
+        });
+        const bool finished = f.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+        CHECK(finished);  // false: the write ignores its timeout
+        if (!finished) {
+            close(master);  // the blocked write now fails, so the thread can end
+            master = -1;
+        }
+        const std::error_code ec = f.get();
         const long long ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         CHECK(ec == std::errc::timed_out);
@@ -184,7 +196,76 @@ TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
         CHECK(ms < 300 + 1000);
     }
     port.reset();
+    if (master >= 0) close(master);
+}
+
+// The real SerialPortStream on a pty: bytes both ways, a read timeout, and
+// the raw mode and baud rate it sets (the core-16 termios rewrite of the
+// boost::asio port).
+TEST_CASE(serial_port_reads_writes_and_sets_raw_mode_on_a_pty) {
+    int master = -1, slave = -1;
+    char name[256] = {0};
+    CHECK(openpty(&master, &slave, name, nullptr, nullptr) == 0);
+    if (master < 0) return;
+    std::string err;
+    std::shared_ptr<cpsl::radar::SerialPortStream> port = cpsl::radar::SerialPortStream::open(name, 921600, err);
+    CHECK(port != nullptr);
+    if (port) {
+        termios t{};
+        CHECK(tcgetattr(slave, &t) == 0);
+        CHECK(cfgetospeed(&t) == B921600);
+        CHECK(cfgetispeed(&t) == B921600);
+        CHECK((t.c_lflag & (ICANON | ECHO | ISIG)) == 0);  // raw
+        CHECK((t.c_cflag & (CREAD | CLOCAL)) == (CREAD | CLOCAL));
+        CHECK((t.c_cflag & CSIZE) == CS8);
+
+        const std::string out = "sensorStop\n";
+        CHECK(!port->write(reinterpret_cast<const uint8_t*>(out.data()), out.size(), std::chrono::milliseconds(100)));
+        char got[64] = {0};
+        CHECK_EQ(read(master, got, sizeof got), static_cast<ssize_t>(out.size()));
+        CHECK_EQ(std::string(got, out.size()), out);
+
+        uint8_t buf[64];
+        size_t n = 0;
+        auto t0 = std::chrono::steady_clock::now();
+        CHECK(port->read_some(buf, sizeof buf, n, std::chrono::milliseconds(100)) == std::errc::timed_out);
+        CHECK_EQ(n, static_cast<size_t>(0));
+        CHECK(std::chrono::steady_clock::now() - t0 >= std::chrono::milliseconds(95));
+        CHECK_EQ(write(master, "Done\r\n", 6), static_cast<ssize_t>(6));
+        CHECK(!port->read_some(buf, sizeof buf, n, std::chrono::milliseconds(500)));
+        CHECK_EQ(std::string(reinterpret_cast<char*>(buf), n), std::string("Done\r\n"));
+        // a read asks for at most `cap` bytes
+        CHECK_EQ(write(master, "abcdef", 6), static_cast<ssize_t>(6));
+        CHECK(!port->read_some(buf, 2, n, std::chrono::milliseconds(500)));
+        CHECK_EQ(n, static_cast<size_t>(2));
+    }
+    // the cascade's 3 125 000 baud is not a termios constant: termios2/BOTHER
+    std::shared_ptr<cpsl::radar::SerialPortStream> fast = cpsl::radar::SerialPortStream::open(name, 3125000, err);
+    CHECK(fast != nullptr);
+    port.reset();
+    fast.reset();
+    close(slave);
     close(master);
+}
+
+// core-13 review S3: an acknowledged cfg command whose prompt read fails is
+// a warning, not an I/O error of the whole cfg.
+TEST_CASE(prompt_read_error_after_done_does_not_fail_the_cfg) {
+    SystemConfigReader sys = serial_free_config("cli_cfg_prompt");
+    std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
+    CLIController cli;
+    CHECK(cli.initialize(sys, fake));
+    fake->prompt_error_on = "channelCfg 15 5 0";
+    WarnCapture warns;
+    CHECK(cli.send_config_to_IWR());
+    CHECK(!cli.io_error());
+    bool warned = false;
+    for (const std::string& w : warns.get()) warned = warned || w.find("prompt after 'channelCfg") != std::string::npos;
+    CHECK(warned);
+    // a command that fails on an I/O error still makes it one
+    fake->fail_from_now(FakeCli::Fail::return_eio);
+    CHECK(!cli.send_config_to_IWR());
+    CHECK(cli.io_error());
 }
 
 // ---- Part 2: Radar over a fake CLI and a loopback fake DCA1000 (real UdpPacketSource) ----

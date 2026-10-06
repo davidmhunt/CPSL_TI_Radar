@@ -1,15 +1,14 @@
 #ifndef CPSL_RADAR_BYTE_STREAM_HPP
 #define CPSL_RADAR_BYTE_STREAM_HPP
 
-// ByteStream: the minimal byte-level seam under the CLI controller (design §3
-// "Internal seams for tests"; directive core-11, reused by core-13). Read and
-// write only. SerialPortStream is the real serial port; tests substitute a
-// fake to script replies and inject I/O errors (e.g. a USB unplug).
+// ByteStream: the minimal byte-level seam under the CLI controller and the
+// serial TLV reader (design §3 "Internal seams for tests"; directive
+// core-11, reused by core-13 and core-16). Read and write only.
+// SerialPortStream is the real serial port; tests substitute a fake to
+// script replies and inject I/O errors (e.g. a USB unplug).
 //
 // Neither call is meant to throw: errors come back as a std::error_code.
 // Callers still guard against a throwing implementation.
-
-#include <boost/asio.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -35,20 +34,23 @@ public:
     virtual std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) = 0;
 };
 
-// A serial port (boost::asio) at a given baud rate.
+// A serial port at a given baud rate: a non-blocking file descriptor in raw
+// mode (termios; termios2/BOTHER for non-standard rates such as the
+// cascade's 3 125 000), with poll() for the read and write deadlines.
 class SerialPortStream : public ByteStream {
 public:
     // Opens `port` and sets `baud`. Returns nullptr and fills `error` on failure.
     static std::shared_ptr<SerialPortStream> open(const std::string& port, unsigned int baud, std::string& error);
     ~SerialPortStream() override;
+    SerialPortStream(const SerialPortStream&) = delete;
+    SerialPortStream& operator=(const SerialPortStream&) = delete;
 
     std::error_code write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) override;
     std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) override;
 
 private:
-    SerialPortStream();
-    boost::asio::io_context io_;
-    boost::asio::serial_port port_;
+    explicit SerialPortStream(int fd) : fd_(fd) {}
+    int fd_ = -1;
 };
 
 }  // namespace radar

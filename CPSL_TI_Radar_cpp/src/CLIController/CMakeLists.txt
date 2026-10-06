@@ -1,6 +1,5 @@
 #declare packages and dependencies
 find_package(Threads REQUIRED)
-find_package(Boost REQUIRED)
 
 #add libraries
 add_library(CLIController CLIController.cpp)
@@ -12,5 +11,4 @@ target_include_directories(CLIController PUBLIC
 
 #link libraries
 target_link_libraries(CLIController PUBLIC Utilities
-                                    PUBLIC Boost::boost
                                     PUBLIC Threads::Threads)
