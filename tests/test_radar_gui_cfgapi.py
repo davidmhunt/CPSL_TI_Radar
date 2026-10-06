@@ -27,7 +27,7 @@ def client(tmp_path):
 def test_boards_and_page(client):
     j = client.get("/api/cfg/boards").json()
     assert set(j["boards"]) == {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}
-    assert j["limits"]["IWR1843"]["max_slope_mhz_us"]["confidence"] in ("repo", "recalled", "unverified")
+    assert j["limits"]["IWR1843"]["max_slope_mhz_us"]["confidence"] in ("repo", "high", "medium", "low", "unverified")
     html = client.get("/").text
     assert 'id="cfgMain"' in html and client.get("/js/cfg.js").status_code == 200
 
@@ -218,3 +218,24 @@ def test_direct_mode_ui_served_and_flow(client):
                                              "params": {"profiles": [{"slope_mhz_us": slope / 2}]}}).json()
     assert r["params"]["derived"]["bandwidth_mhz"] < seed["params"]["derived"]["bandwidth_mhz"] * 0.6
     assert r["metrics"]["max_range_m"] > 0 and r["text"] != base
+
+
+def test_mimo_panel_payload_fields(client):
+    """gui-16: the Configure-tab MIMO panel reads these metrics fields (cfg.js renderMimo); no browser harness."""
+    need = ("scheme", "bpm_enabled", "chirp_sequence", "n_bands", "loop_period_us", "pattern_period_us", "doppler_bins",
+            "doppler_step_ms", "vmax_full_ms", "vmax_per_tx_ms", "lambda_mm", "derivations", "subframes", "n_tx",
+            "n_virtual", "chirps_per_loop", "chirp_us", "idle_us", "ramp_us", "velocity_res_ms")
+    for board, fw, scheme in (("IWR1843", "demo", "tdm"), ("AWR2243_CASCADE", "cascade_ddm", "ddma")):
+        g = client.post("/api/cfg/generate", json={"board": board, "targets": T, "firmware": fw}).json()
+        m = g["metrics"]
+        assert all(k in m for k in need), [k for k in need if k not in m]
+        assert m["scheme"] == scheme and m["chirp_sequence"] and "tx_mask" in m["chirp_sequence"][0]
+        for k in ("vmax_full_ms", "vmax_per_tx_ms", "velocity_res_ms", "loop_period_us", "doppler_bins", "doppler_step_ms",
+                  "n_tx", "n_virtual"):
+            assert set(m["derivations"][k]) >= {"formula", "scheme", "confidence"} and m["derivations"][k]["scheme"] == scheme
+        # analyze (cfg text) carries the same fields
+        a = client.post("/api/cfg/analyze", json={"board": board, "cfg_text": g["text"], "firmware": fw}).json()
+        assert a["metrics"]["scheme"] == scheme and a["metrics"]["derivations"]
+    assert m["n_bands"] == 8 and m["vmax_per_tx_ms"] < m["vmax_full_ms"]
+    html = client.get("/").text
+    assert all(i in html for i in ('id="mBadge"', 'id="mDiagram"', 'id="mDerived"', 'id="mChirpTable"'))

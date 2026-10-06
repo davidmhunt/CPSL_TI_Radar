@@ -199,6 +199,7 @@ function render(j) {
       `<span class="code">${esc(i.code)}</span>`;
     ul.append(li);
   }
+  renderMimo(m);
   $('cText').textContent = j.text || '';
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
@@ -215,19 +216,74 @@ async function loadFirmware(board, want) {
 }
 function showFirmware() {
   const f = C.fw.find(x => x.id === $('cFw').value);
-  if (!f) { $('cOutputs').textContent = ''; $('cScheme').textContent = ''; return; }
+  if (!f) { $('cOutputs').textContent = ''; return; }
   const o = [f.outputs.tlv && 'TLV point cloud (serial)', f.outputs.lvds && 'raw ADC (LVDS \u2192 DCA1000)'].filter(Boolean);
   $('cOutputs').textContent = 'Outputs: ' + o.join(' / ') + ' \u2014 ' + f.description;
-  $('cScheme').textContent = schemeText(f.mimo);
+  C.fwMimo = f.mimo; renderMimo(C.metrics);
   $('sSerial').checked = f.system_enables.serial; $('sDca').checked = f.system_enables.dca1000;
   dcaVis();
 }
-// Read-only MIMO scheme line (the full panel is gui-16).
-function schemeText(m) {
-  if (!m) return '';
-  if (m.scheme === 'ddma') return 'MIMO: DDMA \u2014 all TX every chirp, phase-coded (view-only)';
-  return 'MIMO: TDM' + (m.bpm ? ' (BPM available)' : '');
+// ---------- MIMO panel (gui-16): scheme badge, loop timing diagram, derived numbers with formula + scheme ----------
+const SCHEME = { tdm: 'TDM', ddma: 'DDMA' };
+function schemeName(m) { return m.scheme === 'tdm' && m.bpm_enabled ? 'TDM+BPM' : (SCHEME[m.scheme] || String(m.scheme).toUpperCase()); }
+function diagram(m) {
+  const seq = m.chirp_sequence || [], ddma = m.scheme === 'ddma';
+  if (!seq.length) return '';
+  const SHOW = 12, shown = seq.slice(0, SHOW), more = seq.length > SHOW;
+  const lanes = ddma ? Math.max(1, Math.min(m.n_tx || 3, 12)) : Math.max(3, ...seq.map(c => 32 - Math.clz32(c.tx_mask)));
+  const W = 300, gx = 30, lh = 14, top = 14, n = shown.length + (more ? 0.6 : 0);
+  const slot = (W - gx - 4) / n, rampFrac = m.chirp_us > 0 && m.ramp_us > 0 ? Math.min(1, m.ramp_us / m.chirp_us) : 0.8;
+  const H = top + lanes * lh + 16;
+  let g = '';
+  for (let l = 0; l < lanes; l++) {
+    const y = top + l * lh;
+    g += `<text x="2" y="${y + 10}">TX${l + 1}</text><line class="lane" x1="${gx}" x2="${W - 2}" y1="${y + lh - 1}" y2="${y + lh - 1}"/>`;
+    shown.forEach((c, k) => {
+      const on = ddma || (c.tx_mask >> l) & 1, x = gx + k * slot;
+      g += `<rect class="${on ? 'on' : 'off'}" x="${x.toFixed(1)}" y="${y + 2}" width="${Math.max(1, slot * rampFrac - .5).toFixed(1)}" height="${lh - 5}" rx="1"/>`;
+    });
+  }
+  shown.forEach((c, k) => { g += `<text x="${(gx + k * slot).toFixed(1)}" y="${top - 4}">${c.index + 1}</text>`; });
+  if (more) g += `<text x="${gx + shown.length * slot}" y="${top + lh}">+${seq.length - SHOW}</text>`;
+  const yl = top + lanes * lh + 5;   // loop bracket: one TX-cycle (TDM) or one chirp (DDMA)
+  const lx = Math.min(W - 2, gx + (ddma ? 1 : Math.min(m.n_tx || shown.length, shown.length)) * slot - 1);
+  g += `<path class="loop" d="M${gx} ${yl} V${yl + 3} H${lx.toFixed(1)} V${yl}"/><text class="lp" x="${gx + 3}" y="${yl + 11}">T_loop ${fmt(m.loop_period_us, 1)} \u00b5s</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="chirp loop timing">${g}</svg>`;
 }
+function mrow(label, value, unit, d, cls, labelNote) {
+  const r = el('div', 'mrow ' + (cls || ''));
+  const unv = d && d.confidence === 'unverified' ? '<span class="unv" title="unverified: not confirmed against TI documentation or hardware">\u2020 unverified</span>' : '';
+  r.innerHTML = `<div class="mv"><span>${label}</span><b>${value}${unit ? ' ' + unit : ''}</b></div>` +
+    (d ? `<code>${esc(labelNote || d.formula)}</code><span class="sch">${esc(d.scheme)}</span>${unv}` : '');
+  return r;
+}
+function renderMimo(m) {
+  const list = $('mDerived'); list.replaceChildren();
+  if (!m || !m.scheme) { $('mBadge').textContent = ''; $('mDiagram').innerHTML = ''; $('mCaption').textContent = ''; $('mNote').textContent = ''; return; }
+  const ddma = m.scheme === 'ddma', D = m.derivations || {}, tc = m.chirp_us;
+  $('mBadge').textContent = schemeName(m);
+  $('mNote').textContent = ddma ? `${m.n_bands} Doppler bands, ${m.n_tx} TX` : `${m.n_tx} TX, ${m.chirps_per_loop} chirp${m.chirps_per_loop > 1 ? 's' : ''}/loop` + (m.bpm_enabled ? ', BPM on' : '');
+  $('mDiagram').innerHTML = diagram(m);
+  $('mCaption').textContent = ddma ? 'DDMA: every TX fires on every chirp \u2014 phase-coded, set by firmware \u2014 view only.'
+    : `Tc = ${fmt(tc, 1)} \u00b5s` + (m.idle_us != null && m.ramp_us != null ? ` (idle ${fmt(m.idle_us, 1)} + ramp ${fmt(m.ramp_us, 1)})` : '') + '; bars = TX active.';
+  const sub = m.subframes && m.subframes.length;
+  const vmaxNote = ddma ? `${D.vmax_full_ms.formula}` : `${D.vmax_full_ms.formula}${m.n_tx > 1 ? ` = \u03bb/(4\u00b7${m.n_tx}\u00b7Tc)` : ''}`;
+  const rows = [
+    ['Max velocity (full span, \u00b1)', fmt(m.vmax_full_ms, 2), 'm/s', D.vmax_full_ms, 'head', vmaxNote],
+    ddma && ['\u2514 per-TX band, \u00b1', fmt(m.vmax_per_tx_ms, 2), 'm/s', D.vmax_per_tx_ms, 'sec',
+      `${D.vmax_per_tx_ms.formula} \u2014 limit if empty-band disambiguation fails`],
+    ['Velocity resolution', fmt(m.velocity_res_ms, 3), 'm/s', D.velocity_res_ms],
+    ['Loop period T_loop', fmt(m.loop_period_us, 1), '\u00b5s', D.loop_period_us],
+    m.pattern_period_us !== m.loop_period_us && ['Pattern period', fmt(m.pattern_period_us, 1), '\u00b5s', D.pattern_period_us],
+    ['Doppler bins', m.doppler_bins, '', D.doppler_bins],
+    ['Doppler step', fmt(m.doppler_step_ms, 3), 'm/s/bin', D.doppler_step_ms],
+    ['TX used', m.n_tx, '', D.n_tx],
+    ['Virtual channels', m.n_virtual, '', D.n_virtual],
+  ].filter(Boolean);
+  for (const r of rows) list.append(mrow(...r));
+  if (sub) list.append(el('div', 'muted', `advFrameCfg: ${m.subframes.length} subframes (display only).`));
+}
+
 // Best firmware for a loaded cfg's flavour among the board's list (falls back to the default).
 function inferFirmware(text) {
   const demo = /^\s*(guiMonitor|cfarCfg)\b/m.test(text);
