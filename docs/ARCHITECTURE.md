@@ -157,9 +157,9 @@ main.cpp (CLI)
 ```
 
 `Radar::start()` spawns a DCA worker thread (`runtime.worker_cpu` /
-`worker_priority`, default any CPU at SCHED_RR 80) and a serial reader
+`worker_priority`, default any CPU, normal priority) and a serial reader
 thread; `DCA1000Socket` adds the RX thread (`runtime.rx_cpu` /
-`rx_priority`, default any CPU at SCHED_RR 99). Both serial ports are a
+`rx_priority`, default any CPU, normal priority). Both serial ports are a
 `SerialPortStream` (`src/utilities/ByteStream`): a non-blocking descriptor in
 raw mode whose every read and write is bounded by `poll()`. Baud rates go
 through `src/utilities/SerialBaud*`: termios for the standard rates,
@@ -194,10 +194,9 @@ termios2/`BOTHER` for others (the cascade's 3,125,000 baud data port).
   returns `Code::io_error` with the reason.
 - **Placement** (design P11): `runtime.rx_cpu` / `worker_cpu` pin the RX /
   worker thread to one CPU (`null`, the default: not pinned);
-  `runtime.rx_priority` / `worker_priority` (defaults 99 / 80) are the
-  SCHED_RR priorities requested. Without `cap_sys_nice` the request fails
-  with one warning naming `tools/setup/host_setup.py --apply`, and the
-  thread runs at normal priority; a CPU that cannot be used is also only a
+  `runtime.rx_priority` / `worker_priority` (default 0, range 0-99) request
+  SCHED_RR when above 0. Without `cap_sys_nice` that request fails with one
+  warning, and the thread runs at normal priority; priority 0 asks for nothing; a CPU that cannot be used is also only a
   warning (`src/utilities/ThreadPlacement`).
 - **Resync**: a DCA1000 restart (byte counts back to 0) or a wild byte
   count no longer leaves the stream dead; see "DCA1000 UDP packet format".
@@ -464,6 +463,6 @@ data port 3,125,000 baud).
 
 See `CPSL_TI_Radar_cpp/Readme.md`: raise `net.core.rmem_max` to
 134217728 (at least `dca1000.rcvbuf_bytes`: the kernel caps the request
-at `rmem_max` and reports twice the capped value, the `rcvbuf` stat), and grant
-`cap_sys_nice` (or `rtprio 99`) so the RX and worker threads get their
-SCHED_RR priorities (`tools/setup/host_setup.py --apply` does both). Serial ports need the `dialout` group.
+at `rmem_max` and reports twice the capped value, the `rcvbuf` stat;
+`tools/setup/host_setup.py --apply` does it). Serial ports need the `dialout` group. SCHED_RR is optional
+(`cap_sys_nice` or an `rtprio` limit, only if you set a priority).

@@ -35,9 +35,9 @@ cd ../..
 
 Use the config you plan to run. `--validate` prints the board, ports and frame settings, and exits 0 if the config is good. A config in the old v1 format exits 1 and names the conversion command (`uv run tools/migrate_config_v1_to_v2.py <file>`).
 
-## 4. Re-apply host settings (every rebuild)
+## 4. Check host settings
 
-The real-time capability (`cap_sys_nice`) is stored on the binary file, so every rebuild removes it. The tool also makes the 128 MB UDP receive buffer survive reboots, if it doesn't already.
+A rebuild changes no host setting, so this is a check. The tool also makes the 128 MB UDP receive buffer survive reboots, if it doesn't already.
 
 ```bash
 uv run tools/setup/host_setup.py --nic enp3s0                      # report: OK / MISSING / WARN

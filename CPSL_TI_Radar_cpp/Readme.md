@@ -42,7 +42,7 @@ sudo apt install cmake
 > uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # print the exact commands and file contents, run nothing
 > uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (sudo per command, one confirmation per check)
 > ```
-> `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. `cap_sys_nice` is lost on every rebuild of the driver, so re-run the tool after building. Add `--udev` for stable `/dev/radar/<serial>-cli` and `-data` names when more than one XDS110 board is connected. The manual commands below still work if you'd rather do it by hand.
+> `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. Add `--udev` for stable `/dev/radar/<serial>-cli` and `-data` names when more than one XDS110 board is connected. The manual commands below still work if you'd rather do it by hand.
 
 #### 3. Allow access to serial ports
 1. Finally, to ensure that your system has access to the serial ports to connect to the radar, run the following command
@@ -64,7 +64,7 @@ echo 'net.core.rmem_max=134217728' | sudo tee /etc/sysctl.d/99-radar.conf
 sudo sysctl -p /etc/sysctl.d/99-radar.conf
 ```
 
-The DCA1000 RX thread asks for real-time priority SCHED_RR 99 and the DCA worker thread for SCHED_RR 80 (`runtime.rx_priority` / `worker_priority`). Without permission the driver prints one warning per thread, with the fix (`uv run tools/setup/host_setup.py --apply`), and runs them at normal priority. To allow this without running as root, either grant the executable the capability after building:
+**Optional: real-time priority.** By default the DCA1000 RX and worker threads run at normal priority (`runtime.rx_priority` / `worker_priority` are 0), and nothing here is needed. Set either key to 1-99 to request SCHED_RR; without permission the driver prints one warning for that thread and runs it at normal priority. To allow it without running as root, either grant the executable the capability after building:
 ```bash
 sudo setcap cap_sys_nice+ep ./build/CPSL_TI_Radar_CPP
 ```
@@ -74,9 +74,7 @@ Or add the following to `/etc/security/limits.conf` (replace `<username>` with y
 <username>  -  rtprio  99
 ```
 
-The capability is stored on the binary file, so a rebuild removes it; grant it again after each build. `uv run tools/setup/host_setup.py` reports whether it is set (see "Quick setup" above). An existing `rtprio` limit below 99, such as PipeWire's `@pipewire - rtprio 95`, is not enough for the RX thread.
-
-The pre-rework IWR1843 baseline (core-04) ran without `cap_sys_nice`, so the RX thread did not get real-time priority. Any later hardware performance comparison must say whether the capability was set.
+The capability is stored on the binary file, so a rebuild removes it. An `rtprio` limit below the requested priority, such as PipeWire's `@pipewire - rtprio 95` against a request of 99, is not enough. In the core-20 bench runs (IWR1843, 10 Hz) CPU and drops were the same with and without it.
 
 **Choosing CPUs** (`runtime.rx_cpu`, `runtime.worker_cpu`, optional). By default neither thread is pinned. On a loaded host, pinning keeps the RX thread from being pushed off its CPU while packets arrive: put the RX thread and the DCA worker on two different cores that the rest of your pipeline does not saturate (for example `"rx_cpu": 2, "worker_cpu": 3` on a 4-core machine, leaving 0 and 1 to the system and your consumer). Avoid CPU 0 if it takes most interrupts on your host (`/proc/interrupts`); IRQ affinity of the NIC is not set by the driver. A CPU the process may not use (out of range or outside its cpuset) is a warning and the thread stays unpinned. `bench_pipeline --udp --rx-cpu N --worker-cpu N` measures a placement over loopback.
 
@@ -305,7 +303,7 @@ v1 -> v2 migration section).
 | `runtime.stall_timeout_ms` | no | `0` (default) is off. Above 0: when no frame arrives for that many ms while streaming, the driver warns and the run stops (instead of after 2 s without frames). |
 | `runtime.frame_queue_depth` | no | Completed ADC frames waiting for `next_adc_frame` (1-1024, default 4). When the queue is full the oldest frame is dropped and counted in `frames_overwritten` (`overwritten=` in `--stats`); `1` keeps only the latest frame. Each slot holds one frame buffer, allocated when the radar is opened. Dropped frames are still in `adc_data.bin`. |
 | `runtime.rx_cpu`, `.worker_cpu` | no | Pin the DCA1000 RX thread / the DCA worker thread to one CPU (0-1023; default `null`: not pinned). See "Choosing CPUs" above; a CPU that cannot be used is a warning. |
-| `runtime.rx_priority`, `.worker_priority` | no | SCHED_RR priority (1-99) requested for the RX thread (default 99) and the DCA worker (default 80). Needs `cap_sys_nice` or an `rtprio` limit; without it, one warning and normal priority. |
+| `runtime.rx_priority`, `.worker_priority` | no | SCHED_RR priority (0-99) requested for the RX thread and the DCA worker; default 0 = normal priority. Above 0 needs `cap_sys_nice` or an `rtprio` limit; without it, one warning and normal priority. |
 
 At least one of `serial_stream` and `dca1000` must be enabled.
 

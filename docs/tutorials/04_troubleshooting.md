@@ -13,7 +13,7 @@ The executable prints each failure as `error: <message>` and exits 1 (2 for a ba
 | `... can only be configured once per boot: power-cycle the EVM` (`config_rejected`) | Cascade board: power-cycle (12 V off and on) before **every** run. |
 | `no frame for 2 s, stopping` | Configured and started, but no data arrived. DCA1000: check the `.cfg` has `lvdsStreamCfg`, the LVDS cable, and that `--stats` shows `packets` rising. Serial: the data port, `data_uart` baud, and that the firmware matches the board's `tlv_dialect`. |
 | `sensorStop was not acknowledged` (warning) | The demo answers only after the current frame. Harmless if the exit status is 0. |
-| `could not set SCHED_RR` (warning) | `cap_sys_nice` is missing: re-run `host_setup.py --apply` ([tutorial 1](01_build_and_host_setup.md)). |
+| `could not set SCHED_RR` (warning) | Your config sets `runtime.rx_priority` or `worker_priority` and the process lacks `cap_sys_nice` or an `rtprio` limit. Remove the key (the default 0 needs neither) or grant it (Readme). |
 
 ## Reading `--stats`
 

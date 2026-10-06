@@ -73,9 +73,9 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | Resyncs (`dca_resyncs_final`; since core-15) | 0 | n/a | not measured |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
-| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (core-04, pre-rework driver), 16.1 to 16.3 (v2 driver, binary sha256 `3ecd94cd…`, with `cap_sys_nice`; core-06) / 0.5 to 0.6 |
+| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (core-04, pre-rework driver), 16.1 to 16.3 (v2 driver, binary sha256 `3ecd94cd…`, with `cap_sys_nice`; core-06), about 4.8 (core-20, without) / 0.5 to 0.6 |
 
-For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The 20 % CPU guide comes from the core-06 runs of the reworked driver (16.1 to 16.3 % over 4 reps); the core-04 baseline used the pre-rework driver (9 to 10 %). The cause of the difference is not isolated, since the driver code and the real-time priority (`cap_sys_nice`) both changed; an A/B run with and without `cap_sys_nice` would settle it.
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The 20 % CPU guide comes from the core-06 runs of the reworked driver (16.1 to 16.3 % over 4 reps); the core-04 baseline used the pre-rework driver (9 to 10 %). The core-20 A/B runs (`docs/results/validation/ab_*`, `ab2_*`) show `cap_sys_nice` is not the cause: CPU was about the same with and without it, so the default has no real-time priority.
 
 A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 10.
 
@@ -105,7 +105,7 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 
 | Symptom | Likely cause and fix |
 |---|---|
-| `bench: refusing to run, host preflight failed` | Run `uv run tools/setup/host_setup.py --nic <dca-nic> --apply`, then retry. A rebuild removes `cap_sys_nice`. |
+| `bench: refusing to run, host preflight failed` | Run `uv run tools/setup/host_setup.py --nic <dca-nic> --apply`, then retry (it checks `rmem_max` and the build type). |
 | `no frame received before start timeout` (`FAILED`, exit 2) | Check board mode (SOP jumpers), USB ports, DCA1000 power and cable, and the ping in section 2. For the cascade, power-cycle first. Read `driver_stdout.log`. |
 | `sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Fixed in core-13: `sensorStop` now waits `max(cli.cmd_timeout_ms, frame period + 200 ms)` (`cli.stop_timeout_ms` overrides it). Seen now, the board did not answer within that window; harmless if `status` is `ok` and the `.bin` is `exact`. |
 | `not every config command was acknowledged` | Harmless if only `calibData` is rejected. Otherwise the cfg has a command the firmware does not know. |
@@ -114,6 +114,6 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 | `overrun` > 0 | Not possible since core-15 (the RX thread never discards); an old driver binary. Rebuild. |
 | `drop_events` > 0 with `dropped` = 0 | Not possible since core-15 (a reordered gap that fills in takes its event back); an old driver binary. |
 | `resyncs` > 0 (and a `frame assembly resynchronised` warning) | The DCA1000 restarted its byte count mid-capture (power glitch, a second recordStart from another tool) or sent a corrupt header, or (not on a direct link) a burst of 4 or more packets arrived more than a frame late. The stream recovers by itself; the frames open at the time are dropped (`skipped`). `implausible` > 0 alone means single packets with a wild byte count were discarded. |
-| Warning `could not set SCHED_RR ... (no cap_sys_nice)` | Run `uv run tools/setup/host_setup.py --apply` (a rebuild removes the capability). The run continues at normal priority. |
+| Warning `could not set SCHED_RR ...` | The config sets `runtime.rx_priority` or `worker_priority` without `cap_sys_nice`. Remove the key (default 0) or grant the capability. The run continues at normal priority. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |
 | Non-zero exit after a USB unplug | The driver now exits 1 with `sensorStop could not be sent` (core-11) instead of crashing. Reconnect, power-cycle, rerun. |
