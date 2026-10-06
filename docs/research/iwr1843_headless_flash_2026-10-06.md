@@ -72,7 +72,7 @@ only, not of UniFlash.
 | UniFlash desktop/cloud GUI (cloud needs Chrome + TI Cloud Agent) | yes | no | user flashes elsewhere |
 | CCS 12.8.1 DSLite in Docker image | n/a for xWR18 | n/a | see section 5 |
 | mmWave Studio | yes, Windows only | no | |
-| SDK 3.6 `packages/ti/utils/sbl`, Radar Toolbox `tools/JTAG_Flasher` | JTAG/SBL, not UART flash | needs JTAG debug and a gel | not a replacement |
+| SDK `utils/sbl`, Radar Toolbox `JTAG_Flasher` | JTAG/SBL, not UART | no | not a replacement |
 | Custom UART tool per SWRA551 (break signal, bootloader UART protocol, CRC32) | document yes, tool no | yes | last resort; AWR1642 doc, same ROM family (HYPOTHESIS) |
 
 A TI mmWave FAQ answer points at SWRA551 and an E2E script thread for anyone writing their own
@@ -105,22 +105,15 @@ flasher `ti_e2e_856044` `ti_swra551`.
   names it as the Windows "XDS110 Class Application/User UART") `ti_mmwave_sdk_ug`.
 - **Nothing else may hold the port** (serial driver, viewer); claim it in `status.md`.
 
-## Applicability to CPSL TI Radar
-
-`flash.sh` can stay a manual stub until one bench flash succeeds; then it can call `dslite.sh` from a
-`flash` service layer. The 152132 B MSS-only image is a normal SDK 3.6 meta image (built with
-`generateMetaImage.sh`), so header validation should pass as it does for the stock `.bin`
-(HYPOTHESIS; the log's "correct header for AWR1843" check is the discriminator).
-
 ## Recommended Experiment
 
-1. Ask the user: install UniFlash 9.6.0 on this host (decision for firmware-14). Download the `.run` with
+1. The Controller asks the user to approve the ~365 MiB UniFlash 9.6.0 install before it happens (the user has already said an install on this host is acceptable; decision for firmware-14). Download the `.run` with
    `curl -L -O -C -` (no login), run `--help`, install headless (`--mode unattended --prefix ...` if offered).
 2. Bench (human sets SOP0+SOP2, power-cycles, claims the board): `dslite.sh flash -c IWR1843_serial.ccxml -S '.*'`
    to read setting ids and `-p` for ops; then flash with COM port set to the `-if00` by-id path, Meta Image 1
-   = `iwr1843_sar_lvds.bin`, `-e -g flash.log`. Success text: `SUCCESS!! File type META_IMAGE1 downloaded
-   successfully to SFLASH.` Ignore a trailing `Can't Run Target CPU` only if the process also reached it
-   after the SUCCESS line. Functional mode, re-power, check `mmwDemo:/>` on the CLI port.
+   = `firmware_dev/projects/iwr1843_sar_lvds/build/iwr1843_sar_lvds.bin` (152132 B, sha256 53948f4d20ca501490dd3d1dbe48229622af5346914dfe33daec33980864267a), `-e -g flash.log`. Success text: `SUCCESS!! File type META_IMAGE1 downloaded
+   successfully to SFLASH.` Treat a trailing `Can't Run Target CPU` error as benign only if `SUCCESS` for the meta image was
+   already logged before it; otherwise treat the flash as failed. Functional mode, re-power, check `mmwDemo:/>` on the CLI port.
 3. If the 9.6 CLI rejects the ccxml, use the fallback: on any GUI machine "Generate Package", copy the zip.
 4. Restore test: flash `iwr1843_demo.bin` back the same way.
 
@@ -146,6 +139,4 @@ PDF means the device-family guide could not be read; E2E threads 795052/823136 w
 - `ti_mmwave_sdk_ug` — Texas Instruments (2021), "mmWave SDK 3.6.02.00-LTS package, docs/mmwave_sdk_user_guide.pdf, section How to flash an image onto mmWave EVM," *TI MMWAVE-SDK download*. url:https://dr-download.ti.com/software-development/software-development-kit-sdk/MD-PIrUeCYr3X/03.06.02.00-LTS/mmwave_sdk_03_06_02_00-LTS-Linux-x86-Install.bin
 - `hackmd_iwr1642_linux` — octobersky (2020), "mazu-radar01 and IWR1642BOOST (mmwave)," *HackMD*. url:https://hackmd.io/@octobersky/BJbRPLMpL
 
-Note for the Reviewer: this repo has no `docs/references/references.bib`, so the bib-key existence
-checks of `lint_research_memo.py` cannot pass (same as the 2026-10-05 memo). The SDK user guide was read
-from the copy inside the firmware Docker image (`/opt/ti/mmwave_sdk_03_06_02_00-LTS/docs/`); no PDF archived.
+Note: `docs/references/references.bib` is absent, so `lint_research_memo.py` bib-key checks cannot pass.
