@@ -415,7 +415,7 @@ Three files describe a run (design §1, §2):
    `tools/migrate_config_v1_to_v2.py`. The fields are listed in
    `CPSL_TI_Radar_cpp/Readme.md`.
 2. **Board descriptor** (`CPSL_TI_Radar_cpp/config/boards/<board>.json`:
-   `IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), named by `board`
+   `IWR1443`, `IWR1843`, `IWR1843_SAR`, `IWR6843`, `AWR2243_CASCADE`), named by `board`
    (a name is looked up in `$CPSL_TI_RADAR_BOARDS_DIR`, else `../boards`
    next to the system config; a path is used as given). It holds the CLI
    handshake, cfg dialect (`rx_mask_fields`, `frame_period_field`,
@@ -450,6 +450,18 @@ fields through `SystemConfigReader::getBoard()`:
 `cfg_dialect.skip_commands` drops commands the board's firmware rejects
 before they are sent (the IWR1843 skips `calibData`); the `.cfg` files keep
 the line, and a skipped command does not count as unacknowledged.
+`cfg_dialect.required_commands` / `forbidden_commands` are enforced by
+`cross_check_radar_cfg` (a missing or present command is an error naming the
+command and board). `data_uart.supported: false` marks a board with no
+TLV/data UART; `tlv_dialect`/`header_bytes` are then not required and an
+enabled `serial_stream` is refused.
+
+`IWR1843_SAR` is the descriptor for the `iwr1843_sar_lvds` firmware: IWR1843
+lanes/layout, but `calibData` is required (not skipped), the stock-demo
+commands the SAR image rejects (`guiMonitor`, `cfarCfg`, ...) are forbidden,
+there is no data UART, and `cli.stop_timeout_ms` is about 4000 (firmware
+`sensorStop` waits up to 3 s). Only LVDS `dataFmt 1` (plain ADC, one driver
+frame = Nc chirps) is supported; `dataFmt 2` (per-chirp metadata) is core-24.
 
 DCA1000 network defaults: FPGA `192.168.33.180`, host `192.168.33.30/24`,
 command port 4096, data port 4098.
@@ -457,7 +469,8 @@ command port 4096, data port 4098.
 Supported boards: `IWR1843`, `IWR6843` (2-lane, non-interleaved),
 `IWR1443` (4-lane, interleaved; serial `sdk2` confirmed from TI source but
 not yet run on the board), `AWR2243_CASCADE` (serial TLV only so far;
-data port 3,125,000 baud).
+data port 3,125,000 baud), `IWR1843_SAR` (SAR firmware, DCA1000 ADC capture
+only, `dataFmt 1`).
 
 ## Host prerequisites
 

@@ -326,12 +326,24 @@ with a known wire format is a data change, not a rebuild.
 | `IWR1843` | 2 | `two_lane_iq_pairs` (non-interleaved, SDK 3+) | yes |
 | `IWR6843` | 2 | `two_lane_iq_pairs` (non-interleaved, SDK 3+) | yes |
 | `IWR1443` | 4 | `lane_per_rx` (interleaved, SDK 2) | yes (`sdk2`: x, y, z only; format confirmed from TI source, not yet run on the board) |
+| `IWR1843_SAR` | 2 | `two_lane_iq_pairs` | no (SAR firmware has no data UART) |
 | `AWR2243_CASCADE` | not supported yet | — | yes (3,125,000 baud) |
 
 At load time the driver cross-checks the radar `.cfg` against the board (16-bit complex ADC,
 `adcbufCfg` interleave vs the LVDS layout, `lvdsStreamCfg` ADC streaming) and refuses a mismatch
 with a message. `cfg_dialect.skip_commands` lists cfg commands the board's firmware rejects. They
-stay in the `.cfg` file but are never sent: the IWR1843 skips `calibData`.
+stay in the `.cfg` file but are never sent: the IWR1843 skips `calibData`. `required_commands` and
+`forbidden_commands` make the cross-check fail when a cfg lacks or contains a command.
+
+##### IWR1843 SAR firmware example
+For the `iwr1843_sar_lvds` firmware (see [`docs/firmware.md`](../docs/firmware.md)) use
+[`radar_0_IWR1843_SAR.json`](./config/system/radar_0_IWR1843_SAR.json) (`"board": "IWR1843_SAR"`,
+DCA1000 on, `serial_stream` off) with
+[`sar_configs/1843_SAR_2ms_fmt1.cfg`](./config/radar/sar_configs/1843_SAR_2ms_fmt1.cfg). Set the CLI port
+for your EVM. The board requires `calibData` and rejects stock-demo commands such as `guiMonitor`, so a
+stock cfg fails the load naming the command. Only `lvdsStreamCfg ... dataFmt 1` is supported (`dataFmt 2`
+decoding is planned, core-24). There is no TLV point cloud on this firmware. Check without hardware:
+`CPSL_TI_Radar_CPP --validate config/system/radar_0_IWR1843_SAR.json`.
 
 ##### AWR2243 cascade notes
 * Use [`radar_0_AWR2243_cascade_serial.json`](./config/system/radar_0_AWR2243_cascade_serial.json) with

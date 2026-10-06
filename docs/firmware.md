@@ -96,6 +96,8 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 - NOT yet verified (firmware-18, needs reflector + GUI): phase continuity, tuned gain/HPF point, boundary steps/Tb, ADC full scale, I/Q order, saturation-vs-gain.
 - Tools (`./bench`, from `firmware_dev/`): long, restart, chan, finite, start0, adc, fmt4, fmt1, bsize, bytes, late, irq, tune, sat, soak, endurance, tb.
 
+Driver support (core-22): the `IWR1843_SAR` board descriptor and `config/system/radar_0_IWR1843_SAR.json` capture this image in `lvdsStreamCfg` dataFmt 1; the image has no TLV/data UART. dataFmt 2 decoding is core-24.
+
 ## Open v2.0 items
 
 - Cascade TI binaries: `.gitignore` still has exceptions for `.aer5f`/`.ae66`/`.appimage`
