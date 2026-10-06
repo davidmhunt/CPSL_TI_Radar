@@ -47,10 +47,13 @@ TEST_CASE(one_frame_through_fake_transports) {
 TEST_MAIN()
 ```
 
-Register it by adding one line to `CPSL_TI_Radar_cpp/tests/CMakeLists.txt`, next to the other `add_driver_test` lines (`LIBS` names the libraries it links), then re-run the configure step (CMake does not scan for new files):
+Register it by adding one line to `CPSL_TI_Radar_cpp/tests/CMakeLists.txt`, next to the other `add_driver_test` lines (`LIBS` names the libraries it links), then re-run the configure step (CMake does not scan for new files). Add this line with an editor:
+
+```cmake
+add_driver_test(test_one_frame           LIBS Radar)
+```
 
 ```bash
-sed -i 's/^add_driver_test(test_radar_serial_fake   LIBS Radar)/&\nadd_driver_test(test_one_frame           LIBS Radar)/' CPSL_TI_Radar_cpp/tests/CMakeLists.txt
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
 cmake --build CPSL_TI_Radar_cpp/build -j --target test_one_frame
 ctest --test-dir CPSL_TI_Radar_cpp/build -R test_one_frame --output-on-failure

@@ -36,10 +36,10 @@ It must report `100% tests passed`.
 
 ## Add a TLV type to a serial dialect
 
-The demo sends each frame as a header followed by `{type, length, payload}` TLVs. `parse_uart_frame` in `src/SerialStreamer/UartFrame.cpp` is a pure function (bytes in, `UartFrame` out, no I/O), so a new TLV is one change there plus one test with a synthetic frame. Example: decode the cascade demo's stats TLV (type 6, six `uint32`, layout in `firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/include/mmw_output.h`), keeping the first field.
+The demo sends each frame as a header followed by `{type, length, payload}` TLVs. `parse_uart_frame` in `src/SerialStreamer/UartFrame.cpp` is a pure function (bytes in, `UartFrame` out, no I/O), so a new TLV is one change there plus one test with a synthetic frame. Example: decode the cascade demo's stats TLV (type 6, six `uint32`, layout in the optional `firmware_dev/` submodule, `firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/include/mmw_output.h`), keeping the first field.
 
-1. `src/SerialStreamer/UartFrame.hpp`, in `struct UartFrame`, add `bool has_stats = false;` and `uint32_t inter_frame_processing_us = 0;`.
-2. `src/SerialStreamer/UartFrame.cpp`: add `constexpr uint32_t kTlvStats = 6;` beside `kTlvSideInfo`; add `out.has_stats = false;` beside `out.compact_points_skipped = false;` at the top of `parse_uart_frame`; and in the TLV loop add a branch before the `kTlvCascadeCompactPoints` one:
+1. `src/SerialStreamer/UartFrame.hpp`, in `struct UartFrame`, add `bool has_stats = false;` and `uint32_t inter_frame_processing_us = 0;` right after `has_side_info` (above the comment on `compact_points_skipped`, which stays attached to that field).
+2. `src/SerialStreamer/UartFrame.cpp`: add `constexpr uint32_t kTlvStats = 6;` beside `kTlvSideInfo`; add `out.has_stats = false;` beside `out.compact_points_skipped = false;` at the top of `parse_uart_frame`; and in the TLV loop add this branch just before the `kTlvCascadeCompactPoints` one. The snippet's first line closes the previous branch and its last line leaves the block open; the existing `} else if (type == kTlvCascadeCompactPoints ...` below it closes it:
 
 ```cpp
         } else if (type == kTlvStats && dialect == TlvDialect::mcuplus_cascade) {

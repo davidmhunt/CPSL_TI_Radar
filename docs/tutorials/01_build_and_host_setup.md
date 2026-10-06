@@ -14,7 +14,7 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-The configure step prints `Build type: Release` (the default). `ctest` must end with `100% tests passed`. If the build cannot find the JSON library (a submodule), run `git submodule update --init CPSL_TI_Radar_cpp/include/json`. After pulling new code, follow [`rebuild_driver.md`](rebuild_driver.md).
+The configure step prints `Build type: Release` (the default). `ctest` (about 20 s) must end with `100% tests passed`; it and `test_validate_all_configs` read the repo-root `tests/fixtures/`, so run it from a full checkout, not a copy of `CPSL_TI_Radar_cpp/`. If the build cannot find the JSON library (a submodule), run `git submodule update --init CPSL_TI_Radar_cpp/include/json`. After pulling new code, follow [`rebuild_driver.md`](rebuild_driver.md).
 
 ## Prepare the host
 
