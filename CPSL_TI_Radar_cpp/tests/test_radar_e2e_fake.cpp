@@ -9,6 +9,7 @@
 
 #include <sys/stat.h>
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -165,8 +166,32 @@ TEST_CASE(golden_frames_through_next_adc_frame) {
     CHECK_EQ(static_cast<uint64_t>(sb.st_size), 4 * static_cast<uint64_t>(rig.bytes_per_frame));
 }
 
-TEST_CASE(latest_wins_counts_overwritten_frames) {
+TEST_CASE(frame_queue_drops_the_oldest_and_counts_it) {
+    // default runtime.frame_queue_depth 4: 6 frames with nobody waiting keep
+    // the newest 4, in order; the 2 oldest are counted as overwritten
     Rig rig(load("overwrite"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    for (int k = 0; k < 6; k++) rig.send_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+    const clk::time_point t0 = clk::now();
+    while (r.stats().frames < 6 && ms_since(t0) < 3000) std::this_thread::sleep_for(milliseconds(5));
+    CHECK_EQ(r.stats().frames_overwritten, uint64_t(2));
+    AdcFrame f;
+    for (int k = 2; k < 6; k++) {
+        CHECK(r.next_adc_frame(f, milliseconds(1000)));
+        CHECK_EQ(f.index, static_cast<uint64_t>(k));
+        CHECK(all_samples_are(f, static_cast<int16_t>(k + 1)));
+    }
+    Status why;
+    CHECK(!r.next_adc_frame(f, milliseconds(50), &why));
+    CHECK(why.code == Code::timeout);
+    r.stop();
+}
+
+TEST_CASE(frame_queue_depth_one_is_latest_wins) {
+    Rig rig(load("overwrite1", [](json& j) { j["runtime"] = {{"frame_queue_depth", 1}}; }));
     if (!rig.radar) return;
     Radar& r = *rig.radar;
     CHECK(static_cast<bool>(r.configure()));
@@ -179,6 +204,63 @@ TEST_CASE(latest_wins_counts_overwritten_frames) {
     CHECK_EQ(f.index, uint64_t(3));  // the latest
     CHECK_EQ(r.stats().frames_overwritten, uint64_t(3));
     r.stop();
+}
+
+// Publish ordering through the queue (core-14 P7): a consumer racing the
+// producer never sees a stale, duplicate or torn frame, indices strictly
+// increase, and every frame it did not get was counted in frames_overwritten.
+static void race(const std::string& name, int depth, int frames) {
+    Rig rig(load(name, [depth](json& j) { j["runtime"] = {{"frame_queue_depth", depth}}; }));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    std::vector<uint64_t> got;
+    int bad = 0;
+    std::atomic<bool> produced{false};
+    std::thread consumer([&] {
+        AdcFrame f;
+        uint32_t rnd = 12345;
+        for (;;) {
+            Status why;
+            if (r.next_adc_frame(f, milliseconds(produced ? 300 : 3000), &why)) {
+                if (!got.empty() && f.index <= got.back()) bad++;  // stale or duplicate
+                if (!all_samples_are(f, static_cast<int16_t>(f.index + 1))) bad++;  // torn or wrong buffer
+                got.push_back(f.index);
+                rnd = rnd * 1103515245u + 12345u;
+                std::this_thread::sleep_for(std::chrono::microseconds((rnd >> 16) % 3000));  // a slow, uneven consumer
+            } else if (produced) {
+                break;  // drained
+            }
+        }
+    });
+    for (int k = 0; k < frames; k++) {
+        rig.send_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+        std::this_thread::sleep_for(std::chrono::microseconds(k % 3 == 0 ? 1500 : 200));
+    }
+    const clk::time_point t0 = clk::now();
+    while (r.stats().frames < static_cast<uint64_t>(frames) && ms_since(t0) < 10000)
+        std::this_thread::sleep_for(milliseconds(2));
+    produced = true;
+    consumer.join();
+    const cpsl::radar::Stats st = r.stats();
+    uint64_t gaps = 0;
+    for (size_t i = 0; i < got.size(); i++) gaps += got[i] - (i == 0 ? 0 : got[i - 1] + 1);
+    if (!got.empty()) gaps += static_cast<uint64_t>(frames - 1) - got.back();
+    std::cout << "    depth " << depth << ": received " << got.size() << " of " << frames << ", overwritten "
+              << st.frames_overwritten << std::endl;
+    CHECK_EQ(bad, 0);
+    CHECK_EQ(st.frames, static_cast<uint64_t>(frames));
+    CHECK(!got.empty());
+    CHECK_EQ(st.frames_overwritten, gaps);
+    CHECK_EQ(st.frames_overwritten + got.size(), static_cast<uint64_t>(frames));
+    r.stop();
+}
+
+TEST_CASE(publish_ordering_consumer_racing_the_producer) {
+    race("race_d1", 1, 60);
+    race("race_d2", 2, 60);
+    race("race_d4", 4, 60);
 }
 
 TEST_CASE(concurrent_stop_waits_for_the_first_and_shares_its_status) {

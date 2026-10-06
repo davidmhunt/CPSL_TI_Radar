@@ -1,5 +1,6 @@
 #include "DCA1000Handler.hpp"
 
+#include <algorithm>
 #include <sstream>
 
 #include "Log.hpp"
@@ -182,22 +183,36 @@ bool DCA1000Handler::check_new_frame_available(){
     return count_ > 0;
 }
 
-DCA1000Handler::Cube DCA1000Handler::get_latest_adc_cube()
-{
-    Cube cube;
-    uint64_t index = 0;
-    size_t missing = 0;
-    std::chrono::steady_clock::time_point at;
-    take_frame(cube, index, missing, at);
-    return cube;
+size_t DCA1000Handler::queued_frames(){
+    std::lock_guard<std::mutex> lock(frame_mutex);
+    return count_;
+}
+
+void DCA1000Handler::close_frames(){
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        closed_ = true;
+    }
+    frame_cv_.notify_all();
 }
 
 bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                                 std::chrono::steady_clock::time_point& completed_at){
+    return take_frame(out, index, missing_bytes, completed_at,
+                      std::chrono::steady_clock::time_point::min());
+}
+
+bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
+                                std::chrono::steady_clock::time_point& completed_at,
+                                std::chrono::steady_clock::time_point deadline){
     //take the frame under the one lock the producer publishes with, so a
-    //frame published in between is never lost or delivered stale
-    std::lock_guard<std::mutex> lock(frame_mutex);
-    if(count_ == 0){
+    //frame published in between is never lost or delivered stale. The wait
+    //re-checks the queue under that lock, so a wake-up cannot be missed.
+    std::unique_lock<std::mutex> lock(frame_mutex);
+    if(deadline != std::chrono::steady_clock::time_point::min()){
+        frame_cv_.wait_until(lock, deadline, [this] { return count_ > 0 || closed_; });
+    }
+    if(count_ == 0 || closed_){
         return false;
     }
     Slot& s = queue_[head_];
@@ -226,8 +241,9 @@ void DCA1000Handler::init_buffers()
         //configure processing of completed frames
         received_frames = 0;
 
-        //the frame buffer pool, allocated once here: the work buffer and one
-        //published slot, each indexed by [Rx channel, sample, chirp]
+        //the frame buffer pool, allocated once here: the work buffer and the
+        //runtime.frame_queue_depth queue slots, each indexed by [Rx channel,
+        //sample, chirp]
         const Cube shaped(
             num_rx_channels, std::vector<std::vector<std::complex<std::int16_t>>>(
                 samples_per_chirp, std::vector<std::complex<std::int16_t>>(
@@ -239,10 +255,14 @@ void DCA1000Handler::init_buffers()
             std::lock_guard<std::mutex> lock(frame_mutex);
             work_ = Slot();
             work_.cube = shaped;
-            queue_.assign(1, Slot());
-            queue_[0].cube = shaped;
+            const size_t depth = std::max<size_t>(1, system_config_reader.get_frame_queue_depth());
+            queue_.assign(depth, Slot());
+            for(Slot& s : queue_){
+                s.cube = shaped;
+            }
             head_ = 0;
             count_ = 0;
+            closed_ = false;
         }
 
         //hold a frame open for a few packets past its end so a reordered packet can still land
@@ -317,9 +337,11 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
         publish_hook_();
     }
 
-    //publish: swap the work buffer into a slot under frame_mutex, so a frame
-    //is never visible before its cube; the slot's previous (free or
-    //overwritten) buffer becomes the next work buffer
+    //publish: swap the work buffer into the queue's next slot under
+    //frame_mutex, so a frame is never visible before its cube; the slot's
+    //previous (free or dropped) buffer becomes the next work buffer. The
+    //consumer is woken only after that (notifying earlier could be lost: a
+    //woken consumer would find the queue empty and wait again).
     {
         std::lock_guard<std::mutex> lock(frame_mutex);
         if(count_ == queue_.size()){
@@ -334,6 +356,7 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
         stats_.assembler = assembler_.get_stats();
         stats_.frames = received_frames;
     }
+    frame_cv_.notify_one();
     last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count(),
                          std::memory_order_relaxed);
 

@@ -1,19 +1,21 @@
-// DCA1000Handler frame publish ordering (audit (a) G2, directive core-11).
+// DCA1000Handler frame publish ordering (audit (a) G2, directive core-11) and
+// the frame queue (core-14 P2, P7).
 //
-// The frame-ready flag must never be visible before the cube it announces:
-// the handler converts a frame, then publishes cube + flag together under one
-// lock. A test hook runs in that window (after convert, before publish). A
-// polling consumer must never get the previous frame flagged as new, and
-// never a cube mixing two frames.
-//
-// Regression pin for core-14: the frame queue that replaces "latest frame
-// wins" must keep these cases passing.
+// A frame must never be visible before the cube it announces: the handler
+// converts a frame, then puts the cube in the queue under one lock. A test
+// hook runs in that window (after convert, before publish). A consumer must
+// never get the previous frame again, and never a cube mixing two frames.
+// core-11 pinned this for "latest frame wins"; since core-14 the same cases
+// run against the drop-oldest queue (depth runtime.frame_queue_depth, default
+// 4), plus the queue's own rules: drop-oldest counting, in-order delivery,
+// and a blocked consumer woken only after its frame is in the queue.
 #include "test_harness.hpp"
 #include "dca_test_support.hpp"
 #include "DCA1000Handler.hpp"
 
 #include <algorithm>
 #include <atomic>
+#include <fstream>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -43,8 +45,19 @@ struct Fixture {
     size_t B = 0;
     uint32_t seq = 1;
 
-    explicit Fixture(const std::string& name) {
-        sys.initialize(dca_test::write_system_config(name, dca_test::tmp_dir(), false));
+    // queue_depth 0: the default (runtime.frame_queue_depth unset)
+    explicit Fixture(const std::string& name, int queue_depth = 0) {
+        const std::string path = dca_test::write_system_config(name, dca_test::tmp_dir(), false);
+        if (queue_depth > 0) {
+            nlohmann::json j;
+            {
+                std::ifstream in(path);
+                j = nlohmann::json::parse(in);
+            }
+            j["runtime"] = {{"frame_queue_depth", queue_depth}};
+            std::ofstream(path) << j.dump(2);
+        }
+        sys.initialize(path);
         const cpsl::radar::BoardDescriptor& b = sys.getBoard();
         radar.initialize(sys.getRadarConfigPath(), b.cfg_dialect.rx_mask_fields, b.cfg_dialect.frame_period_field);
         B = radar.get_bytes_per_frame();
@@ -54,6 +67,17 @@ struct Fixture {
             h.ingest_packet(p.data(), static_cast<int>(p.size()));
     }
 };
+
+// the tag of the oldest queued frame, taken without waiting; -2 if none
+static int take_tag(DCA1000Handler& h, uint64_t* index = nullptr) {
+    Cube c;
+    uint64_t i = 0;
+    size_t missing = 0;
+    std::chrono::steady_clock::time_point at;
+    if (!h.take_frame(c, i, missing, at)) return -2;
+    if (index) *index = i;
+    return cube_tag(c);
+}
 
 TEST_CASE(fixture_is_hardware_free_and_configured) {
     Fixture f("publish_fixture");
@@ -71,7 +95,7 @@ TEST_CASE(flag_is_not_visible_between_convert_and_publish) {
 
     f.push_frame(0, 1);
     CHECK(f.h.check_new_frame_available());
-    CHECK_EQ(cube_tag(f.h.get_latest_adc_cube()), 1);
+    CHECK_EQ(take_tag(f.h), 1);
     CHECK(!f.h.check_new_frame_available());
 
     // frame 1: a consumer polls inside the publish window
@@ -82,7 +106,7 @@ TEST_CASE(flag_is_not_visible_between_convert_and_publish) {
         hook_calls++;
         if (f.h.check_new_frame_available()) {
             flag_in_window = true;
-            stale_tag = cube_tag(f.h.get_latest_adc_cube());  // what a consumer would take
+            stale_tag = take_tag(f.h);  // what a consumer would take
         }
     });
     f.push_frame(1, 2);
@@ -91,7 +115,7 @@ TEST_CASE(flag_is_not_visible_between_convert_and_publish) {
     CHECK_EQ(stale_tag, 0);
     // after publish: flag and the new cube, together
     CHECK(f.h.check_new_frame_available());
-    CHECK_EQ(cube_tag(f.h.get_latest_adc_cube()), 2);
+    CHECK_EQ(take_tag(f.h), 2);
     CHECK(!f.h.check_new_frame_available());
 }
 
@@ -115,7 +139,7 @@ TEST_CASE(polling_consumer_never_gets_a_stale_or_torn_frame) {
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (std::chrono::steady_clock::now() < deadline) {
         if (f.h.check_new_frame_available()) {
-            int tag = cube_tag(f.h.get_latest_adc_cube());
+            int tag = take_tag(f.h);
             if (tag < 0) torn++;
             else if (tag <= last) stale++;  // previous frame delivered as new
             else last = tag;
@@ -131,6 +155,102 @@ TEST_CASE(polling_consumer_never_gets_a_stale_or_torn_frame) {
     CHECK_EQ(torn, 0);
     CHECK_EQ(last, frames);
     CHECK(received > 1);
+}
+
+TEST_CASE(default_queue_holds_four_frames_and_drops_the_oldest) {
+    Fixture f("queue_default");
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    for (int k = 0; k < 6; k++) f.push_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+    CHECK_EQ(f.h.queued_frames(), size_t(4));
+    CHECK_EQ(f.h.get_stats().frames_overwritten, uint64_t(2));  // frames 0 and 1
+    uint64_t index = 0;
+    for (int k = 2; k < 6; k++) {
+        CHECK_EQ(take_tag(f.h, &index), k + 1);
+        CHECK_EQ(index, static_cast<uint64_t>(k));
+    }
+    CHECK_EQ(take_tag(f.h), -2);
+    CHECK_EQ(f.h.get_stats().frames, uint64_t(6));
+}
+
+TEST_CASE(depth_one_is_latest_wins) {
+    Fixture f("queue_depth1", 1);
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    for (int k = 0; k < 3; k++) f.push_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+    CHECK_EQ(f.h.queued_frames(), size_t(1));
+    CHECK_EQ(f.h.get_stats().frames_overwritten, uint64_t(2));
+    CHECK_EQ(take_tag(f.h), 3);
+    f.push_frame(3, 4);  // taken in time: nothing dropped
+    CHECK_EQ(take_tag(f.h), 4);
+    CHECK_EQ(f.h.get_stats().frames_overwritten, uint64_t(2));
+}
+
+TEST_CASE(blocked_consumer_is_woken_after_its_frame_is_queued) {
+    // The consumer waits on the condition variable. The producer notifies only
+    // after the frame is in the queue; a notify sent earlier (before the
+    // publish hook, i.e. before the buffer swap) would find the queue empty,
+    // the consumer would wait again and miss the frame until its 3 s
+    // deadline. The hook widens that window to 2 ms.
+    Fixture f("queue_wake", 2);
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    f.h.set_publish_hook([] { std::this_thread::sleep_for(std::chrono::milliseconds(2)); });
+    const int frames = 15;
+    std::atomic<int> acked{-1};
+    std::atomic<int> bad{0};
+    std::thread consumer([&] {
+        Cube c;
+        for (int k = 0; k < frames; k++) {
+            uint64_t index = 0;
+            size_t missing = 0;
+            std::chrono::steady_clock::time_point at;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            if (!f.h.take_frame(c, index, missing, at, deadline)) return;  // timed out: acked stays behind
+            if (index != static_cast<uint64_t>(k) || cube_tag(c) != k + 1) bad++;
+            acked = k;
+        }
+    });
+    int late = 0;
+    long long worst_us = 0;
+    for (int k = 0; k < frames; k++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));  // the consumer is waiting by now
+        const auto t0 = std::chrono::steady_clock::now();
+        f.push_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+        while (acked.load() < k && std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(500)) {
+            std::this_thread::yield();
+        }
+        const long long us =
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0).count();
+        worst_us = std::max(worst_us, us);
+        if (acked.load() < k) late++;
+    }
+    consumer.join();
+    std::cout << "    worst push -> consumer ack: " << worst_us << " us" << std::endl;
+    CHECK_EQ(late, 0);
+    CHECK_EQ(bad.load(), 0);
+    CHECK_EQ(acked.load(), frames - 1);
+    CHECK_EQ(f.h.get_stats().frames_overwritten, uint64_t(0));
+}
+
+TEST_CASE(close_frames_wakes_a_blocked_consumer) {
+    Fixture f("queue_close");
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    bool got = true;
+    long long waited_ms = -1;
+    std::thread consumer([&] {
+        Cube c;
+        uint64_t index = 0;
+        size_t missing = 0;
+        std::chrono::steady_clock::time_point at;
+        const auto t0 = std::chrono::steady_clock::now();
+        got = f.h.take_frame(c, index, missing, at, t0 + std::chrono::seconds(10));
+        waited_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    f.h.close_frames();
+    consumer.join();
+    CHECK(!got);
+    CHECK(waited_ms >= 40 && waited_ms < 2000);
+    f.push_frame(0, 1);  // after close: queued, but take_frame returns false at once
+    CHECK_EQ(take_tag(f.h), -2);
 }
 
 TEST_CASE(frames_are_swapped_through_a_pool_not_copied) {
@@ -151,9 +271,9 @@ TEST_CASE(frames_are_swapped_through_a_pool_not_copied) {
         const void* p = out.empty() || out[0].empty() ? nullptr : out[0][0].data();
         if (std::find(seen.begin(), seen.end(), p) == seen.end()) seen.push_back(p);
     }
-    // the work buffer, the published slot and the consumer's own buffer
+    // the work buffer, the queue's 4 slots and the consumer's own buffer
     std::cout << "    distinct buffers seen by the consumer: " << seen.size() << std::endl;
-    CHECK(seen.size() <= 3);
+    CHECK(seen.size() <= 6);
 }
 
 TEST_CASE(debug_status_is_periodic_not_per_frame_or_per_packet) {

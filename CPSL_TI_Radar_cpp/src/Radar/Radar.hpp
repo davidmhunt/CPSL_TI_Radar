@@ -67,7 +67,7 @@ struct Stats {
     uint64_t skipped_frames = 0;      // frames with no byte received (never completed)
     uint64_t rx_overrun = 0;          // packets discarded because the RX ring was full
     uint64_t frames = 0;              // frames completed (and saved, when saving)
-    uint64_t frames_overwritten = 0;  // completed frames replaced before next_adc_frame took them
+    uint64_t frames_overwritten = 0;  // completed frames dropped from a full frame queue before next_adc_frame took them
     uint64_t rcvbuf_bytes = 0;        // SO_RCVBUF granted by the kernel
     // serial TLV path
     uint64_t serial_frames = 0;       // valid TLV frames received
@@ -114,12 +114,16 @@ public:
     // acknowledgement is only a warning.
     Status stop();
 
-    // Wait at most `timeout` for the next completed frame. false: none, and
-    // `why` (if given) says why: Code::timeout, Code::stalled (no frame for
-    // runtime.stall_timeout_ms; reported once per stall, with a warning and
-    // Stats::stalls + 1), Code::stopped, Code::invalid_state (not started) or
-    // Code::disabled (stream off in the config). Latest frame wins: frames
-    // completed while nobody waits are counted in frames_overwritten.
+    // Wait at most `timeout` for the next completed frame (blocking on a
+    // condition variable: it returns as soon as the frame is published).
+    // false: none, and `why` (if given) says why: Code::timeout,
+    // Code::stalled (no frame for runtime.stall_timeout_ms; reported once per
+    // stall, with a warning and Stats::stalls + 1), Code::stopped (also when
+    // stop() is called while waiting), Code::invalid_state (not started) or
+    // Code::disabled (stream off in the config). Completed frames wait in a
+    // drop-oldest queue of runtime.frame_queue_depth frames (default 4; 1 =
+    // the latest frame wins); a frame dropped because the queue was full is
+    // counted in frames_overwritten. Frames come out in order, each once.
     bool next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Status* why = nullptr);
     bool next_point_cloud(PointCloud& out, std::chrono::milliseconds timeout, Status* why = nullptr);
 

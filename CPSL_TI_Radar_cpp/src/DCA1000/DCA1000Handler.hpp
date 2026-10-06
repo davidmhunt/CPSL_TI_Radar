@@ -11,6 +11,7 @@
 #include <complex>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <functional>
 
 #include "SystemConfigReader.hpp"
@@ -29,9 +30,17 @@
  * Frame buffers (design P2): the cubes are a pool of nested
  * [rx][sample][chirp] buffers that are reused and swapped, never copied. The
  * worker converts each frame in place into its work buffer, then swaps that
- * buffer into the published slot (the slot's old buffer becomes the next
- * work buffer). take_frame() swaps the published buffer with the caller's,
- * so the caller's previous buffer goes back to the pool.
+ * buffer into the next slot of the frame queue (the slot's old buffer becomes
+ * the next work buffer). take_frame() swaps the oldest queued buffer with the
+ * caller's, so the caller's previous buffer goes back to the pool.
+ *
+ * Frame queue (design P7, D10): a drop-oldest single-producer queue of
+ * runtime.frame_queue_depth slots (default 4; 1 = the latest frame wins).
+ * When it is full, publishing drops the oldest untaken frame and counts it in
+ * Stats::frames_overwritten. A consumer waiting in take_frame() is woken by a
+ * condition variable after the frame is in the queue (no polling);
+ * close_frames() wakes it for good. The pool holds depth + 1 buffers (the
+ * queue slots and the work buffer), allocated in configure_pipeline().
  */
 class DCA1000Handler {
 //variables
@@ -47,8 +56,11 @@ public:
 
 private:
 
-    //guards the published slots (queue_, head_, count_) and stats_ together
+    //guards the published slots (queue_, head_, count_, closed_) and stats_ together
     std::mutex frame_mutex;
+    //signalled after a frame is published (under no lock) and by close_frames()
+    std::condition_variable frame_cv_;
+    bool closed_ = false;
 
     //tests only: runs after a frame is converted, before it is published
     std::function<void()> publish_hook_;
@@ -89,10 +101,9 @@ private:
     };
     //the frame being converted (worker thread only)
     Slot work_;
-    //published frames, oldest at head_ (under frame_mutex). One slot: the
-    //latest frame wins and an untaken frame it replaces is counted in
-    //Stats::frames_overwritten. Slots outside [head_, head_ + count_) hold
-    //free buffers.
+    //the frame queue: a ring of runtime.frame_queue_depth slots, oldest
+    //queued frame at head_, count_ queued (under frame_mutex). Slots outside
+    //[head_, head_ + count_) hold free buffers.
     std::vector<Slot> queue_;
     size_t head_ = 0;
     size_t count_ = 0;
@@ -145,16 +156,23 @@ public:
     //pop one packet (waits up to 500 ms) and ingest it; false if none arrived
     bool process_next_packet();
 
-    //true if a published frame is waiting for take_frame()
+    //true if a frame is queued for take_frame()
     bool check_new_frame_available();
-    //tests: take the published frame (as take_frame) and return it; an empty
-    //cube if there is none
-    Cube get_latest_adc_cube();
-    //the published frame, if there is one: swapped into `out` (no copy; the
-    //buffer `out` held goes back to the pool) with its index, missing
-    //(zero-filled) byte count and completion time
+    //frames in the queue now
+    size_t queued_frames();
+    //the oldest queued frame, waiting until `deadline` for one: swapped into
+    //`out` (no copy; the buffer `out` held goes back to the pool) with its
+    //index, missing (zero-filled) byte count and completion time. false: no
+    //frame by the deadline, or close_frames() was called.
+    bool take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
+                    std::chrono::steady_clock::time_point& completed_at,
+                    std::chrono::steady_clock::time_point deadline);
+    //the same without waiting
     bool take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                     std::chrono::steady_clock::time_point& completed_at);
+    //wake every waiting take_frame() and make later calls return false at
+    //once (Radar::stop, or a failed worker). Idempotent.
+    void close_frames();
     Stats get_stats();
     //steady_clock time (ns since epoch) of the last completed frame; 0 = none yet
     int64_t last_frame_ns() const { return last_frame_ns_.load(std::memory_order_relaxed); }

@@ -95,7 +95,20 @@ struct Radar::Impl {
         const int st = state.load();
         if (st == stopped) return Status(Code::stopped, "the radar was stopped");
         if (st != running) return Status(Code::invalid_state, "the radar is not started");
+        // stop() has begun (it sets stop_flag first, then wakes the waiters)
+        if (stop_flag.load()) return Status(Code::stopped, "the radar is stopping");
         return Status::ok();
+    }
+
+    // when the stall policy wants next_adc_frame back: the stall deadline of
+    // the current gap if it has not been reported yet, else `deadline`
+    steady::time_point wake_for_stall(int64_t last_frame_ns, const std::atomic<int64_t>& reported,
+                                      steady::time_point deadline) const {
+        if (stall_ms == 0) return deadline;
+        const int64_t last = std::max(last_frame_ns, started_ns.load());
+        if (reported.load() == last) return deadline;  // this gap's stall was already reported
+        const steady::time_point at{std::chrono::nanoseconds(last + static_cast<int64_t>(stall_ms) * 1000000)};
+        return std::min(deadline, at);
     }
 
     // true once per stall: no frame of this stream for stall_ms while running
@@ -300,6 +313,9 @@ Status Radar::stop() {
     // when the DCA1000 has gone quiet
     try {
         m.stop_flag = true;
+        // wake a consumer blocked in next_adc_frame: it sees stop_flag and
+        // returns Code::stopped instead of waiting out its timeout
+        if (m.dca_on) m.dca.close_frames();
         if (m.dca_worker.joinable()) m.dca_worker.join();
         if (m.serial_worker.joinable()) m.serial_worker.join();
 
@@ -350,9 +366,12 @@ bool Radar::next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Sta
     for (;;) {
         Status st = m.stream_state("dca1000", m.dca_on);
         if (!st) return set(std::move(st));
+        // block on the frame queue's condition variable (woken by a publish
+        // or by stop()), but no longer than the stall policy allows
+        const steady::time_point wake = m.wake_for_stall(m.dca.last_frame_ns(), m.dca_stall_reported, deadline);
         uint64_t index = 0;
         size_t missing = 0;
-        if (m.dca.take_frame(out.data, index, missing, out.completed_at)) {
+        if (m.dca.take_frame(out.data, index, missing, out.completed_at, wake)) {
             out.index = index;
             out.missing_bytes = static_cast<uint32_t>(missing);
             out.shape = m.cfg.frame_shape();
@@ -362,9 +381,11 @@ bool Radar::next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Sta
         if (m.stalled(m.dca.last_frame_ns(), m.dca_stall_reported, "ADC frame")) {
             return set(Status(Code::stalled, "no ADC frame for " + std::to_string(m.stall_ms) + " ms"));
         }
-        const steady::time_point now = steady::now();
-        if (now >= deadline) return set(Status(Code::timeout, "no ADC frame within the timeout"));
-        std::this_thread::sleep_for(std::min<steady::duration>(std::chrono::milliseconds(5), deadline - now));
+        if (steady::now() >= deadline) {
+            st = m.stream_state("dca1000", m.dca_on);  // woken by stop(): say so
+            if (!st) return set(std::move(st));
+            return set(Status(Code::timeout, "no ADC frame within the timeout"));
+        }
     }
 }
 

@@ -14,3 +14,10 @@ target_compile_definitions(bench_pipeline PRIVATE
 #   ctest --test-dir <dir> -C bench -L bench --verbose
 add_test(NAME bench_pipeline COMMAND bench_pipeline CONFIGURATIONS bench)
 set_tests_properties(bench_pipeline PROPERTIES LABELS bench TIMEOUT 600)
+
+# bench_latency: frame complete -> Radar::next_adc_frame return latency over
+# fake transports (directive core-14 P7). Not a ctest; run it directly:
+#   <dir>/bench/bench_latency [--frames N] [--period-ms N]
+add_executable(bench_latency bench_latency.cpp)
+target_link_libraries(bench_latency PRIVATE Radar)
+target_compile_definitions(bench_latency PRIVATE CONFIG_DIR="${PROJECT_SOURCE_DIR}/config")
