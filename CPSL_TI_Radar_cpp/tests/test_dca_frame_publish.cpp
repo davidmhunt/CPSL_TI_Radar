@@ -302,4 +302,31 @@ TEST_CASE(debug_status_is_periodic_not_per_frame_or_per_packet) {
     }
 }
 
+TEST_CASE(dca1000_restart_resyncs_with_one_warning) {
+    // core-15 (core-11 review S1): a DCA1000 restart mid-capture sends byte
+    // counts and sequence numbers from 0 / 1 again. The handler warns once,
+    // and the new stream's frames are published with increasing indices.
+    Fixture f("publish_restart");
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    std::vector<std::string> warns;
+    cpsl::radar::set_log_sink([&](cpsl::radar::LogLevel l, const std::string& m) {
+        if (l == cpsl::radar::LogLevel::warn) warns.push_back(m);
+    });
+    for (uint64_t k = 0; k < 4; k++) f.push_frame(k, static_cast<uint16_t>(k + 1));
+    std::vector<int> tags;
+    std::vector<uint64_t> idx;
+    uint64_t i = 0;
+    for (int t; (t = take_tag(f.h, &i)) != -2;) { tags.push_back(t); idx.push_back(i); }
+    f.seq = 1;  // the restart
+    for (uint64_t k = 0; k < 3; k++) f.push_frame(k, static_cast<uint16_t>(k + 11));
+    for (int t; (t = take_tag(f.h, &i)) != -2;) { tags.push_back(t); idx.push_back(i); }
+    cpsl::radar::set_log_sink(nullptr);
+    const std::vector<int> want = {1, 2, 3, 4, 11, 12, 13};
+    CHECK(tags == want);
+    for (size_t k = 1; k < idx.size(); k++) CHECK(idx[k] > idx[k - 1]);
+    CHECK_EQ(f.h.get_stats().assembler.resyncs, 1u);
+    CHECK_EQ(warns.size(), size_t(1));
+    if (!warns.empty()) CHECK(warns[0].find("resynchronised") != std::string::npos);
+}
+
 TEST_MAIN()

@@ -13,6 +13,8 @@ void add_sat(uint32_t& counter, uint64_t n) {
 }  // namespace
 
 constexpr size_t FrameAssembler::kDefaultReorderSlackPackets;
+constexpr size_t FrameAssembler::kResyncPackets;
+constexpr size_t FrameAssembler::kResyncWindowFrames;
 
 void FrameAssembler::configure(size_t bytes_per_frame, size_t reorder_slack_bytes) {
     bytes_per_frame_ = bytes_per_frame;
@@ -31,13 +33,24 @@ void FrameAssembler::configure(size_t bytes_per_frame, size_t reorder_slack_byte
     have_seq_        = false;
     newest_seq_      = 0;
     seq_window_      = 0;
-    stats_           = Stats();
+    index_bias_      = 0;
+    rebase_pending_  = false;
+    next_index_      = 0;
+    for (std::vector<Held>* v : {&run_, &replay_}) {
+        v->assign(kResyncPackets, Held());
+        for (Held& h : *v) h.bytes.reserve(1472);  // a DCA1000 packet: no allocation on a resync
+    }
+    run_n_       = 0;
+    run_end_     = 0;
+    max_payload_ = 0;
+    stats_       = Stats();
 }
 
 void FrameAssembler::set_frame_sink(FrameSink sink) { sink_ = std::move(sink); }
 
 void FrameAssembler::reset_stats() {
     stats_ = Stats();
+    run_n_ = 0;  // its packets were counted in the old stats
     // the next sequence number is compared against 0, as if seq 0 had just arrived
     have_seq_   = true;
     newest_seq_ = 0;
@@ -150,7 +163,7 @@ int FrameAssembler::close_base() {
         if (missing > 0) stats_.incomplete_frames += 1;
 
         completed_frame_.swap(s.bytes);
-        completed_index_ = base_;
+        completed_index_ = base_ + index_bias_;
         s.have.clear();
         if (sink_) sink_(completed_frame_, completed_index_, missing);
         emitted = 1;
@@ -166,12 +179,36 @@ int FrameAssembler::push_packet(const uint8_t* data, int len) {
     const uint32_t seq   = parse_sequence_number(data);
     const uint64_t first = parse_byte_count(data);
     const uint64_t end   = first + static_cast<uint64_t>(len - 10);
-    const uint8_t* payload = data + 10;
-    const uint64_t B = bytes_per_frame_;
+    const uint64_t B     = bytes_per_frame_;
+    const uint64_t W     = kResyncWindowFrames * B;
+
+    // plausibility, before the sequence number is tracked (see the header)
+    bool ahead = false, behind = false;
+    if (started_) {
+        uint64_t allowance = W;
+        const uint32_t d = seq - newest_seq_;  // sequence numbers the stream moved
+        if (have_seq_ && d != 0 && d < 0x80000000u)
+            allowance += static_cast<uint64_t>(d) * std::max<uint64_t>(max_payload_, static_cast<uint64_t>(len - 10));
+        ahead  = first > front_ && first - front_ > allowance;
+        behind = end + W <= base_ * B;
+    }
 
     const SeqKind kind = track_sequence(seq);
     if (kind == SeqKind::duplicate) return 0;  // its bytes were already handled
 
+    if (ahead || behind) {
+        // late as the placement below would count it; ahead: payload discarded
+        if (behind && kind == SeqKind::in_order) stats_.late_packets += 1;
+        if (ahead) add_sat(stats_.implausible_packets, 1);
+        return hold(data, len, first, end, behind || kind == SeqKind::late, ahead);
+    }
+    run_n_       = 0;  // a plausible packet ends any run
+    max_payload_ = std::max<uint64_t>(max_payload_, static_cast<uint64_t>(len - 10));
+    return place(data + 10, first, end, kind);
+}
+
+int FrameAssembler::place(const uint8_t* payload, uint64_t first, uint64_t end, SeqKind kind) {
+    const uint64_t B = bytes_per_frame_;
     int emitted    = 0;
     bool late_data = false;
     for (uint64_t o = first; o < end;) {
@@ -181,6 +218,10 @@ int FrameAssembler::push_packet(const uint8_t* data, int len) {
         if (!started_) {
             started_ = true;
             base_    = f;
+            if (rebase_pending_) {  // after a resync: indices continue past the dropped frames
+                index_bias_     = next_index_ - f;
+                rebase_pending_ = false;
+            }
         }
 
         if (f < base_) {
@@ -215,7 +256,49 @@ int FrameAssembler::push_packet(const uint8_t* data, int len) {
     return emitted;
 }
 
+int FrameAssembler::hold(const uint8_t* data, int len, uint64_t first, uint64_t end, bool late, bool implausible) {
+    if (run_n_ > 0 && first != run_end_) run_n_ = 0;  // not contiguous: a new run starts here
+    Held& h = run_[run_n_++];
+    h.bytes.assign(data, data + len);
+    h.counted_late        = late;
+    h.counted_implausible = implausible;
+    run_end_              = end;
+    return run_n_ < kResyncPackets ? 0 : resync();
+}
+
+int FrameAssembler::resync() {
+    // drop the open frames; the next emitted index follows them
+    const uint64_t span = !slot(base_ + 1).have.empty() ? 2 : (!slot(base_).have.empty() ? 1 : 0);
+    add_sat(stats_.skipped_frames, span);
+    next_index_     = base_ + index_bias_ + span;
+    rebase_pending_ = true;
+    for (Slot& s : slots_) s.have.clear();
+    started_                   = false;
+    front_                     = 0;
+    stats_.adc_data_byte_count = 0;
+    // the run's packets are replayed below and counted again as they land
+    for (size_t i = 0; i < run_n_; i++) {
+        if (run_[i].counted_late && stats_.late_packets > 0) stats_.late_packets -= 1;
+        if (run_[i].counted_implausible && stats_.implausible_packets > 0) stats_.implausible_packets -= 1;
+    }
+    // sequence tracking restarts just before the run's first packet
+    have_seq_   = true;
+    newest_seq_ = parse_sequence_number(run_[0].bytes.data()) - 1;
+    seq_window_ = ~uint64_t(0);
+    add_sat(stats_.resyncs, 1);
+
+    std::swap(run_, replay_);
+    const size_t n = run_n_;
+    run_n_         = 0;
+    int emitted    = 0;
+    for (size_t i = 0; i < n; i++) {
+        emitted += push_packet(replay_[i].bytes.data(), static_cast<int>(replay_[i].bytes.size()));
+    }
+    return emitted;
+}
+
 int FrameAssembler::flush() {
+    run_n_ = 0;
     if (bytes_per_frame_ == 0 || !started_) return 0;
     int emitted = 0;
     while (!slot(base_).have.empty() || !slot(base_ + 1).have.empty()) emitted += close_base();

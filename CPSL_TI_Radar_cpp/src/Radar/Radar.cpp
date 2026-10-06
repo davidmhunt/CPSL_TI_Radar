@@ -467,6 +467,8 @@ Stats Radar::stats() const {
         s.duplicate = d.assembler.duplicate_packets;
         s.incomplete_frames = d.assembler.incomplete_frames;
         s.skipped_frames = d.assembler.skipped_frames;
+        s.implausible = d.assembler.implausible_packets;
+        s.resyncs = d.assembler.resyncs;
         s.frames = d.frames;
         s.frames_overwritten = d.frames_overwritten;
         if (m.packets) {

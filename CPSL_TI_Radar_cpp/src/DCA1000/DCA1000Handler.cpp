@@ -164,6 +164,9 @@ void DCA1000Handler::ingest_packet(const uint8_t* data, int len){
     // Delegate sequence checking and frame assembly to FrameAssembler; every
     // completed frame reaches save_frame_byte_buffer() through the frame sink
     assembler_.push_packet(data, len);
+    if (assembler_.resync_count() != resyncs_warned_) {
+        warn_resync();
+    }
 
     // Write entire ADC payload to raw LVDS file in one syscall
     if (save_raw_lvds && len > 10 && raw_lvds_out_file && raw_lvds_out_file->is_open()) {
@@ -281,6 +284,7 @@ void DCA1000Handler::init_buffers()
         }
         last_frame_ns_.store(0, std::memory_order_relaxed);
         last_status_ = std::chrono::steady_clock::time_point{};
+        resyncs_warned_ = 0;
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
@@ -288,6 +292,20 @@ void DCA1000Handler::init_buffers()
         cpsl::radar::log_error("attempted to initialize DCA1000 Handler buffers, ",
                                "but radar_config_reader wasn't initialized");
     }
+}
+
+//a resync (FrameAssembler: a DCA1000 restart, or a wild byte count) is
+//worth a warning, but at most one per kStatusPeriod: a stream of garbage
+//must not stall this thread on the log sink (design P10)
+void DCA1000Handler::warn_resync(){
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    if (resyncs_warned_ != 0 && now - last_resync_warn_ < kStatusPeriod) return;
+    const uint32_t n = assembler_.resync_count();
+    cpsl::radar::log_warn("DCA1000: packet byte counts jumped (DCA1000 restart or a corrupt header?); frame "
+                          "assembly resynchronised, open frames dropped (", n - resyncs_warned_,
+                          " resync(s), ", n, " in total)");
+    resyncs_warned_ = n;
+    last_resync_warn_ = now;
 }
 
 //one debug line with the cumulative counters (the same ones Radar::stats()
@@ -304,6 +322,8 @@ void DCA1000Handler::print_status(){
       << ", duplicate " << stats.duplicate_packets
       << ", incomplete frames " << stats.incomplete_frames
       << ", skipped frames " << stats.skipped_frames
+      << ", implausible " << stats.implausible_packets
+      << ", resyncs " << stats.resyncs
       << ", rx overruns " << (source_ ? source_->overrun_count() : 0)
       << ", rx ring full " << (source_ ? source_->ring_full_count() : 0)
       << ", kernel drops " << (source_ ? source_->kernel_drops() : 0);

@@ -114,6 +114,9 @@ private:
     std::atomic<int64_t> last_frame_ns_{0};
     //when the debug status line was last logged (at most one per kStatusPeriod)
     std::chrono::steady_clock::time_point last_status_{};
+    //resyncs already warned about, and when (at most one warning per kStatusPeriod)
+    uint32_t resyncs_warned_ = 0;
+    std::chrono::steady_clock::time_point last_resync_warn_{};
 
     //ADC cube conversion (interleaved / non-interleaved)
     ADCCubeConverter converter_;
@@ -185,6 +188,7 @@ private:
     //receiving data / initializing buffers
     void init_buffers();
     void print_status();
+    void warn_resync();
 
     //processing frame byte buffer
     void save_frame_byte_buffer(uint64_t index, size_t missing_bytes);

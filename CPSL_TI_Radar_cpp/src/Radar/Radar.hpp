@@ -63,7 +63,9 @@ struct Stats {
     uint64_t late = 0;                // packets that arrived after a newer one
     uint64_t duplicate = 0;           // packets received twice
     uint64_t incomplete_frames = 0;   // frames completed with zero-filled bytes
-    uint64_t skipped_frames = 0;      // frames with no byte received (never completed)
+    uint64_t skipped_frames = 0;      // frames never completed: no byte received, or dropped by a resync
+    uint64_t implausible = 0;         // packets whose byte count was implausibly far ahead (payload discarded)
+    uint64_t resyncs = 0;             // frame assembly restarted on a new byte count (DCA1000 restart)
     uint64_t rx_overrun = 0;          // packets discarded in user space (RX ring full): 0 since core-15
     uint64_t rx_ring_full = 0;        // times the RX ring was full and the RX thread stopped reading
     uint64_t kernel_drops = 0;        // packets the kernel dropped (SO_RCVBUF full; SO_RXQ_OVFL)
