@@ -1,6 +1,6 @@
 # MIMO modes: TDM vs DDMA
 
-Reference the GUI/cfg code follows (gui-21, #59). Each firmware descriptor names its scheme in a `mimo` block; formulas and checks are chosen from it, not from the board name. Restates `docs/research/gui_multichirp_tdm.md` (**M1**, sections cited as M1 s1..s4) and `docs/research/gui_board_limits_cascade_multiprofile.md` (**M2**, s3/s4); no new research. Source refs: `RP` = SDK 3.6 `demo/utils/mmwdemo_rfparser.c`; `CAS` = `firmware_dev/projects/awr2243_cascade_ddm/src/ti/`. Cfg formulas (`Tc`, `lambda`, `dv`, ...) are in [`cfg_formulas.md`](cfg_formulas.md); that doc links here for `n_TX`/`vmax`.
+Reference the GUI/cfg code follows (gui-21, #59); each firmware descriptor names its scheme in a `mimo` block. Restates `docs/research/gui_multichirp_tdm.md` (**M1**, sections cited as M1 s1..s4) and `docs/research/gui_board_limits_cascade_multiprofile.md` (**M2**, s3/s4); no new research. Source refs: `RP` = SDK 3.6 `demo/utils/mmwdemo_rfparser.c`; `CAS` = `firmware_dev/projects/awr2243_cascade_ddm/src/ti/`. Cfg formulas (`Tc`, `lambda`, `dv`, ...) are in [`cfg_formulas.md`](cfg_formulas.md); that doc links here for `n_TX`/`vmax`.
 
 Symbols: `Tc` chirp time (us); `cpl` chirps per loop (frameCfg `end-start+1`); `L` loops; `N = cpl*L` chirps per frame; `n_TX` distinct azimuth TX in the loop (+1 if an elevation chirp exists; TX1/TX3 azimuth, TX2 elevation), **not** `cpl`; `n_RX` enabled RX; `lambda = c/fc`. Masks: bit0 = TX1, bit1 = TX2, bit2 = TX3 (so mask 1 = TX1, 2 = TX2, 4 = TX3, 5 = TX1+TX3).
 
@@ -17,11 +17,9 @@ Symbols: `Tc` chirp time (us); `cpl` chirps per loop (frameCfg `end-start+1`); `
 | Cfg that sets it | `channelCfg` (RX/TX masks), `chirpCfg` (per-chirp TX mask), `frameCfg` (cpl, `L`, period), `bpmCfg` (opt-in), `advFrameCfg` (stock only: up to 4 subframes, each its own pattern; not SAR) | `channelCfg` (TX count: 2,3,4 or 6), `frameCfg`; `chirpCfg txEnable` only has to overlap `channelCfg` (parser overwrites it with the merged mask, `CAS/.../mmwdemo_rfparserDDMA.c:717-733`); no `advFrameCfg` (`mss_main.c:3888-3891`) |
 | Phase codes | none (BPM sign is switched by the demo when `bpmCfg` is on) | firmware only: `rlRfSetPhaseShiftConfig` per chirp, `txAntMaskEnable=63` hard-coded (`mss_main.c:3796-3850`); not a cfg command |
 
-Slow time: for TDM the per-virtual-antenna sample interval is `n_TX*Tc` (the loop period for a conforming pattern, `cpl = n_TX`); for DDMA it is `Tc` (every TX each chirp). Hence the different `vmax` multipliers.
-
 ## 2. Timing diagrams (one column per chirp, `#` = TX on)
 
-**TDM, 3 TX, pattern 1,4,2 (masks 1,4,2 = TX1, TX3, TX2), `cpl = 3`, `L = 2`.** One loop = `3*Tc`; each TX repeats every `3*Tc`.
+**TDM, 3 TX, pattern 1,4,2 (masks 1,4,2 = TX1, TX3, TX2), `cpl = 3`, `L = 2`.**
 ```
 chirp  : 0  1  2 | 3  4  5          n_TX = 3  (TX1, TX3 azimuth; TX2 elevation)
 TX1    : #  .  . | #  .  .          interval per TX = 3*Tc
@@ -29,7 +27,7 @@ TX2    : .  .  # | .  .  #
 TX3    : .  #  . | .  #  .
 ```
 
-**TDM, 2 TX BPM (opt-in), mask 5 on both chirps, `cpl = 2`.** Both azimuth TX on every chirp; `bpmCfg` flips the sign of one TX on alternate chirps (sign pattern is the BPM concept, not read from source here). `n_TX = 2`, interval `2*Tc`.
+**TDM, 2 TX BPM (opt-in), mask 5 on both chirps, `cpl = 2`.** `bpmCfg` flips the sign of one TX on alternate chirps (sign pattern is the BPM concept, not read from source here). `n_TX = 2`, interval `2*Tc`.
 ```
 chirp  : 0  1 | 2  3
 TX1    : #  # | #  #
@@ -56,7 +54,7 @@ TX1..6 : #  #  #  #  #  #  #  #      (all six every chirp; no per-TX slot in tim
 
 **TDM:** the chirp table (TX mask per chirp; presets SIMO / 2-TX / 3-TX with elevation / BPM), `cpl <= 32`, `L`, period, profile. `channelCfg` TX = OR of the chirp masks (parser requires `(chirp mask & channelCfg tx) > 0` per chirp; `RP:836`). Rules: no mixing one-TX and multi-TX chirps; multi-TX masks only as BPM or SIMO; keep the pattern `n_TX`-periodic; TI order is azimuth first, elevation last (1,4,2). **GUI default = plain TDM, `bpmCfg` disabled; BPM is an opt-in preset** available only where the stock demo supports it: 1843/6843 yes, 1443 no, SAR not confirmed (descriptor `bpm` false). `advFrameCfg` subframes (stock only) may each use a different pattern.
 
-**DDMA:** profile, `L`, period, `channelCfg` TX count (2, 3, 4 or 6). `cpl` should be a multiple of `n_bands` (8; shipped cfgs all use 8; inferred, HYPOTHESIS). The chirp table and phase codes are **view-only**: shown, not editable, since the firmware sets them. One cfg per power-up; one profile used.
+**DDMA:** profile, `L`, period, `channelCfg` TX count (2, 3, 4 or 6). `cpl` should be a multiple of `n_bands` (8; shipped cfgs all use 8; inferred, HYPOTHESIS, M2 experiment 1). The chirp table and phase codes are **view-only**: shown, not editable, since the firmware sets them. One cfg per power-up; one profile used.
 
 ## 5. Unverified (carried from M1/M2)
 
@@ -64,4 +62,3 @@ TX1..6 : #  #  #  #  #  #  #  #      (all six every chirp; no per-TX slot in tim
 - HYPOTHESIS: non-cyclic patterns (`[1,4,1,2]`) misdecode; `[1,4,1,4]` working is inferred from the parser, not run. 3-TX `L` should be even (stride 6, medium). M1 experiment 1.
 - Cascade TDM exists only as the compile-time `MMWDEMO_TDM` build (untested here); the shipped build is DDMA, and a one-TX-per-chirp cfg will not decode as TDM (HYPOTHESIS, M1 s3).
 - 1443 BPM and all 1443 rules (shipped demo is SDK 2.x, no source); `dca1000_raw` TDM/BPM rules (binaries, `tdm` true, `bpm` false, limits unverified); SAR BPM (same parser, not confirmed).
-- DDMA `cpl` multiple-of-8 rule (M2 experiment 1).
