@@ -4,7 +4,7 @@
 #   ctest --test-dir <dir> -C bench -L bench --verbose   (or run <dir>/bench/bench_pipeline)
 add_executable(bench_pipeline bench_pipeline.cpp)
 target_include_directories(bench_pipeline PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bench_pipeline PRIVATE FrameAssembler ADCCubeConverter Utilities)
+target_link_libraries(bench_pipeline PRIVATE DCA1000Handler FrameAssembler ADCCubeConverter Utilities)
 target_compile_definitions(bench_pipeline PRIVATE
     CONFIG_DIR="${PROJECT_SOURCE_DIR}/config"
     BENCH_BUILD_TYPE="$<CONFIG>")

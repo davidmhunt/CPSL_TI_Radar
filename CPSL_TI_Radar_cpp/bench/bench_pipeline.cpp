@@ -7,23 +7,38 @@
 // pluggable so the D5 question (nested vs flat AdcFrame) can be revisited
 // with data; see converter_kernels.hpp for the three variants.
 //
-// Two measurements, each run for all three variants on identical input:
-//   1. converter only: the same assembled frame converted N times
+// Three measurements:
+//   1. converter only: the same assembled frame converted N times, for all
+//      three variants on identical input
 //   2. pipeline replay: FrameAssembler + converter over a packet stream, for
-//      three scenarios (clean, 1% dropped packets, duplicates + reordering)
+//      three scenarios (clean, 1% dropped packets, duplicates + reordering),
+//      again for all three variants
+//   3. driver replay (rows "drv_*", variant (d)), added for the core-14 perf
+//      gate: the same kind of packet stream through the driver's own
+//      DCA1000Handler (configure_pipeline + ingest_packet: assembler,
+//      converter, publish, adc_data.bin), as the DCA worker thread runs it.
+//      drv_save writes adc_data.bin to a temp dir (--tmp-dir, default
+//      /dev/shm when present, so disk writeback does not add noise). Driver
+//      log messages go to a counting sink at --log-level (default info).
 //
 // Every rep runs the variants in turn (a, b, c, a, b, c, ...) after one
 // untimed warm-up rep; the table shows the median rep and, in brackets, the
-// best rep. Single-threaded; no sockets, no file I/O.
+// best rep. Single-threaded; no sockets.
+//
+// Compare two builds with tools/bench/pipeline_gate.py (the perf gate).
 //
 // Usage: bench_pipeline [--cfg <radar .cfg>] [--frames N] [--reps N]
+//                       [--log-level error|warn|info|debug] [--tmp-dir DIR]
+#include <stdlib.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -32,8 +47,11 @@
 #include <string>
 #include <vector>
 
+#include "DCA1000Handler.hpp"
 #include "FrameAssembler.hpp"
+#include "Log.hpp"
 #include "RadarConfigReader.hpp"
+#include "SystemConfigReader.hpp"
 #include "converter_kernels.hpp"
 
 // ---------------------------------------------------------------------------
@@ -99,8 +117,11 @@ const size_t kHeader = 10;
 
 // Build the in-order packet sequence covering `frames` frames, then inject
 // drops / duplicates / adjacent swaps with the given per-packet probabilities.
+// `tail_packets` clean packets of frame `frames` follow (never emitted): they
+// move the stream past the reorder slack, so the last frame closes without
+// FrameAssembler::flush() (the driver rows have no flush).
 PacketStream make_stream(const std::string& name, size_t bytes_per_frame, size_t frames, double p_drop,
-                         double p_dup, double p_swap, uint64_t seed) {
+                         double p_dup, double p_swap, uint64_t seed, size_t tail_packets = 0) {
     const size_t payload = kPacketBytes - kHeader;
     const uint64_t total = static_cast<uint64_t>(bytes_per_frame) * frames;
     const size_t n = static_cast<size_t>((total + payload - 1) / payload);
@@ -137,6 +158,12 @@ PacketStream make_stream(const std::string& name, size_t bytes_per_frame, size_t
             ps.swapped++;
             i++;
         }
+    }
+    {
+        // the tail continues the stream exactly where frame `frames` begins
+        uint32_t seq = static_cast<uint32_t>(n + 1);
+        uint64_t off = total;
+        for (size_t i = 0; i < tail_packets; i++, seq++, off += payload) order.push_back(Pkt{seq, off, payload});
     }
 
     // materialise: header (seq LE32, byte count LE48) + payload. Payload bytes
@@ -229,6 +256,79 @@ ReplayResult replay(Kernel& k, const PacketStream& ps, size_t bytes_per_frame) {
     return r;
 }
 
+// ---------------------------------------------------------------------------
+// Driver replay: DCA1000Handler over a packet stream, as the DCA worker runs it
+// ---------------------------------------------------------------------------
+struct DriverRig {
+    SystemConfigReader sys;
+    RadarConfigReader radar;
+    std::string out_dir;
+};
+
+// a schema v2 IWR1843 + DCA1000 system config for `cfg` (no port is opened:
+// the bench calls configure_pipeline() only), adc_data.bin in `out_dir`
+bool make_driver_rig(DriverRig& rig, const std::string& cfg, const std::string& out_dir, bool save,
+                     const std::string& json_path) {
+    setenv(SystemConfigReader::kBoardsDirEnv, (std::string(CONFIG_DIR) + "/boards").c_str(), 0);
+    {
+        std::ofstream j(json_path);
+        j << "{\n"
+             "  \"schema_version\": 2,\n"
+             "  \"board\": \"IWR1843\",\n"
+             "  \"radar_cfg\": \"" << cfg << "\",\n"
+             "  \"cli\": { \"port\": \"/dev/null-not-opened\" },\n"
+             "  \"dca1000\": { \"enabled\": true, \"fpga_ip\": \"127.0.0.1\", \"host_ip\": \"127.0.0.1\",\n"
+             "               \"cmd_port\": 4096, \"data_port\": 4098 },\n"
+             "  \"output\": { \"dir\": \"" << out_dir << "\", \"save_adc_frames\": " << (save ? "true" : "false")
+          << ", \"save_raw_lvds\": false }\n"
+             "}\n";
+        if (!j) return false;
+    }
+    if (!rig.sys.initialize(json_path)) return false;
+    const cpsl::radar::BoardDescriptor& b = rig.sys.getBoard();
+    rig.radar.initialize(rig.sys.getRadarConfigPath(), b.cfg_dialect.rx_mask_fields, b.cfg_dialect.frame_period_field);
+    rig.out_dir = out_dir;
+    return rig.radar.initialized;
+}
+
+struct DriverResult {
+    Sample s;
+    FrameAssembler::Stats st;
+    uint64_t log_messages = 0;
+};
+
+uint64_t g_log_messages = 0;
+
+DriverResult replay_driver(const DriverRig& rig, const PacketStream& ps) {
+    DriverResult r;
+    {
+        DCA1000Handler h;
+        // untimed: opens adc_data.bin (when saving) and sizes the frame buffers
+        if (!h.configure_pipeline(rig.sys, rig.radar)) {
+            std::fprintf(stderr, "FAIL: DCA1000Handler::configure_pipeline\n");
+            std::exit(1);
+        }
+        const uint64_t m0 = g_log_messages;
+        uint64_t a0 = g_allocs;
+        Clock::time_point t0 = Clock::now();
+        const uint8_t* base = ps.buf.data();
+        for (size_t i = 0; i < ps.off.size(); i++) {
+            h.ingest_packet(base + ps.off[i], static_cast<int>(ps.len[i]));
+        }
+        double ns = std::chrono::duration<double, std::nano>(Clock::now() - t0).count();
+        uint64_t allocs = g_allocs - a0;
+        r.log_messages = g_log_messages - m0;
+        h.stop();  // untimed: flush and close adc_data.bin
+        const DCA1000Handler::Stats st = h.get_stats();
+        r.s = {st.frames / (ns * 1e-9), ns / static_cast<double>(ps.payload_bytes),
+               st.frames ? static_cast<double>(allocs) / st.frames : 0.0, st.frames};
+        r.st = st.assembler;
+    }
+    std::error_code ec;
+    std::filesystem::remove(rig.out_dir + "/adc_data.bin", ec);
+    return r;
+}
+
 std::string cpu_model() {
     std::ifstream f("/proc/cpuinfo");
     std::string line;
@@ -253,21 +353,45 @@ void print_rows(const char* scenario, std::unique_ptr<Kernel> (&k)[3], std::vect
     }
 }
 
+void print_driver_row(const char* scenario, const std::vector<Sample>& runs) {
+    Stats s = summarize(runs);
+    std::printf("  %-12s (d) %-26s %10.1f [%10.1f] %8.3f [%8.3f] %12.1f %8s\n", scenario, "DCA1000Handler (driver)",
+                s.median.frames_per_s, s.best.frames_per_s, s.median.ns_per_byte, s.best.ns_per_byte,
+                s.median.allocs_per_frame, "-");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::string cfg = std::string(CONFIG_DIR) + "/radar/nav_configs/1843_stress_test.cfg";
     size_t frames = 40;
     size_t reps = 7;
+    std::string log_level = "info";
+    std::string tmp_base = std::filesystem::is_directory("/dev/shm") && access("/dev/shm", W_OK) == 0 ? "/dev/shm"
+                                                                                                       : "/tmp";
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         if (a == "--cfg" && i + 1 < argc) cfg = argv[++i];
         else if (a == "--frames" && i + 1 < argc) frames = std::strtoul(argv[++i], nullptr, 10);
         else if (a == "--reps" && i + 1 < argc) reps = std::strtoul(argv[++i], nullptr, 10);
+        else if (a == "--log-level" && i + 1 < argc) log_level = argv[++i];
+        else if (a == "--tmp-dir" && i + 1 < argc) tmp_base = argv[++i];
         else {
-            std::fprintf(stderr, "usage: %s [--cfg <radar .cfg>] [--frames N] [--reps N]\n", argv[0]);
+            std::fprintf(stderr,
+                         "usage: %s [--cfg <radar .cfg>] [--frames N] [--reps N] [--log-level error|warn|info|debug]"
+                         " [--tmp-dir DIR]\n",
+                         argv[0]);
             return 2;
         }
+    }
+    cpsl::radar::LogLevel level;
+    if (log_level == "error") level = cpsl::radar::LogLevel::error;
+    else if (log_level == "warn") level = cpsl::radar::LogLevel::warn;
+    else if (log_level == "info") level = cpsl::radar::LogLevel::info;
+    else if (log_level == "debug") level = cpsl::radar::LogLevel::debug;
+    else {
+        std::fprintf(stderr, "--log-level must be error, warn, info or debug\n");
+        return 2;
     }
     if (frames < 2 || reps < 1) {
         std::fprintf(stderr, "need --frames >= 2 and --reps >= 1\n");
@@ -325,6 +449,8 @@ int main(int argc, char** argv) {
     std::printf("  method     : %zu frames per rep, 1 warm-up + %zu timed reps, variants interleaved per rep;\n"
                 "               median rep shown, best rep in [brackets]; single thread\n",
                 frames, reps);
+    std::printf("  driver rows: log level %s (counting sink), adc_data.bin for drv_save in %s\n", log_level.c_str(),
+                tmp_base.c_str());
 
     std::unique_ptr<Kernel> kernels[3] = {std::unique_ptr<Kernel>(new bench::TodayKernel()),
                                           std::unique_ptr<Kernel>(new bench::NestedReusedKernel()),
@@ -406,14 +532,76 @@ int main(int argc, char** argv) {
         if (done != frames) golden_ok = false;
     }
 
+    // ---- 3. driver replay (DCA1000Handler) ----
+    std::string tmp_dir = tmp_base + "/bench_pipeline_XXXXXX";
+    if (mkdtemp(&tmp_dir[0]) == nullptr) {
+        std::fprintf(stderr, "cannot create a temp dir under %s\n", tmp_base.c_str());
+        return 1;
+    }
+    DriverRig rig_nosave, rig_save;
+    if (!make_driver_rig(rig_nosave, cfg, tmp_dir, false, tmp_dir + "/nosave.json") ||
+        !make_driver_rig(rig_save, cfg, tmp_dir, true, tmp_dir + "/save.json") ||
+        rig_save.radar.get_bytes_per_frame() != B) {
+        std::fprintf(stderr, "cannot build the driver rig for %s\n", cfg.c_str());
+        return 1;
+    }
+    cpsl::radar::set_log_level(level);
+    cpsl::radar::set_log_sink([](cpsl::radar::LogLevel, const std::string&) { ++g_log_messages; });
+    {
+        const size_t tail = FrameAssembler::kDefaultReorderSlackPackets + 1;
+        struct DriverScenario {
+            const char* name;
+            PacketStream ps;
+            const DriverRig* rig;
+        };
+        DriverScenario ds[3] = {
+            {"drv_clean", make_stream("drv_clean", B, frames, 0, 0, 0, 1, tail), &rig_nosave},
+            {"drv_drop_1pct", make_stream("drv_drop_1pct", B, frames, 0.01, 0, 0, 2, tail), &rig_nosave},
+            {"drv_save", make_stream("drv_save", B, frames, 0, 0, 0, 1, tail), &rig_save},
+        };
+        std::cout.rdbuf(&quiet);
+        std::vector<Sample> runs[3];
+        DriverResult last[3];
+        for (size_t rep = 0; rep <= reps; rep++) {
+            for (int v = 0; v < 3; v++) {
+                DriverResult r = replay_driver(*ds[v].rig, ds[v].ps);
+                if (rep > 0) runs[v].push_back(r.s);
+                last[v] = r;
+            }
+        }
+        std::cout.rdbuf(old);
+        for (int v = 0; v < 3; v++) {
+            print_driver_row(ds[v].name, runs[v]);
+            const PacketStream& ps = ds[v].ps;
+            const FrameAssembler::Stats& st = last[v].st;
+            char buf[640];
+            const unsigned long long done = static_cast<unsigned long long>(runs[v].front().frames);
+            std::snprintf(buf, sizeof buf,
+                          "%-12s %zu packets (%zu dropped, %zu duplicated, %zu swapped, %zu tail); frames completed "
+                          "%llu of %zu (%s); assembler stats: dropped_packets %u, drop events %u, late %u, "
+                          "duplicate %u, incomplete frames %u, skipped frames %u; log messages per rep %llu",
+                          ps.name.c_str(), ps.off.size(), ps.dropped, ps.duplicated, ps.swapped, tail, done, frames,
+                          done == frames ? "= golden" : "NOT golden", st.dropped_packets, st.dropped_packet_events,
+                          st.late_packets, st.duplicate_packets, st.incomplete_frames, st.skipped_frames,
+                          static_cast<unsigned long long>(last[v].log_messages));
+            notes.push_back(buf);
+            for (const Sample& r : runs[v])
+                if (r.frames != frames) golden_ok = false;
+        }
+    }
+    cpsl::radar::set_log_sink(nullptr);
+    std::error_code ec;
+    std::filesystem::remove_all(tmp_dir, ec);
+
     std::printf("\n  replay input:\n");
     for (const std::string& n : notes) std::printf("    %s\n", n.c_str());
     std::printf("\n  ns/byte: wall-clock time per ADC payload byte on one thread. allocs/frame: operator new\n"
                 "  calls in the timed region / frames converted. x (a): how many times faster than (a), by\n"
                 "  median ns/byte. Replay rows include the driver's FrameAssembler (byte-offset placement,\n"
-                "  core-11 P1; flushed at end of stream), identical for every variant. Every replay row must\n"
-                "  complete exactly the requested number of frames (\"= golden\"). Compare variants within a\n"
-                "  row group, not across groups.\n");
+                "  core-11 P1; flushed at end of stream), identical for every variant. drv_* rows (d) run the\n"
+                "  driver's DCA1000Handler instead (no flush: a clean tail closes the last frame). Every replay\n"
+                "  row must complete exactly the requested number of frames (\"= golden\"). Compare variants\n"
+                "  within a row group, not across groups.\n");
     if (!golden_ok) {
         std::fprintf(stderr, "FAIL: a replay row did not complete the golden frame count\n");
         return 1;

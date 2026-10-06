@@ -23,11 +23,22 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
       }
+    },
+    {
+      "name": "bench-aligned",
+      "displayName": "Release, functions and loops aligned to 64 B (perf gate only)",
+      "description": "Measurement build for the bench_pipeline perf gate (tools/bench/pipeline_gate.py): Release plus -falign-functions=64 -falign-loops=64, so a code-layout shift cannot trip or hide a regression. Never ship this build.",
+      "binaryDir": "${sourceDir}/build-bench-aligned",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "-falign-functions=64 -falign-loops=64"
+      }
     }
   ],
   "buildPresets": [
     {"name": "release", "configurePreset": "release"},
-    {"name": "asan-ubsan", "configurePreset": "asan-ubsan"}
+    {"name": "asan-ubsan", "configurePreset": "asan-ubsan"},
+    {"name": "bench-aligned", "configurePreset": "bench-aligned"}
   ],
   "testPresets": [
     {

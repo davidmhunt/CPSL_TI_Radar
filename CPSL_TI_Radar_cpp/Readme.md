@@ -159,6 +159,17 @@ cmake --build build-release -j
 ctest --test-dir build-release -C bench -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
 ```
 
+The `drv_*` rows (variant `(d)`) replay the same kind of stream through the driver's own `DCA1000Handler` (assembler, converter, frame publish and, for `drv_save`, `adc_data.bin`), the code the DCA worker thread runs. `drv_save` writes to a temp directory (`--tmp-dir`, default `/dev/shm`). Driver log messages go to a counting sink at `--log-level` (default `info`); the count per rep is in the "replay input" notes.
+
+**Perf gate (before/after a change).** Code placement alone can move a short kernel by tens of percent (core-11 measured +76% on unchanged code). So a change is measured in two Release builds of each tree, the default one and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`, a measurement build only), with `bench_pipeline --frames 400` run before/after interleaved three times per build. Save each run's stdout under a name with `before`/`after` and `default`/`aligned` in it, then:
+
+```bash
+cmake --preset bench-aligned && cmake --build --preset bench-aligned -j --target bench_pipeline
+uv run tools/bench/pipeline_gate.py runs/p3_{before,after}_{default,aligned}_{1,2,3}.txt
+```
+
+It prints a table per build (the runs' median ns/byte, Δ of the mean, allocs/frame) and fails (exit 1) only if a row is more than 5% slower in **both** builds, if allocations/frame rise, or if an "after" run is not golden. A shift in one build only is reported as layout noise.
+
 ## Preparing your hardware
 
 To stream samples from the DCA1000, the following steps must be completed

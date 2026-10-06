@@ -20,5 +20,7 @@ jsonconfig.json
 __pycache__/
 # --- end friday harness ---
 
-# CMake preset build dirs (CPSL_TI_Radar_cpp/CMakePresets.json; build/ has its own .gitignore)
+# CMake preset build dirs (CPSL_TI_Radar_cpp/CMakePresets.json: build-asan-ubsan,
+# build-bench-aligned; build/ has its own .gitignore)
 CPSL_TI_Radar_cpp/build-*/
+CPSL_TI_Radar_cpp/build-bench-aligned/

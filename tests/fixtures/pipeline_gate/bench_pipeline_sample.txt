@@ -1,0 +1,42 @@
+bench_pipeline (core-09)
+  build type : Release   optimized: yes   compiler: gcc 13.3.0
+  host       : cpsl-gmk-6, Intel(R) N150, Linux 7.0.0-34-generic
+  frame      : 4 rx x 250 samples x 126 chirps = 504000 B (345 packets of 1472 B), from CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg
+  layout     : two_lane_iq_pairs, q_first (IWR1843/IWR6843 path)
+  method     : 40 frames per rep, 1 warm-up + 2 timed reps, variants interleaved per rep;
+               median rep shown, best rep in [brackets]; single thread
+  driver rows: log level info (counting sink), adc_data.bin for drv_save in /dev/shm
+  equivalence: (b) and (c) match (a) on all 126000 samples of a random frame: yes
+
+               variant                                frames/s [best]      ns/byte [best] allocs/frame    x (a)
+  converter    (a) today ADCCubeConverter          876.2 [     890.5]    2.265 [   2.228]       1013.0    1.00x
+  converter    (b) nested, reused buffer          2386.1 [    2398.9]    0.832 [   0.827]          0.0    2.72x
+  converter    (c) flat [chirp][rx][sample]      24198.1 [   25071.9]    0.082 [   0.079]          0.0   27.62x
+  clean        (a) today ADCCubeConverter          825.9 [     844.4]    2.402 [   2.350]       1013.0    1.00x
+  clean        (b) nested, reused buffer          2122.8 [    2127.3]    0.935 [   0.933]          0.0    2.57x
+  clean        (c) flat [chirp][rx][sample]       9464.0 [   11076.7]    0.210 [   0.179]          0.0   11.46x
+  drop_1pct    (a) today ADCCubeConverter          722.1 [     826.6]    2.776 [   2.425]       1013.0    1.00x
+  drop_1pct    (b) nested, reused buffer          1854.8 [    2032.7]    1.081 [   0.986]          0.0    2.57x
+  drop_1pct    (c) flat [chirp][rx][sample]       9363.3 [   10908.4]    0.214 [   0.184]          0.0   12.97x
+  dup_reorder  (a) today ADCCubeConverter          806.6 [     828.4]    2.448 [   2.383]       1013.0    1.00x
+  dup_reorder  (b) nested, reused buffer          1958.9 [    2094.0]    1.008 [   0.943]          0.0    2.43x
+  dup_reorder  (c) flat [chirp][rx][sample]      10815.3 [   10931.6]    0.183 [   0.181]          0.0   13.41x
+  drv_clean    (d) DCA1000Handler (driver)         803.7 [     812.1]    2.467 [   2.442]       1013.0        -
+  drv_drop_1pct (d) DCA1000Handler (driver)         805.8 [     814.9]    2.486 [   2.458]       1013.0        -
+  drv_save     (d) DCA1000Handler (driver)         190.7 [     191.7]   10.400 [  10.344]       1013.0        -
+
+  replay input:
+    clean        13790 packets (0 dropped, 0 duplicated, 0 swapped); frames completed 40 of 40 (= golden); assembler stats: dropped_packets 0, drop events 0, late 0, duplicate 0, incomplete frames 0, skipped frames 0
+    drop_1pct    13650 packets (140 dropped, 0 duplicated, 0 swapped); frames completed 40 of 40 (= golden); assembler stats: dropped_packets 140, drop events 140, late 0, duplicate 0, incomplete frames 39, skipped frames 0
+    dup_reorder  13859 packets (0 dropped, 69 duplicated, 68 swapped); frames completed 40 of 40 (= golden); assembler stats: dropped_packets 0, drop events 66, late 66, duplicate 69, incomplete frames 0, skipped frames 0
+    drv_clean    13799 packets (0 dropped, 0 duplicated, 0 swapped, 9 tail); frames completed 40 of 40 (= golden); assembler stats: dropped_packets 0, drop events 0, late 0, duplicate 0, incomplete frames 0, skipped frames 0; log messages per rep 0
+    drv_drop_1pct 13659 packets (140 dropped, 0 duplicated, 0 swapped, 9 tail); frames completed 40 of 40 (= golden); assembler stats: dropped_packets 140, drop events 140, late 0, duplicate 0, incomplete frames 39, skipped frames 0; log messages per rep 0
+    drv_save     13799 packets (0 dropped, 0 duplicated, 0 swapped, 9 tail); frames completed 40 of 40 (= golden); assembler stats: dropped_packets 0, drop events 0, late 0, duplicate 0, incomplete frames 0, skipped frames 0; log messages per rep 0
+
+  ns/byte: wall-clock time per ADC payload byte on one thread. allocs/frame: operator new
+  calls in the timed region / frames converted. x (a): how many times faster than (a), by
+  median ns/byte. Replay rows include the driver's FrameAssembler (byte-offset placement,
+  core-11 P1; flushed at end of stream), identical for every variant. drv_* rows (d) run the
+  driver's DCA1000Handler instead (no flush: a clean tail closes the last frame). Every replay
+  row must complete exactly the requested number of frames ("= golden"). Compare variants
+  within a row group, not across groups.
