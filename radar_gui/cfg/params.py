@@ -12,9 +12,16 @@ Schema (single profile; the profile fields live in `profiles[0]`, so gui-14..16 
     rx_mask, tx_mask            channelCfg enables (cascade: also rx_mask2, tx_mask2 for the second chip)
     chirp_tx_masks              TX mask of each chirp of the loop, frameCfg chirpStart..chirpEnd order
     n_loops, frame_period_ms, frames
+    bpm                         bool: bpmCfg enabled (single chip only; gui-15). Writing true needs a board + firmware whose
+                                descriptor says `mimo.bpm` (else ParamsError); default/false = plain TDM, bpmCfg disabled
     lvds_stream                 {subframe, header, data_fmt, sw} = lvdsStreamCfg (gui-22); only when the cfg has the
                                 line. data_fmt 0 = HW (ADC) stream off, 1 = ADC data, 2 = ADC + metadata (SAR firmware)
     derived                     read-only (ignored by apply_params): metrics-derived bandwidth, ramp, sample window ...
+
+Coupling (gui-15, docs/design/mimo_modes.md s4): single chip -> channelCfg tx_mask = OR(chirp_tx_masks) whenever
+chirp_tx_masks is given; a tx_mask-only edit regenerates the chirps in TI's azimuth-first order (TX1, TX3, TX2 =
+1,4,2); `bpm: true` writes mask 5 on both chirps and enables bpmCfg. Cascade (DDMA): chirp_tx_masks edits are
+ignored (all TX fire every chirp; the firmware overwrites the chirp masks); a warning is appended to `warnings`.
 
 Partial dicts are fine: missing keys keep the base cfg's value. Only `profiles[0]` is applied for now and its
 `id` is read-only (chirpCfg lines refer to it). To add multi-profile later: `profiles` gains entries (written as
@@ -25,6 +32,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping
 
+from . import firmware as fwmod
 from .metrics import infer_board_kind, metrics
 from .parse import Cfg, CfgError, parse_cfg
 
@@ -97,6 +105,8 @@ def params_from_cfg(cfg: Cfg, board: str | None = None) -> dict:
     out["n_loops"] = int(f[2])
     out["frames"] = int(f[3])
     out["frame_period_ms"] = m.frame_period_ms
+    if not cascade:
+        out["bpm"] = bool(cfg.bpm_enabled)
     lv = cfg.first("lvdsStreamCfg")
     if lv is not None and len(lv.args) >= 4:
         a = _num_list(lv.args[:4], "lvdsStreamCfg")
@@ -119,17 +129,46 @@ def _set(tok: list[str], i: int, val, kind, key: str) -> None:
         tok[i] = _fmt(v)
 
 
-def apply_params(base_cfg_text: str, params: Mapping[str, Any]) -> str:
-    """`base_cfg_text` with `params` applied. Raises CfgError (ParamsError) for a missing base command or a
-    non-numeric value; range problems are left for `validate` to report."""
+def _truthy(v: Any, key: str) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)) and v in (0, 1):
+        return bool(v)
+    raise ParamsError(f"{key}: expected true/false, got {v!r}")
+
+
+def apply_params(base_cfg_text: str, params: Mapping[str, Any], *, board: str | None = None,
+                 firmware: str | None = None, warnings: list | None = None) -> str:
+    """`base_cfg_text` with `params` applied. Raises CfgError (ParamsError) for a missing base command, a
+    non-numeric value, or `bpm: true` where the board/firmware does not support BPM (`board` and `firmware`
+    are required for that; `firmware` defaults to the board's default). Range problems are left for
+    `validate` to report. Non-fatal notices (ignored cascade chirp-mask edits, ...) are appended to
+    `warnings` (a list of `(code, message)`) when given."""
+    warn = warnings if warnings is not None else []
     cfg = parse_cfg(base_cfg_text)
-    base = params_from_cfg(cfg)
+    base = params_from_cfg(cfg, board)
     prof_in = params.get("profiles")
     if prof_in is not None and (not isinstance(prof_in, (list, tuple)) or not prof_in or
                                 not isinstance(prof_in[0], Mapping)):
         raise ParamsError("profiles: expected a non-empty list of objects")
     prof_in = dict(prof_in[0]) if prof_in else {}
     cascade_frame = len(cfg.first("frameCfg").args) >= 9
+    cascade = cascade_frame or board == "AWR2243_CASCADE"
+    bpm_in = None
+    if "bpm" in params and params["bpm"] is not None:
+        bpm_in = _truthy(params["bpm"], "bpm")
+        if bpm_in == base.get("bpm"):
+            bpm_in = None                           # unchanged: nothing to write or check
+        elif bpm_in:
+            if cascade:
+                raise ParamsError("bpm: the cascade DDMA firmware has no bpmCfg (docs/design/mimo_modes.md s1)")
+            fw = (fwmod.get(firmware) if firmware else fwmod.default_for(board)) if board else None
+            if fw is None:
+                raise ParamsError("bpm: needs a known board (and firmware) to check that BPM is supported")
+            mm = fwmod.mimo(board, fw)
+            if mm["scheme"] != "tdm" or not mm.get("bpm"):
+                raise ParamsError(f"bpm: firmware {fw['id']!r} on {board} does not support BPM "
+                                  f"(descriptor mimo.bpm is false; {mm.get('source', '')})")
     first_chirp = cfg.first("chirpCfg")
     if first_chirp is None:
         raise CfgError("missing chirpCfg")
@@ -158,6 +197,7 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any]) -> str:
 
     # chirpCfg: regenerate when the per-chirp masks changed, or (single chip) when only tx_mask changed
     masks = base["chirp_tx_masks"]
+    tx_edit = ("tx_mask" in params and _num(params["tx_mask"], int, "tx_mask") != base["tx_mask"])
     if "chirp_tx_masks" in params:
         raw = params["chirp_tx_masks"]
         if not isinstance(raw, (list, tuple)) or not raw:
@@ -165,11 +205,27 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any]) -> str:
         masks_new = [_num(m, int, "chirp_tx_masks") for m in raw]
     else:
         masks_new = list(masks)
-    if (not cascade_frame and "tx_mask" in params and "chirp_tx_masks" not in params
-            and _num(params["tx_mask"], int, "tx_mask") != base["tx_mask"]):
-        masks_new = [b for b in (1, 2, 4) if _num(params["tx_mask"], int, "tx_mask") & b]
-        if not masks_new:
-            masks_new = [0]
+    if cascade:
+        if masks_new != masks:
+            warn.append(("cascade_chirp_mask_ignored", "cascade DDMA: all TX fire on every chirp and the firmware "
+                         "overwrites the chirpCfg TX masks; chirp_tx_masks edit ignored"))
+        masks_new = list(masks)
+    elif bpm_in:
+        if "chirp_tx_masks" not in params:
+            masks_new = [5, 5]                      # BPM: TX1+TX3 on both chirps of the pair
+    elif "chirp_tx_masks" not in params and (tx_edit or (bpm_in is False and base.get("bpm"))):
+        txm = _num(params["tx_mask"], int, "tx_mask") if "tx_mask" in params else base["tx_mask"]
+        masks_new = [b for b in (1, 4, 2) if txm & b] or [0]     # TI's azimuth-first order
+    if not cascade and (masks_new != masks or bpm_in):
+        want = 0
+        for m_ in masks_new:
+            want |= m_
+        if "tx_mask" in params and _num(params["tx_mask"], int, "tx_mask") != want:
+            warn.append(("tx_mask_from_chirps", f"channelCfg tx_mask set to {want} = OR of the chirp masks "
+                         f"(asked {params['tx_mask']})"))
+        tok = new[cc.line].split()
+        _set(tok, 2, want, int, "tx_mask")
+        new[cc.line] = " ".join(tok)
     regenerate = masks_new != masks
     if regenerate:
         proto = tokens(first_chirp)
@@ -181,6 +237,20 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any]) -> str:
             lines.append(" ".join(t))
         new[first_chirp.line] = "\n".join(lines)
         delete |= {c.line for c in cfg.all("chirpCfg") if c.line != first_chirp.line}
+
+    # bpmCfg (single chip): enable/disable only when asked and different from the base
+    if bpm_in is not None and not cascade:
+        bc = [c for c in cfg.all("bpmCfg")]
+        if bc:
+            for c in bc:
+                tok = tokens(c)
+                _set(tok, 2, int(bpm_in), int, "bpm")
+                if bpm_in:
+                    _set(tok, 3, 0, int, "bpm")
+                    _set(tok, 4, 1, int, "bpm")
+                new[c.line] = " ".join(tok)
+        else:
+            new[cc.line] = new[cc.line] + f"\nbpmCfg -1 {int(bpm_in)} 0 1"
 
     # frameCfg
     fc = cfg.first("frameCfg")

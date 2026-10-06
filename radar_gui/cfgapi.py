@@ -187,7 +187,9 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
         Bad values come back as error issues (ok false), never as a 5xx."""
         _bad_board(req.board)
         try:
-            text = apply_params(req.base_cfg_text, req.params or {})
+            pw: list = []
+            text = apply_params(req.base_cfg_text, req.params or {}, board=req.board, firmware=req.firmware,
+                                warnings=pw)
         except CfgError as e:
             return {"board": req.board, "ok": False, "source": "params", "text": req.base_cfg_text, "metrics": None,
                     "issues": [{"level": "error", "code": "params", "message": str(e), "source": "", "confidence": ""}],
@@ -195,6 +197,9 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
                                                                          "message": str(e)}]}}
         res = _analyze_text(req.board, text, req.firmware)
         res["source"] = "params"
+        for code, msg in pw:
+            res["issues"].append({"level": "warning", "code": code, "message": msg, "source": "params",
+                                  "confidence": ""})
         try:
             res["params"] = params_from_cfg(parse_cfg(text), req.board)
         except CfgError:
