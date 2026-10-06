@@ -270,7 +270,8 @@ TEST_CASE(duplicate_inside_an_open_frame_changes_nothing) {
 
 TEST_CASE(reorder_inside_a_frame_is_recovered) {
     // packet 3 arrives before packet 2: counted as a drop, then the late
-    // packet fills the gap and the drop is taken back
+    // packet fills the gap and the drop (and, since core-15, its event) is
+    // taken back
     FrameAssembler fa;
     fa.configure(120);
     CHECK_EQ(push(fa, make_packet(1, 0, 40)), 0);
@@ -281,7 +282,7 @@ TEST_CASE(reorder_inside_a_frame_is_recovered) {
     CHECK(fa.get_frame_bytes() == stream_bytes(0, 120));
     FrameAssembler::Stats st = fa.get_stats();
     CHECK_EQ(st.dropped_packets, 0u);
-    CHECK_EQ(st.dropped_packet_events, 1u);
+    CHECK_EQ(st.dropped_packet_events, 0u);
     CHECK_EQ(st.late_packets, 1u);
     CHECK_EQ(st.incomplete_frames, 0u);
 }
@@ -501,7 +502,8 @@ TEST_CASE(sporadic_late_packets_never_resync) {
 // calls. Streams without a restart or adversarial header also keep every
 // emitted byte 0 or the true stream byte at index * B + pos and never
 // resync; clean and reorder-within-slack streams are golden; a restart
-// recovers to whole frames.
+// recovers to whole frames. Without junk headers or restarts, every drop
+// event has a dropped packet behind it.
 TEST_CASE(fuzz_invariants_hold_with_resync) {
     uint64_t s = 0x2545F4914F6CDD1Dull;
     auto rnd = [&](uint64_t n) {
@@ -567,6 +569,9 @@ TEST_CASE(fuzz_invariants_hold_with_resync) {
         }
         const FrameAssembler::Stats st = fa.get_stats();
         if (mode <= 4 && (st.resyncs != 0 || st.implausible_packets != 0)) ok = false;
+        // core-15 S3: with no packet lost, reorders leave no drop event
+        if ((mode == 0 || mode == 2 || mode == 3) && st.dropped_packets == 0 && st.dropped_packet_events != 0) ok = false;
+        if (mode <= 4 && st.dropped_packet_events > st.dropped_packets + 1) ok = false;  // + 1: a first seq >= 2^31
         const bool golden = mode == 0 || mode == 4 || (mode == 2 && std::min(slack, B - 1) >= 2 * P);  // configure() clamps the slack below B
         if (golden) {
             if (k.idx.size() != frames) ok = false;
@@ -589,6 +594,40 @@ TEST_CASE(fuzz_invariants_hold_with_resync) {
     std::cout << "    " << streams << " streams, " << failures << " failures, " << resynced << " resyncs (restart streams)"
               << std::endl;
     CHECK_EQ(failures, static_cast<size_t>(0));
+}
+
+TEST_CASE(a_gap_filled_by_late_packets_is_not_a_drop_event) {
+    // core-11 review S3: dropped_packet_events counts only gaps that end with
+    // missing packets; a reorder (the gap filled later) takes its event back
+    FrameAssembler fa;
+    fa.configure(1000, 500);
+    push(fa, make_packet(1, 0, 50));
+    push(fa, make_packet(3, 100, 50));  // gap {2}
+    CHECK_EQ(fa.get_stats().dropped_packet_events, 1u);
+    push(fa, make_packet(2, 50, 50));   // filled: a reorder
+    CHECK_EQ(fa.get_stats().dropped_packet_events, 0u);
+    CHECK_EQ(fa.get_stats().dropped_packets, 0u);
+    push(fa, make_packet(6, 250, 50));  // gap {4, 5}
+    push(fa, make_packet(4, 150, 50));  // half filled: still a drop
+    CHECK_EQ(fa.get_stats().dropped_packet_events, 1u);
+    CHECK_EQ(fa.get_stats().dropped_packets, 1u);
+    push(fa, make_packet(9, 400, 50));  // gap {7, 8}
+    CHECK_EQ(fa.get_stats().dropped_packet_events, 2u);
+    push(fa, make_packet(5, 200, 50));  // the first gap is now filled
+    CHECK_EQ(fa.get_stats().dropped_packet_events, 1u);
+    push(fa, make_packet(8, 350, 50));
+    push(fa, make_packet(7, 300, 50));
+    FrameAssembler::Stats st = fa.get_stats();
+    CHECK_EQ(st.dropped_packet_events, 0u);
+    CHECK_EQ(st.dropped_packets, 0u);
+    CHECK_EQ(st.late_packets, 5u);
+    // a gap older than the 64-packet window can no longer be filled: it stays
+    push(fa, make_packet(11, 500, 50));  // gap {10}
+    for (uint32_t q = 12; q < 90; q++) push(fa, make_packet(q, 50ull * (q - 1), 50));
+    push(fa, make_packet(10, 450, 50));  // too late to tell: late, the drop stays
+    st = fa.get_stats();
+    CHECK_EQ(st.dropped_packet_events, 1u);
+    CHECK_EQ(st.dropped_packets, 1u);
 }
 
 TEST_CASE(sink_sees_every_frame_once_in_order) {
@@ -673,6 +712,8 @@ TEST_CASE(golden_replay_with_drops_duplicates_and_reordering) {
     CHECK_EQ(st.dropped_packets, static_cast<uint32_t>(n_drop));
     CHECK_EQ(st.duplicate_packets, static_cast<uint32_t>(n_dup));
     CHECK_EQ(st.skipped_frames, 0u);
+    // core-15: swaps fill their own gaps, so only real losses are events
+    CHECK(st.dropped_packet_events <= static_cast<uint32_t>(n_drop));
 }
 
 TEST_CASE(configure_resets_state_and_stats) {

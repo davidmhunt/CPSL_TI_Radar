@@ -858,7 +858,7 @@ int main(int argc, char** argv) {
         const unsigned long long done = static_cast<unsigned long long>(runs[0].front().frames);
         std::snprintf(buf, sizeof buf,
                       "%-12s %zu packets (%zu dropped, %zu duplicated, %zu swapped); frames completed %llu of %zu "
-                      "(%s); assembler stats: dropped_packets %u, drop events %u, late %u, duplicate %u, "
+                      "(%s); assembler stats: dropped_packets %u, drop events (gaps not filled) %u, late %u, duplicate %u, "
                       "incomplete frames %u, skipped frames %u",
                       ps.name.c_str(), ps.off.size(), ps.dropped, ps.duplicated, ps.swapped, done, frames,
                       done == frames ? "= golden" : "NOT golden", st.dropped_packets, st.dropped_packet_events,
@@ -913,7 +913,7 @@ int main(int argc, char** argv) {
             const unsigned long long done = static_cast<unsigned long long>(runs[v].front().frames);
             std::snprintf(buf, sizeof buf,
                           "%-12s %zu packets (%zu dropped, %zu duplicated, %zu swapped, %zu tail); frames completed "
-                          "%llu of %zu (%s); assembler stats: dropped_packets %u, drop events %u, late %u, "
+                          "%llu of %zu (%s); assembler stats: dropped_packets %u, drop events (gaps not filled) %u, late %u, "
                           "duplicate %u, incomplete frames %u, skipped frames %u; log messages per rep %llu",
                           ps.name.c_str(), ps.off.size(), ps.dropped, ps.duplicated, ps.swapped, tail, done, frames,
                           done == frames ? "= golden" : "NOT golden", st.dropped_packets, st.dropped_packet_events,

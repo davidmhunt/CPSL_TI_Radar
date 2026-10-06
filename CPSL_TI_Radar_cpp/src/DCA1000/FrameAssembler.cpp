@@ -33,6 +33,7 @@ void FrameAssembler::configure(size_t bytes_per_frame, size_t reorder_slack_byte
     have_seq_        = false;
     newest_seq_      = 0;
     seq_window_      = 0;
+    gap_n_           = 0;
     index_bias_      = 0;
     rebase_pending_  = false;
     next_index_      = 0;
@@ -51,6 +52,7 @@ void FrameAssembler::set_frame_sink(FrameSink sink) { sink_ = std::move(sink); }
 void FrameAssembler::reset_stats() {
     stats_ = Stats();
     run_n_ = 0;  // its packets were counted in the old stats
+    gap_n_ = 0;
     // the next sequence number is compared against 0, as if seq 0 had just arrived
     have_seq_   = true;
     newest_seq_ = 0;
@@ -74,29 +76,64 @@ uint64_t FrameAssembler::parse_byte_count(const uint8_t* data) {
            (static_cast<uint64_t>(data[5]) << 8) | static_cast<uint64_t>(data[4]);
 }
 
+void FrameAssembler::open_gap(uint32_t first, uint32_t last) {
+    stats_.dropped_packet_events += 1;
+    // gaps that fell out of the 64-packet window can no longer be filled
+    size_t keep = 0;
+    for (size_t i = 0; i < gap_n_; i++) {
+        if (newest_seq_ - gaps_[i].last < 64) gaps_[keep++] = gaps_[i];
+    }
+    gap_n_ = keep;
+    if (gap_n_ == kMaxGaps) {  // cannot happen inside 64 packets; keep the newest
+        std::memmove(&gaps_[0], &gaps_[1], (kMaxGaps - 1) * sizeof(Gap));
+        gap_n_--;
+    }
+    gaps_[gap_n_++] = Gap{first, last, last - first + 1};
+}
+
+void FrameAssembler::fill_gap(uint32_t seq) {
+    for (size_t i = 0; i < gap_n_; i++) {
+        Gap& g = gaps_[i];
+        if (seq - g.first <= g.last - g.first) {  // modulo 2^32
+            if (--g.missing == 0) {
+                // every packet of this gap arrived late: a reorder, not a drop
+                if (stats_.dropped_packet_events > 0) stats_.dropped_packet_events -= 1;
+                gaps_[i] = gaps_[--gap_n_];
+            }
+            return;
+        }
+    }
+}
+
 FrameAssembler::SeqKind FrameAssembler::track_sequence(uint32_t seq) {
     if (!have_seq_) {
         // the DCA1000 numbers packets from 1 after recordStart
-        have_seq_ = true;
+        have_seq_   = true;
+        newest_seq_ = seq;
+        seq_window_ = 1;
+        gap_n_      = 0;
         if (seq != 1) {
-            stats_.dropped_packet_events += 1;
-            if (seq > 1 && seq < 0x80000000u) add_sat(stats_.dropped_packets, seq - 1);
+            if (seq > 1 && seq < 0x80000000u) {
+                add_sat(stats_.dropped_packets, seq - 1);
+                open_gap(1, seq - 1);
+            } else {
+                stats_.dropped_packet_events += 1;
+            }
         }
-        newest_seq_             = seq;
-        seq_window_             = 1;
         stats_.received_packets = seq;
         return SeqKind::in_order;
     }
 
     const uint32_t ahead = seq - newest_seq_;  // modulo 2^32: the counter may wrap
     if (ahead != 0 && ahead < 0x80000000u) {
-        if (ahead > 1) {
-            add_sat(stats_.dropped_packets, ahead - 1);
-            stats_.dropped_packet_events += 1;
-        }
+        const uint32_t before   = newest_seq_;
         seq_window_             = ahead >= 64 ? 1 : (seq_window_ << ahead) | 1;
         newest_seq_             = seq;
         stats_.received_packets = seq;
+        if (ahead > 1) {
+            add_sat(stats_.dropped_packets, ahead - 1);
+            open_gap(before + 1, seq - 1);
+        }
         return SeqKind::in_order;
     }
 
@@ -109,6 +146,7 @@ FrameAssembler::SeqKind FrameAssembler::track_sequence(uint32_t seq) {
         }
         seq_window_ |= bit;
         if (stats_.dropped_packets > 0) stats_.dropped_packets -= 1;  // it filled a gap
+        fill_gap(seq);
     }
     stats_.late_packets += 1;
     return SeqKind::late;
@@ -285,6 +323,7 @@ int FrameAssembler::resync() {
     have_seq_   = true;
     newest_seq_ = parse_sequence_number(run_[0].bytes.data()) - 1;
     seq_window_ = ~uint64_t(0);
+    gap_n_      = 0;
     add_sat(stats_.resyncs, 1);
 
     std::swap(run_, replay_);

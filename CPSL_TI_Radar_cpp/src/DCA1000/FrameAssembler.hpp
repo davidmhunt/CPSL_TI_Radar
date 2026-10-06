@@ -45,10 +45,12 @@
 // warns on a resync).
 //
 // Sequence numbers give the packet counters: a forward gap counts its
-// packets as dropped (one drop event per gap); a packet older than the newest
+// packets as dropped and is one drop event; a packet older than the newest
 // one is either a duplicate (already seen) or late (it fills an earlier gap,
-// so dropped_packets goes back down by one). A 64-packet window tells the two
-// apart; an older packet counts as late without changing dropped_packets.
+// so dropped_packets goes back down by one, and once every packet of a gap
+// has arrived late the gap's drop event is taken back: a reorder is not a
+// drop). A 64-packet window tells the two apart; an older packet counts as
+// late without changing dropped_packets or the events.
 //
 // Frames are delivered through the frame sink (set_frame_sink), once each,
 // in order. Without a sink, get_frame_bytes() returns the most recently
@@ -66,7 +68,7 @@ public:
     struct Stats {
         uint32_t received_packets      = 0;  // newest sequence number seen
         uint32_t dropped_packets       = 0;  // sequence numbers never received (net of late fills)
-        uint32_t dropped_packet_events = 0;  // forward sequence gaps
+        uint32_t dropped_packet_events = 0;  // forward sequence gaps not (yet) filled by late packets
         uint64_t adc_data_byte_count   = 0;  // end of the furthest payload seen (stream offset)
         uint32_t late_packets          = 0;  // arrived after a newer packet (not a duplicate)
         uint32_t duplicate_packets     = 0;  // sequence number already received
@@ -131,6 +133,16 @@ private:
     bool have_seq_       = false;
     uint32_t newest_seq_ = 0;
     uint64_t seq_window_ = 0;     // bit i: newest_seq_ - i was received
+    // the open gaps inside the window: sequence numbers [first, last], `missing`
+    // of them not arrived; a gap filled completely takes back its drop event
+    struct Gap {
+        uint32_t first, last, missing;
+    };
+    static constexpr size_t kMaxGaps = 32;  // a 64-packet window holds at most 32 gaps
+    Gap gaps_[kMaxGaps];
+    size_t gap_n_ = 0;
+    void open_gap(uint32_t first, uint32_t last);
+    void fill_gap(uint32_t seq);
 
     // resync: emitted index = frame number (byte offset / B) + index_bias_
     uint64_t index_bias_ = 0;

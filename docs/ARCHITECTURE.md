@@ -206,9 +206,12 @@ A frame that received nothing is skipped, not emitted. There is no
 retransmission.
 
 Counters (sequence numbers, 64-packet window): a forward gap adds its
-packets to `dropped_packets` (one `dropped_packet_events`); an older packet
-is `duplicate` if already seen, else `late`, and a late packet that fills a
-gap takes its drop back. Data for an already-emitted frame is dropped and
+packets to `dropped_packets` and is one `dropped_packet_events`; an older
+packet is `duplicate` if already seen, else `late`, and a late packet that
+fills a gap takes its drop back. Once every packet of a gap has arrived
+late, the gap's event is taken back too (core-15): `dropped_packet_events`
+counts gaps that end with packets missing, so a reorder is not a drop
+event (bench `dup_reorder`: 695 events before, 0 after). Data for an already-emitted frame is dropped and
 counted late. `incomplete_frames` / `skipped_frames` count frames emitted
 with zeros / never emitted.
 

@@ -59,7 +59,7 @@ struct Stats {
     // DCA1000 path
     uint64_t packets = 0;             // newest packet sequence number seen
     uint64_t dropped = 0;             // packets never received (net of late fills)
-    uint64_t drop_events = 0;         // forward sequence gaps
+    uint64_t drop_events = 0;         // sequence gaps still missing packets (a reorder filled later is not one)
     uint64_t late = 0;                // packets that arrived after a newer one
     uint64_t duplicate = 0;           // packets received twice
     uint64_t incomplete_frames = 0;   // frames completed with zero-filled bytes
