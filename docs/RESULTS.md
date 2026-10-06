@@ -68,3 +68,46 @@ Tag `validation_iwr1843_dca_release`, DCA1000 raw-ADC, `front_radar_IWR1843_stre
 Rep 4: tag `validation_iwr1843_dca_release_confirm`, basename `validation_iwr1843_dca_release_confirm__front_radar_IWR1843_stress_test_baseline__rep4__60s__20261005T214741Z`, same binary `3ecd94cd`, run after the doc fixes with the doc unmodified (600 frames, status ok, exit 0). Its files were committed in `6845a0a` under a core-11 subject.
 
 Caveats: exit 0 on all four; every run logs `sensorStop was not acknowledged with 'Done'` (likely the 100 ms command timeout equalling the frame period; tracked for core-13; harmless). CPU is higher than the pre-rework core-04 baseline (9 to 10 %; 16.1 to 16.3 % over 4 reps here). The cause is not isolated: the baseline used the pre-rework driver and this binary has both the driver changes and `cap_sys_nice`; an A/B run with and without `cap_sys_nice` would settle it. The < 20 % guide in the runbook comes from these runs. The core-11 SIGINT flush fix is confirmed (`exact`, was 896 B short).
+
+## Bench pass, reworked v2 driver, IWR1843 (core-11 to core-16, core-20)
+
+Release build of the reworked driver on `release/v2.0`, 2026-10-06, host `cpsl-gmk-6`, 10 Hz `front_radar_IWR1843_stress_test_baseline.json` (DCA) and `radar_0_IWR1843_demo.json` (serial), SIGINT stops, run per `docs/tutorials/bench_validation.md`. Every value below is read from the CSV and `.json` sidecars in `docs/results/validation/` (basenames abbreviated to tag, `rep<k>` and UTC stamp). Driver sha256 `2e44b47c...` for the core-16 and ab2 runs; `09abcbec...` for core-20 (default build). Kernel drops, resyncs and `rx_overrun_count` are 0 in every successful run.
+
+### DCA1000 validation, 3 x 60 s (tag `validation_iwr1843_dca_core16`, with `cap_sys_nice`)
+
+| Rep (UTC) | fps mean / min / max | Frames | Dropped packets | Kernel drops / resyncs / overruns | CPU % mean / max | RSS max (kB) | .bin check |
+|---|---|---|---|---|---|---|---|
+| 1 (`20261006T115551Z`) | 10.017 / 9 / 12 | 601 | 0 | 0 / 0 / 0 | 5.0 / 6.0 | 10748 | exact |
+| 2 (`20261006T115823Z`) | 10.017 / 9 / 11 | 601 | 0 | 0 / 0 / 0 | 5.0 / 6.3 | 10840 | exact |
+| 3 (`20261006T120220Z`) | 10.017 / 9 / 11 | 601 | 0 | 0 / 0 / 0 | 2.2 / 3.5 | 10812 | exact |
+
+All: status `ok`, exit 0, `adc_data.bin` 302904000 B equal to expected, granted `SO_RCVBUF` 134217728, no driver warnings. Against the core-04 pre-rework baseline (same config, 0 drops, `.bin` 896 B short, CPU 9.1 to 10.5 % mean): CPU is roughly halved (2.2 to 5.0 % here) and the SIGINT `.bin` is `exact`. The core-06 figure of 16 % came from an intermediate driver and is superseded. Rep 3 ran at 2.2 %, less than half of reps 1 and 2; its sidecar records a different repo HEAD (`8ed1aa2`, against `87affa5`) with the same binary hash. The cause of the spread is not isolated.
+
+### Serial validation, 1 x 60 s (tag `validation_iwr1843_serial_core16`, `20261006T120347Z`)
+
+TLV fps 10.017 / 9 / 11, 601 TLV frames, 0 missed, CPU 0.3 % mean / 1.0 % max, RSS max 4096 kB, status `ok`, exit 0. Baseline for comparison: 9.983 to 10.0 fps, 0 to 1 missed, CPU 0.5 to 0.6 %.
+
+### `cap_sys_nice` A/B and core-20 default build
+
+| Tag | Rep (UTC) | CPU % mean / max | Dropped | .bin |
+|---|---|---|---|---|
+| `ab2_iwr1843_dca_nocap` (no capability) | 1 (`20261006T123856Z`) | 4.8 / 6.0 | 0 | exact |
+| | 2 (`20261006T124453Z`) | 4.9 / 6.0 | 0 | exact |
+| | 3 (`20261006T124812Z`) | 4.7 / 6.3 | 0 | exact |
+| `core20_iwr1843_dca_default` (default build) | 1 (`20261006T134130Z`) | 5.6 / 7.4 | 0 | exact |
+| | 3 (`20261006T134310Z`) | 5.3 / 7.0 | 0 | exact |
+
+Without the capability the driver warns that the RX thread "could not set SCHED_RR 99" and runs at normal priority; with it (core16 rows above) CPU was 5.0 / 5.0 / 2.2 %. Every run has fps 10.017 mean, 0 drops, 0 kernel drops, 0 resyncs and an `exact` `.bin`. Conclusion: on this config the capability is not needed. No drop or CPU difference is visible, and the with-capability spread (2.2 to 5.0 %) is wider than the gap to the without-capability runs (4.7 to 4.9 %). Across all 8 successful runs CPU is 2.2 to 5.6 %. The core-20 sidecars record no `realtime` preflight entry and no SCHED_RR warning, so whether that build had the capability is not stated in them.
+
+### Failed runs and causes
+
+- **First A/B set (tag `ab_iwr1843_dca_nocap`, binary run from a temporary path, commit `49bafeb`):** reps 1 and 2 were `ok` (CPU 4.9 and 4.8 %, 0 drops, `exact`); rep 3 (`20261006T120918Z`) is `FAILED`, "no frame received before start timeout". Its start stamp is 10 s after rep 2 (`20261006T120908Z`), and a 60 s rep cannot be over in 10 s, so overlapping reps are the likely cause. This is unverified: no driver log was checked for a bind error. These reps were not used in the table above; the A/B was repeated as `ab2` with all three reps `ok`.
+- **core-20 rep 2 (`20261006T134220Z`):** `FAILED`, same start-timeout note. The driver log shows "failed to bind the cmd socket to 192.168.33.30:4096" and "cannot open the DCA1000 sockets". The Runner launched it 50 s after rep 1 (`134130Z`, `134220Z`) while rep 1 ran 60 s; the sidecar timestamps and the driver log agree. It is an operator-side overlap, not a driver fault. The user accepted 2 of 3 reps for core-20.
+
+### USB unplug (tool `tools/bench/usb_unplug_test.py`, run dir `tools/bench/runs/usb_unplug_20261006T123112Z_6gi10qkf`)
+
+Pre-rework, unplugging the radar USB aborted the driver (SIGABRT, `.bin` short; above). Now: frames flowed for about 21 s (212 frames, 0 drops, 0 kernel drops in `driver.log`), the radar was unplugged, the driver took SIGINT, logged "sensorStop could not be sent (radar disconnected?)" and exited 1 with "stopped with errors". No crash, no hang. **Design ruling:** the driver does not stop itself when the CLI port disappears, because raw ADC capture needs no CLI; it keeps capturing until told to stop. The tool's own `summary.json` for this run reads `verdict: FAIL`, solely for "driver did not exit on its own; needed SIGINT", with `crashed` and `hang` false, `clean_error_message` true. That reason is the ruled design, so this run is recorded as a pass of the crash/hang/message criteria. The tool's two `PASS` runs in `tools/bench/runs/` (`...123405Z`, `...123417Z`) and its crash/hang `FAIL` runs (`...123407Z`, `...123410Z`, `...123428Z`) end in short `stats v1 frames=5` logs, which look like the tool's self-tests (not verified); they are not used here.
+
+### Caveats
+
+One board, one config (10 Hz baseline), IWR1843 only; other frame rates, boards and hosts are unmeasured. At most 3 reps per condition, so the CPU spread above is not characterized. The sdk2 and serial dialects and the I/Q lane order are still unconfirmed (core-17 is parked until the GUI exists).

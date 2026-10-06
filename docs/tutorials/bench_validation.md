@@ -72,7 +72,7 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | Resyncs (`dca_resyncs_final`; since core-15) | 0 | n/a | not measured |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
-| CPU % mean (guide) | below 10 (see note) | below 3 | about 4 to 5 (current driver, core-20; 2.2 to 5.0 over 6 runs) / 0.5 to 0.6 |
+| CPU % mean (guide) | below 10 (see note) | below 3 | about 4 to 5 (current driver, core-20; 2.2 to 5.6 over 8 runs) / 0.5 to 0.6 |
 
 For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The DCA CPU guide of 10 % is about twice the current driver's 4 to 5 %, with or without `cap_sys_nice` (IWR1843 10 Hz only, `docs/results/validation/validation_iwr1843_dca_core16__*`, `ab2_*`). Older drivers measured 9 to 10 % (core-04) and 16 % (core-06).
 
