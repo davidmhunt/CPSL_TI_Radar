@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """USB-unplug test (core-11 Step 8b): pull the board's USB cable mid-run and
-check the driver exits cleanly (exit 1 + 'sensorStop could not be sent'),
-not crashing (134/139/negative) or hanging.
+check the driver ends cleanly (exit 1 + 'sensorStop could not be sent'),
+not crashing (134/139/negative) or hanging (needing SIGKILL).
+
+Raw ADC streaming does not depend on the CLI serial port, so after an unplug
+the driver normally keeps streaming DCA frames; the script then sends SIGINT
+after --exit-wait (expected, informational only) and the driver must exit 1
+with the clean-error text. Exiting on its own is also fine.
 
 Run:  uv run tools/bench/usb_unplug_test.py      (stdlib only, no args needed)
+Offline:  uv run tools/bench/usb_unplug_test.py --rescore <driver.log>
+          (re-scores a past run using summary.json next to the log; no hardware)
 Hardware is single-user: run it only with the bench free.
 """
 import argparse, json, os, signal, subprocess, sys, tempfile, threading, time
@@ -15,6 +22,37 @@ MSG = "sensorStop could not be sent"
 CRASH_CODES = (134, 139)
 
 
+def score(rc, hang, sigint_sent, flowing, msg_found):
+    """Return (verdict, reasons, notes, crashed, sig). SIGINT needed is only a note."""
+    crashed = (not hang) and rc is not None and (rc < 0 or rc in CRASH_CODES)
+    sig = signal.Signals(-rc).name if rc is not None and rc < 0 else None
+    reasons, notes = [], []
+    if not flowing: reasons.append("frames never started flowing (nothing to unplug from)")
+    if hang: reasons.append("HANG (needed SIGKILL)")
+    if crashed: reasons.append(f"CRASH (rc={rc}{' ' + sig if sig else ''})")
+    if rc != 1 and not crashed and not hang: reasons.append(f"exit code {rc} != 1")
+    if not msg_found: reasons.append(f"'{MSG}' not in log")
+    if sigint_sent and flowing and not hang:
+        notes.append("driver keeps streaming after a CLI unplug; stopped via SIGINT")
+    return ("PASS" if not reasons else "FAIL"), reasons, notes, crashed, sig
+
+
+def rescore(log):
+    log = Path(log)
+    sj = log.parent / "summary.json"
+    if not sj.is_file():
+        sys.exit(f"--rescore needs summary.json next to the log (for exit code): {sj}")
+    old = json.loads(sj.read_text())
+    msg = MSG in log.read_text(errors="replace")
+    verdict, reasons, notes, _, _ = score(old["exit_code"], old["hang"], old["sigint_sent"],
+                                          old["frames_flowed"], msg)
+    print(f"rescore {log}\n  rc={old['exit_code']} hang={old['hang']} sigint={old['sigint_sent']} "
+          f"frames={old['frames_flowed']} msg={msg}\n  old verdict: {old['verdict']}  ->  VERDICT: {verdict}")
+    for r in reasons: print(f"  - {r}")
+    for n in notes: print(f"  note: {n}")
+    return 0 if verdict == "PASS" else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default=str(REPO / "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json"))
@@ -23,7 +61,10 @@ def main():
     ap.add_argument("--start-timeout", type=float, default=60, help="s to wait for frames to flow")
     ap.add_argument("--exit-wait", type=float, default=20, help="s to wait for exit after unplug")
     ap.add_argument("--sigint-wait", type=float, default=15)
+    ap.add_argument("--rescore", metavar="LOG", help="offline: re-score an existing driver.log, no hardware")
     a = ap.parse_args()
+    if a.rescore:
+        return rescore(a.rescore)
 
     driver, config = Path(a.driver).resolve(), Path(a.config).resolve()
     if not driver.is_file() or not os.access(driver, os.X_OK):
@@ -91,7 +132,7 @@ def main():
                     print(f"\nDriver still alive {a.exit_wait:.0f}s after prompt: sending SIGINT once.", flush=True)
                     proc.send_signal(signal.SIGINT); sigint_sent = True
                     break
-                print(f"  driver running... {el:4.0f}s since prompt (SIGINT at {a.exit_wait:.0f}s) - UNPLUG NOW", flush=True)
+                print(f"  driver running... {el:4.0f}s since prompt (SIGINT at {a.exit_wait:.0f}s is expected) - UNPLUG NOW", flush=True)
                 if el - last_bell >= 5:
                     print("\a", end="", flush=True); last_bell = el
                 time.sleep(1)
@@ -119,20 +160,11 @@ def main():
         text = "\n".join(lines)
         tail = lines[-10:]
     msg_found = MSG in text
-    crashed = rc is not None and (rc < 0 or rc in CRASH_CODES)
-    sig = signal.Signals(-rc).name if rc is not None and rc < 0 else None
-    reasons = []
-    if not flowing.is_set(): reasons.append("frames never started flowing (nothing to unplug from)")
-    if hang: reasons.append("HANG (needed SIGKILL)")
-    if sigint_sent and not hang and flowing.is_set(): reasons.append("driver did not exit on its own; needed SIGINT")
-    if crashed: reasons.append(f"CRASH (rc={rc}{' ' + sig if sig else ''})")
-    if rc != 1 and not crashed and not hang: reasons.append(f"exit code {rc} != 1")
-    if not msg_found: reasons.append(f"'{MSG}' not in log")
-    verdict = "PASS" if not reasons else "FAIL"
+    verdict, reasons, notes, crashed, sig = score(rc, hang, sigint_sent, flowing.is_set(), msg_found)
 
     summary = dict(verdict=verdict, exit_code=rc, signal=sig, crashed=crashed, hang=hang,
                    sigint_sent=sigint_sent, frames_flowed=flowing.is_set(), unplug_prompted=unplug_prompted,
-                   clean_error_message=msg_found, reasons=reasons, cmd=cmd, log=str(log_path), time=stamp)
+                   clean_error_message=msg_found, reasons=reasons, notes=notes, cmd=cmd, log=str(log_path), time=stamp)
     json_path.write_text(json.dumps(summary, indent=2) + "\n")
 
     print("\n" + "=" * 60)
@@ -140,8 +172,9 @@ def main():
     print(f"  exit code:            {rc}   (want 1)")
     print(f"  clean-error message:  {'yes' if msg_found else 'NO'}  ('{MSG}')")
     print(f"  crash/signal:         {'YES ' + str(sig or rc) if crashed else 'no'}  (negative rc, 134, 139)")
-    print(f"  hang:                 {'YES' if hang else 'no'}   SIGINT needed: {'yes' if sigint_sent else 'no'}")
+    print(f"  hang:                 {'YES' if hang else 'no'}   SIGINT sent (expected): {'yes' if sigint_sent else 'no'}")
     for r in reasons: print(f"  - {r}")
+    for n in notes: print(f"  note: {n}")
     print("  last log lines:")
     for l in tail: print("    | " + l)
     print(f"log:     {log_path}\nsummary: {json_path}")
