@@ -96,3 +96,24 @@ High: TX/RX counts, bands, slope maxima, sample-rate maxima, numLoops, LVDS lane
 - `ti_spruij4a_dca1000` — Texas Instruments (2019), "DCA1000EVM Data Capture Card, SPRUIJ4A," *User's Guide*. url:https://www.ti.com/lit/ug/spruij4a/spruij4a.pdf
 - `ti_mmwave_sdk_3_6` — Texas Instruments (2022), "mmWave SDK 03.06.02.00-LTS (rl_sensor.h, mmwdemo_rfparser.c, demo and platform sources)," *Software*. url:https://www.ti.com/tool/MMWAVE-SDK
 - `ti_icd_rev223_awr2243` — Texas Instruments (2022), "mmWave Radar Interface Control Document, Revision 2.23 (AWR2243/xWR6243)," *Interface control document*. url:https://www.ti.com/tool/MMWAVE-DFP
+
+## Correction / clarification (2026-10-06): low-power ADC mode sample-rate caps
+
+**Question (gui-13, #52):** the table's low-power ADC mode value for IWR1843 (9375 ksps) is not 12500/2 = 6250; which is right?
+
+**Resolution: 9375 ksps (complex 1x) is the documented value for IWR1843; the memo row stands, and 6250 is wrong for this board.** The only TI source that states low-power-mode rates is the mmwavelink API doc comment for `rlProfileCfg_t.digOutSampleRate` in SDK 3.6.02 `rl_sensor.h` (lines 742-767). It has one table per IF bandwidth, each with a "Low power ADC mode" row split by device family:
+
+| IF BW table (rl_sensor.h) | Device row | Real / Complex 1x / Complex 2x (Msps) | Applies to |
+|---|---|---|---|
+| 15 MHz (L749-751) | Low power (xWR1xxx) | 18.75 / **9.375** / 18.75 | IWR1443 |
+| 10 MHz (L755-759) | Low power (xWR1xxx) | 18.75 / **9.375** / 18.75 | IWR1843 |
+| 10 MHz (L755-758) | Low power (xWR6x43) | 25 / **12.5** / 25 (= regular) | IWR6843 |
+| 5 MHz (L763-767) | Low power (either) | 12.5 / 6.25 / 12.5 | not these boards |
+
+IWR1843 is an xWR1xxx part with 10 MHz IF (DS18 §7.7 lists 12.5 Msps complex-1x max), so it takes the xWR1xxx low-power row of the 10 MHz table: 9375 ksps. 6250 appears only in the 5 MHz IF table, which none of the three boards uses; 12500/2 was a coincidence of the arithmetic, not a rule (the low-power cap is not half the regular cap in general: 1443 regular 18750 -> 9375 is /2, 1843 regular 12500 -> 9375 is x0.75, 6843 unchanged).
+
+**Per board (complex 1x, low-power ADC mode, `lowPower <cfg> 1`):** IWR1443 **9375** (memo correct); IWR1843 **9375** (memo correct; note this is *below* the 12500 regular cap, so a profile at >9375 ksps must not be combined with low-power mode); IWR6843 **12500** (memo correct, no extra restriction). Real / complex-2x low-power caps are 18750 (1443, 1843) and 25000 (6843). Min stays 2000 ksps.
+
+**Not found:** the three datasheets (SWRS211C, SWRS228B, SWRS219F in `docs/references/`, read via pdftotext) never mention a low-power ADC mode or its rates; the value is an API-doc statement only, not a datasheet-level spec. No bench check done.
+
+**Confidence:** high that `rl_sensor.h` says 9375 / 9375 / 12500 for 1443 / 1843 / 6843 (read directly, tables above); medium-high that the silicon honours it for the 1843, because it rests on one header comment (the radar subsystem enforces it via mmwavelink range checks per the memo's Evidence section, so a bench `profileCfg` + `lowPower 0 1` at 10000 ksps on the 1843 should be rejected, if the user wants to confirm). Recommendation for Step 3: encode `lowpower_max_ksps = {1443: 9375, 1843: 9375, 6843: 12500}` as a warning-level limit (conditional on low-power mode), and keep 12500 (1843) / 12500 (6843) / 18750 (1443) as the regular caps.
