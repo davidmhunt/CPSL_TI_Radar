@@ -2,6 +2,7 @@
 import { $, S } from './state.js';
 import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
+import { showConfigure } from './cfg.js';
 
 // ---------- stream ----------
 const STATE_DOT = { streaming: 'ok', starting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad' };
@@ -98,6 +99,16 @@ cv.addEventListener('wheel', e => {
   e.preventDefault(); S.zoom = Math.max(0.3, Math.min(6, S.zoom * Math.exp(-e.deltaY * 0.001))); redraw();
 }, { passive: false });
 addEventListener('resize', redraw);
+
+// ---------- tabs ----------
+function tab(name) {
+  [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  $('liveMain').hidden = name !== 'live'; $('cfgMain').hidden = name !== 'cfg';
+  if (name === 'cfg') showConfigure(); else redraw();
+  history.replaceState(null, '', name === 'cfg' ? '#configure' : location.pathname);
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
+if (location.hash === '#configure') tab('cfg');
 
 if (location.hash === '#3d') $('viewSeg').children[1].click();  // link straight to the 3D view
 connect();

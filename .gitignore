@@ -24,3 +24,6 @@ __pycache__/
 # build-bench-aligned; build/ has its own .gitignore)
 CPSL_TI_Radar_cpp/build-*/
 CPSL_TI_Radar_cpp/build-bench-aligned/
+
+# radar_gui Configure tab saves user cfgs + system JSONs here (radar_gui/README.md)
+CPSL_TI_Radar_cpp/config/user/

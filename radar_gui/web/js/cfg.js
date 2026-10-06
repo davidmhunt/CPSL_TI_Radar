@@ -1,0 +1,163 @@
+// Configure tab: targets (or a loaded cfg) -> live metrics + constraint check -> save cfg + system JSON.
+import { $ } from './state.js';
+
+const C = { source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
+const TARGETS = ['max_range_m', 'max_velocity_ms', 'range_res_m', 'velocity_res_ms', 'frame_rate_hz',
+  'num_samples', 'num_loops', 'tx_mask', 'rx_mask', 'cfar_range_db', 'cfar_doppler_db'];
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  let j = null; try { j = await r.json(); } catch { /* not json */ }
+  return { ok: r.ok, status: r.status, j };
+}
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (v, d = 2) => v == null || !isFinite(v) ? '–' : (+v).toFixed(d);
+
+function targets() {
+  const t = {};
+  for (const k of TARGETS) { const v = $('t_' + k).value; if (v !== '') t[k] = +v; }
+  t.output_mode = $('cMode').value;
+  return t;
+}
+
+function setSource(kind, name) {
+  C.source = kind; C.loadedName = name || '';
+  $('cSource').textContent = kind === 'cfg' ? `Analysing loaded cfg: ${name}. Editing a target switches back to generating.` : '';
+  $('cToTargets').disabled = kind !== 'cfg';
+}
+
+// ---------- analysis ----------
+function schedule() { clearTimeout(C.timer); C.timer = setTimeout(analyze, 200); }
+async function analyze() {
+  const seq = ++C.seq, board = $('cBoard').value;
+  const body = C.source === 'cfg' ? { board, cfg_text: C.text } : { board, targets: targets() };
+  const { ok, j } = await api('/api/cfg/analyze', body);
+  if (seq !== C.seq) return;   // a newer request is in flight
+  if (!ok) { render({ ok: false, metrics: null, issues: [{ level: 'error', code: 'api', message: JSON.stringify(j && j.detail || j), confidence: '' }], text: C.text }); return; }
+  C.text = j.text; C.name = j.name || C.name; C.metrics = j.metrics; C.ok = j.ok;
+  render(j);
+}
+
+function tile(label, value, unit, sub, big) {
+  const t = el('div', 'tile' + (big ? ' big' : ''));
+  t.innerHTML = `<span>${label}</span><b>${value}</b> <small style="display:inline">${unit || ''}</small>` + (sub ? `<small>${sub}</small>` : '');
+  return t;
+}
+function render(j) {
+  const m = j.metrics, tiles = $('tiles'); tiles.replaceChildren();
+  if (m) {
+    const want = j.targets || {}, a = j.achieved || {};
+    tiles.append(
+      tile('Range resolution', fmt(m.range_res_m * 100, 1), 'cm', want.range_res_m ? `asked ${fmt(want.range_res_m * 100, 1)} cm` : '', true),
+      tile('Velocity resolution', fmt(m.velocity_res_ms, 3), 'm/s', want.velocity_res_ms ? `asked ${fmt(want.velocity_res_ms, 3)}` : '', true),
+      tile('Angular resolution', fmt(m.azimuth_res_deg, 1), 'deg', `${m.n_az_virtual} az virtual ch.`, true),
+      tile('Max range', fmt(m.max_range_m, 1), 'm', want.max_range_m ? `asked ${fmt(want.max_range_m, 1)} m` : ''),
+      tile('Max velocity', fmt(m.max_velocity_ms, 2), 'm/s', want.max_velocity_ms ? `asked ${fmt(want.max_velocity_ms, 2)}` : ''),
+      tile('Frame rate', fmt(m.frame_rate_hz, 1), 'Hz', `${fmt(m.frame_period_ms, 1)} ms period`),
+      tile('Bandwidth', fmt(m.bandwidth_mhz, 0), 'MHz', `slope ${fmt(m.slope_mhz_us, 2)} MHz/us`),
+      tile('Samples x chirps', `${m.num_samples} x ${m.n_chirps}`, '', `${m.n_tx} TX, ${m.n_rx} RX (${m.mode})`),
+      tile('Duty cycle', fmt(m.duty_cycle * 100, 0), '%', `${fmt(m.avg_data_rate_mbps, 0)} Mbps avg ADC`),
+    );
+  } else tiles.append(el('div', 'muted', 'No metrics (see the issues).'));
+  const issues = j.issues || [], ne = issues.filter(i => i.level === 'error').length, nw = issues.filter(i => i.level === 'warning').length;
+  const v = $('cVerdict');
+  v.className = 'badge ' + (ne ? 'bad' : nw ? 'warn' : 'ok');
+  v.textContent = ne ? `${ne} error${ne > 1 ? 's' : ''}` : nw ? `fits, ${nw} warning${nw > 1 ? 's' : ''}` : 'fits the board';
+  $('cCounts').textContent = `${ne} error, ${nw} warning, ${issues.length - ne - nw} info`;
+  const ul = $('issues'); ul.replaceChildren();
+  if (!issues.length) ul.append(el('li', 'info', '<span class="lv">ok</span>No constraint violations found.'));
+  const order = { error: 0, warning: 1, info: 2 };
+  for (const i of [...issues].sort((x, y) => order[x.level] - order[y.level])) {
+    const li = el('li', i.level);
+    if (i.source) li.title = 'source: ' + i.source;
+    li.innerHTML = `<span class="lv">${esc(i.level)}</span>${esc(i.message)}` +
+      (i.confidence ? `<span class="conf ${esc(i.confidence)}">${i.confidence === 'unverified' ? 'unverified limit' : esc(i.confidence)}</span>` : '') +
+      `<span class="code">${esc(i.code)}</span>`;
+    ul.append(li);
+  }
+  $('cText').textContent = j.text || '';
+  if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
+}
+
+// ---------- boards, modes, loading ----------
+function inferMode(text) {
+  const demo = /^\s*(guiMonitor|cfarCfg)\b/m.test(text);
+  const lv = /^\s*lvdsStreamCfg\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/m.exec(text);
+  if (!demo) return 'raw';
+  return lv && (lv[3] !== '0' || lv[4] === '1') ? 'lvds' : 'tlv';
+}
+function applyModeDefaults(mode) {
+  $('sSerial').checked = mode !== 'raw'; $('sDca').checked = mode !== 'tlv';
+  dcaVis();
+}
+function dcaVis() { $('dcaFields').style.opacity = $('sDca').checked ? 1 : .4; }
+
+async function loadList(select) {
+  const { j } = await api('/api/cfgs');
+  const keep = $('cLoad').value;
+  $('cLoad').replaceChildren(new Option('(choose a shipped or saved cfg)', ''));
+  for (const grp of ['shipped', 'user']) {
+    const og = document.createElement('optgroup'); og.label = grp === 'user' ? 'Saved (user)' : 'Shipped (read-only)';
+    for (const c of j.cfgs.filter(c => c.group === grp)) { const o = new Option(c.name, c.id); o.dataset.board = c.board; og.append(o); }
+    $('cLoad').append(og);
+  }
+  if (select) $('cLoad').value = select; else $('cLoad').value = keep;
+}
+
+async function onLoad() {
+  const id = $('cLoad').value; if (!id) return;
+  const { ok, j } = await api('/api/cfg/file?id=' + encodeURIComponent(id));
+  if (!ok) return;
+  $('cBoard').value = j.board; C.text = j.text; setSource('cfg', j.name);
+  const mode = inferMode(j.text); $('cMode').value = mode; applyModeDefaults(mode);
+  $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + '_copy';
+  analyze();
+}
+function toTargets() {
+  const m = C.metrics; if (!m) return;
+  const set = (k, v) => { $('t_' + k).value = v == null ? '' : +(+v).toPrecision(4); };
+  set('max_range_m', m.max_range_m); set('max_velocity_ms', m.max_velocity_ms); set('frame_rate_hz', m.frame_rate_hz);
+  set('range_res_m', ''); set('velocity_res_ms', ''); set('num_samples', m.num_samples); set('num_loops', m.n_loops);
+  setSource('targets'); schedule();
+}
+
+// ---------- save ----------
+async function save() {
+  const msg = $('sMsg'); msg.className = 'muted'; msg.textContent = 'Saving...';
+  const body = {
+    board: $('cBoard').value, name: $('sName').value.trim(), cfg_text: C.text, force: $('sForce').checked,
+    cli_port: $('sCli').value, data_port: $('sData').value, serial_enabled: $('sSerial').checked,
+    dca1000_enabled: $('sDca').checked, fpga_ip: $('sFpga').value, host_ip: $('sHost').value,
+    cmd_port: +$('sCmd').value, data_udp_port: +$('sUdp').value,
+    save_adc_frames: $('sAdc').checked, save_raw_lvds: $('sLvds').checked, log_level: 'info',
+  };
+  const { ok, j } = await api('/api/cfg/save', body);
+  if (!ok) {
+    const d = j && j.detail; msg.className = 'bad';
+    msg.textContent = typeof d === 'string' ? d : d && d.message ? d.message : Array.isArray(d) ? d.map(x => x.msg).join('; ') : 'save failed';
+    return;
+  }
+  msg.className = 'ok';
+  msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br><span class="muted">check: ${esc(j.validate_cmd)}</span>`;
+  loadList();
+}
+
+// ---------- init ----------
+async function init() {
+  const { j } = await api('/api/cfg/boards');
+  for (const b of j.boards) $('cBoard').append(new Option(b, b));
+  for (const m of j.output_modes) $('cMode').append(new Option(m, m));
+  $('cBoard').value = 'IWR1843';
+  await loadList();
+  for (const k of TARGETS) $('t_' + k).addEventListener('input', () => { setSource('targets'); schedule(); });
+  $('cMode').addEventListener('change', () => { setSource('targets'); applyModeDefaults($('cMode').value); schedule(); });
+  $('cBoard').addEventListener('change', () => { if (C.source === 'targets') schedule(); else analyze(); });
+  $('cLoad').addEventListener('change', onLoad);
+  $('cToTargets').onclick = toTargets;
+  $('sSave').onclick = save;
+  $('sName').addEventListener('input', () => { $('sName').dataset.touched = '1'; });
+  $('sDca').addEventListener('change', dcaVis);
+  dcaVis(); analyze();
+}
+export function showConfigure() { if (!C.ready) { C.ready = true; init(); } }

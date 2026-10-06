@@ -23,4 +23,29 @@ Wire format on `/stream` (JSON text messages): `status`, `cfg` (page hints: `max
 `frame` (`frame`, `n`, `pts` = `[x, y, z, v, snr, noise]`, `rate`, `gaps`, `errors`).
 New sources subclass `Source` and yield frame dicts from `async frames()`.
 
-Tests: `uv run pytest tests/test_radar_gui_skeleton.py`.
+## Configure tab (gui-03)
+
+Open `http://127.0.0.1:8000/#configure` (or the **Configure** tab). Pick a board and output mode, enter targets
+(max range / velocity required; range / velocity resolution, frame rate and advanced overrides optional) and the
+resolution / max-range / max-velocity tiles and the constraint list update live (200 ms debounce). Issues show their
+level and the confidence of the limit behind them (`repo`, `recalled`, `unverified limit`; hover for the source).
+"Load an existing cfg" analyses any shipped or saved `.cfg` (the board is guessed from its path; change it if wrong).
+Save writes `<name>.cfg` + `<name>.json` (driver system JSON, schema v2, `radar_cfg` = the sibling cfg).
+
+**Where saves go:** `CPSL_TI_Radar_cpp/config/user/` (gitignored; override with `RADAR_GUI_USER_CFG_DIR` or
+`create_app(user_cfg_dir=...)`). It sits next to `config/boards/`, so the driver finds the board descriptor with its
+default lookup: `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/user/<name>.json --validate`.
+Saving never overwrites: an existing `<name>.cfg` or `<name>.json` gives 409, and shipped dirs are never written.
+A cfg with error-level issues is refused unless `force` ("Save even with errors") is set. Ports / IPs default to the
+repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33.180 / .30) and are editable.
+
+| Endpoint | |
+|---|---|
+| `GET /api/cfg/boards` | boards, output modes, `limits_dict()`, user dir |
+| `POST /api/cfg/analyze` | `{board, cfg_text}` or `{board, targets}` -> `{ok, metrics, issues, text, ...}` |
+| `POST /api/cfg/generate` | `{board, targets}` -> same shape (`targets`, `achieved`, `name` included) |
+| `GET /api/cfgs`, `GET /api/cfg/file?id=` | shipped (`config/radar`, `tools/radar_viewer/configs`) + user cfgs; read one |
+| `POST /api/cfg/save` | write the `.cfg` + system JSON (new names only) |
+
+Tests: `uv run pytest tests/test_radar_gui_skeleton.py tests/test_radar_gui_cfgapi.py` (the driver `--validate` test
+skips when `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` is absent).

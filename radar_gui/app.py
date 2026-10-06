@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .cfgapi import make_router
 from .sources import Source
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -55,7 +56,7 @@ class Hub:
             self.set_status("error", f"Source failed: {e}")
 
 
-def create_app(source: Source) -> FastAPI:
+def create_app(source: Source, user_cfg_dir=None) -> FastAPI:
     hub = Hub(source)
 
     @contextlib.asynccontextmanager
@@ -68,6 +69,7 @@ def create_app(source: Source) -> FastAPI:
 
     app = FastAPI(title="CPSL radar GUI", lifespan=lifespan)
     app.state.hub = hub
+    app.include_router(make_router(user_cfg_dir))
 
     @app.get("/api/health")
     def health():

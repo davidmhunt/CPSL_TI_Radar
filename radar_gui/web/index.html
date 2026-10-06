@@ -9,6 +9,7 @@
 <body>
 <header>
   <h1>CPSL Radar</h1>
+  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button></span>
   <span class="pill"><span class="dot" id="dot"></span><span id="state">connecting</span></span>
   <span class="pill" id="cfgName" style="display:none"></span>
   <span id="statusMsg"></span>
@@ -21,7 +22,7 @@
   </div>
 </header>
 
-<main>
+<main id="liveMain">
   <section class="card" id="mainCard">
     <h2>
       <span class="seg" id="viewSeg"><button data-v="top" class="on">Top view</button><button data-v="3d">3D</button></span>
@@ -66,6 +67,90 @@
       </div>
     </section>
   </aside>
+</main>
+
+<main id="cfgMain" hidden>
+  <div class="cfgcol">
+    <section class="card">
+      <h2>Radar &amp; targets</h2>
+      <div class="controls">
+        <div class="grid2">
+          <label>Board <select id="cBoard"></select></label>
+          <label>Output mode <select id="cMode"></select></label>
+        </div>
+        <div class="grid2">
+          <label>Max range (m) <input type="number" id="t_max_range_m" value="10" min="0.1" step="any"></label>
+          <label>Max velocity (m/s) <input type="number" id="t_max_velocity_ms" value="3" min="0.01" step="any"></label>
+          <label>Range res (m, optional) <input type="number" id="t_range_res_m" min="0.001" step="any"></label>
+          <label>Velocity res (m/s, optional) <input type="number" id="t_velocity_res_ms" min="0.001" step="any"></label>
+          <label>Frame rate (Hz) <input type="number" id="t_frame_rate_hz" value="10" min="0.1" step="any"></label>
+        </div>
+        <details><summary>Advanced</summary>
+          <div class="grid2">
+            <label>ADC samples <input type="number" id="t_num_samples" step="1" min="1"></label>
+            <label>Loops (chirps/frame) <input type="number" id="t_num_loops" step="1" min="1"></label>
+            <label>TX mask <input type="number" id="t_tx_mask" step="1" min="1" placeholder="5"></label>
+            <label>RX mask <input type="number" id="t_rx_mask" step="1" min="1" placeholder="15"></label>
+            <label>CFAR range (dB) <input type="number" id="t_cfar_range_db" step="any"></label>
+            <label>CFAR doppler (dB) <input type="number" id="t_cfar_doppler_db" step="any"></label>
+          </div>
+        </details>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Load an existing cfg</h2>
+      <div class="controls">
+        <select id="cLoad"><option value="">(choose a shipped or saved cfg)</option></select>
+        <div id="cSource" class="muted"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button class="btn" id="cToTargets" disabled>Use its numbers as targets</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="cfgcol">
+    <section class="card">
+      <h2>Resolution &amp; limits <span id="cVerdict" class="badge"></span></h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+    <section class="card grow">
+      <h2>Constraint check <span id="cCounts" class="muted"></span></h2>
+      <ul id="issues" class="issues"></ul>
+    </section>
+  </div>
+
+  <div class="cfgcol">
+    <section class="card">
+      <h2>Save</h2>
+      <div class="controls">
+        <label>Name (new files only) <input type="text" id="sName" placeholder="e.g. my_1843_10m"></label>
+        <div class="grid2">
+          <label>CLI port <input type="text" id="sCli" value="/dev/ttyACM0"></label>
+          <label>Data port <input type="text" id="sData" value="/dev/ttyACM1"></label>
+        </div>
+        <label class="chk"><input type="checkbox" id="sSerial" checked> Serial TLV stream</label>
+        <label class="chk"><input type="checkbox" id="sDca"> DCA1000 stream</label>
+        <div class="grid2" id="dcaFields">
+          <label>FPGA IP <input type="text" id="sFpga" value="192.168.33.180"></label>
+          <label>Host IP <input type="text" id="sHost" value="192.168.33.30"></label>
+          <label>Cmd port <input type="number" id="sCmd" value="4096"></label>
+          <label>Data port (UDP) <input type="number" id="sUdp" value="4098"></label>
+        </div>
+        <div class="grid2">
+          <label class="chk"><input type="checkbox" id="sAdc"> Save ADC frames</label>
+          <label class="chk"><input type="checkbox" id="sLvds"> Save raw LVDS</label>
+        </div>
+        <label class="chk"><input type="checkbox" id="sForce"> Save even with errors</label>
+        <button class="btn primary" id="sSave">Save .cfg + system .json</button>
+        <div id="sMsg" class="muted"></div>
+      </div>
+    </section>
+    <section class="card grow">
+      <h2>cfg preview</h2>
+      <pre id="cText"></pre>
+    </section>
+  </div>
 </main>
 <script type="module" src="/js/main.js"></script>
 </body>
