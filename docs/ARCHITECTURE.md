@@ -39,7 +39,7 @@ sink.
 | `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets}` swaps in a fake `ByteStream` or a `ReplayPacketSource` |
 | `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured` |
 | `start()` | `recordStart` and the RX thread, the DCA worker (SCHED_RR 80) and serial reader threads, then `sensorStart` |
-| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | latest completed frame (`AdcFrame`: `[rx][sample][chirp]` cube copied in, `index`, `completed_at`, `missing_bytes`, `shape`; `PointCloud` of `Point{x,y,z,v,snr_db,noise_db}`); false with `why` = `timeout`, `stalled`, `stopped`, `invalid_state` or `disabled` |
+| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` of `Point{x,y,z,v,snr_db,noise_db}`. false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
 | `stop()` | see below; the destructor calls it |
 | `set_log_sink(fn)`, `set_log_level(l)` | process-wide; default sink: one line per message to stderr, `warning: `/`error: ` prefixes |
@@ -253,8 +253,8 @@ Three files describe a run (design §1, §2):
    read by `SystemConfigReader`): `"schema_version": 2`, `board`,
    `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
    `output` (`dir`, `save_adc_frames`, `save_raw_lvds`) and `runtime`
-   (`log_level`, `stall_timeout_ms`; the queue/affinity/priority keys are
-   validated but reserved for core-14/15). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
+   (`log_level`, `stall_timeout_ms`, `frame_queue_depth` are applied; the
+   affinity/priority keys are validated but reserved for core-15). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
    is strict (unknown keys, bad types, repeated keys are errors with a JSON
    path). A v1 file is rejected with the name of
    `tools/migrate_config_v1_to_v2.py`. The fields are listed in

@@ -277,7 +277,8 @@ bool SystemConfigReader::load() {
         if (o.contains("save_raw_lvds") && !r.boolean(o, "save_raw_lvds", p, save_raw_lvds)) return failed();
     }
 
-    // runtime: optional; everything but log_level is reserved (validated, not applied yet)
+    // runtime: optional; log_level, stall_timeout_ms and frame_queue_depth are
+    // applied, the affinity/priority keys are reserved (validated, not applied yet; core-15)
     if (data.contains("runtime")) {
         const json& rt = data.at("runtime");
         const std::string p = "/runtime";
