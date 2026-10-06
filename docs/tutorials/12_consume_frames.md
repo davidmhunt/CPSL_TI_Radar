@@ -1,6 +1,6 @@
 # 12. Consume frames in your own program
 
-You will write a program that links the driver and reads ADC frames as they complete. Without a radar it still builds and fails cleanly, so you can check the build first. Prerequisite: [tutorial 1](01_build_and_host_setup.md).
+Write a program that links the driver and reads ADC frames as they complete. Without a radar it still builds and fails cleanly. Prerequisite: [tutorial 1](01_build_and_host_setup.md).
 
 ## Install the driver and build a consumer
 
@@ -78,13 +78,13 @@ Use a DCA1000 config for the last line. For a serial config call `next_point_clo
 
 `next_adc_frame` does not copy. It **swaps** the oldest queued buffer into `frame.data` and the buffer you held goes back to the driver's pool. Consequences:
 
-- Reuse one `AdcFrame` (as above) and nothing is allocated per frame.
-- **Anything you point into `frame.data` is invalid after the next `next_adc_frame` call**, because that buffer now belongs to the driver. Keep a reference or iterator across calls and you read another frame's data. Copy what you keep, as `chirp0` does. (`next_point_cloud` swaps `cloud.points` the same way.)
+- Reuse one `AdcFrame` and nothing is allocated per frame.
+- **Anything you point into `frame.data` is invalid after the next `next_adc_frame` call**, because that buffer now belongs to the driver. Copy what you keep, as `chirp0` does. (`next_point_cloud` swaps `cloud.points` the same way.)
 - Frames come out in order, once each; `frame.missing_bytes` > 0 means lost packets were zero-filled.
 
 ## Queue depth and latency
 
-Completed frames wait in a queue of `runtime.frame_queue_depth` frames (default 4). If your loop falls behind, the **oldest** frame is dropped and `Stats::frames_overwritten` counts it (`overwritten=` in `--stats`). Dropped frames are still in `adc_data.bin`.
+Completed frames wait in a queue of `runtime.frame_queue_depth` frames (default 4). If your loop falls behind, the **oldest** frame is dropped and `Stats::frames_overwritten` counts it (`overwritten=` in `--stats`).
 
 Depth 1 always gives you the newest frame and skips the rest when you are slow: lowest latency, lossy. A larger depth absorbs a stall of up to depth-1 frames without loss, but after a stall you read older frames, up to depth x frame period behind, until you catch up.
 

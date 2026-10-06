@@ -1,6 +1,6 @@
 # 10. Code map: where things live
 
-This is the entry point of the "extending" track. All driver code is in `CPSL_TI_Radar_cpp/`; the rest of this track assumes you built it ([tutorial 1](01_build_and_host_setup.md)). Reference detail (every call, the stop sequence, packet formats) is in `docs/ARCHITECTURE.md`; this page tells you which file to open.
+Entry point of the "extending" track. All driver code is in `CPSL_TI_Radar_cpp/` (built per [tutorial 1](01_build_and_host_setup.md)); reference detail is in `docs/ARCHITECTURE.md`.
 
 ## How data moves
 
@@ -18,7 +18,7 @@ This is the entry point of the "extending" track. All driver code is in `CPSL_TI
  your code --> Radar::configure/start/stop --> CLIController --CLI UART--> radar (cfg commands)
 ```
 
-Four threads matter: the RX thread (packets into the ring), the DCA worker (assemble, convert, queue, save), the serial reader, and yours.
+Four threads matter: RX, DCA worker, serial reader, and yours.
 
 ## Directory map
 

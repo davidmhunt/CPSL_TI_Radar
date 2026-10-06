@@ -1,10 +1,10 @@
 # 13. Write a test, measure performance
 
-Run commands from the repository root, with the build from [tutorial 1](01_build_and_host_setup.md).
+Run from the repository root, with the build from [tutorial 1](01_build_and_host_setup.md).
 
 ## Write a test
 
-Each `tests/test_*.cpp` is one executable and one ctest test, using the in-tree harness `tests/test_harness.hpp` (`TEST_CASE`, `CHECK`, `CHECK_EQ`, `TEST_MAIN`). No device is needed: `Radar::open` accepts fake transports (`FakeCli`, `ReplayPacketSource` in `tests/fake_transports.hpp`), and `tests/dca_test_support.hpp` writes a system config and builds a frame's packets. This test pushes one frame through a whole `Radar`. Save it as `CPSL_TI_Radar_cpp/tests/test_one_frame.cpp`:
+Each `tests/test_*.cpp` is one executable and one ctest test, using the in-tree harness `tests/test_harness.hpp` (`TEST_CASE`, `CHECK`, `CHECK_EQ`, `TEST_MAIN`). No device is needed: `Radar::open` accepts fake transports (`FakeCli`, `ReplayPacketSource` in `tests/fake_transports.hpp`), and `tests/dca_test_support.hpp` writes a system config and builds a frame's packets. This one pushes a frame through a whole `Radar`; save it as `CPSL_TI_Radar_cpp/tests/test_one_frame.cpp`:
 
 ```cpp
 #include "test_harness.hpp"
@@ -56,7 +56,7 @@ cmake --build CPSL_TI_Radar_cpp/build -j --target test_one_frame
 ctest --test-dir CPSL_TI_Radar_cpp/build -R test_one_frame --output-on-failure
 ```
 
-Expect `100% tests passed`. A bug you are not fixing now is recorded with `KNOWN_BUG(...)`, which starts failing once it is fixed. For a crash or memory bug, run the suite under AddressSanitizer and UndefinedBehaviorSanitizer (builds in `build-asan-ubsan/`):
+Expect `100% tests passed`. Record a bug you are not fixing with `KNOWN_BUG(...)`. For a crash or memory bug, run the suite under ASan/UBSan:
 
 ```bash
 cd CPSL_TI_Radar_cpp && cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan; cd ..
@@ -75,7 +75,7 @@ CPSL_TI_Radar_cpp/build/bench/bench_pipeline --udp --frames 100 --stall-ms 200  
 
 The second line runs the real receive path over loopback and should report 0 discards and 0 kernel drops.
 
-**Before/after a change.** Moving code can change a short kernel's speed by tens of percent on its own, so one build before and one after is not evidence. The gate compares two builds of each tree, the default and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`), three interleaved runs each, and fails only if a row is more than 5% slower in **both** builds, allocations per frame rise, or a run is not golden. In each tree (before your change, then after), build both and save the binaries under the names shown, then run:
+**Before/after a change.** Moving code can change a short kernel's speed by tens of percent on its own. The gate compares two builds of each tree, the default and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`), three interleaved runs each, and fails only if a row is more than 5% slower in **both** builds, allocations per frame rise, or a run is not golden. In each tree (before your change, then after), build both and save the binaries under the names shown, then run:
 
 ```bash
 cd CPSL_TI_Radar_cpp && cmake --preset bench-aligned && cmake --build --preset bench-aligned -j --target bench_pipeline; cd ..
@@ -91,4 +91,4 @@ uv run tools/bench/pipeline_gate.py /tmp/perf/p_*.txt
 
 Exit 0 passes; a regression in one build only is printed as layout noise.
 
-**On a board** (needs the board and a DCA1000): follow [`bench_validation.md`](bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`. Record a new result there with the artifact it came from.
+**On a board** (needs the board and a DCA1000): follow [`bench_validation.md`](bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`.

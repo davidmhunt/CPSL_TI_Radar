@@ -1,6 +1,6 @@
 # 4. Troubleshooting: messages, `stats v1`, drops
 
-Start with how the run ended, then read the stats. The executable prints each failure as `error: <message>` and exits 1 (2 for a bad command line). Library users get the same text as `Status::message` plus a `Code`. `runtime.log_level: "debug"` shows every CLI command and reply.
+The executable prints each failure as `error: <message>` and exits 1 (2 for a bad command line). `runtime.log_level: "debug"` shows every CLI command and reply.
 
 ## It failed before or at start
 
@@ -8,7 +8,7 @@ Start with how the run ended, then read the stats. The executable prints each fa
 |---|---|
 | `cannot open the CLI port ...` / `... serial data port ...` (`open_failed`) | Wrong port, board not powered, or you are not in `dialout`. Check `ls /dev/ttyACM*` and `utilities/determine_serial_ports.ipynb`. |
 | `cannot open the DCA1000 sockets ...` (`open_failed`) | The host NIC does not have `dca1000.host_ip`, or another process holds the ports. `host_setup.py` checks the address. |
-| `DCA1000 did not answer ...` (`device_error`) | The capture card is unpowered, unplugged, or on another subnet. Power-cycle it and check the cable. |
+| `DCA1000 did not answer ...` (`device_error`) | The capture card is unpowered, unplugged, or on another subnet. |
 | `not every config command was acknowledged with 'Done'` (`config_rejected`) | A cfg command got no `Done`: harmless if it is only `calibData` (the driver skips it); otherwise the firmware does not know the command, or the board is in flashing mode or wrong firmware. |
 | `... can only be configured once per boot: power-cycle the EVM` (`config_rejected`) | Cascade board: power-cycle (12 V off and on) before **every** run. |
 | `no frame for 2 s, stopping` | Configured and started, but no data arrived. DCA1000: check the `.cfg` has `lvdsStreamCfg`, the LVDS cable, and that `--stats` shows `packets` rising. Serial: the data port, `data_uart` baud, and that the firmware matches the board's `tlv_dialect`. |
@@ -34,4 +34,4 @@ A healthy DCA run has `dropped`, `kernel_drops`, `resyncs` and `implausible` at 
 | `overwritten` > 0 | Your consumer was slower than the radar: the oldest frame in a full queue was dropped (still in `adc_data.bin`). | See [tutorial 12](12_consume_frames.md). |
 | serial `missed` > 0 | Gaps in the demo's frame counter. | Check the data cable and baud. |
 
-To survive longer stalls, raise `dca1000.rcvbuf_bytes` (and `rmem_max` with it). Pass/fail thresholds per counter on a real board: [`bench_validation.md`](bench_validation.md) section 7.
+To survive longer stalls, raise `dca1000.rcvbuf_bytes` and `rmem_max`. Pass/fail thresholds per counter on a real board: [`bench_validation.md`](bench_validation.md) section 7.

@@ -1,10 +1,10 @@
 # 11. Add a board, add a TLV type
 
-Two small changes, each with a test; the last section undoes both. Run commands from the repository root, with the build from [tutorial 1](01_build_and_host_setup.md).
+Two small changes, each with a test; the last section undoes both. Run from the repository root, with the build from [tutorial 1](01_build_and_host_setup.md).
 
 ## Add or tune a board (no rebuild of the driver)
 
-A board descriptor is one JSON file in `CPSL_TI_Radar_cpp/config/boards/`; the file name must equal its `"name"`. Start from the closest board. This creates `TOY1843`, an IWR1843 with a slower CLI timeout, and a system config that uses it:
+A board descriptor is one JSON file in `CPSL_TI_Radar_cpp/config/boards/`; the file name must equal its `"name"`. This creates `TOY1843`, an IWR1843 with a slower CLI timeout, and a system config that uses it:
 
 ```bash
 cd CPSL_TI_Radar_cpp
@@ -15,7 +15,7 @@ sed 's/"board": "IWR1843"/"board": "TOY1843"/' config/system/radar_0_IWR1843_dem
 cd ..
 ```
 
-The `cli:` line must now say `300 ms per command`. The fields (CLI handshake, `cfg_dialect`, `data_uart.tlv_dialect`, `lvds.lanes` and `layout`, `dca1000` packet settings) and where each value comes from are in `config/boards/README.md`. Loading is strict: an unknown key, a bad enum, or a `lanes`/`layout` mismatch is an error. To change one value for one run only, use `"board_overrides"` in the system config instead of a new file. A new serial dialect or LVDS layout needs code, not just JSON.
+The `cli:` line must now say `300 ms per command`. Fields and where each value comes from: `config/boards/README.md`. To change one value for one run only, use `"board_overrides"` in the system config instead of a new file. A new serial dialect or LVDS layout needs code, not just JSON.
 
 Now pin it with a test. In `CPSL_TI_Radar_cpp/tests/test_board_descriptor.cpp`, add this above `TEST_CASE(loads_IWR6843)`:
 
