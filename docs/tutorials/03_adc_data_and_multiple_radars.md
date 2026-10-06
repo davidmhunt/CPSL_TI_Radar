@@ -35,8 +35,10 @@ For range, Doppler and azimuth processing, use the notebook. It reads the radar 
 cd utilities
 CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg \
 ADC_DATA_FILE=../CPSL_TI_Radar_cpp/build/adc_data.bin \
-uv run --group notebooks jupyter nbconvert --to notebook --execute process_adc_data.ipynb --output /tmp/out.ipynb
+uv run --group notebooks jupyter nbconvert --to html --execute process_adc_data.ipynb --output-dir ../CPSL_TI_Radar_cpp/build --output adc_report
 ```
+
+The executed notebook, with its plots, lands in `CPSL_TI_Radar_cpp/build/adc_report.html` next to `adc_data.bin` (git ignores that folder); open it in any browser, e.g. `xdg-open ../CPSL_TI_Radar_cpp/build/adc_report.html`. The source notebook is not modified.
 
 `process_raw_lbds_data.ipynb` decodes `LVDS_Raw_0.bin` (`output.save_raw_lvds`, for debugging packet loss).
 
