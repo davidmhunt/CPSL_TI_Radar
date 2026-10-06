@@ -64,7 +64,7 @@ echo 'net.core.rmem_max=134217728' | sudo tee /etc/sysctl.d/99-radar.conf
 sudo sysctl -p /etc/sysctl.d/99-radar.conf
 ```
 
-**Optional: real-time priority.** By default the DCA1000 RX and worker threads run at normal priority (`runtime.rx_priority` / `worker_priority` are 0), and nothing here is needed. Set either key to 1-99 to request SCHED_RR; without permission the driver prints one warning for that thread and runs it at normal priority. To allow it without running as root, either grant the executable the capability after building:
+**Optional: real-time priority.** By default the DCA1000 RX and worker threads run at normal priority (`runtime.rx_priority` / `worker_priority` are 0). Set either key to 1-99 to request SCHED_RR; without permission the driver prints one warning for that thread and runs it at normal priority. To allow it without running as root, either grant the executable the capability after building:
 ```bash
 sudo setcap cap_sys_nice+ep ./build/CPSL_TI_Radar_CPP
 ```
@@ -74,7 +74,7 @@ Or add the following to `/etc/security/limits.conf` (replace `<username>` with y
 <username>  -  rtprio  99
 ```
 
-The capability is stored on the binary file, so a rebuild removes it. An `rtprio` limit below the requested priority, such as PipeWire's `@pipewire - rtprio 95` against a request of 99, is not enough. In the core-20 bench runs (IWR1843, 10 Hz) CPU and drops were the same with and without it.
+The capability is stored on the binary file, so a rebuild removes it. An `rtprio` limit below the requested priority, such as PipeWire's `@pipewire - rtprio 95` against a request of 99, is not enough.
 
 **Choosing CPUs** (`runtime.rx_cpu`, `runtime.worker_cpu`, optional). By default neither thread is pinned. On a loaded host, pinning keeps the RX thread from being pushed off its CPU while packets arrive: put the RX thread and the DCA worker on two different cores that the rest of your pipeline does not saturate (for example `"rx_cpu": 2, "worker_cpu": 3` on a 4-core machine, leaving 0 and 1 to the system and your consumer). Avoid CPU 0 if it takes most interrupts on your host (`/proc/interrupts`); IRQ affinity of the NIC is not set by the driver. A CPU the process may not use (out of range or outside its cpuset) is a warning and the thread stays unpinned. `bench_pipeline --udp --rx-cpu N --worker-cpu N` measures a placement over loopback.
 

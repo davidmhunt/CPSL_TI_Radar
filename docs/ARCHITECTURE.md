@@ -196,7 +196,7 @@ termios2/`BOTHER` for others (the cascade's 3,125,000 baud data port).
   worker thread to one CPU (`null`, the default: not pinned);
   `runtime.rx_priority` / `worker_priority` (default 0, range 0-99) request
   SCHED_RR when above 0. Without `cap_sys_nice` that request fails with one
-  warning, and the thread runs at normal priority; priority 0 asks for nothing; a CPU that cannot be used is also only a
+  warning, and the thread runs at normal priority; a CPU that cannot be used is also only a
   warning (`src/utilities/ThreadPlacement`).
 - **Resync**: a DCA1000 restart (byte counts back to 0) or a wild byte
   count no longer leaves the stream dead; see "DCA1000 UDP packet format".

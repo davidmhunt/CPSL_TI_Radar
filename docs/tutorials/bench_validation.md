@@ -73,9 +73,9 @@ Thresholds come from the core-04 IWR1843 baseline (3 reps of 60 s, `docs/results
 | Resyncs (`dca_resyncs_final`; since core-15) | 0 | n/a | not measured |
 | Missed TLV frames (`tlv_missed_frames_total`) | n/a | 1 or fewer | 1, 0, 0 |
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` was fixed in core-11) | n/a | 896 B short x3 (pre-core-11); `exact` x3 after |
-| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (core-04, pre-rework driver), 16.1 to 16.3 (v2 driver, binary sha256 `3ecd94cd…`, with `cap_sys_nice`; core-06), about 4.8 (core-20, without) / 0.5 to 0.6 |
+| CPU % mean (guide) | below 20 (see note) | below 3 | 9.1 to 10.5 (core-04, pre-rework driver), 16.1 to 16.3 (v2 driver, with `cap_sys_nice`; core-06), about 4.8 (core-20, without) / 0.5 to 0.6 |
 
-For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The 20 % CPU guide comes from the core-06 runs of the reworked driver (16.1 to 16.3 % over 4 reps); the core-04 baseline used the pre-rework driver (9 to 10 %). The core-20 A/B runs (`docs/results/validation/ab_*`, `ab2_*`) show `cap_sys_nice` is not the cause: CPU was about the same with and without it, so the default has no real-time priority.
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The 20 % CPU guide comes from the core-06 runs of the reworked driver (16.1 to 16.3 % over 4 reps); the core-04 baseline used the pre-rework driver (9 to 10 %). The core-20 A/B runs (`docs/results/validation/ab_*`, `ab2_*`) show `cap_sys_nice` is not the cause (CPU about the same without it), so the default has no real-time priority.
 
 A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 10.
 
