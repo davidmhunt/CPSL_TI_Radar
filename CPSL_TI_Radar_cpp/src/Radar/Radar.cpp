@@ -279,7 +279,7 @@ Status Radar::start() {
             if (!s) return s;
             m.dca_worker = std::thread([&m] {
                 // runtime.worker_cpu / worker_priority (default: any CPU,
-                // SCHED_RR 80); a failure is a warning (design P11)
+                // normal priority); a failure is a warning (design P11)
                 apply_thread_placement(pthread_self(),
                                        {m.cfg.system().get_worker_cpu(), m.cfg.system().get_worker_priority()},
                                        "DCA worker");

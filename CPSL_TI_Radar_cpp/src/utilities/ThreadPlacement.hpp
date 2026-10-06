@@ -6,10 +6,10 @@
 // and the DCA worker thread (runtime.worker_cpu / worker_priority).
 //
 // cpu -1 (the key null or unset) leaves the thread on every CPU; priority
-// 1..99 asks for SCHED_RR at that priority (0 leaves the scheduling alone).
-// Neither failure is an error: the thread keeps running where and how it
-// was, and one warning says why. SCHED_RR needs cap_sys_nice (or an rtprio
-// limit); the warning names tools/setup/host_setup.py --apply, which grants it.
+// 1..99 asks for SCHED_RR at that priority (0, the default, leaves the
+// scheduling alone and warns nothing). Neither failure is an error: the
+// thread keeps running where and how it was, and one warning says why.
+// SCHED_RR is opt-in and needs cap_sys_nice (or an rtprio limit).
 
 #include <pthread.h>
 #include <sched.h>

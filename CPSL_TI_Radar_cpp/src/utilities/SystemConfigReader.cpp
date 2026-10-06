@@ -13,8 +13,8 @@ namespace {
 // Defaults for optional v2 keys (design §2)
 constexpr size_t kDefaultRcvbufBytes = 64u * 1024u * 1024u;
 constexpr uint32_t kDefaultFrameQueueDepth = 4;
-constexpr uint32_t kDefaultRxPriority = 99;
-constexpr uint32_t kDefaultWorkerPriority = 80;
+constexpr uint32_t kDefaultRxPriority = 0;
+constexpr uint32_t kDefaultWorkerPriority = 0;
 
 std::string dir_of(const std::string& path) {
     size_t pos = path.find_last_of('/');
@@ -311,11 +311,11 @@ bool SystemConfigReader::load() {
         if (rt.contains("rx_cpu") && !r.cpu(rt, "rx_cpu", p, rx_cpu)) return failed();
         if (rt.contains("worker_cpu") && !r.cpu(rt, "worker_cpu", p, worker_cpu)) return failed();
         if (rt.contains("rx_priority")) {
-            if (!r.uint(rt, "rx_priority", p, 1, 99, x)) return failed();
+            if (!r.uint(rt, "rx_priority", p, 0, 99, x)) return failed();
             rx_priority = static_cast<uint32_t>(x);
         }
         if (rt.contains("worker_priority")) {
-            if (!r.uint(rt, "worker_priority", p, 1, 99, x)) return failed();
+            if (!r.uint(rt, "worker_priority", p, 0, 99, x)) return failed();
             worker_priority = static_cast<uint32_t>(x);
         }
     }

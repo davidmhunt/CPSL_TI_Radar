@@ -53,7 +53,7 @@ public:
 
     // Resets the ring buffer and spawns the RX thread, pinned and at the
     // SCHED_RR priority in `placement` (runtime.rx_cpu / rx_priority;
-    // default: any CPU, SCHED_RR 99). Failing to apply either is a warning.
+    // default: any CPU, normal priority). Failing to apply either is a warning.
     void start_rx(const cpsl::radar::ThreadPlacement& placement = {-1, 99});
 
     // the RX thread (valid between start_rx() and stop_rx(); tests)

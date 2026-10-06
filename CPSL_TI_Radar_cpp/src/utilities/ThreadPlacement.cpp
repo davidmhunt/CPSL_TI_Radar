@@ -44,8 +44,9 @@ PlacementResult apply_thread_placement(pthread_t t, const ThreadPlacement& p, co
             log_debug(name, " thread at SCHED_RR ", p.priority);
         } else if (r.priority_error == EPERM) {
             log_warn(name, " thread: could not set SCHED_RR ", p.priority,
-                     " (no cap_sys_nice); it runs at normal priority. Grant it with: "
-                     "uv run tools/setup/host_setup.py --apply");
+                     " (not permitted); it runs at normal priority. A requested "
+                     "real-time priority needs cap_sys_nice or an rtprio limit; "
+                     "set the priority to 0 to disable the request");
         } else {
             log_warn(name, " thread: could not set SCHED_RR ", p.priority, " (", std::strerror(r.priority_error),
                      "); it runs at normal priority");
