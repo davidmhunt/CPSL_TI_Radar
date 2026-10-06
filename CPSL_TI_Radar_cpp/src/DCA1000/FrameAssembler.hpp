@@ -41,7 +41,7 @@
 // after the dropped frames), so after one an index is no longer byte
 // offset / bytes_per_frame.
 //
-// Documented compromise, pending user confirmation: a restart is detected
+// Documented compromise, accepted by the user 2026-10-06: a restart is detected
 // only once its packets lie more than W behind the oldest open frame, so not
 // before the old stream is about two frames in (a restart in the first 64
 // packets also looks like sequence duplicates, which never count toward a

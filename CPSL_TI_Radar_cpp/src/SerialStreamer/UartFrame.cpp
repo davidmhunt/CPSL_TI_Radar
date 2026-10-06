@@ -58,8 +58,8 @@ Status decode_points_sdk3(const uint8_t* p, uint32_t len, uint32_t num_obj, Uart
 // descriptor {u16 numDetetedObj, u16 xyzQFormat}, then 12 B per object
 // {u16 rangeIdx, i16 dopplerIdx, u16 peakVal, i16 x, i16 y, i16 z};
 // meters = int16 / 2^xyzQFormat. No velocity, SNR or noise is sent: v,
-// snr_db and noise_db are NaN (a documented compromise pending user
-// confirmation, docs/ARCHITECTURE.md).
+// snr_db and noise_db are NaN (approved by the user 2026-10-06 for now;
+// to be improved, docs/ARCHITECTURE.md).
 Status decode_points_sdk2(const uint8_t* p, uint32_t len, uint32_t num_obj, UartFrame& out) {
     if (len < 4) {
         return bad("sdk2 points TLV length " + std::to_string(len) + " is shorter than its 4-byte descriptor");
