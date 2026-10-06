@@ -52,9 +52,10 @@ class SaveReq(BaseModel):
     cfg_text: str
     force: bool = False                    # save even when validate() reports an error
     cli_port: str = "/dev/ttyACM0"
-    serial_enabled: bool = True
+    firmware: str | None = None            # firmware id (default: the board's); sets the enables below when they are omitted
+    serial_enabled: bool | None = None     # None = the firmware's system_enables
     data_port: str = "/dev/ttyACM1"
-    dca1000_enabled: bool = False
+    dca1000_enabled: bool | None = None
     fpga_ip: str = "192.168.33.180"
     host_ip: str = "192.168.33.30"
     cmd_port: int = Field(4096, ge=1, le=65535)
@@ -69,27 +70,52 @@ def _bad_board(board):
         raise HTTPException(422, f"unknown board {board!r}; one of {list(BOARDS)}")
 
 
-def _analyze_text(board: str, text: str) -> dict:
+def _fw_issue(board: str, firmware: str | None) -> dict | None:
+    """Error issue when `firmware` is unknown / does not support `board` / is a pending stub, else None."""
+    if not firmware:
+        return None
+    fw = fwmod.get(firmware)
+    src = f"config/firmware/{firmware}.json"
+    if fw is None:
+        return {"level": "error", "code": "unknown_firmware", "source": "", "confidence": "",
+                "message": f"unknown firmware {firmware!r}; expected one of {list(fwmod.load_all())}"}
+    if board not in fw["boards"]:
+        return {"level": "error", "code": "firmware_board_mismatch", "source": src, "confidence": "repo",
+                "message": f"firmware {firmware!r} does not support {board} (it runs on {fw['boards']})"}
+    if fw.get("pending"):
+        return {"level": "error", "code": "firmware_pending", "source": src, "confidence": "repo",
+                "message": f"firmware {firmware!r}: {fw['pending']}"}
+    return None
+
+
+def _analyze_text(board: str, text: str, firmware: str | None = None) -> dict:
+    pre = _fw_issue(board, firmware)
     try:
         cfg = parse_cfg(text)
-        rep = validate(cfg, board)
+        rep = validate(cfg, board, None if pre else firmware)
     except CfgError as e:
         return {"board": board, "ok": False, "source": "cfg", "text": text, "metrics": None,
                 "issues": [{"level": "error", "code": "parse", "message": str(e), "source": "", "confidence": ""}]}
     d = rep.to_dict()
-    return {"board": board, "ok": d["ok"], "source": "cfg", "text": text, "metrics": d["metrics"],
-            "issues": d["issues"]}
+    issues = ([pre] if pre else []) + d["issues"]
+    return {"board": board, "ok": d["ok"] and not pre, "source": "cfg", "text": text, "metrics": d["metrics"],
+            "issues": issues}
 
 
 def system_json(req: SaveReq, cfg_name: str) -> dict:
-    """The driver's schema v2 (docs/ARCHITECTURE.md "Configuration"); paths resolve against the JSON's dir."""
+    """The driver's schema v2 (docs/ARCHITECTURE.md "Configuration"); paths resolve against the JSON's dir.
+    serial/dca1000 enables come from the firmware descriptor unless the request sets them explicitly."""
+    fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
+    en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
+    serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
+    dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled
     return {
         "schema_version": 2,
         "board": req.board,
         "radar_cfg": cfg_name,
         "cli": {"port": req.cli_port},
-        "serial_stream": {"enabled": req.serial_enabled, "port": req.data_port},
-        "dca1000": {"enabled": req.dca1000_enabled, "fpga_ip": req.fpga_ip, "host_ip": req.host_ip,
+        "serial_stream": {"enabled": serial, "port": req.data_port},
+        "dca1000": {"enabled": dca, "fpga_ip": req.fpga_ip, "host_ip": req.host_ip,
                     "cmd_port": req.cmd_port, "data_port": req.data_udp_port},
         "output": {"save_adc_frames": req.save_adc_frames, "save_raw_lvds": req.save_raw_lvds},
         "runtime": {"log_level": req.log_level},
@@ -105,7 +131,7 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
 
     @r.get("/api/cfg/boards")
     def boards():
-        return {"boards": list(BOARDS), "output_modes": OUTPUT_MODES,   # DEPRECATED alias; the UI moves to `firmware` in gui-10 Step 2
+        return {"boards": list(BOARDS), "output_modes": OUTPUT_MODES,   # DEPRECATED alias, unused by the UI
                 "firmware": fwmod.summary(), "log_levels": LOG_LEVELS,
                 "limits": limits_dict(), "user_dir": str(udir)}
 
@@ -119,7 +145,7 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
     def analyze(req: AnalyzeReq):
         _bad_board(req.board)
         if req.cfg_text is not None:
-            return _analyze_text(req.board, req.cfg_text)
+            return _analyze_text(req.board, req.cfg_text, req.firmware)
         if req.targets is not None:
             return _generated(req.board, req.targets, req.firmware)
         raise HTTPException(422, "give cfg_text or targets")
@@ -165,7 +191,7 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
             raise HTTPException(422, "name: letters, digits, '_', '-', '.', must start with a letter or digit")
         if req.log_level not in LOG_LEVELS:
             raise HTTPException(422, f"log_level must be one of {LOG_LEVELS}")
-        res = _analyze_text(req.board, req.cfg_text)
+        res = _analyze_text(req.board, req.cfg_text, req.firmware)
         if not res["ok"] and not req.force:
             raise HTTPException(422, {"message": "cfg has error-level issues (set force to save anyway)",
                                       "issues": res["issues"]})

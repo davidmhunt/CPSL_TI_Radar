@@ -25,7 +25,7 @@ New sources subclass `Source` and yield frame dicts from `async frames()`.
 
 ## Configure tab (gui-03)
 
-Open `http://127.0.0.1:8000/#configure` (or the **Configure** tab). Pick a board and output mode, enter targets
+Open `http://127.0.0.1:8000/#configure` (or the **Configure** tab). Pick a board and a firmware (the firmware list is filtered by board; its outputs show read-only), enter targets
 (max range / velocity required; range / velocity resolution, frame rate and advanced overrides optional) and the
 resolution / max-range / max-velocity tiles and the constraint list update live (200 ms debounce). Issues show their
 level and the confidence of the limit behind them (`repo`, `recalled`, `unverified limit`; hover for the source).
@@ -41,9 +41,9 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 
 | Endpoint | |
 |---|---|
-| `GET /api/cfg/boards` | boards, output modes, `limits_dict()`, user dir |
+| `GET /api/cfg/boards` | boards, firmware summaries, `limits_dict()`, user dir |
 | `POST /api/cfg/analyze` | `{board, cfg_text}` or `{board, targets}` -> `{ok, metrics, issues, text, ...}` |
-| `POST /api/cfg/generate` | `{board, targets, firmware?}` -> same shape (`targets`, `achieved`, `name` included); `firmware` = descriptor id, default the board's; `output_mode` in targets is a deprecated alias |
+| `POST /api/cfg/generate` | `{board, targets, firmware?}` -> same shape (`targets`, `achieved`, `name` included); `firmware` = descriptor id, default the board's; `output_mode` in targets is a deprecated alias (backend only; the UI no longer sends it) |
 | `GET /api/cfg/firmware[?board=]` | firmware descriptors (id, boards, outputs, system_enables, pending), default first for a board. Descriptors: `CPSL_TI_Radar_cpp/config/firmware/<id>.json` (schema in `radar_gui/cfg/firmware.py`); limits are loaded from them |
 | `GET /api/cfgs`, `GET /api/cfg/file?id=` | shipped (`config/radar`, `tools/radar_viewer/configs`) + user cfgs; read one |
 | `POST /api/cfg/save` | write the `.cfg` + system JSON (new names only) |

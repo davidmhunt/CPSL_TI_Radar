@@ -1,7 +1,7 @@
 // Configure tab: targets (or a loaded cfg) -> live metrics + constraint check -> save cfg + system JSON.
 import { $ } from './state.js';
 
-const C = { source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
+const C = { fw: [], source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
 const TARGETS = ['max_range_m', 'max_velocity_ms', 'range_res_m', 'velocity_res_ms', 'frame_rate_hz',
   'num_samples', 'num_loops', 'tx_mask', 'rx_mask', 'cfar_range_db', 'cfar_doppler_db'];
 
@@ -17,7 +17,6 @@ const fmt = (v, d = 2) => v == null || !isFinite(v) ? '–' : (+v).toFixed(d);
 function targets() {
   const t = {};
   for (const k of TARGETS) { const v = $('t_' + k).value; if (v !== '') t[k] = +v; }
-  t.output_mode = $('cMode').value;
   return t;
 }
 
@@ -31,7 +30,7 @@ function setSource(kind, name) {
 function schedule() { clearTimeout(C.timer); C.timer = setTimeout(analyze, 200); }
 async function analyze() {
   const seq = ++C.seq, board = $('cBoard').value;
-  const body = C.source === 'cfg' ? { board, cfg_text: C.text } : { board, targets: targets() };
+  const body = C.source === 'cfg' ? { board, firmware: $('cFw').value, cfg_text: C.text } : { board, firmware: $('cFw').value, targets: targets() };
   const { ok, j } = await api('/api/cfg/analyze', body);
   if (seq !== C.seq) return;   // a newer request is in flight
   if (!ok) { render({ ok: false, metrics: null, issues: [{ level: 'error', code: 'api', message: JSON.stringify(j && j.detail || j), confidence: '' }], text: C.text }); return; }
@@ -80,16 +79,31 @@ function render(j) {
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
 
-// ---------- boards, modes, loading ----------
-function inferMode(text) {
+// ---------- boards, firmware, loading ----------
+// Firmware offered for a board come from the descriptors (GET /api/cfg/firmware); the default is listed first.
+async function loadFirmware(board, want) {
+  const { j } = await api('/api/cfg/firmware?board=' + encodeURIComponent(board));
+  C.fw = (j && j.firmware || []).filter(f => !f.pending);   // pending stubs are not offered
+  $('cFw').replaceChildren(...C.fw.map(f => new Option(f.id + (f.default ? ' (default)' : ''), f.id)));
+  const pick = C.fw.find(f => f.id === want) || C.fw[0];
+  if (pick) $('cFw').value = pick.id;
+  showFirmware();
+}
+function showFirmware() {
+  const f = C.fw.find(x => x.id === $('cFw').value);
+  if (!f) { $('cOutputs').textContent = ''; return; }
+  const o = [f.outputs.tlv && 'TLV point cloud (serial)', f.outputs.lvds && 'raw ADC (LVDS \u2192 DCA1000)'].filter(Boolean);
+  $('cOutputs').textContent = 'Outputs: ' + o.join(' / ') + ' \u2014 ' + f.description;
+  $('sSerial').checked = f.system_enables.serial; $('sDca').checked = f.system_enables.dca1000;
+  dcaVis();
+}
+// Best firmware for a loaded cfg's flavour among the board's list (falls back to the default).
+function inferFirmware(text) {
   const demo = /^\s*(guiMonitor|cfarCfg)\b/m.test(text);
   const lv = /^\s*lvdsStreamCfg\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/m.exec(text);
-  if (!demo) return 'raw';
-  return lv && (lv[3] !== '0' || lv[4] === '1') ? 'lvds' : 'tlv';
-}
-function applyModeDefaults(mode) {
-  $('sSerial').checked = mode !== 'raw'; $('sDca').checked = mode !== 'tlv';
-  dcaVis();
+  const lvds = demo && lv && (lv[3] !== '0' || lv[4] === '1');
+  const f = C.fw.find(f => demo ? (f.outputs.tlv && f.outputs.lvds === !!lvds) : !f.outputs.tlv);
+  return f ? f.id : null;
 }
 function dcaVis() { $('dcaFields').style.opacity = $('sDca').checked ? 1 : .4; }
 
@@ -110,7 +124,7 @@ async function onLoad() {
   const { ok, j } = await api('/api/cfg/file?id=' + encodeURIComponent(id));
   if (!ok) return;
   $('cBoard').value = j.board; C.text = j.text; setSource('cfg', j.name);
-  const mode = inferMode(j.text); $('cMode').value = mode; applyModeDefaults(mode);
+  await loadFirmware(j.board); const fw = inferFirmware(j.text); if (fw) { $('cFw').value = fw; showFirmware(); }
   $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + '_copy';
   analyze();
 }
@@ -126,7 +140,7 @@ function toTargets() {
 async function save() {
   const msg = $('sMsg'); msg.className = 'muted'; msg.textContent = 'Saving...';
   const body = {
-    board: $('cBoard').value, name: $('sName').value.trim(), cfg_text: C.text, force: $('sForce').checked,
+    board: $('cBoard').value, firmware: $('cFw').value, name: $('sName').value.trim(), cfg_text: C.text, force: $('sForce').checked,
     cli_port: $('sCli').value, data_port: $('sData').value, serial_enabled: $('sSerial').checked,
     dca1000_enabled: $('sDca').checked, fpga_ip: $('sFpga').value, host_ip: $('sHost').value,
     cmd_port: +$('sCmd').value, data_udp_port: +$('sUdp').value,
@@ -147,12 +161,12 @@ async function save() {
 async function init() {
   const { j } = await api('/api/cfg/boards');
   for (const b of j.boards) $('cBoard').append(new Option(b, b));
-  for (const m of j.output_modes) $('cMode').append(new Option(m, m));
   $('cBoard').value = 'IWR1843';
+  await loadFirmware('IWR1843');
   await loadList();
   for (const k of TARGETS) $('t_' + k).addEventListener('input', () => { setSource('targets'); schedule(); });
-  $('cMode').addEventListener('change', () => { setSource('targets'); applyModeDefaults($('cMode').value); schedule(); });
-  $('cBoard').addEventListener('change', () => { if (C.source === 'targets') schedule(); else analyze(); });
+  $('cFw').addEventListener('change', () => { showFirmware(); if (C.source === 'targets') schedule(); else analyze(); });
+  $('cBoard').addEventListener('change', async () => { await loadFirmware($('cBoard').value, $('cFw').value); if (C.source === 'targets') schedule(); else analyze(); });
   $('cLoad').addEventListener('change', onLoad);
   $('cToTargets').onclick = toTargets;
   $('sSave').onclick = save;

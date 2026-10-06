@@ -142,3 +142,53 @@ def test_saved_system_json_passes_driver_validate(client):
     p = subprocess.run([str(DRIVER), j["json_path"], "--validate"], capture_output=True, text=True, env=env, timeout=60)
     assert p.returncode == 0, p.stdout + p.stderr
     assert "OK:" in p.stdout and "board:      IWR1843" in p.stdout
+
+
+# ---- gui-10 Step 2: firmware selector in the UI / save ----
+def test_ui_has_firmware_selector_and_no_output_mode():
+    js = (REPO / "radar_gui" / "web" / "js" / "cfg.js").read_text()
+    html = (REPO / "radar_gui" / "web" / "index.html").read_text()
+    assert 'id="cFw"' in html and 'id="cOutputs"' in html and 'id="cMode"' not in html
+    assert "output_mode" not in js and "cMode" not in js and "/api/cfg/firmware?board=" in js
+
+
+def test_firmware_list_per_board_default_first_and_sar_not_offered(client):
+    for b in ("IWR1443", "IWR1843", "IWR6843"):
+        fws = client.get("/api/cfg/firmware", params={"board": b}).json()["firmware"]
+        assert fws[0]["id"] == "demo_stock" and fws[0]["default"]
+        assert all(f["outputs"] and not f["pending"] for f in fws) and "iwr1843_sar_lvds" not in [f["id"] for f in fws]
+    assert "IWR1843_SAR" not in client.get("/api/cfg/boards").json()["boards"]
+
+
+def test_analyze_cfg_reports_firmware_issues(client):
+    text = generate("IWR1843", T).text
+    bad = client.post("/api/cfg/analyze", json={"board": "IWR1443", "cfg_text": text, "firmware": "cascade_ddm"}).json()
+    assert not bad["ok"] and bad["issues"][0]["code"] == "firmware_board_mismatch"
+    pend = client.post("/api/cfg/analyze", json={"board": "IWR1843_SAR", "cfg_text": text, "firmware": "iwr1843_sar_lvds"})
+    assert pend.status_code == 422                                         # not a GUI board
+    ok = client.post("/api/cfg/analyze", json={"board": "IWR1843", "cfg_text": text, "firmware": "demo_stock"}).json()
+    assert not any(i["code"].startswith("firmware_") for i in ok["issues"])
+
+
+def test_save_uses_firmware_system_enables(client):
+    def saved(fw, **kw):
+        body = _save_body(client, f"fw_{fw}_{len(kw)}", **kw)
+        body.pop("serial_enabled", None); body.pop("dca1000_enabled", None)
+        body.update(kw, firmware=fw)
+        r = client.post("/api/cfg/save", json=body)
+        assert r.status_code == 200, r.text
+        return json.loads(Path(r.json()["json_path"]).read_text())
+    s = saved("demo_stock")
+    assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
+    s = saved("dca1000_raw")
+    assert not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
+    s = saved("demo_lvds")
+    assert s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
+    # explicit request values still win (the UI checkboxes)
+    s = saved("demo_stock", dca1000_enabled=True)
+    assert s["dca1000"]["enabled"]
+
+
+def test_save_refuses_firmware_mismatch_unless_forced(client):
+    r = client.post("/api/cfg/save", json=_save_body(client, "mm", board="IWR1443", firmware="cascade_ddm"))
+    assert r.status_code == 422
