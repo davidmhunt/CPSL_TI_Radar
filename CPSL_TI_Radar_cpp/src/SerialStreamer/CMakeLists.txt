@@ -3,7 +3,8 @@ find_package(Threads REQUIRED)
 find_package(Boost REQUIRED)
 
 #add libraries
-add_library(TLVProcessing TLVProcessing.cpp)
+#TLVProcessing: the pure frame parser (parse_uart_frame) and the TLV type codes
+add_library(TLVProcessing TLVProcessing.cpp UartFrame.cpp)
 add_library(SerialStreamer SerialStreamer.cpp)
 
 target_include_directories(TLVProcessing PUBLIC
@@ -16,6 +17,7 @@ target_include_directories(SerialStreamer PUBLIC
 )
 
 #link libraries
+target_link_libraries(TLVProcessing PUBLIC BoardDescriptor PUBLIC Log)
 target_link_libraries(SerialStreamer PUBLIC Utilities
                                     PUBLIC Boost::boost
                                     PUBLIC Threads::Threads

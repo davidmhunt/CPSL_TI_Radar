@@ -1,699 +1,228 @@
 #include "SerialStreamer.hpp"
 
-#include <iomanip>
-#include <sstream>
+#include <algorithm>
+#include <cstring>
+#include <string>
+#include <system_error>
 
 #include "Log.hpp"
 
-using namespace std;
-using namespace boost::asio;
+using cpsl::radar::ByteStream;
+using cpsl::radar::Status;
+using cpsl::radar::UartFrame;
 
-/**
- * @brief Construct a new Serial Streamer:: Serial Streamer object
- * but leave it uninitialized
- * 
- */
-SerialStreamer::SerialStreamer():
-    initialized(false),
-    new_frame_available(false),
-    new_frame_available_mutex(),
-    tlv_processing_mutex(),
-    system_config_reader(), //will leave it uninitialized
-    io_context(new boost::asio::io_context()),
-    data_port(nullptr),
-    serial_stream(),
-    timeout(*io_context),
-    serial_message_data_buffer(),
-    header_data_bytes(32,0),
-    header_data(8,0),
-    header_version(""),
-    header_totalPacketLen(0),
-    header_platform(""),
-    header_frameNumber(0),
-    header_timeCPUCycles(0),
-    header_numDetectedObj(0),
-    header_numTLVs(0),
-    header_subFrameNumber(0),
-    have_previous_frame(false),
-    previous_frame_number(0),
-    missed_frame_count(0),
-    tlv_detected_points_processor(),
-    tlv_side_info_processor(),
-    VALID_DETECTED_POINTS()
-{}
-
-/**
- * @brief Construct a new Serial Streamer:: Serial Streamer object
- * 
- * @param systemConfigReader initialized system config reader
- */
-SerialStreamer::SerialStreamer(const SystemConfigReader & systemConfigReader):
-    initialized(false),
-    new_frame_available(false),
-    new_frame_available_mutex(),
-    tlv_processing_mutex(),
-    system_config_reader(),
-    io_context(new boost::asio::io_context()),
-    data_port(nullptr),
-    serial_stream(),
-    timeout(*io_context),
-    serial_message_data_buffer(),
-    header_data_bytes(32,0),
-    header_data(8,0),
-    header_version(""),
-    header_totalPacketLen(0),
-    header_platform(""),
-    header_frameNumber(0),
-    header_timeCPUCycles(0),
-    header_numDetectedObj(0),
-    header_numTLVs(0),
-    header_subFrameNumber(0),
-    have_previous_frame(false),
-    previous_frame_number(0),
-    missed_frame_count(0),
-    tlv_detected_points_processor(),
-    tlv_side_info_processor(),
-    VALID_DETECTED_POINTS()
-{    
-    initialize(systemConfigReader);
-}
-
-/**
- * @brief Copy Contructor
- * 
- * @param rhs 
- */
-SerialStreamer::SerialStreamer(const SerialStreamer & rhs):
-    initialized(rhs.initialized),
-    new_frame_available(rhs.new_frame_available),
-    new_frame_available_mutex(),
-    tlv_processing_mutex(),
-    io_context(rhs.io_context),
-    data_port(rhs.data_port),
-    system_config_reader(rhs.system_config_reader),
-    serial_stream(), // `boost::asio::streambuf` does not support copying; initialize a fresh buffer
-    timeout(*rhs.io_context),
-    serial_message_data_buffer(rhs.serial_message_data_buffer),
-    header_data_bytes(rhs.header_data_bytes),
-    header_data(rhs.header_data),
-    header_version(rhs.header_version),
-    header_totalPacketLen(rhs.header_totalPacketLen),
-    header_platform(rhs.header_platform),
-    header_frameNumber(rhs.header_frameNumber),
-    header_timeCPUCycles(rhs.header_timeCPUCycles),
-    header_numDetectedObj(rhs.header_numDetectedObj),
-    header_numTLVs(rhs.header_numTLVs),
-    header_subFrameNumber(rhs.header_subFrameNumber),
-    have_previous_frame(rhs.have_previous_frame),
-    previous_frame_number(rhs.previous_frame_number),
-    missed_frame_count(rhs.missed_frame_count),
-    tlv_detected_points_processor(rhs.tlv_detected_points_processor),
-    tlv_side_info_processor(rhs.tlv_side_info_processor),
-    VALID_DETECTED_POINTS(rhs.VALID_DETECTED_POINTS)
-{}
-
-/**
- * @brief Assignment operator
- * 
- * @param rhs 
- * @return SerialStreamer& 
- */
-SerialStreamer & SerialStreamer::operator=(const SerialStreamer & rhs){
-    if(this!= & rhs){
-
-        //close the cli port if it is open
-        if(data_port.get() != nullptr &&
-            data_port.use_count() == 1 && 
-            data_port -> is_open())
-        {
-            boost::system::error_code ec;
-            data_port -> close(ec);
-        }
-
-        // Copy other members
-        initialized = rhs.initialized;
-        new_frame_available = rhs.new_frame_available;
-        //don't re-assign the mutex operators
-        io_context = rhs.io_context;
-        data_port = rhs.data_port;
-        system_config_reader = rhs.system_config_reader;
-        serial_message_data_buffer = rhs.serial_message_data_buffer;
-        header_data_bytes = rhs.header_data_bytes;
-        header_data = rhs.header_data;
-
-        // Streambuf cannot be copied; ensure it’s reinitialized
-        serial_stream.consume(serial_stream.size()); // Clear buffer contents
-        timeout = boost::asio::deadline_timer(*io_context); // Reinitialize timeout with the new io_context
-    }
-
-    return *this;
-}
-
-/**
- * @brief Destroy the Serial Streamer:: Serial Streamer object
- * 
- */
-SerialStreamer::~SerialStreamer()
-{
-    //TODO: Check if the serial port is running right now
-    if(data_port.get() != nullptr && 
-        data_port.use_count() == 1 &&
-        data_port -> is_open()){
-        boost::system::error_code ec;
-        data_port -> close(ec);  //never throws, even if the device is gone
-    }
-}
+namespace {
+//longest single wait inside process_next_message, so close() ends it promptly
+constexpr std::chrono::milliseconds kReadSlice(100);
+}  // namespace
 
 bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
-
-    system_config_reader = systemConfigReader;
-
-    //check to make sure that the cli port isn't already open
-    if(data_port.get() != nullptr &&
-        data_port.use_count() == 1 && 
-        data_port -> is_open())
-    {
-        boost::system::error_code ec;
-        data_port -> close(ec);
-    }
-
-    if(system_config_reader.initialized){
-        data_port = std::make_shared<boost::asio::serial_port>(*io_context);
-        boost::system::error_code ec;
-        data_port->open(system_config_reader.getRadarDataPort(), ec);
-        if(ec){
-            cpsl::radar::log_error("SerialStreamer: cannot open ", system_config_reader.getRadarDataPort(),
-                                   ": ", ec.message());
-            initialized = false;
-            return false;
-        }
-        try{
-            initialized = set_serial_baud_rate(*data_port, system_config_reader.getRadarDataBaudRate());
-        } catch(const std::exception& e){
-            cpsl::radar::log_error("SerialStreamer: cannot set the data port baud rate: ", e.what());
-            initialized = false;
-        }
-        have_previous_frame = false;
-        missed_frame_count = 0;
-        {
-            std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-            committed_frames_ = 0;
-            taken_at_ = 0;
-        }
-        last_frame_ns_.store(0, std::memory_order_relaxed);
-        io_error_.store(false, std::memory_order_relaxed);
-    } else{
-        initialized = false;
+    stream_.reset();  //closes a port this streamer opened before
+    initialized = false;
+    if(!systemConfigReader.initialized){
         cpsl::radar::log_error("attempted to initialize the serial streamer, ",
                                "but system_config_reader was not initialized");
+        return false;
     }
+    std::string error;
+    std::shared_ptr<cpsl::radar::SerialPortStream> port = cpsl::radar::SerialPortStream::open(
+        systemConfigReader.getRadarDataPort(), systemConfigReader.getRadarDataBaudRate(), error);
+    if(!port){
+        cpsl::radar::log_error("SerialStreamer: ", error);
+        return false;
+    }
+    return initialize(systemConfigReader, port);
+}
 
+bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader,
+                                std::shared_ptr<ByteStream> stream){
+    system_config_reader = systemConfigReader;
+    stream_ = std::move(stream);
+    initialized = system_config_reader.initialized && stream_ != nullptr;
+
+    dialect_ = system_config_reader.getBoard().data_uart.tlv_dialect;
+    header_bytes_ = cpsl::radar::uart_header_bytes(dialect_);
+    timeout_ms_ = system_config_reader.getRadarDataTimeoutMs();
+    rx_len_ = 0;
+    synced_ = false;
+    {
+        std::lock_guard<std::mutex> l(m_);
+        published_points_.clear();
+        published_frame_number_ = 0;
+        committed_frames_ = 0;
+        taken_at_ = 0;
+        have_previous_frame_ = false;
+        previous_frame_number_ = 0;
+        missed_frame_count_ = 0;
+    }
+    closed_.store(false);
+    last_frame_ns_.store(0, std::memory_order_relaxed);
+    io_error_.store(false, std::memory_order_relaxed);
+    rejected_frames_.store(0, std::memory_order_relaxed);
     return initialized;
 }
 
-/**
- * @brief Process the next message of TLV data
- * @note new_frame_data flag must be checked to see if the new
- *  TLV frame data was actually valid
- * 
- * @return true new TLV frame data received successfully
- *  (check new_frame_available flag to see if data was valid though)
- * @return false new TLV frame data was not successfully received
- *  (usually due to a timeout) 
- */
 bool SerialStreamer::process_next_message(void){
 
-    //define unique locks for thread safety
-    std::unique_lock<std::mutex> new_frame_available_unique_lock(
-        new_frame_available_mutex,
-        std::defer_lock
-    );
-
-    //get the next serial frame and load it into the serial_message_data_buffer
-    if (!get_next_serial_frame()){
+    if(!stream_){
         return false;
     }
+    const clock::time_point deadline = clock::now() + std::chrono::milliseconds(timeout_ms_);
 
-    //process the header
-    if (!process_message_header()){
-        return true;
-    }
+    for(;;){
+        if(closed_.load(std::memory_order_relaxed)){
+            return false;
+        }
 
-
-    //process all new TLVs; a valid frame is committed (under the TLV lock) only here
-    if (!process_TLV_messages()){
-        return true;
-    }
-
-    //denote a new frame is available
-    new_frame_available_unique_lock.lock();
-    new_frame_available = true;
-    new_frame_available_unique_lock.unlock();
-
-    return true;
-}
-
-/**
- * @brief Determine if a new frame's worth of TLV data
- *  is now available in a thread safe manner
- * 
- * @return true - a new frame is available
- * @return false - a new frame is not available
- */
-bool SerialStreamer::check_new_frame_available(void){
-
-    //create unique locks to access data in a thread safe manner
-    std::unique_lock<std::mutex> new_frame_available_unique_lock(
-        new_frame_available_mutex,
-        std::defer_lock
-    );
-
-    bool status;
-
-    //get the status in a thread safe way
-    new_frame_available_unique_lock.lock();
-    status = new_frame_available;
-    new_frame_available_unique_lock.unlock();
-
-    return status;
-}
-
-std::vector<std::vector<float>> SerialStreamer::tlv_get_latest_detected_points(void){
-
-    //create the mutexes/locks to access data in a thread safe manner
-    std::unique_lock<std::mutex> new_frame_available_unique_lock(
-        new_frame_available_mutex,
-        std::defer_lock
-    );
-
-    std::unique_lock<std::mutex> tlv_processing_unique_lock(
-        tlv_processing_mutex,
-        std::defer_lock
-    );
-
-    //access the latest detected points
-    std::vector<std::vector<float>> latest_detected_points;
-    tlv_processing_unique_lock.lock();
-    latest_detected_points = tlv_detected_points_processor.detected_points;
-    tlv_processing_unique_lock.unlock();
-
-    //reset the new_frame_available flage
-    new_frame_available_unique_lock.lock();
-    new_frame_available = false;
-    new_frame_available_unique_lock.unlock();
-
-    return latest_detected_points;
-}
-
-/**
- * @brief Get the SNR/noise ([snr_dB, noise_dB] per point, same order as the
- *  detected points) from the latest frame. Empty if the demo doesn't send TLV type 7.
- * @note Doesn't reset the new_frame_available flag; call it before
- *  tlv_get_latest_detected_points() to read both for the same frame.
- * 
- * @return std::vector<std::vector<float>> 
- */
-std::vector<std::vector<float>> SerialStreamer::tlv_get_latest_detected_points_side_info(void){
-
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-    return tlv_side_info_processor.side_info;
-}
-
-/**
- * @brief Get the frame number from the header of the latest valid frame
- * 
- * @return uint32_t 
- */
-uint32_t SerialStreamer::get_latest_frame_number(void){
-
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-    return header_frameNumber;
-}
-
-/**
- * @brief Get the number of frames skipped (gaps in the header frame number)
- * since the streamer was initialized
- * 
- * @return uint32_t 
- */
-uint32_t SerialStreamer::get_missed_frame_count(void){
-
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-    return missed_frame_count;
-}
-
-/**
- * @brief Wait for the next complete message (indicated by 
- * receiving a magic word) and save the read data into the 
- * serial_message_data_buffer. Times out after the configured
- * serial_streaming timeout_ms (default 1s)
- * 
- * @return true on successful data capture
- * @return false on error or timeout during data capture
- */
-bool SerialStreamer::get_next_serial_frame(void) {
-    size_t bytes_transfered = 0;
-    boost::system::error_code ec;
-
-    // Set the timeout for the asynchronous read
-    timeout.expires_from_now(boost::posix_time::millisec(
-        system_config_reader.getRadarDataTimeoutMs()));
-
-    // Start asynchronous read until the magic word is found
-    async_read_until(*data_port, serial_stream, magic_word, 
-        [this,&ec, &bytes_transfered](const boost::system::error_code& e, size_t transfered) {
-            ec = e;
-            bytes_transfered = transfered;
-
-            if(!e){
-                boost::system::error_code cancel_ec;
-                this->timeout.cancel(cancel_ec);
+        //1. a magic word at rx_[0]; keep a possible partial one at the end
+        const size_t magic = cpsl::radar::find_uart_magic(rx_.data(), rx_len_);
+        if(magic == rx_len_){
+            discard(rx_len_ > 7 ? rx_len_ - 7 : 0);
+            if(!read_more(header_bytes_, deadline)) return false;
+            continue;
+        }
+        if(magic > 0){
+            if(synced_){
+                cpsl::radar::log_debug("SerialStreamer: skipped ", magic, " bytes before a magic word");
             }
+            discard(magic);
         }
-    );
 
-    // Set up the timeout to cancel the operation if it takes too long
-    timeout.async_wait([this](const boost::system::error_code& e) {
-        if (!e) {
-            boost::system::error_code cancel_ec;
-            data_port->cancel(cancel_ec);  //must not throw out of io_context::run (unplugged port)
+        //2. the header, for totalPacketLen
+        if(rx_len_ < header_bytes_){
+            if(!read_more(header_bytes_ - rx_len_, deadline)) return false;
+            continue;
         }
-    });
+        const uint32_t total = cpsl::radar::uart_le32(rx_.data(), 12);
+        if(total < header_bytes_ || total > cpsl::radar::kUartMaxPacketBytes){
+            rejected_frames_.fetch_add(1, std::memory_order_relaxed);
+            cpsl::radar::log_warn("SerialStreamer: dropped a frame with totalPacketLen ", total,
+                                  " (resynchronizing)");
+            discard(1);
+            continue;
+        }
 
-    // Run the I/O context to process the asynchronous operations
-    io_context->run();
-    io_context->reset();
-
-    // Check for errors and handle the results
-    io_error_.store(ec && ec != boost::asio::error::operation_aborted, std::memory_order_relaxed);
-    if (!ec) {
-
-        //load data into the vector
-        serial_message_data_buffer = std::vector<uint8_t>(bytes_transfered);
-        boost::asio::buffer_copy(
-            boost::asio::buffer(serial_message_data_buffer),
-            serial_stream.data(),
-            bytes_transfered
-        );
-
-        // Remove the received data from the buffer
-        serial_stream.consume(bytes_transfered);
-
+        //3. exactly the rest of the frame, then parse and publish at once
+        if(rx_len_ < total){
+            if(!read_more(total - rx_len_, deadline)) return false;
+            continue;
+        }
+        const clock::time_point completed_at = clock::now();
+        const Status s = cpsl::radar::parse_uart_frame(rx_.data(), total, dialect_, work_);
+        if(!s){
+            rejected_frames_.fetch_add(1, std::memory_order_relaxed);
+            cpsl::radar::log_warn("SerialStreamer: dropped a frame: ", s.message);
+            discard(1);  //search again from just past this magic word
+            continue;
+        }
+        if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
+            const cpsl::radar::UartHeader & h = work_.header;
+            cpsl::radar::log_debug("SerialStreamer: frame ", h.frame_number, ", ", total, " bytes, ",
+                                   h.num_tlvs, " TLVs, ", work_.points.size(), " points");
+        }
+        discard(total);
+        commit(completed_at);
+        synced_ = true;
         return true;
-    } else if (ec == boost::asio::error::operation_aborted) {
-        // Timeout occurred
-        cpsl::radar::log_debug("SerialStreamer: Timeout while waiting for response");
+    }
+}
+
+bool SerialStreamer::read_more(size_t want, clock::time_point deadline){
+    const clock::time_point now = clock::now();
+    if(now >= deadline){
+        cpsl::radar::log_debug("SerialStreamer: no complete frame within ", timeout_ms_, " ms");
         return false;
-    } else {
-        // Other errors
+    }
+    if(rx_.size() < rx_len_ + want){
+        rx_.resize(rx_len_ + want);
+    }
+    const std::chrono::milliseconds left =
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now) + std::chrono::milliseconds(1);
+    size_t n = 0;
+    const std::error_code ec = stream_->read_some(rx_.data() + rx_len_, want, n, std::min(left, kReadSlice));
+    if(ec && ec != std::errc::timed_out){
+        io_error_.store(true, std::memory_order_relaxed);
         cpsl::radar::log_error("SerialStreamer: error while reading the data port: ", ec.message());
         return false;
     }
-}
-
-/**
- * @brief Decode the latest frame message's header
- * @note Assumes that latest frame data bytes have
- * already been loaded in via the
- * get_next_serial_frame function
- * 
- * @return true on header successfully decoded
- * @return false on header error
- */
-bool SerialStreamer::process_message_header(void){
-
-    //confirm valid message (first received frame will not be)
-    if(serial_message_data_buffer.size() <= 32){
-        return false;
-    }
-
-    //get the header data bytes
-    header_data_bytes.assign(
-        serial_message_data_buffer.begin(),
-        serial_message_data_buffer.begin() + 32
-    );
-
-    //reinterpret the data into uint32 type
-    const uint32_t* data_ptr = reinterpret_cast<const uint32_t*>(header_data_bytes.data());
-
-    // Append the reinterpreted data to header_data
-    header_data.assign(data_ptr, data_ptr + 8);
-    
-    //convert from le32 to host format
-    for (size_t i = 0; i < header_data.size(); i++)
-    {
-        header_data[i] = le32toh(header_data[i]);
-    }
-
-    //decode into pending_: nothing a reader can see changes until the whole
-    //frame (header length and every TLV) has been validated
-    pending_.version = uint32ToHex(header_data[0]);
-    pending_.totalPacketLen = header_data[1];
-    pending_.platform = uint32ToHex(header_data[2]);
-    pending_.frameNumber = header_data[3];
-    pending_.timeCPUCycles = header_data[4];
-    pending_.numDetectedObj = header_data[5];
-    pending_.numTLVs = header_data[6];
-    pending_.subFrameNumber = header_data[7];
-
-    if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
-        print_status();
-    }
-
-    //check to ensure the message is valid
-    return check_valid_message();
-}
-
-void SerialStreamer::print_status(void){
-
-    std::ostringstream o;
-    o <<
-    "frame: " << pending_.frameNumber << "\n" <<
-    "\tversion: " << pending_.version << "\n" <<
-    "\ttotal Packet length: " << pending_.totalPacketLen << " bytes" << "\n" <<
-    "\tplatform: " << pending_.platform << "\n" <<
-    "\ttime (CPU cycles): " << pending_.timeCPUCycles << "\n" <<
-    "\tDetected Objects: " << pending_.numDetectedObj << "\n" <<
-    "\tNumber of TLVs: " << pending_.numTLVs << "\n" <<
-    "\tSubframe number: " << pending_.subFrameNumber;
-    cpsl::radar::log_debug(o.str());
-}
-
-/**
- * @brief Check's to make sure that the message and its header
- * are valid
- * @note Assumes that latest frame data bytes have
- * already been loaded in via the
- * get_next_serial_frame function and that the header
- * has been processed using the process_message_header
- * 
- * @return true on message is valid
- * @return false message is invalid
- */
-bool SerialStreamer::check_valid_message(void){
-    if(static_cast<size_t>(pending_.totalPacketLen) == 
-        serial_message_data_buffer.size()){
-            return true;
-        }
-    else{
-        cpsl::radar::log_debug("serialStreamer: invalid message (length ", serial_message_data_buffer.size(),
-                               ", header says ", pending_.totalPacketLen, ")");
-        return false;
-    }
-}
-
-/**
- * @brief Process all of the TLV messages 
- * @note Assumes that the serial data has already been loaded into the
- *  serial_message_data_buffer and that the header has been processed
- *  by calling the process_message_header() function
- * 
- */
-bool SerialStreamer::process_TLV_messages(void){
-
-    //start processing after the header
-    size_t tlv_start_byte_idx = 32;
-    uint32_t TLV_type;
-    size_t TLV_len;
-
-    //helper variables for processing tlv packets
-    size_t start_idx;
-    size_t end_idx;
-
-    //decode into fresh processors; a frame without a given TLV (e.g. no
-    //detections) then reports empty, never stale, data
-    TLVDetectedPoints points;
-    TLVDetectedPointsSideInfo side_info;
-
-    for (size_t i = 0; i < pending_.numTLVs; i++)
-    {
-        //make sure the TLV header and payload fit in the received message
-        if (tlv_start_byte_idx + 8 > serial_message_data_buffer.size()){
-            cpsl::radar::log_warn("SerialStreamer: TLV header past end of message");
-            return false;
-        }
-
-        //get the next TLV type and length
-        TLV_type = get_TLV_type(tlv_start_byte_idx);
-        TLV_len = get_TLV_len(tlv_start_byte_idx);
-
-        //create the tlv_data_vector
-        start_idx = tlv_start_byte_idx + 8;
-        end_idx = start_idx + TLV_len;
-        if (end_idx > serial_message_data_buffer.size()){
-            cpsl::radar::log_warn("SerialStreamer: TLV (type ", TLV_type, ") length ", TLV_len,
-                                  " runs past end of message");
-            return false;
-        }
-        std::vector<uint8_t> tlv_data(
-            serial_message_data_buffer.begin() + start_idx,
-            serial_message_data_buffer.begin() + end_idx
-        );
-
-        if (!process_TLV(tlv_data, TLV_type, points, side_info)){
-            cpsl::radar::log_warn("SerialStreamer: TLV (type ", TLV_type, ") payload of ", TLV_len,
-                                  " bytes is malformed");
-            return false;
-        }
-
-        //increment the start byte index to process next tlv packet
-        tlv_start_byte_idx += TLV_len + 8;
-    }
-
-    commit_frame(points, side_info);
+    io_error_.store(false, std::memory_order_relaxed);
+    rx_len_ += std::min(n, want);
     return true;
 }
 
-/**
- * @brief Publish a fully validated frame: header fields, TLV outputs and the
- * frame-number gap tracking change together under the TLV lock.
- */
-void SerialStreamer::commit_frame(TLVDetectedPoints & points, TLVDetectedPointsSideInfo & side_info){
-
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-
-    header_version = pending_.version;
-    header_totalPacketLen = pending_.totalPacketLen;
-    header_platform = pending_.platform;
-    header_frameNumber = pending_.frameNumber;
-    header_timeCPUCycles = pending_.timeCPUCycles;
-    header_numDetectedObj = pending_.numDetectedObj;
-    header_numTLVs = pending_.numTLVs;
-    header_subFrameNumber = pending_.subFrameNumber;
-
-    tlv_detected_points_processor.detected_points.swap(points.detected_points);
-    tlv_detected_points_processor.valid_data = points.valid_data;
-    VALID_DETECTED_POINTS = points.valid_data;
-    tlv_side_info_processor.side_info.swap(side_info.side_info);
-    tlv_side_info_processor.valid_data = side_info.valid_data;
-
-    //track gaps in the frame number (dropped/corrupted frames)
-    if (have_previous_frame && header_frameNumber != previous_frame_number + 1){
-        uint32_t missed = header_frameNumber - previous_frame_number - 1;
-        missed_frame_count += missed;
-        cpsl::radar::log_warn("SerialStreamer: frame number jumped from ", previous_frame_number,
-                              " to ", header_frameNumber, " (", missed_frame_count,
-                              " missed in total)");
+void SerialStreamer::discard(size_t n){
+    n = std::min(n, rx_len_);
+    if(n == 0) return;
+    if(n < rx_len_){
+        std::memmove(rx_.data(), rx_.data() + n, rx_len_ - n);
     }
-    have_previous_frame = true;
-    previous_frame_number = header_frameNumber;
-    committed_frames_ += 1;
-    last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                             std::chrono::steady_clock::now().time_since_epoch()).count(),
-                         std::memory_order_relaxed);
+    rx_len_ -= n;
 }
 
-bool SerialStreamer::take_frame(std::vector<std::vector<float>> & points,
-                                std::vector<std::vector<float>> & side_info,
+void SerialStreamer::commit(clock::time_point completed_at){
+    {
+        std::lock_guard<std::mutex> l(m_);
+        published_points_.swap(work_.points);
+        published_frame_number_ = work_.header.frame_number;
+        published_at_ = completed_at;
+
+        //track gaps in the frame number (dropped/corrupted frames)
+        const uint32_t fn = work_.header.frame_number;
+        if(have_previous_frame_ && fn != previous_frame_number_ + 1){
+            const uint32_t missed = fn - previous_frame_number_ - 1;
+            missed_frame_count_ += missed;
+            cpsl::radar::log_warn("SerialStreamer: frame number jumped from ", previous_frame_number_,
+                                  " to ", fn, " (", missed_frame_count_, " missed in total)");
+        }
+        have_previous_frame_ = true;
+        previous_frame_number_ = fn;
+        committed_frames_ += 1;
+    }
+    last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             completed_at.time_since_epoch()).count(),
+                         std::memory_order_relaxed);
+    cv_.notify_all();
+}
+
+bool SerialStreamer::take_frame(std::vector<cpsl::radar::Point> & points,
                                 uint32_t & frame_number,
-                                uint64_t & overwritten){
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
-    if (committed_frames_ == taken_at_){
+                                clock::time_point & completed_at,
+                                uint64_t & overwritten,
+                                clock::time_point wait_until){
+    std::unique_lock<std::mutex> l(m_);
+    cv_.wait_until(l, wait_until, [this]{
+        return committed_frames_ != taken_at_ || closed_.load(std::memory_order_relaxed);
+    });
+    if(committed_frames_ == taken_at_){
         return false;
     }
     overwritten = committed_frames_ - taken_at_ - 1;
     taken_at_ = committed_frames_;
-    points = tlv_detected_points_processor.detected_points;
-    side_info = tlv_side_info_processor.side_info;
-    frame_number = header_frameNumber;
+    points.swap(published_points_);
+    frame_number = published_frame_number_;
+    completed_at = published_at_;
     return true;
 }
 
+void SerialStreamer::close(void){
+    {
+        std::lock_guard<std::mutex> l(m_);
+        closed_.store(true);
+    }
+    cv_.notify_all();
+}
+
+uint32_t SerialStreamer::get_latest_frame_number(void){
+    std::lock_guard<std::mutex> l(m_);
+    return published_frame_number_;
+}
+
+uint32_t SerialStreamer::get_missed_frame_count(void){
+    std::lock_guard<std::mutex> l(m_);
+    return missed_frame_count_;
+}
+
 uint64_t SerialStreamer::get_committed_frame_count(void){
-    std::lock_guard<std::mutex> tlv_processing_lock(tlv_processing_mutex);
+    std::lock_guard<std::mutex> l(m_);
     return committed_frames_;
-}
-
-bool SerialStreamer::process_TLV(
-    std::vector<uint8_t>  & tlv_data,
-    uint32_t tlv_type,
-    TLVDetectedPoints & points,
-    TLVDetectedPointsSideInfo & side_info){
-
-        switch (tlv_type)
-        {
-        case TLVCodes::DETECTED_POINTS:
-            points.process(tlv_data);
-            return points.valid_data;
-
-        case TLVCodes::DETECTED_POINTS_SIDE_INFO:
-            side_info.process(tlv_data);
-            return side_info.valid_data;
-
-        default:
-            return true;
-        }
-}
-
-/**
- * @brief Get the TLV type of a given TLV packet
- * 
- * @param tlv_start_byte_idx the index of the first byte for the given TLV
- *  packet in the serial_message_data_buffer
- * @return uint32_t the uint32_t value corresponding to the TLV type
- *  (see TLVProcessing for decoding the TLV type)
- */
-uint32_t SerialStreamer::get_TLV_type(size_t tlv_start_byte_idx){
-
-    size_t i = tlv_start_byte_idx;
-    uint32_t value = (static_cast<uint32_t>(serial_message_data_buffer[i]) << 0) |
-        (static_cast<uint32_t>(serial_message_data_buffer[i + 1]) << 8) |
-        (static_cast<uint32_t>(serial_message_data_buffer[i + 2]) << 16) |
-        (static_cast<uint32_t>(serial_message_data_buffer[i + 3]) << 24);
-
-    return le32toh(value);
-}
-
-/**
- * @brief Get the length in bytes of a TLV packet (excludes the 
- *  bytes for the TLV type and TLV length data)
- * 
- * @param tlv_start_byte_idx the index of the first byte for the given TLV
- *  packet in the serial_message_data_buffer
- * @return size_t the length (in bytes) of a TLV packet (excludes the 
- *  bytes for the TLV type and TLV length data)
- */
-size_t SerialStreamer::get_TLV_len(size_t tlv_start_byte_idx){
-
-    size_t i = tlv_start_byte_idx + 4;
-    uint32_t value = (static_cast<uint32_t>(serial_message_data_buffer[i]) << 0) |
-        (static_cast<uint32_t>(serial_message_data_buffer[i + 1]) << 8) |
-        (static_cast<uint32_t>(serial_message_data_buffer[i + 2]) << 16) |
-        (static_cast<uint32_t>(serial_message_data_buffer[i + 3]) << 24);
-
-    return static_cast<size_t>(le32toh(value));
-}
-
-/**
- * @brief Convert a uint32_t into a string of its hexidecimal representation
- * 
- * @param value the uint32_t value to get a hex representation of
- * @return std::string 
- */
-std::string SerialStreamer::uint32ToHex(uint32_t value) {
-    std::stringstream ss;
-    ss << std::hex << std::uppercase << 
-        std::setw(8) << std::setfill('0') 
-        << value;
-    return ss.str();
 }

@@ -28,6 +28,7 @@ enum class Code {
     stopped,             // the radar was stopped
     disabled,            // that stream is not enabled in the config
     file_error,          // an output file failed to open, flush or close
+    malformed_frame,     // a serial TLV frame failed validation (parse_uart_frame)
 };
 
 const char* to_string(Code c);
@@ -77,6 +78,7 @@ inline const char* to_string(Code c) {
         case Code::stopped: return "stopped";
         case Code::disabled: return "disabled";
         case Code::file_error: return "file_error";
+        case Code::malformed_frame: return "malformed_frame";
     }
     return "?";
 }

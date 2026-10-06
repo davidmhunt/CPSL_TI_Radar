@@ -1,10 +1,11 @@
 #ifndef TLVPROCESSING
 #define TLVPROCESSING
 
+// TLV type codes of the TI demos' serial frames. The decoders are in
+// UartFrame.cpp (parse_uart_frame); only types 1 and 7 are decoded, every
+// other type is skipped by its length.
+
 #include <cstdint>
-#include <cstring>
-#include <vector>
-#include <endian.h>
 
 class TLVCodes{
     public:
@@ -19,48 +20,6 @@ class TLVCodes{
         static const uint32_t DETECTED_POINTS_SIDE_INFO =7;
         static const uint32_t TRACKER =10; //AWR2243 cascade demo
         static const uint32_t DETECTED_POINTS_COMPACT =104; //AWR2243 cascade demo
-};
-
-class TLVDetectedPoints{
-    
-    //constructors, destructors, assignment operators
-    public:
-        TLVDetectedPoints();
-        TLVDetectedPoints(const TLVDetectedPoints & rhs);
-        TLVDetectedPoints & operator=(const TLVDetectedPoints & rhs);
-        ~TLVDetectedPoints();
-
-        bool valid_data;
-    public:
-        std::vector<std::vector<float>> detected_points;
-
-        void process(
-            std::vector<uint8_t> & tlv_raw_data_bytes
-        );
-
-        //helper function
-        std::vector<float> bytes_to_floats(
-            std::vector<uint8_t> & bytes
-        );
-};
-
-
-
-/**
- * @brief Per-point SNR and noise (TLV type 7). Each row is [snr, noise] in dB
- * (the demo sends int16 values in 0.1 dB steps).
- */
-class TLVDetectedPointsSideInfo{
-
-    public:
-        TLVDetectedPointsSideInfo();
-
-        bool valid_data;
-        std::vector<std::vector<float>> side_info;
-
-        void process(
-            std::vector<uint8_t> & tlv_raw_data_bytes
-        );
 };
 
 #endif

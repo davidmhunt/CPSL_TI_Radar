@@ -196,8 +196,9 @@ Result<std::unique_ptr<Radar>> Radar::open(const RadarConfig& config, Transports
             const Status s = m.packets->open();
             if (!s) return s;
         }
-        if (m.serial_on && !m.serial.initialize(sys)) {
-            return Status(Code::open_failed, "cannot open the serial data port " + sys.getRadarDataPort());
+        if (m.serial_on) {
+            const bool ok = transports.data ? m.serial.initialize(sys, transports.data) : m.serial.initialize(sys);
+            if (!ok) return Status(Code::open_failed, "cannot open the serial data port " + sys.getRadarDataPort());
         }
         const bool cli_ok = transports.cli ? m.cli.initialize(sys, transports.cli) : m.cli.initialize(sys);
         if (!cli_ok) {
@@ -309,6 +310,7 @@ Status Radar::start() {
                         }
                     }
                 });
+                if (!m.failure(m.serial_failure).empty()) m.serial.close();  // wake a waiting consumer
             });
         }
         // running from here: stop() now joins the threads and stops the sensor
@@ -352,6 +354,8 @@ Status Radar::stop() {
         // wake a consumer blocked in next_adc_frame: it sees stop_flag and
         // returns Code::stopped instead of waiting out its timeout
         if (m.dca_on) m.dca.close_frames();
+        // and one in next_point_cloud; also ends the serial reader's read
+        if (m.serial_on) m.serial.close();
         if (m.dca_worker.joinable()) m.dca_worker.join();
         if (m.serial_worker.joinable()) m.serial_worker.join();
 
@@ -433,37 +437,27 @@ bool Radar::next_point_cloud(PointCloud& out, std::chrono::milliseconds timeout,
     if (!impl_) return set(Status(Code::invalid_state, "moved-from Radar"));
     Impl& m = *impl_;
     const steady::time_point deadline = steady::now() + timeout;
-    std::vector<std::vector<float>> points;
-    std::vector<std::vector<float>> side;
     for (;;) {
         Status st = m.stream_state("serial_stream", m.serial_on, m.serial_failure);
         if (!st) return set(std::move(st));
-        uint32_t frame_number = 0;
+        // block on the streamer's condition variable (woken by a publish or
+        // by stop()), but no longer than the stall policy allows
+        const steady::time_point wake =
+            m.wake_for_stall(m.serial.last_frame_ns(), m.serial_stall_reported, deadline);
         uint64_t overwritten = 0;
-        if (m.serial.take_frame(points, side, frame_number, overwritten)) {
+        if (m.serial.take_frame(out.points, out.frame_number, out.completed_at, overwritten, wake)) {
             m.serial_overwritten.fetch_add(overwritten);
-            out.frame_number = frame_number;
-            out.points.resize(points.size());
-            for (size_t i = 0; i < points.size(); i++) {
-                Point& p = out.points[i];
-                const std::vector<float>& r = points[i];
-                p.x = r.size() > 0 ? r[0] : 0.0f;
-                p.y = r.size() > 1 ? r[1] : 0.0f;
-                p.z = r.size() > 2 ? r[2] : 0.0f;
-                p.v = r.size() > 3 ? r[3] : 0.0f;
-                const bool has_side = i < side.size() && side[i].size() >= 2;
-                p.snr_db = has_side ? side[i][0] : 0.0f;
-                p.noise_db = has_side ? side[i][1] : 0.0f;
-            }
             if (why) *why = Status::ok();
             return true;
         }
         if (m.stalled(m.serial.last_frame_ns(), m.serial_stall_reported, "TLV frame")) {
             return set(Status(Code::stalled, "no TLV frame for " + std::to_string(m.stall_ms) + " ms"));
         }
-        const steady::time_point now = steady::now();
-        if (now >= deadline) return set(Status(Code::timeout, "no TLV frame within the timeout"));
-        std::this_thread::sleep_for(std::min<steady::duration>(std::chrono::milliseconds(5), deadline - now));
+        if (steady::now() >= deadline) {
+            st = m.stream_state("serial_stream", m.serial_on, m.serial_failure);  // woken by stop(): say so
+            if (!st) return set(std::move(st));
+            return set(Status(Code::timeout, "no TLV frame within the timeout"));
+        }
     }
 }
 

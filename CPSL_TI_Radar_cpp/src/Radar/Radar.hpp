@@ -24,6 +24,7 @@
 #include "PacketSource.hpp"
 #include "RadarConfig.hpp"
 #include "Status.hpp"
+#include "UartFrame.hpp"
 
 namespace cpsl {
 namespace radar {
@@ -41,16 +42,14 @@ struct AdcFrame {
     std::vector<std::vector<std::vector<std::complex<int16_t>>>> data;  // [rx][sample][chirp]
 };
 
-// One detected point from the on-chip demo's TLV stream. snr_db and
-// noise_db are 0 when the demo sends no side info (TLV type 7).
-struct Point {
-    float x = 0, y = 0, z = 0;  // m
-    float v = 0;                // radial velocity, m/s
-    float snr_db = 0, noise_db = 0;
-};
-
+// One frame of the on-chip demo's TLV stream. Point (x, y, z, v, snr_db,
+// noise_db) is defined in UartFrame.hpp; which fields a board's demo fills
+// depends on its data_uart.tlv_dialect (docs/ARCHITECTURE.md). Like
+// AdcFrame, next_point_cloud swaps the driver's buffer into `points`, so
+// reusing one PointCloud allocates nothing after the first frames.
 struct PointCloud {
-    uint32_t frame_number = 0;  // the demo's frame counter
+    uint32_t frame_number = 0;                           // the demo's frame counter
+    std::chrono::steady_clock::time_point completed_at;  // when the frame's last byte was read
     std::vector<Point> points;
 };
 
@@ -78,10 +77,12 @@ struct Stats {
 };
 
 // Optional transports for Radar::open: a null member means the real one
-// (the CLI serial port named by cli.port; the DCA1000 over UDP).
+// (the CLI serial port named by cli.port; the DCA1000 over UDP; the serial
+// data port named by serial_stream.port).
 struct Transports {
     std::shared_ptr<ByteStream> cli;
     std::shared_ptr<PacketSource> packets;
+    std::shared_ptr<ByteStream> data = nullptr;
 };
 
 class Radar {
@@ -127,6 +128,10 @@ public:
     // the latest frame wins); a frame dropped because the queue was full is
     // counted in frames_overwritten. Frames come out in order, each once.
     bool next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Status* why = nullptr);
+    // The same for the serial TLV stream, except that only the latest
+    // frame waits (a frame replaced before it was taken counts in
+    // serial_overwritten). A frame is published as soon as its last byte
+    // is read (core-16).
     bool next_point_cloud(PointCloud& out, std::chrono::milliseconds timeout, Status* why = nullptr);
 
     Stats stats() const;
