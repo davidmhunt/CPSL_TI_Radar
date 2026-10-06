@@ -17,6 +17,7 @@ const fmt = (v, d = 2) => v == null || !isFinite(v) ? '–' : (+v).toFixed(d);
 function targets() {
   const t = {};
   for (const k of TARGETS) { const v = $('t_' + k).value; if (v !== '') t[k] = +v; }
+  if ($('t_lvds').dataset.touched && !$('lvdsTargets').hidden) t.lvds = $('t_lvds').checked;   // untouched = the firmware template
   return t;
 }
 
@@ -87,6 +88,9 @@ function fillParams(p) {   // p: a params dict from the endpoint -> inputs + der
     $(pid(k)).value = v == null ? '' : kind === 'm' ? v.join(', ') : +(+v).toPrecision(8);
   }
   C.seed = JSON.parse(JSON.stringify(p));
+  const lv = p.lvds_stream;
+  if (lv) { $('l_subframe').value = lv.subframe; $('l_data_fmt').value = lv.data_fmt; $('l_header').checked = !!lv.header; $('l_sw').checked = !!lv.sw; }
+  lvdsVis();
   showDerived(p.derived);
 }
 function showDerived(d) {
@@ -103,6 +107,12 @@ function collectParams() {
     if (kind === 'p') prof[k] = v; else out[k] = v;
   }
   if (Object.keys(prof).length) out.profiles = [prof];
+  const slv = sd.lvds_stream;
+  if (slv && !$('lvdsParams').hidden) {
+    const cur = { subframe: +$('l_subframe').value, data_fmt: +$('l_data_fmt').value, header: $('l_header').checked ? 1 : 0, sw: $('l_sw').checked ? 1 : 0 };
+    const ch = {}; for (const k in cur) if (cur[k] !== slv[k] && !(k === 'subframe' && $('l_subframe').value === '')) ch[k] = cur[k];
+    if (Object.keys(ch).length) out.lvds_stream = ch;
+  }
   return out;
 }
 function markFields(issues) {
@@ -134,6 +144,7 @@ async function setMode(m) {
     C.mode = m; modeUi(); await seedDirect();
   } else {
     C.mode = m; modeUi(); markFields([]);
+    $('t_lvds').checked = cfgLvdsOn(C.text); $('t_lvds').dataset.touched = '1';
     const mt = C.metrics;   // direct -> targets: seed the target fields from the achieved numbers
     if (mt) {
       const set = (k, v) => { $('t_' + k).value = v == null ? '' : +(+v).toPrecision(4); };
@@ -199,7 +210,7 @@ function render(j) {
       `<span class="code">${esc(i.code)}</span>`;
     ul.append(li);
   }
-  renderMimo(m);
+  renderMimo(m); lvdsWarn();
   $('cText').textContent = j.text || '';
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
@@ -221,7 +232,29 @@ function showFirmware() {
   $('cOutputs').textContent = 'Outputs: ' + o.join(' / ') + ' \u2014 ' + f.description;
   C.fwMimo = f.mimo; renderMimo(C.metrics);
   $('sSerial').checked = f.system_enables.serial; $('sDca').checked = f.system_enables.dca1000;
-  dcaVis();
+  dcaVis(); lvdsVis();
+}
+// ---------- LVDS stream (cfg) group (gui-22): shown only where the firmware has an LVDS output on this board ----------
+const curFw = () => C.fw.find(x => x.id === $('cFw').value);
+function lvdsVis() {
+  const f = curFw(), o = f && f.outputs;
+  $('lvdsTargets').hidden = !(o && o.tlv && o.lvds);          // raw-ADC firmwares always stream; nothing to toggle in the targets view
+  $('lvdsParams').hidden = !(o && o.lvds && C.seed && C.seed.lvds_stream);
+  lvdsWarn();
+}
+function cfgLvdsOn(text) {
+  const lv = /^\s*lvdsStreamCfg\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/m.exec(text || '');
+  return !!lv && lv[3] !== '0';
+}
+function lvdsWarn() {   // cfg LVDS vs DCA1000 system setting: separate settings, so say when they disagree
+  const f = curFw(), w = $('sLvdsWarn'), o = f && f.outputs;
+  let msg = '';
+  if (o && o.tlv && o.lvds) {
+    const on = cfgLvdsOn(C.text), dca = $('sDca').checked;
+    if (on && !dca) msg = 'The cfg streams ADC data over LVDS but the DCA1000 stream is off: nothing will capture it.';
+    else if (!on && dca) msg = 'The DCA1000 stream is on but the cfg has LVDS streaming off: the capture card will get no data.';
+  }
+  w.textContent = msg; w.hidden = !msg;
 }
 // ---------- MIMO panel (gui-16): scheme badge, loop timing diagram, derived numbers with formula + scheme ----------
 const SCHEME = { tdm: 'TDM', ddma: 'DDMA' };
@@ -313,6 +346,7 @@ async function onLoad() {
   const { ok, j } = await api('/api/cfg/file?id=' + encodeURIComponent(id));
   if (!ok) return;
   $('cBoard').value = j.board; C.text = j.text; setSource('cfg', j.name);
+  $('t_lvds').checked = cfgLvdsOn(j.text); $('t_lvds').dataset.touched = '1';   // a loaded cfg's LVDS choice survives regenerating
   await loadFirmware(j.board); const fw = inferFirmware(j.text); if (fw) { $('cFw').value = fw; showFirmware(); }
   $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + '_copy';
   if (C.mode === 'direct') seedDirect(); else analyze();
@@ -322,6 +356,7 @@ function toTargets() {
   const set = (k, v) => { $('t_' + k).value = v == null ? '' : +(+v).toPrecision(4); };
   set('max_range_m', m.max_range_m); set('max_velocity_ms', m.max_velocity_ms); set('frame_rate_hz', m.frame_rate_hz);
   set('range_res_m', ''); set('velocity_res_ms', ''); set('num_samples', m.num_samples); set('num_loops', m.n_loops);
+  $('t_lvds').checked = cfgLvdsOn(C.text); $('t_lvds').dataset.touched = '1';
   setSource('targets'); schedule();
 }
 
@@ -342,7 +377,8 @@ async function save() {
     return;
   }
   msg.className = 'ok';
-  msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br><span class="muted">check: ${esc(j.validate_cmd)}</span>`;
+  msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
+    (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span>`;
   loadList();
 }
 
@@ -362,7 +398,9 @@ async function init() {
   for (const b of document.querySelectorAll('#cInMode button')) b.onclick = () => setMode(b.dataset.m);
   $('sSave').onclick = save;
   $('sName').addEventListener('input', () => { $('sName').dataset.touched = '1'; });
-  $('sDca').addEventListener('change', dcaVis);
+  $('sDca').addEventListener('change', () => { dcaVis(); lvdsWarn(); });
+  $('t_lvds').addEventListener('change', () => { $('t_lvds').dataset.touched = '1'; setSource('targets'); schedule(); });
+  for (const k of ['subframe', 'data_fmt', 'header', 'sw']) $('l_' + k).addEventListener('input', () => { if (C.mode === 'direct') schedule(); });
   dcaVis(); analyze();
 }
 export function showConfigure() { if (!C.ready) { C.ready = true; init(); } }

@@ -116,15 +116,7 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
     fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
     en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
     serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
-    if req.dca1000_enabled is not None:
-        dca = req.dca1000_enabled
-    else:   # a demo with LVDS in its cfg (lvdsStreamCfg enabled) also needs the DCA1000 stream
-        try:
-            lv = parse_cfg(req.cfg_text).first("lvdsStreamCfg")
-            lv_on = bool(lv and len(lv.args) >= 3 and int(lv.floats()[2]) != 0)
-        except (CfgError, ValueError):
-            lv_on = False
-        dca = en["dca1000"] or bool(lv_on and fw and fwmod.outputs(fw, req.board)["lvds"])
+    dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled   # never inferred from the cfg (gui-22)
     return {
         "schema_version": 2,
         "board": req.board,
@@ -136,6 +128,29 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
         "output": {"save_adc_frames": req.save_adc_frames, "save_raw_lvds": req.save_raw_lvds},
         "runtime": {"log_level": req.log_level},
     }
+
+
+def lvds_mismatch_warnings(req: SaveReq, dca: bool) -> list[str]:
+    """gui-22: cfg LVDS and the DCA1000 system enable are separate settings; say so when they disagree.
+    Only for a TLV firmware that has an LVDS output on this board (the demo on 1843/6843)."""
+    fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
+    if not fw or req.board not in fw["outputs"]:
+        return []
+    o = fw["outputs"][req.board]
+    if not (o["tlv"] and o["lvds"]):
+        return []
+    try:
+        lv = parse_cfg(req.cfg_text).first("lvdsStreamCfg")
+        on = bool(lv and len(lv.args) >= 3 and int(lv.floats()[2]) != 0)
+    except (CfgError, ValueError):
+        return []
+    if on and not dca:
+        return ["The cfg turns LVDS streaming on (lvdsStreamCfg) but the DCA1000 stream is off in the system settings: "
+                "the radar will stream ADC data that nothing captures."]
+    if dca and not on:
+        return ["The DCA1000 stream is on in the system settings but the cfg has LVDS streaming off (lvdsStreamCfg): "
+                "the capture card will receive no data."]
+    return []
 
 
 def make_router(user_dir: Path | None = None) -> APIRouter:
@@ -248,7 +263,9 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
                 f.write(text)
         except FileExistsError:
             raise HTTPException(409, f"{req.name}.cfg / {req.name}.json already exists in {udir}; pick a new name") from None
+        sysj = system_json(req, cfg_path.name)
         return {"ok": True, "cfg_path": str(cfg_path), "json_path": str(json_path), "issues": res["issues"],
+                "warnings": lvds_mismatch_warnings(req, sysj["dca1000"]["enabled"]),
                 "validate_cmd": f"CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP {json_path} --validate"}
 
     return r

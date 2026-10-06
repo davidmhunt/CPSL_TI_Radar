@@ -12,6 +12,8 @@ Schema (single profile; the profile fields live in `profiles[0]`, so gui-14..16 
     rx_mask, tx_mask            channelCfg enables (cascade: also rx_mask2, tx_mask2 for the second chip)
     chirp_tx_masks              TX mask of each chirp of the loop, frameCfg chirpStart..chirpEnd order
     n_loops, frame_period_ms, frames
+    lvds_stream                 {subframe, header, data_fmt, sw} = lvdsStreamCfg (gui-22); only when the cfg has the
+                                line. data_fmt 0 = HW (ADC) stream off, 1 = ADC data, 2 = ADC + metadata (SAR firmware)
     derived                     read-only (ignored by apply_params): metrics-derived bandwidth, ramp, sample window ...
 
 Partial dicts are fine: missing keys keep the base cfg's value. Only `profiles[0]` is applied for now and its
@@ -66,6 +68,9 @@ def _num_list(args: list[str], line_name: str) -> list[float]:
         raise CfgError(f"{line_name}: non-numeric field") from None
 
 
+_LVDS = {"subframe": 1, "header": 2, "data_fmt": 3, "sw": 4}   # lvdsStreamCfg token index (0 = the command name)
+
+
 def params_from_cfg(cfg: Cfg, board: str | None = None) -> dict:
     """Editable fields of `cfg` (first profileCfg / channelCfg / frameCfg; chirps of the frame's loop).
     Raises CfgError when the cfg is missing a command or is malformed (same checks as `metrics`)."""
@@ -92,6 +97,10 @@ def params_from_cfg(cfg: Cfg, board: str | None = None) -> dict:
     out["n_loops"] = int(f[2])
     out["frames"] = int(f[3])
     out["frame_period_ms"] = m.frame_period_ms
+    lv = cfg.first("lvdsStreamCfg")
+    if lv is not None and len(lv.args) >= 4:
+        a = _num_list(lv.args[:4], "lvdsStreamCfg")
+        out["lvds_stream"] = {k: int(a[i - 1]) for k, i in _LVDS.items()}
     d = m.to_dict()
     out["derived"] = {k: d[k] for k in _DERIVED}
     return out
@@ -183,6 +192,19 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any]) -> str:
         if key in params:
             _set(tok, i, params[key], kind, key)
     new[fc.line] = " ".join(tok)
+
+    # lvdsStreamCfg (gui-22): only the changed fields
+    lv, lv_in = cfg.first("lvdsStreamCfg"), params.get("lvds_stream")
+    if lv_in is not None:
+        if not isinstance(lv_in, Mapping):
+            raise ParamsError("lvds_stream: expected an object")
+        if lv is None or "lvds_stream" not in base:
+            raise ParamsError("lvds_stream: the base cfg has no lvdsStreamCfg line")
+        tok = tokens(lv)
+        for key, i in _LVDS.items():
+            if key in lv_in:
+                _set(tok, i, lv_in[key], int, "lvds_stream." + key)
+        new[lv.line] = " ".join(tok)
 
     out = []
     for n, raw in enumerate(base_cfg_text.splitlines(), 1):

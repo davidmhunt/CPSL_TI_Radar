@@ -191,9 +191,9 @@ def test_save_uses_firmware_system_enables(client):
     assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
     s = saved("dca1000_raw")
     assert not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
-    lvds_text = generate("IWR1843", {**T, "lvds": True}).text     # the demo's LVDS output is on in the cfg
+    lvds_text = generate("IWR1843", {**T, "lvds": True}).text     # cfg LVDS on; system settings stay separate (gui-22)
     s = saved("demo", cfg_text=lvds_text)
-    assert s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
+    assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
     # explicit request values still win (the UI checkboxes)
     s = saved("demo", dca1000_enabled=True)
     assert s["dca1000"]["enabled"]
@@ -239,3 +239,19 @@ def test_mimo_panel_payload_fields(client):
     assert m["n_bands"] == 8 and m["vmax_per_tx_ms"] < m["vmax_full_ms"]
     html = client.get("/").text
     assert all(i in html for i in ('id="mBadge"', 'id="mDiagram"', 'id="mDerived"', 'id="mChirpTable"'))
+
+
+def test_save_warns_on_cfg_lvds_vs_dca1000_mismatch(client):
+    on = generate("IWR1843", {**T, "lvds": True}).text
+    off = generate("IWR1843", T).text
+
+    def warns(text, dca, name, board="IWR1843", fw="demo"):
+        body = _save_body(client, name, cfg_text=text, firmware=fw, board=board, dca1000_enabled=dca)
+        r = client.post("/api/cfg/save", json=body)
+        assert r.status_code == 200, r.text
+        return r.json()["warnings"]
+    w = warns(on, False, "w1")
+    assert len(w) == 1 and "LVDS streaming on" in w[0]
+    assert len(warns(off, True, "w3")) == 1
+    assert warns(on, True, "w4") == [] and warns(off, False, "w5") == []
+    assert warns(off, True, "w6", fw="dca1000_raw") == []     # raw firmware: LVDS is not a cfg choice

@@ -91,6 +91,11 @@
           <label>Velocity res (m/s, optional) <input type="number" id="t_velocity_res_ms" min="0.001" step="any"></label>
           <label>Frame rate (Hz) <input type="number" id="t_frame_rate_hz" value="10" min="0.1" step="any"></label>
         </div>
+        <div id="lvdsTargets" hidden>
+          <div class="pgroup">LVDS stream (cfg)</div>
+          <label class="chk"><input type="checkbox" id="t_lvds"> Stream raw ADC over LVDS (lvdsStreamCfg)</label>
+          <div class="muted lvdshint">Unticked = the firmware template's setting. DCA1000 capture is enabled separately, in the Save step's system settings.</div>
+        </div>
         <details><summary>Advanced</summary>
           <div class="grid2">
             <label>ADC samples <input type="number" id="t_num_samples" step="1" min="1"></label>
@@ -106,6 +111,16 @@
     <section class="card" id="paramsCard" hidden>
       <h2>Chirp parameters <span class="muted sub" id="pNote"></span></h2>
       <div class="controls" id="pFields"></div>
+      <div class="controls" id="lvdsParams" hidden>
+        <div class="pgroup">LVDS stream (cfg) <span class="muted">lvdsStreamCfg</span></div>
+        <div class="grid2">
+          <label>Subframe (-1 = all) <input type="number" id="l_subframe" step="1"></label>
+          <label>HW stream (ADC data) <select id="l_data_fmt"><option value="0">off</option><option value="1">ADC data</option><option value="2">ADC + metadata (SAR fw)</option></select></label>
+          <label class="chk"><input type="checkbox" id="l_header"> HSI header</label>
+          <label class="chk"><input type="checkbox" id="l_sw"> SW stream</label>
+        </div>
+        <div class="muted lvdshint">DCA1000 capture is enabled separately, in the Save step's system settings.</div>
+      </div>
     </section>
     <section class="card" id="mimoCard">
       <h2>MIMO <span class="badge" id="mBadge"></span><span class="muted sub" id="mNote"></span></h2>
@@ -150,6 +165,7 @@
         </div>
         <label class="chk"><input type="checkbox" id="sSerial" checked> Serial TLV stream</label>
         <label class="chk"><input type="checkbox" id="sDca"> DCA1000 stream</label>
+        <div class="warnline" id="sLvdsWarn" hidden></div>
         <div class="grid2" id="dcaFields">
           <label>FPGA IP <input type="text" id="sFpga" value="192.168.33.180"></label>
           <label>Host IP <input type="text" id="sHost" value="192.168.33.30"></label>

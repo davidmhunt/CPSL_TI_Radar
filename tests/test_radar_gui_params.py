@@ -140,3 +140,52 @@ def test_endpoint_honours_firmware_and_board(client):
                                              "firmware": "no_such_fw", "params": {}}).json()
     assert any(i["code"] == "unknown_firmware" for i in r["issues"])
     assert client.post("/api/cfg/params", json={"board": "nope", "base_cfg_text": "x"}).status_code == 422
+
+
+# ---- lvdsStreamCfg (gui-22) ----
+def _lvds_cfgs():
+    out = []
+    for p in sorted((ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar").rglob("*.cfg")) + \
+            sorted((ROOT / "firmware_dev" / "projects").rglob("*.cfg")):
+        t = p.read_text(errors="replace")
+        if "lvdsStreamCfg" in t:
+            try:
+                parse_cfg(t).first("profileCfg") and params_from_cfg(parse_cfg(t))
+            except (CfgError, AttributeError):    # advanced-subframe / partial cfgs the editor does not take
+                continue
+            out.append(p)
+    return out
+
+
+@pytest.mark.parametrize("path", _lvds_cfgs(), ids=lambda p: p.name)
+def test_lvds_stream_round_trip_exact(path):
+    t = path.read_text(errors="replace")
+    p = params_from_cfg(parse_cfg(t))
+    assert set(p["lvds_stream"]) == {"subframe", "header", "data_fmt", "sw"}
+    assert apply_params(t, p) == apply_params(t, {})        # whole-dict round trip changes nothing more than the baseline
+
+
+def test_apply_lvds_hw_stream_changes_only_that_line():
+    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    assert "lvdsStreamCfg -1 0 1 0" in t
+    out = apply_params(t, {"lvds_stream": {"data_fmt": 0}})
+    a, b = t.splitlines(), out.splitlines()
+    diff = [(x, y) for x, y in zip(a, b) if x != y]
+    assert len(a) == len(b) and len(diff) == 1 and diff[0][1].split("%")[0].split() == "lvdsStreamCfg -1 0 0 0".split()
+    assert params_from_cfg(parse_cfg(out))["lvds_stream"]["data_fmt"] == 0
+
+
+def test_lvds_stream_missing_line_or_bad_value():
+    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    no = "\n".join(l for l in t.splitlines() if "lvdsStreamCfg" not in l) + "\n"
+    assert "lvds_stream" not in params_from_cfg(parse_cfg(no))
+    with pytest.raises(CfgError):
+        apply_params(no, {"lvds_stream": {"data_fmt": 1}})
+    with pytest.raises(CfgError):
+        apply_params(t, {"lvds_stream": {"data_fmt": 0.5}})
+
+
+def test_iwr1443_demo_with_lvds_on_flags_not_in_firmware():
+    from radar_gui.cfg import generate, validate
+    cfg = parse_cfg(generate("IWR1443", max_range_m=10, max_velocity_ms=5).text + "\nlvdsStreamCfg -1 0 1 0\n")
+    assert "lvds_not_in_firmware" in {i.code for i in validate(cfg, "IWR1443", "demo").errors}
