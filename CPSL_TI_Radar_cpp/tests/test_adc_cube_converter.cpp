@@ -237,6 +237,54 @@ TEST_CASE(short_frame_reads_missing_words_as_zero_on_both_layouts) {
     }
 }
 
+// adc_data.bin order (core-14 P9): for chirp, rx, sample: real, imag. It
+// must hold exactly the cube's values, which is what the v1 per-element
+// writer put in the file.
+static void check_file_order(ADCCubeConverter& conv, const Bytes& b, size_t rx, size_t samples, size_t chirps) {
+    const auto cube = conv.convert(b);
+    std::vector<int16_t> file;
+    conv.file_order(b, file);
+    CHECK_EQ(file.size(), 2 * rx * samples * chirps);
+    size_t i = 0, bad = 0;
+    for (size_t c = 0; c < chirps; c++)
+        for (size_t r = 0; r < rx; r++)
+            for (size_t s = 0; s < samples; s++) {
+                if (i + 1 >= file.size() || file[i] != cube[r][s][c].real() || file[i + 1] != cube[r][s][c].imag()) bad++;
+                i += 2;
+            }
+    CHECK_EQ(bad, size_t(0));
+}
+
+TEST_CASE(file_order_matches_the_cube_on_every_layout) {
+    for (int iq = 0; iq < 2; iq++) {
+        const IqOrder order = iq == 0 ? IqOrder::q_first : IqOrder::i_first;
+        ADCCubeConverter two;
+        two.configure(4, 8, 3, LvdsLayout::two_lane_iq_pairs, order);
+        check_file_order(two, noninterleaved_stream(4, 8, 3), 4, 8, 3);
+        ADCCubeConverter odd;
+        odd.configure(3, 5, 2, LvdsLayout::two_lane_iq_pairs, order);
+        check_file_order(odd, noninterleaved_global_stream(3, 5, 2), 3, 5, 2);
+        Bytes shortb = noninterleaved_stream(4, 8, 3);
+        shortb.resize(shortb.size() / 3);
+        check_file_order(two, shortb, 4, 8, 3);
+        ADCCubeConverter lane;
+        lane.configure(2, 5, 4, LvdsLayout::lane_per_rx, order);
+        check_file_order(lane, interleaved_stream(2, 5, 4), 2, 5, 4);
+        Bytes shortl = interleaved_stream(2, 5, 4);
+        shortl.resize(shortl.size() / 2 + 2);
+        check_file_order(lane, shortl, 2, 5, 4);
+    }
+    // on the shipped IWR1843 path the file is the wire bytes with each
+    // four-word group reordered [A0 A1 B0 B1] -> [B0 A0 B1 A1]
+    ADCCubeConverter conv;
+    conv.configure(1, 2, 1, IWR18_68_LVDS);
+    Bytes b;
+    for (int16_t v : {11, 12, 21, 22}) put_i16(b, v);
+    std::vector<int16_t> file;
+    conv.file_order(b, file);
+    CHECK(file == std::vector<int16_t>({21, 11, 22, 12}));
+}
+
 TEST_CASE(convert_into_a_reused_buffer_keeps_its_storage) {
     // design P2: the driver converts into pooled cubes; a correctly shaped
     // buffer is filled in place (same storage), a wrongly shaped one is

@@ -40,11 +40,12 @@ TEST_CASE(adc_data_bin_is_exact_after_stop) {
             h.ingest_packet(p.data(), static_cast<int>(p.size()));
     const long long expected = static_cast<long long>(N) * static_cast<long long>(B);
 
-    // the bug's mechanism: until the file is closed, the ofstream buffer
-    // holds the tail (5 x 231840 B = 1159200 B, 4128 B past a 8192 B boundary)
+    // the bug's mechanism was an ofstream buffer tail never flushed. Since
+    // core-14 P9 a frame is one frame-sized write that bypasses the buffer,
+    // so the file may already be whole here; stop() must make it whole either way
     const long long before = file_size(bin);
     std::cout << "    before stop(): " << before << " of " << expected << " B on disk" << std::endl;
-    CHECK(before < expected);
+    CHECK(before <= expected);
 
     CHECK(h.stop());
     CHECK_EQ(file_size(bin), expected);

@@ -66,6 +66,62 @@ ADCCubeConverter::ADCCube ADCCubeConverter::convert(
     return cube;
 }
 
+void ADCCubeConverter::file_order(const std::vector<uint8_t>& frame_bytes, std::vector<std::int16_t>& out) const
+{
+    const size_t R = num_rx_channels_, S = samples_per_chirp_, C = chirps_per_frame_;
+    const size_t total = R * S * C;  // samples
+    out.resize(2 * total);
+    const uint8_t* b = frame_bytes.data();
+    const size_t words = frame_bytes.size() / 2;
+    std::int16_t* o = out.data();
+    switch (layout_) {
+        case LvdsLayout::two_lane_iq_pairs: {
+            // the file order is the wire's sample order n; only the four words
+            // of each pair are rearranged: [A0 A1 B0 B1] -> (re, im) of 2g, 2g+1
+            const bool q_first = iq_order_ == IqOrder::q_first;
+            const size_t groups = total / 2;
+            if (words >= 4 * groups) {
+                for (size_t g = 0; g < groups; g++, o += 4) {
+                    const std::int16_t a0 = word(b, 4 * g), a1 = word(b, 4 * g + 1);
+                    const std::int16_t b0 = word(b, 4 * g + 2), b1 = word(b, 4 * g + 3);
+                    if (q_first) {
+                        o[0] = b0; o[1] = a0; o[2] = b1; o[3] = a1;
+                    } else {
+                        o[0] = a0; o[1] = b0; o[2] = a1; o[3] = b1;
+                    }
+                }
+                if (total % 2 != 0) {  // an unpaired last sample (as convert())
+                    const size_t w = 4 * groups;
+                    const std::int16_t a = word_or_0(b, words, w), bb = word_or_0(b, words, w + 2);
+                    o[0] = q_first ? bb : a;
+                    o[1] = q_first ? a : bb;
+                }
+            } else {
+                for (size_t n = 0; n < total; n++, o += 2) {
+                    const size_t w = 4 * (n >> 1) + (n & 1);
+                    const std::int16_t a = word_or_0(b, words, w), bb = word_or_0(b, words, w + 2);
+                    o[0] = q_first ? bb : a;
+                    o[1] = q_first ? a : bb;
+                }
+            }
+            break;
+        }
+        case LvdsLayout::lane_per_rx: {
+            const size_t re_off = iq_order_ == IqOrder::i_first ? 0 : R;
+            const size_t im_off = iq_order_ == IqOrder::i_first ? R : 0;
+            const size_t step = 2 * R;
+            for (size_t c = 0; c < C; c++)
+                for (size_t r = 0; r < R; r++)
+                    for (size_t s = 0; s < S; s++, o += 2) {
+                        const size_t w = (c * S + s) * step + r;
+                        o[0] = word_or_0(b, words, w + re_off);
+                        o[1] = word_or_0(b, words, w + im_off);
+                    }
+            break;
+        }
+    }
+}
+
 // Both fills loop in OUTPUT order (rx, sample, chirp): the innermost loop
 // walks one cube[rx][sample] vector over its chirps, so every write is
 // sequential and only the reads stride through the packed frame (core-09

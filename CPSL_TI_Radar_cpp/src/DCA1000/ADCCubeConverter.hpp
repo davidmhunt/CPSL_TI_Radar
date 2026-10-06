@@ -45,6 +45,14 @@ public:
     // Convenience: a new cube filled with the given frame bytes (allocates).
     ADCCube convert(const std::vector<uint8_t>& frame_bytes);
 
+    // The frame in adc_data.bin order: for chirp, for rx, for sample, the
+    // int16 real then imag part (the same values convert() puts in the cube,
+    // missing words of a short frame as 0). One sequential pass over the
+    // packed bytes; `out` is resized to 2 * rx * samples * chirps (no
+    // allocation once it has that size). The driver writes it with a single
+    // write() per frame (core-14 P9).
+    void file_order(const std::vector<uint8_t>& frame_bytes, std::vector<std::int16_t>& out) const;
+
     // Give `cube` the configured [rx][sample][chirp] shape; no allocation
     // when it already has it.
     void shape(ADCCube& cube) const;

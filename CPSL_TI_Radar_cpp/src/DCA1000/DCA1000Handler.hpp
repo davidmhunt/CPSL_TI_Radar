@@ -91,6 +91,8 @@ private:
     bool save_raw_lvds;
     std::shared_ptr<std::ofstream> adc_cube_out_file;
     std::shared_ptr<std::ofstream> raw_lvds_out_file;
+    //the frame in adc_data.bin order, rebuilt per frame (worker thread only)
+    std::vector<std::int16_t> file_frame_;
 
     //one pooled frame buffer and the frame it holds
     struct Slot {
@@ -188,7 +190,8 @@ private:
 
     //handling files
     bool init_out_file();
-    void write_adc_data_cube_to_file(const Cube& cube);
+    //append the completed frame to adc_data.bin with one write (design P9)
+    void write_adc_frame_to_file();
     bool close_output_files();
 };
 

@@ -240,6 +240,8 @@ void DCA1000Handler::init_buffers()
 
         //configure processing of completed frames
         received_frames = 0;
+        //the adc_data.bin staging buffer, sized once (no per-frame allocation)
+        file_frame_.assign(save_adc_frames ? 2 * num_rx_channels * samples_per_chirp * chirps_per_frame : 0, 0);
 
         //the frame buffer pool, allocated once here: the work buffer and the
         //runtime.frame_queue_depth queue slots, each indexed by [Rx channel,
@@ -327,12 +329,6 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
     work_.missing = missing_bytes;
     work_.completed_at = now;
 
-    //the consumer may take the buffer as soon as it is published, so the file
-    //gets it first
-    if(save_adc_frames){
-        write_adc_data_cube_to_file(work_.cube);
-    }
-
     if(publish_hook_){
         publish_hook_();
     }
@@ -357,6 +353,13 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
         stats_.frames = received_frames;
     }
     frame_cv_.notify_one();
+
+    //after the publish, so the consumer does not wait for the disk; built
+    //from the frame bytes, not the published cube (the consumer owns that now)
+    if(save_adc_frames){
+        write_adc_frame_to_file();
+    }
+
     last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count(),
                          std::memory_order_relaxed);
 
@@ -397,37 +400,15 @@ bool DCA1000Handler::init_out_file(){
     return true;
 }
 
-void DCA1000Handler::write_adc_data_cube_to_file(const Cube& adc_data_cube){
-    
-    //initialize real and complex values
-    std::int16_t real = 0;
-    std::int16_t imag = 0;
-
-    //make sure that the adc_cube_out_file is open
-    if(adc_cube_out_file -> is_open()){
-        for(size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx++){
-            for(size_t rx_idx=0; rx_idx < num_rx_channels; rx_idx++){
-                for(size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx++){
-
-                    //write the real part
-                    real = adc_data_cube[rx_idx][sample_idx][chirp_idx].real();
-                    adc_cube_out_file -> write(
-                        reinterpret_cast<const char*>(
-                            &real),
-                        sizeof(real)
-                    );
-
-                    //write the imag part
-                    imag = adc_data_cube[rx_idx][sample_idx][chirp_idx].imag();
-                    adc_cube_out_file -> write(
-                        reinterpret_cast<const char*>(
-                            &imag),
-                        sizeof(imag)
-                    );
-                }
-            }
-        }
-    }else{
+void DCA1000Handler::write_adc_frame_to_file(){
+    if(!adc_cube_out_file || !adc_cube_out_file->is_open()){
         cpsl::radar::log_error("adc_data.bin is not open, failed to save ADC data");
+        return;
     }
+    //for chirp, for rx, for sample: int16 real, int16 imag (docs/ARCHITECTURE.md
+    //"Output files"); a frame-sized write bypasses the stream buffer, so it is
+    //one write() syscall
+    converter_.file_order(assembler_.get_frame_bytes(), file_frame_);
+    adc_cube_out_file->write(reinterpret_cast<const char*>(file_frame_.data()),
+                             static_cast<std::streamsize>(file_frame_.size() * sizeof(std::int16_t)));
 }
