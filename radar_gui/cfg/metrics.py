@@ -195,6 +195,7 @@ def metrics(cfg: Cfg, board: str | None = None) -> Metrics:
     if adc_fmt == 0:
         ideal /= 2                    # real-only sampling: only fs/2 of IF band
     range_res = C / (2 * bw * 1e6)
+    # FUTURE(gui-12): real per-board antenna geometry (6843 ODS/AOP, 2-chip cascade) instead of the uniform half-wavelength virtual array
     az_res = math.degrees(2.0 / n_az)
 
     active_ms = n_chirps * tc * 1e-3
