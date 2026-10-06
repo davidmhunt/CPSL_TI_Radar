@@ -36,9 +36,21 @@
 // by a wild count that was accepted) trigger a resync: the open frames are
 // dropped (counted in skipped_frames), assembly and sequence tracking restart
 // at the first of those packets, they are replayed, and resyncs goes up by
-// one. Sequence duplicates never count toward a resync. Frame indices keep
-// increasing across a resync (they continue after the dropped frames), so
-// after one an index is no longer byte offset / bytes_per_frame.
+// one. The first new frame is whole when the restart's first packets arrive
+// in order. Frame indices keep increasing across a resync (they continue
+// after the dropped frames), so after one an index is no longer byte
+// offset / bytes_per_frame.
+//
+// Documented compromise, pending user confirmation: a restart is detected
+// only once its packets lie more than W behind the oldest open frame, so not
+// before the old stream is about two frames in (a restart in the first 64
+// packets also looks like sequence duplicates, which never count toward a
+// resync). Inside that window there is no resync: one emitted frame mixes
+// old and new bytes with missing_bytes 0, and one new-stream frame is lost.
+// Conversely, a contiguous run of >= 4 genuinely late packets more than a
+// frame late, or re-delivered duplicates older than 64 packets, look like a
+// restart: they trigger a resync (open frames dropped, dropped_packets grows
+// by the sequence distance). Neither occurs on a direct DCA1000 link.
 //
 // Nothing here logs or prints: the counters are read with get_stats() (the
 // driver logs them periodically at debug level and in Radar::stats(), and

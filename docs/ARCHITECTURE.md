@@ -76,7 +76,8 @@ off, and `main` keeps its 2 s no-frame exit.
 `stop()`, one line per enabled stream, counters cumulative since `start()`
 and `t` in seconds since `start()`. `tools/bench` reads only these lines;
 the format is versioned (`v1`): keys may be appended (readers skip keys
-they do not know; core-15 appended `kernel_drops` … `resyncs`), but
+they do not know; core-15 appended `kernel_drops` … `resyncs`), and a key
+may be narrowed to its documented meaning (core-15: `drop_events`), but
 renaming or removing a key needs a new version:
 
 ```
@@ -91,8 +92,9 @@ and at stop (`drop_events` counts only gaps that stayed missing since
 core-15; a reorder is no longer one). `overrun` counts packets discarded in
 user space because the RX ring was full; since core-15 the RX thread never
 discards, so it stays 0 (kept so the key keeps its meaning). `kernel_drops`
-counts packets the kernel dropped because the data socket's `SO_RCVBUF`
-was full, the one place a slow consumer loses data now, and `ring_full` how
+counts packets the kernel dropped on the data socket (`sk_drops`: almost
+always a full `SO_RCVBUF`, the one place a slow consumer loses data now;
+datagrams with a bad checksum count too), and `ring_full` how
 often the RX thread found its ring full and stopped reading (back-pressure,
 not a loss). `implausible` and `resyncs` are the `FrameAssembler`
 plausibility counters (see "DCA1000 UDP packet format"). `overwritten`
@@ -270,10 +272,23 @@ for byte (a DCA1000 restart that starts the count at 0 again, or the real
 stream after a wild count that was accepted) trigger a *resync*: the open
 frames are dropped (counted in `skipped_frames`), assembly and sequence
 tracking restart at the first of the four, the four are replayed, and
-`resyncs` goes up by one. The first frame of the new stream is whole.
-Sequence duplicates never count toward a resync, so a restart within the
-first 64 packets of a capture (sequence numbers still in the duplicate
-window) is not detected; that is under one frame at every shipped cfg.
+`resyncs` goes up by one. The first frame of the new stream is whole when
+the restart's first packets arrive in order.
+
+**Documented compromise, pending user confirmation.** A restart is
+detected only once its packets lie more than W behind the oldest open
+frame, so not before the old stream is about two frames in (692 packets
+at the IWR1843 baseline); a restart in the first 64 packets also looks
+like sequence duplicates, which never count toward a resync. Inside that
+window there is no resync: the stream continues on the new counts, but
+one emitted frame mixes old and new bytes with `missing_bytes` 0, and one
+new-stream frame is lost (late). The reverse also holds: a contiguous run
+of 4 or more genuinely late packets more than a frame late, or re-delivered
+duplicates older than 64 packets, cannot be told apart from a restart by
+their headers. They trigger a resync: the open frames are dropped and
+`dropped_packets` grows by the sequence distance. Neither occurs on a
+direct DCA1000 link.
+
 Legitimate losses keep a sequence gap that matches the byte gap and are
 placed exactly as before. Frame indices keep increasing across a resync
 (the next index follows the dropped frames), so after one an index is no
