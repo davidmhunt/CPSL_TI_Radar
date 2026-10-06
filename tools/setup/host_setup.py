@@ -11,8 +11,7 @@ when nothing is MISSING and 1 otherwise, so scripts and CI can gate on it.
 
 Checks: ``sysctl`` (net.core.rmem_max, runtime and persistent), ``dca-nic``
 (192.168.33.30/24 on the DCA1000 NIC, persistent in its NetworkManager
-profile), ``dialout``, ``realtime`` (cap_sys_nice on the driver, or an rtprio
-limit of 99), ``build-type`` (Release) and, opt-in with ``--udev``, stable
+profile), ``dialout``, ``build-type`` (Release) and, opt-in with ``--udev``, stable
 ``/dev/radar/<serial>-cli|data`` symlinks for XDS110 boards.
 
 ``--apply`` never runs as root itself: it calls ``sudo`` per command, so every
@@ -51,9 +50,6 @@ SYSCTL_DIRS = ("/etc/sysctl.d", "/run/sysctl.d", "/usr/local/lib/sysctl.d",
 DCA_HOST_CIDR = "192.168.33.30/24"
 DCA_SUBNET_PREFIX = "192.168.33."
 DCA_FPGA_IP = "192.168.33.180"
-RT_PRIO_NEEDED = 99  # DCA1000 RX thread: SCHED_RR 99 (DCA1000Socket.cpp)
-LIMITS_FILES_DIR = "/etc/security/limits.d"
-LIMITS_CONF = "/etc/security/limits.conf"
 UDEV_RULES = "/etc/udev/rules.d/99-radar.rules"
 XDS110_VENDOR, XDS110_MODEL = "0451", "bef3"
 XDS110_IFACES = {"00": "cli", "03": "data"}
@@ -139,11 +135,6 @@ class Host:
     def euid(self) -> int:
         return os.geteuid()
 
-    def rtprio_limit(self) -> int:
-        import resource
-        soft = resource.getrlimit(resource.RLIMIT_RTPRIO)[0]
-        return 1 << 30 if soft == resource.RLIM_INFINITY else int(soft)
-
     def group_of(self, path: str) -> str | None:
         import grp
         try:
@@ -224,27 +215,6 @@ def parse_nmcli_con_list(text: str) -> list:
 
 def parse_udev_props(text: str) -> dict:
     return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
-
-
-def parse_getcap(text: str) -> bool:
-    """True if getcap output grants cap_sys_nice effective+permitted.
-
-    Handles libcap >= 2.4x (`/p cap_sys_nice=ep`) and older (`/p = cap_sys_nice+ep`).
-    """
-    for names, op, flags in re.findall(r"((?:cap_[a-z_]+,?)+)\s*([=+])([eip]*)", text):
-        if "cap_sys_nice" in names.split(",") and "e" in flags and "p" in flags:
-            return True
-    return False
-
-
-def parse_limits(text: str) -> list:
-    """[(domain, type, item, value)] from a limits.conf-format file."""
-    out = []
-    for line in text.splitlines():
-        v = line.split("#", 1)[0].split()
-        if len(v) == 4:
-            out.append(tuple(v))
-    return out
 
 
 # -------------------------------------------------------------------- checks
@@ -509,55 +479,6 @@ def check_dialout(host: Host) -> Check:
                  notes=notes + ["takes effect after you log out and back in"])
 
 
-def limits_rtprio(host: Host, user: str, groups: list):
-    """(value, source) of the rtprio soft limit pam_limits would give user, or (None, None).
-
-    A user line beats a @group line beats '*'; among equals the later line wins.
-    """
-    files = [LIMITS_CONF] + [f"{LIMITS_FILES_DIR}/{n}" for n in host.listdir(LIMITS_FILES_DIR)
-                             if n.endswith(".conf")]
-    best = (0, None, None)
-    for f in files:
-        for dom, typ, item, val in parse_limits(host.read(f) or ""):
-            if item != "rtprio" or typ not in ("soft", "-"):
-                continue
-            rank = 3 if dom == user else 2 if dom.startswith("@") and dom[1:] in groups \
-                else 1 if dom == "*" else 0
-            if rank and rank >= best[0]:
-                v = 1 << 30 if val in ("unlimited", "infinity") else _as_int(val)
-                if v is not None:
-                    best = (rank, v, f"{f} ({dom})")
-    return best[1], best[2]
-
-
-def check_realtime(host: Host, driver: Path) -> Check:
-    drv = str(driver)
-    if not host.exists(drv):
-        return Check("realtime", NA, f"driver not built ({drv}); re-run after building")
-    rc, out = host.run(["getcap", drv])
-    notes = ["file capabilities are lost whenever the binary is rebuilt: re-run this check "
-             "after every build"]
-    if rc == 127:
-        notes.insert(0, "getcap not installed (package libcap2-bin)")
-    if parse_getcap(out):
-        return Check("realtime", OK, f"cap_sys_nice=ep on {drv}", notes=notes)
-    rt = host.rtprio_limit()
-    if rt >= RT_PRIO_NEEDED:
-        return Check("realtime", OK, f"RLIMIT_RTPRIO {rt} in this session (>= {RT_PRIO_NEEDED})")
-    user = host.user()
-    _, sess = host.run(["id", "-nG", user])
-    lim, src = limits_rtprio(host, user, sess.split())
-    detail = (f"no cap_sys_nice on {drv}; RLIMIT_RTPRIO {rt} < {RT_PRIO_NEEDED} "
-              f"(the DCA1000 RX thread asks for SCHED_RR {RT_PRIO_NEEDED})")
-    if lim is not None:
-        detail += f"; limits: rtprio {lim} from {src}"
-        if lim >= RT_PRIO_NEEDED:
-            return Check("realtime", MISSING, detail,
-                         notes=["limits.conf already allows it: log out and back in"])
-    return Check("realtime", MISSING, detail,
-                 fix_cmds=[Step(["sudo", "setcap", "cap_sys_nice+ep", drv])], notes=notes)
-
-
 def _rel(p: Path) -> str:
     try:
         return str(p.resolve().relative_to(REPO))
@@ -577,8 +498,7 @@ def check_build_type(host: Host, driver: Path) -> Check:
     return Check("build-type", MISSING,
                  f"CMAKE_BUILD_TYPE is {bt!r} in {b}/CMakeCache.txt, not 'Release'",
                  manual=[f"cmake -S CPSL_TI_Radar_cpp -B {shlex.quote(b)} -DCMAKE_BUILD_TYPE=Release "
-                         f"&& cmake --build {shlex.quote(b)} -j"],
-                 notes=["a rebuild drops cap_sys_nice: re-run the realtime check afterwards"])
+                         f"&& cmake --build {shlex.quote(b)} -j"])
 
 
 def xds110_boards(host: Host):
@@ -664,7 +584,6 @@ def run_checks(host: Host, args, confirm=None, only: str | None = None) -> list:
         ("sysctl", lambda: check_sysctl(host, args.rmem_target)),
         ("dca-nic", lambda: check_dca_nic(host, args.nic, confirm=confirm, ping=args.ping)),
         ("dialout", lambda: check_dialout(host)),
-        ("realtime", lambda: check_realtime(host, args.driver)),
         ("build-type", lambda: check_build_type(host, args.driver)),
         ("udev", lambda: check_udev(host, args.udev)),
     ]
@@ -677,7 +596,7 @@ def run_checks(host: Host, args, confirm=None, only: str | None = None) -> list:
     return out
 
 
-def preflight(driver: Path, need_realtime: bool, host: Host | None = None,
+def preflight(driver: Path, host: Host | None = None,
               rmem_target: int = RMEM_TARGET) -> list:
     """Checks tools/bench/bench_run.py runs before launching the driver.
 
@@ -685,8 +604,6 @@ def preflight(driver: Path, need_realtime: bool, host: Host | None = None,
     """
     host = host or Host()
     checks = [check_sysctl(host, rmem_target, require_persistent=False)]
-    if need_realtime:
-        checks.append(check_realtime(host, driver))
     checks.append(check_build_type(host, driver))
     return checks
 
@@ -720,7 +637,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--nic", help="DCA1000 host NIC (e.g. enp3s0); never auto-picked")
     ap.add_argument("--driver", type=Path, default=DEFAULT_DRIVER,
-                    help="driver binary for the realtime/build-type checks")
+                    help="driver binary for the build-type check")
     ap.add_argument("--rmem-target", type=int, default=RMEM_TARGET)
     ap.add_argument("--udev", action="store_true",
                     help="also check/generate /etc/udev/rules.d/99-radar.rules for XDS110 boards")

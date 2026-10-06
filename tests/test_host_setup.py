@@ -34,7 +34,7 @@ class FakeHost(hs.Host):
     def __init__(self):
         self.files, self.dirs, self.cmds, self.links = {}, set(), {}, {}
         self.groups_of, self.executed, self.calls = {}, [], []
-        self._user, self._euid, self.rtprio, self.fail_on = "cpsl", 1000, 95, None
+        self._user, self._euid, self.fail_on = "cpsl", 1000, None
 
     def read(self, path):
         return self.files.get(str(path))
@@ -60,9 +60,6 @@ class FakeHost(hs.Host):
     def euid(self):
         return self._euid
 
-    def rtprio_limit(self):
-        return self.rtprio
-
     def group_of(self, path):
         return self.groups_of.get(path)
 
@@ -76,7 +73,7 @@ def nmcli_con(uuid):
 
 
 def bench_host(boards=1):
-    """The bench host as captured: NIC configured, rmem set at runtime only, no setcap."""
+    """The bench host as captured: NIC configured, rmem set at runtime only."""
     h = FakeHost()
     h.files.update({
         "/proc/sys/net/core/rmem_max": "134217728\n",
@@ -104,7 +101,6 @@ def bench_host(boards=1):
         nmcli_con(W2): (0, fx(f"nmcli_con_{W2}.txt")),
         ("id", "-nG"): (0, fx("id_nG_session.txt")),
         ("id", "-nG", "cpsl"): (0, fx("id_nG_user.txt")),
-        ("getcap", str(DRIVER)): (0, ""),
         ("ping", "-c", "1", "-W", "1", "192.168.33.180"): (1, ""),
     })
     for n in range(2 * boards):
@@ -116,7 +112,6 @@ def bench_host(boards=1):
 
 def make_all_ok(h):
     h.files["/etc/sysctl.d/99-radar.conf"] = "net.core.rmem_max=134217728\n"
-    h.cmds[("getcap", str(DRIVER))] = (0, f"{DRIVER} cap_sys_nice=ep\n")
     return h
 
 
@@ -150,26 +145,21 @@ def test_parsers_on_captured_output():
     assert prof["ipv4.addresses"] == "192.168.1.57/24, 192.168.33.30/24"
     p = hs.parse_udev_props(fx("udevadm_ttyACM3.txt"))
     assert (p["ID_SERIAL_SHORT"], p["ID_USB_INTERFACE_NUM"]) == ("00000000", "03")
-    assert hs.parse_getcap("/x/CPSL_TI_Radar_CPP cap_sys_nice=ep\n")
-    assert hs.parse_getcap("/x/drv = cap_net_raw,cap_sys_nice+eip\n")  # libcap < 2.4x format
-    assert not hs.parse_getcap("/x/drv cap_sys_nice=p\n")
-    assert not hs.parse_getcap("")
     assert hs.parse_sysctl_conf("# c\n; c\n-net/core/rmem_max = 5\n") == [("net.core.rmem_max", "5")]
 
 
 # ------------------------------------------------------- captured bench host
 
 def test_doctor_on_captured_bench_host():
-    """The real host: rmem set at runtime only, no cap_sys_nice (PipeWire rtprio 95)."""
+    """The real host: rmem set at runtime only; no realtime check (core-20)."""
     h = bench_host()
     rc, out = run_main(h, "--nic", "enp3s0")
     c = by_name(hs.run_checks(h, args("--nic", "enp3s0")))
     assert rc == 1
     assert {n: x.status for n, x in c.items()} == {
-        "sysctl": "MISSING", "dca-nic": "OK", "dialout": "OK", "realtime": "MISSING", "build-type": "OK"}
+        "sysctl": "MISSING", "dca-nic": "OK", "dialout": "OK", "build-type": "OK"}
     assert "persistent not set" in c["sysctl"].detail and "runtime 134217728" in c["sysctl"].detail
-    assert "rtprio 95" in c["realtime"].detail and "@pipewire" in c["realtime"].detail
-    assert "fix: sudo setcap cap_sys_nice+ep /fake/build/CPSL_TI_Radar_CPP" in out
+    assert "realtime" not in out and "setcap" not in out
     assert not h.executed
 
 
@@ -339,7 +329,7 @@ def test_nic_ping_is_report_only_and_missing_iface():
     assert nic(h, "--nic", "eth9").detail == "interface eth9 not found"
 
 
-# --------------------------------------------------- dialout / realtime / build
+# --------------------------------------------------- dialout / build
 
 def test_dialout_paths():
     h = bench_host()
@@ -352,20 +342,6 @@ def test_dialout_paths():
     assert [s.argv for s in c.fix_cmds] == [["sudo", "usermod", "-aG", "dialout", "cpsl"]]
     h.groups_of["/dev/ttyACM0"] = "uucp"
     assert any("'uucp'" in n for n in hs.check_dialout(h).notes)
-
-
-def test_realtime_paths():
-    h = bench_host()
-    h.cmds[("getcap", str(DRIVER))] = (0, f"{DRIVER} cap_sys_nice=ep\n")
-    assert hs.check_realtime(h, DRIVER).status == "OK"
-    h.cmds[("getcap", str(DRIVER))] = (0, "")
-    h.rtprio = 99
-    assert hs.check_realtime(h, DRIVER).status == "OK"
-    h.rtprio = 95
-    h.files["/etc/security/limits.d/90-radar.conf"] = "cpsl - rtprio 99\n"
-    c = hs.check_realtime(h, DRIVER)
-    assert c.status == "MISSING" and not c.fix_cmds and "log out" in c.notes[0]
-    assert hs.check_realtime(h, Path("/nope/CPSL_TI_Radar_CPP")).status == "N-A"
 
 
 def test_build_type_is_printed_never_run():
@@ -436,9 +412,6 @@ nmcli connection up uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8  # 'Wired connecti
 # dialout
 sudo usermod -aG dialout cpsl
 
-# realtime
-sudo setcap cap_sys_nice+ep /fake/build/CPSL_TI_Radar_CPP
-
 # udev
 sudo tee /etc/udev/rules.d/99-radar.rules > /dev/null <<'EOF'
 # CPSL TI Radar XDS110 port names (tools/setup/host_setup.py --udev)
@@ -488,18 +461,18 @@ def test_apply_confirms_per_check_and_rechecks():
 
     def ask(p):
         prompts.append(p)
-        return "sysctl" in p  # yes to sysctl, no to realtime
+        return "sysctl" in p  # yes to sysctl
 
     rc, out = run_main(h, "--nic", "enp3s0", "--apply", ask=ask)
-    assert [p.split()[2] for p in prompts] == ["sysctl", "realtime"]
+    assert [p.split()[2] for p in prompts] == ["sysctl"]
     assert [s.argv[:2] for s in h.executed] == [["sudo", "tee"], ["sudo", "sysctl"]]
-    assert "skipped realtime" in out and "re-check: [MISSING] sysctl" in out  # fake host unchanged
+    assert "re-check: [MISSING] sysctl" in out  # fake host unchanged
     assert rc == 1
     # failure stops the group
     h = bench_host()
     h.fail_on = "tee"
     run_main(h, "--nic", "enp3s0", "--apply", ask=lambda p: True)
-    assert [s.argv[1] for s in h.executed] == ["tee", "setcap"]
+    assert [s.argv[1] for s in h.executed] == ["tee"]
 
 
 def test_apply_confirm_single_candidate_nic():
@@ -519,7 +492,7 @@ def test_exit_codes_json_and_root():
     rc, out = run_main(bench_host(), "--nic", "enp3s0", "--json", "--apply", "--dry-run")
     data = json.loads(out)
     assert rc == data["exit"] == 1
-    assert "sudo setcap cap_sys_nice+ep /fake/build/CPSL_TI_Radar_CPP" in data["would_run"]
+    assert "setcap" not in data["would_run"]
     h = bench_host()
     h._euid = 0
     assert run_main(h, "--nic", "enp3s0")[0] == 2
@@ -529,10 +502,8 @@ def test_exit_codes_json_and_root():
 
 def test_preflight_runtime_only():
     h = bench_host()
-    checks = hs.preflight(DRIVER, need_realtime=True, host=h)
-    assert [(c.name, c.status) for c in checks] == [
-        ("sysctl", "OK"), ("realtime", "MISSING"), ("build-type", "OK")]
-    assert [c.name for c in hs.preflight(DRIVER, need_realtime=False, host=h)] == ["sysctl", "build-type"]
+    checks = hs.preflight(DRIVER, host=h)
+    assert [(c.name, c.status) for c in checks] == [("sysctl", "OK"), ("build-type", "OK")]
 
 
 def test_unreadable_owned_files_are_never_rewritten():

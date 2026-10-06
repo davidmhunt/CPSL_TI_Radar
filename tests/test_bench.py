@@ -197,21 +197,13 @@ FAKE_DRIVER = textwrap.dedent('''\
 
 
 class PreflightHost(host_setup.Host):
-    """Real host, except rmem_max and getcap report a bench-ready machine."""
+    """Real host, except rmem_max reports a bench-ready machine."""
 
-    def __init__(self, rmem="134217728", cap=True):
-        self.rmem, self.cap = rmem, cap
+    def __init__(self, rmem="134217728"):
+        self.rmem = rmem
 
     def read(self, path):
         return self.rmem + "\n" if path == "/proc/sys/net/core/rmem_max" else super().read(path)
-
-    def run(self, argv):
-        if argv[0] == "getcap":
-            return 0, f"{argv[1]} cap_sys_nice=ep\n" if self.cap else ""
-        return super().run(argv)
-
-    def rtprio_limit(self):
-        return 0
 
 
 def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
@@ -255,7 +247,7 @@ def test_end_to_end_with_fake_driver(tmp_path, monkeypatch):
     assert side["radar_cfg_numFrames"] == 30  # the shipped stress cfg, only a warning
     assert side["board"] == "IWR1843" and "kernel" in side["host"] and "rmem_max" in side["host"]
     assert [(c["name"], c["status"]) for c in side["preflight"]] == [
-        ("sysctl", "OK"), ("realtime", "OK"), ("build-type", "OK")]
+        ("sysctl", "OK"), ("build-type", "OK")]
     assert side["preflight_overridden"] == []
 
 
@@ -285,12 +277,13 @@ def test_preflight_refuses_with_fix_commands(tmp_path, monkeypatch):
     drv.write_text("#!/bin/sh\n")
     drv.chmod(0o755)
     (tmp_path / "CMakeCache.txt").write_text("CMAKE_BUILD_TYPE:STRING=Release\n")
-    monkeypatch.setattr(bench_run, "PREFLIGHT_HOST", PreflightHost(rmem="212992", cap=False))
+    monkeypatch.setattr(bench_run, "PREFLIGHT_HOST", PreflightHost(rmem="212992"))
     with pytest.raises(SystemExit) as e:
         bench_run.main([str(STRESS_JSON), "--driver", str(drv)])
     msg = str(e.value)
     assert "sudo sysctl -w net.core.rmem_max=134217728" in msg
-    assert f"sudo setcap cap_sys_nice+ep {drv}" in msg and "--allow-missing-prereq" in msg
+    assert "--allow-missing-prereq" in msg
+    assert "setcap" not in msg and "realtime" not in msg
     assert "build-type" not in msg
 
 

@@ -169,7 +169,7 @@ def main(argv=None) -> int:
                     help="run even if the driver build is not CMAKE_BUILD_TYPE=Release "
                          "(sidecar records it; such a run is not a baseline)")
     ap.add_argument("--allow-missing-prereq", action="store_true",
-                    help="run even if the host preflight (rmem_max, cap_sys_nice/rtprio) fails "
+                    help="run even if the host preflight (rmem_max, Release build) fails "
                          "(sidecar records it)")
     ap.add_argument("--natural-timeout", type=float, default=120.0)
     args = ap.parse_args(argv)
@@ -194,8 +194,8 @@ def main(argv=None) -> int:
         (args.driver.resolve().parent / "CMakeCache.txt").read_text()
         if (args.driver.resolve().parent / "CMakeCache.txt").exists() else "")
     # Host preflight: the same checks as `tools/setup/host_setup.py` (rmem_max at
-    # runtime, cap_sys_nice/rtprio when the DCA1000 path runs, Release build).
-    checks = host_setup.preflight(args.driver.resolve(), need_realtime=dca_on, host=PREFLIGHT_HOST)
+    # runtime, Release build).
+    checks = host_setup.preflight(args.driver.resolve(), host=PREFLIGHT_HOST)
     refused, overridden = [], []
     for c in checks:
         # an unreadable CMakeCache (N-A) cannot prove a Release build: refuse as before

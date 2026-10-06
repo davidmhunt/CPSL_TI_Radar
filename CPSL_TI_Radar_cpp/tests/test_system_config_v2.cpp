@@ -115,8 +115,8 @@ TEST_CASE(minimal_config_defaults_and_optional_sections) {
     CHECK_EQ(r.get_stall_timeout_ms(), 0u);
     CHECK_EQ(r.get_rx_cpu(), -1);
     CHECK_EQ(r.get_worker_cpu(), -1);
-    CHECK_EQ(r.get_rx_priority(), 99u);
-    CHECK_EQ(r.get_worker_priority(), 80u);
+    CHECK_EQ(r.get_rx_priority(), 0u);      // SCHED_RR is opt-in (core-20)
+    CHECK_EQ(r.get_worker_priority(), 0u);
 
     // a disabled section may omit everything but "enabled"
     json k = j;
@@ -197,7 +197,7 @@ TEST_CASE(bad_types_and_ranges_rejected) {
         {"/runtime/log_level", "verbose", "\"verbose\" is not one of: error, warn, info, debug"},
         {"/runtime/frame_queue_depth", 0, "/runtime/frame_queue_depth: 0 is outside [1, 1024]"},
         {"/runtime/rx_cpu", "0", "/runtime/rx_cpu: expected an integer"},
-        {"/runtime/rx_priority", 100, "/runtime/rx_priority: 100 is outside [1, 99]"},
+        {"/runtime/rx_priority", 100, "/runtime/rx_priority: 100 is outside [0, 99]"},
         {"/runtime/stall_timeout_ms", 1.5, "/runtime/stall_timeout_ms: expected an integer"},
     };
     int i = 0;
@@ -207,6 +207,16 @@ TEST_CASE(bad_types_and_ranges_rejected) {
         std::string e = reject("v2_bad_" + std::to_string(i++) + ".json", j);
         CHECK(has(e, c.expect));
     }
+}
+
+TEST_CASE(explicit_zero_priority_is_accepted) {
+    json j = base_config();
+    j["runtime"]["rx_priority"] = 0;
+    j["runtime"]["worker_priority"] = 0;
+    SystemConfigReader r(write_json("v2_prio0.json", j));
+    CHECK(r.initialized);
+    CHECK_EQ(r.get_rx_priority(), 0u);
+    CHECK_EQ(r.get_worker_priority(), 0u);
 }
 
 TEST_CASE(required_keys_and_enabled_streams) {

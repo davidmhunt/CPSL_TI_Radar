@@ -91,7 +91,20 @@ TEST_CASE(unset_keys_change_nothing) {
     CHECK(log.warns.empty());
 }
 
-TEST_CASE(priority_requests_sched_rr_and_eperm_is_a_warning_with_the_hint) {
+TEST_CASE(priority_zero_does_nothing_and_warns_nothing) {
+    Captured log;
+    g_calls = 0;
+    g_result = EPERM;  // would fail if asked
+    const PlacementResult r =
+        apply_thread_placement(pthread_self(), ThreadPlacement{-1, 0}, "DCA1000 RX", fake_sched, counting_affinity);
+    CHECK_EQ(g_calls, 0);
+    CHECK(!r.prioritized);
+    CHECK_EQ(r.priority_error, 0);
+    CHECK(log.warns.empty());
+    g_result = 0;
+}
+
+TEST_CASE(priority_requests_sched_rr_and_eperm_is_a_warning) {
     Captured log;
     g_calls = 0;
     g_result = EPERM;  // no cap_sys_nice
@@ -106,7 +119,8 @@ TEST_CASE(priority_requests_sched_rr_and_eperm_is_a_warning_with_the_hint) {
     if (!log.warns.empty()) {
         CHECK(log.warns[0].find("DCA1000 RX") != std::string::npos);
         CHECK(log.warns[0].find("SCHED_RR 42") != std::string::npos);
-        CHECK(log.warns[0].find("host_setup.py --apply") != std::string::npos);
+        CHECK(log.warns[0].find("cap_sys_nice") != std::string::npos);
+        CHECK(log.warns[0].find("host_setup.py") == std::string::npos);
     }
     // granted: no warning
     g_result = 0;
