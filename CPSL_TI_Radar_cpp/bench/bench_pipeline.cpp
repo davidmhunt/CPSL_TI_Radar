@@ -83,8 +83,8 @@ using Clock = std::chrono::steady_clock;
 // keep the compiler from discarding a kernel's output
 inline void escape(const void* p) { asm volatile("" : : "g"(p) : "memory"); }
 
-// swallows FrameAssembler's per-drop "d-P"/"d-B" prints during timed sections
-// (their formatting cost is still paid, terminal I/O is not)
+// swallows anything printed to std::cout while the radar cfg is read and
+// during timed sections (the driver itself logs through the log sink only)
 class NullBuf : public std::streambuf {
 protected:
     int overflow(int c) override { return c; }

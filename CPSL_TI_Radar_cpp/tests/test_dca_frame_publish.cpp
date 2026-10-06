@@ -14,7 +14,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <thread>
+#include <vector>
+
+#include "Log.hpp"
 
 typedef std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> Cube;
 
@@ -126,6 +130,32 @@ TEST_CASE(polling_consumer_never_gets_a_stale_or_torn_frame) {
     CHECK_EQ(torn, 0);
     CHECK_EQ(last, frames);
     CHECK(received > 1);
+}
+
+TEST_CASE(debug_status_is_periodic_not_per_frame_or_per_packet) {
+    // design P10: at debug level a drop storm must not log per packet or per
+    // frame; one counter line per DCA1000Handler::kStatusPeriod at most
+    Fixture f("publish_quiet");
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    std::vector<std::string> lines;
+    cpsl::radar::set_log_level(cpsl::radar::LogLevel::debug);
+    cpsl::radar::set_log_sink([&](cpsl::radar::LogLevel, const std::string& m) { lines.push_back(m); });
+    const int frames = 6;
+    for (int k = 0; k < frames; k++) {
+        auto p = dca_test::frame_packets(static_cast<uint64_t>(k), f.B, static_cast<uint16_t>(k + 1), f.seq);
+        for (size_t i = 0; i < p.size(); i++) {
+            if (i % 20 == 5) continue;  // a dropped packet every 20
+            f.h.ingest_packet(p[i].data(), static_cast<int>(p[i].size()));
+        }
+    }
+    cpsl::radar::set_log_sink(nullptr);
+    cpsl::radar::set_log_level(cpsl::radar::LogLevel::info);
+    CHECK(f.h.get_stats().frames >= static_cast<uint64_t>(frames - 1));
+    CHECK(f.h.get_stats().assembler.dropped_packet_events > 30);
+    CHECK_EQ(lines.size(), size_t(1));  // the first frame's line only (the frames take well under 1 s)
+    if (!lines.empty()) {
+        CHECK(lines[0].find("DCA1000: frames 1, packets ") == 0);
+    }
 }
 
 TEST_MAIN()

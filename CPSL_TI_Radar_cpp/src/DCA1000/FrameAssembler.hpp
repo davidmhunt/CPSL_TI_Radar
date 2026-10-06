@@ -20,6 +20,9 @@
 // skipped_frames. Data for a frame that was already emitted is late: it is
 // counted and dropped.
 //
+// Nothing here logs or prints: the counters are read with get_stats() (the
+// driver logs them periodically at debug level and in Radar::stats()).
+//
 // Sequence numbers give the packet counters: a forward gap counts its
 // packets as dropped (one drop event per gap); a packet older than the newest
 // one is either a duplicate (already seen) or late (it fills an earlier gap,

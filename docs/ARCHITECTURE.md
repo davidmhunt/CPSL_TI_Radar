@@ -156,8 +156,10 @@ reader thread; `DCA1000Socket` adds the RX thread. Serial baud handling
   `net.core.rmem_max` raised); data socket timeout 500 ms.
 - `dropped_packets`, `dropped_packet_events`, `late packets`, `duplicate
   packets`, `incomplete frames`, `skipped frames` and `rx_overrun_count`
-  print per frame with `runtime.log_level: "debug"`, and are in `stats()`
-  and the `stats v1` lines.
+  are in `stats()` and the `stats v1` lines, and with
+  `runtime.log_level: "debug"` one `DCA1000: frames ...` line logs them at
+  most once a second. Nothing on the per-packet or per-frame path logs or
+  prints (design P10).
 
 The worker converts a completed frame outside any lock, then publishes the
 cube and the `new_frame_available` flag together under one mutex, so the

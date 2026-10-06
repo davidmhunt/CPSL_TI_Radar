@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include "Log.hpp"
-
 namespace {
 
 void add_sat(uint32_t& counter, uint64_t n) {
@@ -68,7 +66,6 @@ FrameAssembler::SeqKind FrameAssembler::track_sequence(uint32_t seq) {
         // the DCA1000 numbers packets from 1 after recordStart
         have_seq_ = true;
         if (seq != 1) {
-            cpsl::radar::log_debug("d-P: ", seq);
             stats_.dropped_packet_events += 1;
             if (seq > 1 && seq < 0x80000000u) add_sat(stats_.dropped_packets, seq - 1);
         }
@@ -81,7 +78,6 @@ FrameAssembler::SeqKind FrameAssembler::track_sequence(uint32_t seq) {
     const uint32_t ahead = seq - newest_seq_;  // modulo 2^32: the counter may wrap
     if (ahead != 0 && ahead < 0x80000000u) {
         if (ahead > 1) {
-            cpsl::radar::log_debug("d-P: ", seq);
             add_sat(stats_.dropped_packets, ahead - 1);
             stats_.dropped_packet_events += 1;
         }

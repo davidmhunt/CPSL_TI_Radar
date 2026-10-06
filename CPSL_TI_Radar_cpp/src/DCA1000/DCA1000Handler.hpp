@@ -87,6 +87,8 @@ private:
     Stats stats_;
     //steady_clock time (ns since its epoch) of the last completed frame; 0 = none yet
     std::atomic<int64_t> last_frame_ns_{0};
+    //when the debug status line was last logged (at most one per kStatusPeriod)
+    std::chrono::steady_clock::time_point last_status_{};
 
     //ADC cube conversion (interleaved / non-interleaved)
     ADCCubeConverter converter_;
@@ -99,6 +101,9 @@ private:
 
 //functions
 public:
+    //the debug-level counter line is logged at most this often (never per packet or per frame)
+    static constexpr std::chrono::seconds kStatusPeriod{1};
+
     DCA1000Handler();
     DCA1000Handler(const DCA1000Handler & rhs) = delete;
     DCA1000Handler & operator=(const DCA1000Handler & rhs) = delete;

@@ -251,6 +251,7 @@ void DCA1000Handler::init_buffers()
             stats_ = Stats();
         }
         last_frame_ns_.store(0, std::memory_order_relaxed);
+        last_status_ = std::chrono::steady_clock::time_point{};
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
@@ -260,30 +261,30 @@ void DCA1000Handler::init_buffers()
     }
 }
 
+//one debug line with the cumulative counters (the same ones Radar::stats()
+//and --stats report); called at most once per kStatusPeriod
 void DCA1000Handler::print_status(){
-    if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
-        auto stats = assembler_.get_stats();
-        std::ostringstream o;
-        o <<
-        "frame: " << received_frames << "\n" <<
-        "\tpackets: " << stats.received_packets << "\n" <<
-        "\tdata bytes: " << stats.adc_data_byte_count << "\n" <<
-        "\tdropped packets: " << stats.dropped_packets << "\n" <<
-        "\tdropped packet events: " << stats.dropped_packet_events << "\n" <<
-        "\tlate packets: " << stats.late_packets << "\n" <<
-        "\tduplicate packets: " << stats.duplicate_packets << "\n" <<
-        "\tincomplete frames: " << stats.incomplete_frames << "\n" <<
-        "\tskipped frames: " << stats.skipped_frames << "\n" <<
-        "\trx_overrun_count: " << (source_ ? source_->overrun_count() : 0);
-        cpsl::radar::log_debug(o.str());
-    }
+    const FrameAssembler::Stats stats = assembler_.get_stats();
+    std::ostringstream o;
+    o << "DCA1000: frames " << received_frames
+      << ", packets " << stats.received_packets
+      << ", data bytes " << stats.adc_data_byte_count
+      << ", dropped packets " << stats.dropped_packets
+      << " (" << stats.dropped_packet_events << " events)"
+      << ", late " << stats.late_packets
+      << ", duplicate " << stats.duplicate_packets
+      << ", incomplete frames " << stats.incomplete_frames
+      << ", skipped frames " << stats.skipped_frames
+      << ", rx overruns " << (source_ ? source_->overrun_count() : 0);
+    cpsl::radar::log_debug(o.str());
 }
 
 
 /**
  * @brief Convert the frame the assembler just completed, publish it (cube,
  * flag, index, missing bytes, completion time and a counter snapshot change
- * together under frame_mutex), print the debug status and save it.
+ * together under frame_mutex), log the debug status line (at most once per
+ * kStatusPeriod) and save it.
  *
  * @param index frame index (stream offset / bytes_per_frame)
  * @param missing_bytes zero-filled bytes in the frame
@@ -319,7 +320,12 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
     last_frame_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count(),
                          std::memory_order_relaxed);
 
-    print_status();
+    //periodic, not per frame: a log line per frame (or per dropped packet)
+    //would stall this thread on the sink in a drop storm (design P10)
+    if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug) && now - last_status_ >= kStatusPeriod){
+        last_status_ = now;
+        print_status();
+    }
 
     //only this thread writes adc_data_cube, so reading it here needs no lock
     if(save_adc_frames){

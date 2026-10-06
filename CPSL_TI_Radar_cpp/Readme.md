@@ -281,7 +281,7 @@ v1 -> v2 migration section).
 | `output.dir` | no | Where `adc_data.bin` and `LVDS_Raw_0.bin` are written, relative to the JSON file. Unset: the current directory. The driver creates it (with its parents) when it opens the radar; `--validate` says whether it exists or will be created, and fails if a part of the path is a file or the parent is not writable. |
 | `output.save_adc_frames` | no | Write every ADC frame to `adc_data.bin` (default `false`). |
 | `output.save_raw_lvds` | no | Write the raw LVDS payload to `LVDS_Raw_0.bin` (default `false`; only needed to debug packet loss). |
-| `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`: the least severe message printed. `debug` adds the per-frame status lines (the v1 `"verbose": true`), every CLI command and reply, and each skipped cfg command. |
+| `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`: the least severe message printed. `debug` adds a DCA1000 counter line once a second (the v1 `"verbose": true` printed a block per frame), every CLI command and reply, and each skipped cfg command. |
 | `runtime.stall_timeout_ms` | no | `0` (default) is off. Above 0: when no frame arrives for that many ms while streaming, the driver warns and the run stops (instead of after 2 s without frames). |
 | `runtime.frame_queue_depth`, `.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults 4, `null`, `null`, 99, 80) but not applied yet. |
 
