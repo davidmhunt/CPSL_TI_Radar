@@ -32,6 +32,21 @@ def test_boards_and_page(client):
     assert 'id="cfgMain"' in html and client.get("/js/cfg.js").status_code == 200
 
 
+def test_firmware_list_per_board_and_generate_with_firmware(client):
+    allfw = client.get("/api/cfg/firmware").json()["firmware"]
+    assert {f["id"] for f in allfw} >= {"demo_stock", "demo_lvds", "dca1000_raw", "cascade_ddm", "iwr1843_sar_lvds"}
+    f1843 = client.get("/api/cfg/firmware", params={"board": "IWR1843"}).json()["firmware"]
+    assert [f["id"] for f in f1843][0] == "demo_stock" and {f["id"] for f in f1843} == {"demo_stock", "demo_lvds", "dca1000_raw"}
+    assert all("outputs" in f and f["template"] for f in f1843)
+    assert {f["id"] for f in client.get("/api/cfg/firmware", params={"board": "AWR2243_CASCADE"}).json()["firmware"]} \
+        == {"cascade_ddm"}
+    assert client.get("/api/cfg/firmware", params={"board": "NOPE"}).status_code == 422
+    g = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T, "firmware": "demo_lvds"}).json()
+    assert g["ok"] and g["targets"]["firmware"] == "demo_lvds"
+    bad = client.post("/api/cfg/generate", json={"board": "IWR1443", "targets": T, "firmware": "demo_lvds"}).json()
+    assert not bad["ok"] and bad["issues"][0]["code"] == "firmware_board_mismatch"
+
+
 def test_generate_then_analyze_round_trip(client):
     g = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T}).json()
     assert g["ok"] and g["text"] and g["source"] == "targets"

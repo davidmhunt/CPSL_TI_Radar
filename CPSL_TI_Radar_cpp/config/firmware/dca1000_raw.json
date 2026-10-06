@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "id": "dca1000_raw",
+  "description": "DCA1000 raw-ADC streaming firmware (Firmware/DCA1000_Streaming): no on-chip processing, ADC over LVDS only.",
+  "boards": [
+    "IWR1443",
+    "IWR1843"
+  ],
+  "outputs": {
+    "tlv": false,
+    "lvds": true
+  },
+  "templates": {
+    "IWR1443": "radar/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
+    "IWR1843": "radar/DCA1000/custom_configs/short_range.cfg"
+  },
+  "system_enables": {
+    "serial": false,
+    "dca1000": true
+  },
+  "default_for": [],
+  "limits": {
+    "IWR1443": {
+      "n_tx": {
+        "value": 3,
+        "level": "error",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked)",
+        "confidence": "recalled"
+      },
+      "n_rx": {
+        "value": 4,
+        "level": "error",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked)",
+        "confidence": "recalled"
+      },
+      "band_ghz": {
+        "value": [
+          76.0,
+          81.0
+        ],
+        "level": "error",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked): RF band",
+        "confidence": "recalled"
+      },
+      "max_slope_mhz_us": {
+        "value": 100.0,
+        "level": "warning",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked): max slope (value uncertain; shipped cfgs reach 100)",
+        "confidence": "unverified"
+      },
+      "max_sample_rate_ksps": {
+        "value": 12500,
+        "level": "warning",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked): ADC rate / IF bandwidth (shipped cfgs reach 12499)",
+        "confidence": "unverified"
+      },
+      "min_idle_us": {
+        "value": 2.0,
+        "level": "warning",
+        "source": "TI mmWave DFP interface doc: minimum idle time (value uncertain; shipped cfgs use >= 5)",
+        "confidence": "unverified"
+      },
+      "max_loops": {
+        "value": 255,
+        "level": "warning",
+        "source": "TI mmWave interface control doc: frameCfg numLoops 1..255 (recalled)",
+        "confidence": "unverified"
+      },
+      "adc_buffer_half_bytes": {
+        "value": 16384,
+        "level": "warning",
+        "source": "ADC buffer ping/pong half: one chirp's samples x RX x bytes must fit (recalled)",
+        "confidence": "unverified"
+      },
+      "l3_radar_cube_bytes": {
+        "value": 262144,
+        "level": "warning",
+        "source": "L3 RAM size; the demo's radar cube must fit alongside other buffers (recalled)",
+        "confidence": "unverified"
+      },
+      "lvds_supported": {
+        "value": true,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1443.json lvds.supported",
+        "confidence": "repo"
+      },
+      "lvds_lanes": {
+        "value": 4,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1443.json lvds.lanes",
+        "confidence": "repo"
+      },
+      "lvds_lane_mbps": {
+        "value": 600,
+        "level": "warning",
+        "source": "DCA1000 EVM user guide: LVDS DDR up to 600 Mbps/lane (recalled)",
+        "confidence": "unverified"
+      },
+      "sdk": {
+        "value": "mmwave_sdk_2",
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1443.json sdk",
+        "confidence": "repo"
+      },
+      "frame_cfg_args": {
+        "value": 7,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1443.json cfg_dialect.frame_period_field = 5",
+        "confidence": "repo"
+      },
+      "channel_cfg_args": {
+        "value": 3,
+        "level": "error",
+        "source": "shipped single-chip cfgs: channelCfg rx tx cascading",
+        "confidence": "repo"
+      },
+      "config_once_per_boot": {
+        "value": false,
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1443.json lifecycle",
+        "confidence": "repo"
+      }
+    },
+    "IWR1843": {
+      "n_tx": {
+        "value": 3,
+        "level": "error",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked)",
+        "confidence": "recalled"
+      },
+      "n_rx": {
+        "value": 4,
+        "level": "error",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked)",
+        "confidence": "recalled"
+      },
+      "band_ghz": {
+        "value": [
+          76.0,
+          81.0
+        ],
+        "level": "error",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked): RF band",
+        "confidence": "recalled"
+      },
+      "max_slope_mhz_us": {
+        "value": 266.0,
+        "level": "warning",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked): max slope (value uncertain; shipped cfgs reach 100)",
+        "confidence": "unverified"
+      },
+      "max_sample_rate_ksps": {
+        "value": 12500,
+        "level": "warning",
+        "source": "TI IWR/AWR datasheet (recalled, not re-checked): ADC rate / IF bandwidth (shipped cfgs reach 12499)",
+        "confidence": "unverified"
+      },
+      "min_idle_us": {
+        "value": 2.0,
+        "level": "warning",
+        "source": "TI mmWave DFP interface doc: minimum idle time (value uncertain; shipped cfgs use >= 5)",
+        "confidence": "unverified"
+      },
+      "max_loops": {
+        "value": 255,
+        "level": "warning",
+        "source": "TI mmWave interface control doc: frameCfg numLoops 1..255 (recalled)",
+        "confidence": "unverified"
+      },
+      "adc_buffer_half_bytes": {
+        "value": 16384,
+        "level": "warning",
+        "source": "ADC buffer ping/pong half: one chirp's samples x RX x bytes must fit (recalled)",
+        "confidence": "unverified"
+      },
+      "l3_radar_cube_bytes": {
+        "value": 786432,
+        "level": "warning",
+        "source": "L3 RAM size; the demo's radar cube must fit alongside other buffers (recalled)",
+        "confidence": "unverified"
+      },
+      "lvds_supported": {
+        "value": true,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1843.json lvds.supported",
+        "confidence": "repo"
+      },
+      "lvds_lanes": {
+        "value": 2,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1843.json lvds.lanes",
+        "confidence": "repo"
+      },
+      "lvds_lane_mbps": {
+        "value": 600,
+        "level": "warning",
+        "source": "DCA1000 EVM user guide: LVDS DDR up to 600 Mbps/lane (recalled)",
+        "confidence": "unverified"
+      },
+      "sdk": {
+        "value": "mmwave_sdk_3",
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1843.json sdk",
+        "confidence": "repo"
+      },
+      "frame_cfg_args": {
+        "value": 7,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1843.json cfg_dialect.frame_period_field = 5",
+        "confidence": "repo"
+      },
+      "channel_cfg_args": {
+        "value": 3,
+        "level": "error",
+        "source": "shipped single-chip cfgs: channelCfg rx tx cascading",
+        "confidence": "repo"
+      },
+      "config_once_per_boot": {
+        "value": false,
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR1843.json lifecycle",
+        "confidence": "repo"
+      }
+    }
+  }
+}

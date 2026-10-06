@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from .limits import (BOARD_LIMITS, DCA1000_ETHERNET_HEADROOM_MBPS, DCA1000_ETHERNET_MBPS, DUTY_WARN,
+from .limits import (BOARD_LIMITS, firmware_limits, DCA1000_ETHERNET_HEADROOM_MBPS, DCA1000_ETHERNET_MBPS, DUTY_WARN,
                      SAR_FIRMWARE_FMT2, Limit)
 from .metrics import BOARDS, Metrics, metrics
 from .parse import Cfg, CfgError
@@ -50,11 +50,15 @@ def _is_demo(cfg: Cfg) -> bool:
     return cfg.has("guiMonitor") or cfg.has("cfarCfg")
 
 
-def validate(cfg: Cfg, board: str) -> Report:
+def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
+    """Check `cfg` against `board`'s limits; `firmware` (id) selects that firmware's limits, default: the board's."""
     if board not in BOARDS:
         return Report(board, False, [Issue("error", "unknown_board",
                                            f"unknown board {board!r}; expected one of {list(BOARDS)}")])
-    lim = BOARD_LIMITS[board]
+    lim = firmware_limits(board, firmware) if firmware else BOARD_LIMITS[board]
+    if lim is None:
+        return Report(board, False, [Issue("error", "firmware_board_mismatch",
+                                           f"firmware {firmware!r} has no limits for {board}")])
     issues: list[Issue] = []
 
     def add(key: Limit | str, code: str, msg: str, level: str | None = None):

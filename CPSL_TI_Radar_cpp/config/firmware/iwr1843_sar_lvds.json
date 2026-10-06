@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "iwr1843_sar_lvds",
+  "description": "IWR1843 SAR/LVDS raw-ADC firmware (firmware_dev iwr1843_sar_lvds): MSS-only, no TLV/data UART, CBUFF ADC over LVDS (dataFmt 1/2).",
+  "boards": [
+    "IWR1843_SAR"
+  ],
+  "outputs": {
+    "tlv": false,
+    "lvds": true
+  },
+  "templates": {
+    "IWR1843_SAR": "radar/sar_configs/1843_SAR_2ms_fmt1.cfg"
+  },
+  "system_enables": {
+    "serial": false,
+    "dca1000": true
+  },
+  "default_for": [],
+  "pending": "pending core-22/23: driver board IWR1843_SAR exists, but cfg generation/validation for it is not implemented in radar_gui",
+  "limits": {}
+}

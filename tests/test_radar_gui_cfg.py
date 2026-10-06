@@ -233,17 +233,18 @@ import time
 
 from radar_gui.cfg import generate
 
-GEN_CASES = [("IWR1443", "tlv"), ("IWR1443", "raw"), ("IWR1843", "tlv"), ("IWR1843", "lvds"),
-             ("IWR1843", "raw"), ("IWR6843", "tlv"), ("IWR6843", "lvds"), ("AWR2243_CASCADE", "tlv")]
+GEN_CASES = [("IWR1443", "demo_stock"), ("IWR1443", "dca1000_raw"), ("IWR1843", "demo_stock"),
+             ("IWR1843", "demo_lvds"), ("IWR1843", "dca1000_raw"), ("IWR6843", "demo_stock"),
+             ("IWR6843", "demo_lvds"), ("AWR2243_CASCADE", "cascade_ddm")]
 TYPICAL = [dict(max_range_m=10, max_velocity_ms=5, range_res_m=0.1, frame_rate_hz=10),
            dict(max_range_m=20, max_velocity_ms=8, range_res_m=0.15, frame_rate_hz=20),
            dict(max_range_m=5, max_velocity_ms=3, frame_rate_hz=5)]
 
 
-@pytest.mark.parametrize("board,mode", GEN_CASES)
+@pytest.mark.parametrize("board,fw", GEN_CASES)
 @pytest.mark.parametrize("targets", TYPICAL)
-def test_generate_round_trips_targets_and_validates_clean(board, mode, targets):
-    r = generate(board, dict(targets, output_mode=mode))
+def test_generate_round_trips_targets_and_validates_clean(board, fw, targets):
+    r = generate(board, targets, firmware=fw)
     assert r.ok, [i.message for i in r.report.errors]
     assert not r.report.errors
     assert r.text.strip().startswith("%")
@@ -282,17 +283,86 @@ def test_generate_tx_rx_selection():
     assert cas.metrics.n_tx == 6 and any(i.code == "mask_fixed" for i in cas.report.issues)
 
 
-def test_generate_output_modes():
-    assert "lvdsStreamCfg -1 0 0 0" in generate("IWR1843", max_range_m=10, max_velocity_ms=5).text
-    lv = generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="lvds")
+def test_generate_firmware_selects_cfg_flavour():
+    assert "lvdsStreamCfg -1 0 0 0" in generate("IWR1843", max_range_m=10, max_velocity_ms=5).text   # default
+    lv = generate("IWR1843", max_range_m=10, max_velocity_ms=5, firmware="demo_lvds")
     assert "lvdsStreamCfg -1 0 1 0" in lv.text and lv.metrics.lvds_data_fmt == 1
-    raw = generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="raw")
+    assert lv.targets["firmware"] == "demo_lvds" and lv.targets["template"].startswith("radar/")
+    raw = generate("IWR1843", max_range_m=10, max_velocity_ms=5, firmware="dca1000_raw")
     assert "guiMonitor" not in raw.text and "testFmkCfg" in raw.text
-    for board, mode in [("IWR1443", "lvds"), ("IWR6843", "raw"), ("AWR2243_CASCADE", "lvds")]:
-        r = generate(board, max_range_m=10, max_velocity_ms=5, output_mode=mode)
-        assert not r.ok and r.text == "" and r.report.errors[0].code == "mode_unsupported"
+    assert generate("AWR2243_CASCADE", max_range_m=10, max_velocity_ms=5).targets["firmware"] == "cascade_ddm"
+
+
+def test_generate_every_board_firmware_pair_generates_or_mismatches():
+    from radar_gui.cfg import firmware as fwmod
+    for fw in fwmod.load_all().values():
+        for board in BOARDS:
+            r = generate(board, max_range_m=10, max_velocity_ms=5, firmware=fw["id"])
+            if board not in fw["boards"]:
+                assert not r.ok and r.text == "" and r.report.errors[0].code == "firmware_board_mismatch", (board, fw["id"])
+            elif fw.get("pending"):
+                assert r.report.errors[0].code == "firmware_pending"
+            else:
+                assert r.ok, (board, fw["id"], [i.message for i in r.report.errors])
+    r = generate("IWR1443", max_range_m=10, max_velocity_ms=5, firmware="demo_lvds")
+    assert "supports:" in r.report.errors[0].message
+    assert generate("IWR1843", max_range_m=10, max_velocity_ms=5, firmware="nope").report.errors[0].code \
+        == "unknown_firmware"
+
+
+def test_generate_output_mode_is_a_deprecated_alias():
+    lv = generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="lvds")
+    assert lv.ok and lv.targets["firmware"] == "demo_lvds"
+    assert any(i.code == "output_mode_deprecated" for i in lv.report.issues)
+    assert generate("AWR2243_CASCADE", max_range_m=10, max_velocity_ms=5, output_mode="tlv").ok
+    assert generate("IWR1443", max_range_m=10, max_velocity_ms=5, output_mode="lvds").report.errors[0].code \
+        == "firmware_board_mismatch"
     assert generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="x").report.errors[0].code \
         == "bad_output_mode"
+
+
+# --- firmware descriptors (gui-10) --------------------------------------------------------------------
+
+def _descriptor_files():
+    from radar_gui.cfg import firmware as fwmod
+    return sorted(fwmod.FIRMWARE_DIR.glob("*.json"))
+
+
+def test_firmware_descriptors_exist_and_validate():
+    from radar_gui.cfg import firmware as fwmod
+    files = _descriptor_files()
+    assert {p.stem for p in files} >= {"demo_stock", "demo_lvds", "dca1000_raw", "iwr1843_sar_lvds", "cascade_ddm"}
+    for p in files:
+        d = json.loads(p.read_text())
+        assert fwmod.check_descriptor(d, p.stem) == [], p.name
+        for b in d["boards"]:   # every board has a template that exists
+            assert (fwmod.CONFIG_DIR / d["templates"][b]).is_file(), (p.name, b)
+    assert set(fwmod.load_all()) == {p.stem for p in files}
+
+
+def test_firmware_descriptor_schema_rejects_bad_files():
+    from radar_gui.cfg import firmware as fwmod
+    good = json.loads((fwmod.FIRMWARE_DIR / "demo_lvds.json").read_text())
+    def bad(**ch):
+        return fwmod.check_descriptor({**good, **ch}, "demo_lvds")
+    assert bad(boards=["NOPE"]) and bad(outputs={"tlv": False, "lvds": False}) and bad(templates={})
+    assert bad(system_enables={"serial": True}) and bad(id="other")
+    assert bad(limits={"IWR1843": {"x": {"value": 1}}})
+
+
+def test_every_board_has_a_default_firmware_with_matching_limits():
+    from radar_gui.cfg import firmware as fwmod
+    for board in BOARDS:
+        d = fwmod.default_for(board)
+        assert d is not None and d["limits"][board], board
+        assert fwmod.for_board(board)[0]["id"] == d["id"]
+        assert set(BOARD_LIMITS[board]) == set(d["limits"][board])
+
+
+def test_validate_with_firmware_uses_its_limits_and_rejects_unsupported():
+    cfg = parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg")
+    assert validate(cfg, "AWR2243_CASCADE", "cascade_ddm").ok
+    assert validate(cfg, "AWR2243_CASCADE", "demo_stock").errors[0].code == "firmware_board_mismatch"
 
 
 def test_generate_infeasible_range_resolution_is_reported_not_raised():
@@ -329,8 +399,8 @@ def test_generate_bad_input_is_structured():
 
 def test_generate_result_is_json_safe_and_fast():
     t0 = time.perf_counter()
-    for board, mode in GEN_CASES:
-        r = generate(board, dict(TYPICAL[0], output_mode=mode))
+    for board, fw in GEN_CASES:
+        r = generate(board, TYPICAL[0], firmware=fw)
         json.dumps(r.to_dict(), allow_nan=False)
     bad = generate("IWR1843", max_range_m=100, max_velocity_ms=5, range_res_m=0.02)
     json.dumps(bad.to_dict(), allow_nan=False)

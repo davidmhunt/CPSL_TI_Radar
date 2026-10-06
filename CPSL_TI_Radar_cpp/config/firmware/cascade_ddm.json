@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "id": "cascade_ddm",
+  "description": "AM273x + AWR2243 2-chip cascade DDM demo (firmware_dev awr2243_cascade_ddm): TLV point cloud over serial; config accepted once per power-up.",
+  "boards": [
+    "AWR2243_CASCADE"
+  ],
+  "outputs": {
+    "tlv": true,
+    "lvds": false
+  },
+  "templates": {
+    "AWR2243_CASCADE": "radar/cascade/cascade_shortrange.cfg"
+  },
+  "system_enables": {
+    "serial": true,
+    "dca1000": false
+  },
+  "default_for": [
+    "AWR2243_CASCADE"
+  ],
+  "limits": {
+    "AWR2243_CASCADE": {
+      "n_tx": {
+        "value": 6,
+        "level": "error",
+        "source": "tools/radar_viewer/cfggen.py docstring: 6 TX x 8 RX (2-chip cascade, DDMA)",
+        "confidence": "repo"
+      },
+      "n_rx": {
+        "value": 8,
+        "level": "error",
+        "source": "tools/radar_viewer/cfggen.py docstring: 6 TX x 8 RX",
+        "confidence": "repo"
+      },
+      "band_ghz": {
+        "value": [
+          76.0,
+          81.0
+        ],
+        "level": "error",
+        "source": "tools/radar_viewer/cfggen.py BAND_TOP_GHZ=81; AWR2243 76-81 GHz (datasheet, recalled)",
+        "confidence": "recalled"
+      },
+      "max_slope_mhz_us": {
+        "value": 100.0,
+        "level": "error",
+        "source": "tools/radar_viewer/cfggen.py MAX_SLOPE",
+        "confidence": "repo"
+      },
+      "max_sample_rate_ksps": {
+        "value": 10000,
+        "level": "warning",
+        "source": "cfggen.py FS_MAX_KSPS; TI's short/long cfgs use 5000/10000",
+        "confidence": "repo"
+      },
+      "min_sample_rate_ksps": {
+        "value": 2000,
+        "level": "warning",
+        "source": "cfggen.py FS_MIN_KSPS",
+        "confidence": "repo"
+      },
+      "tested_sample_rates_ksps": {
+        "value": [
+          5000,
+          10000
+        ],
+        "level": "warning",
+        "source": "cfggen.py FS_TESTED_KSPS",
+        "confidence": "repo"
+      },
+      "min_idle_us": {
+        "value": 4.0,
+        "level": "error",
+        "source": "cfggen.py MIN_IDLE_US",
+        "confidence": "repo"
+      },
+      "max_loops": {
+        "value": 255,
+        "level": "warning",
+        "source": "TI mmWave interface control doc numLoops (recalled)",
+        "confidence": "unverified"
+      },
+      "max_samples": {
+        "value": 192,
+        "level": "warning",
+        "source": "cfggen.py: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps')",
+        "confidence": "repo"
+      },
+      "max_chirps": {
+        "value": 256,
+        "level": "warning",
+        "source": "cfggen.py: TI only tested 192 samples x 256 chirps",
+        "confidence": "repo"
+      },
+      "lvds_supported": {
+        "value": false,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/AWR2243_CASCADE.json lvds.supported",
+        "confidence": "repo"
+      },
+      "sdk": {
+        "value": "mmwave_mcuplus",
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/AWR2243_CASCADE.json sdk",
+        "confidence": "repo"
+      },
+      "frame_cfg_args": {
+        "value": 9,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/AWR2243_CASCADE.json cfg_dialect.frame_period_field = 6",
+        "confidence": "repo"
+      },
+      "channel_cfg_args": {
+        "value": 5,
+        "level": "error",
+        "source": "cascade_shortrange.cfg: channelCfg rx tx cascading rx2 tx2",
+        "confidence": "repo"
+      },
+      "config_once_per_boot": {
+        "value": true,
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/AWR2243_CASCADE.json lifecycle; docs/firmware.md",
+        "confidence": "repo"
+      }
+    }
+  }
+}

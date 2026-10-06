@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .cfg import firmware as fwmod
 from .cfg import BOARDS, CfgError, generate, limits_dict, metrics, parse_cfg, validate
 
 REPO = Path(__file__).resolve().parent.parent
@@ -21,6 +22,7 @@ SHIPPED = {"driver": REPO / "CPSL_TI_Radar_cpp" / "config" / "radar",
 # Saved files go here. It is a sibling of config/boards, so a system JSON saved in it finds the board
 # descriptors through the driver's default "<JSON dir>/../boards" lookup.
 DEFAULT_USER_DIR = REPO / "CPSL_TI_Radar_cpp" / "config" / "user"
+# deprecated output_mode values, accepted by generate() as aliases for a firmware
 OUTPUT_MODES = ["tlv", "lvds", "raw"]
 LOG_LEVELS = ["debug", "info", "warn", "error"]
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
@@ -41,6 +43,7 @@ class AnalyzeReq(BaseModel):
     board: str
     cfg_text: str | None = None            # analyse this cfg ...
     targets: dict | None = None            # ... or generate one from these targets
+    firmware: str | None = None            # firmware id for generation (default: the board's)
 
 
 class SaveReq(BaseModel):
@@ -102,8 +105,15 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
 
     @r.get("/api/cfg/boards")
     def boards():
-        return {"boards": list(BOARDS), "output_modes": OUTPUT_MODES, "log_levels": LOG_LEVELS,
+        return {"boards": list(BOARDS), "output_modes": OUTPUT_MODES,   # DEPRECATED alias; the UI moves to `firmware` in gui-10 Step 2
+                "firmware": fwmod.summary(), "log_levels": LOG_LEVELS,
                 "limits": limits_dict(), "user_dir": str(udir)}
+
+    @r.get("/api/cfg/firmware")
+    def firmware(board: str | None = None):
+        if board is not None:
+            _bad_board(board)
+        return {"firmware": fwmod.summary(board)}
 
     @r.post("/api/cfg/analyze")
     def analyze(req: AnalyzeReq):
@@ -111,11 +121,11 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
         if req.cfg_text is not None:
             return _analyze_text(req.board, req.cfg_text)
         if req.targets is not None:
-            return _generated(req.board, req.targets)
+            return _generated(req.board, req.targets, req.firmware)
         raise HTTPException(422, "give cfg_text or targets")
 
-    def _generated(board, targets):
-        g = generate(board, targets).to_dict()
+    def _generated(board, targets, firmware=None):
+        g = generate(board, targets, firmware=firmware).to_dict()
         return {"board": board, "ok": g["ok"], "source": "targets", "text": g["text"], "name": g["name"],
                 "metrics": g["metrics"], "issues": g["report"]["issues"], "achieved": g["achieved"],
                 "targets": g["targets"]}
@@ -123,7 +133,7 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
     @r.post("/api/cfg/generate")
     def gen(req: AnalyzeReq):
         _bad_board(req.board)
-        return _generated(req.board, req.targets or {})
+        return _generated(req.board, req.targets or {}, req.firmware)
 
     @r.get("/api/cfgs")
     def cfgs():
