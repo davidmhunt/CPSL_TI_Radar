@@ -90,7 +90,8 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
         return Report(board, False, issues)
 
     try:
-        m = metrics(cfg, board)
+        _fw = fwmod.get(firmware) if firmware else fwmod.default_for(board)
+        m = metrics(cfg, board, fwmod.mimo(board, _fw)["scheme"] if _fw else None)
     except CfgError as e:
         add("parse", "bad_cfg", str(e))
         return Report(board, False, issues)

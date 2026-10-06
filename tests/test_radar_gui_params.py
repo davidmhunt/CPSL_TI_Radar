@@ -53,7 +53,8 @@ def test_slope_edit_changes_exactly_the_slope_dependent_metrics():
     # slope enters bandwidth, range resolution, max range, centre frequency (-> wavelength -> velocities),
     # and the sweep; nothing about timing, samples, array or frame.
     assert changed == {"slope_mhz_us", "bandwidth_mhz", "sweep_mhz", "center_ghz", "range_res_m", "max_range_m",
-                       "max_range_ideal_m", "velocity_res_ms", "max_velocity_ms"}
+                       "max_range_ideal_m", "velocity_res_ms", "max_velocity_ms",
+                       "lambda_mm", "doppler_step_ms", "vmax_full_ms", "vmax_per_tx_ms"}
     assert new["bandwidth_mhz"] == pytest.approx(old["bandwidth_mhz"] * 40.0 / 80.0)
 
 
@@ -64,7 +65,7 @@ def test_loops_and_period_edit_touch_frame_metrics_only():
     new = md(apply_params(text, {"n_loops": 50, "frame_period_ms": 200}), board)
     changed = {k for k in old if old[k] != new[k]}
     assert changed == {"n_loops", "n_chirps", "velocity_res_ms", "frame_period_ms", "frame_rate_hz", "active_ms",
-                       "duty_cycle", "bytes_per_frame", "avg_data_rate_mbps"}
+                       "duty_cycle", "bytes_per_frame", "avg_data_rate_mbps", "doppler_bins", "doppler_step_ms"}
 
 
 def test_tx_mask_edit_regenerates_chirps_on_single_chip():
