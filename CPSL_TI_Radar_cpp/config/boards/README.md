@@ -61,12 +61,19 @@ dialect starts a frame with the same 8-byte magic word, has a `{type, length}` T
 | `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade (CASCADE_PLAN). TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
 | `sdk2` | IWR1443 (mmWave SDK 1.x/2.x xWR14xx demo) | 36 B (no `subFrameNumber`) | `{u16 count, u16 xyzQFormat}`, then 12 B per point: int16 x, y, z in meters x 2^xyzQFormat (decoded per frame), plus range/Doppler bin indices and peak value | not sent | format confirmed from TI's SDK 2.1 source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); **not yet run against a real IWR1443** |
 
-**Approved compromise (`sdk2`):** the SDK 2 demo sends no velocity, SNR or noise per point.
+**Documented compromise (`sdk2`), pending user confirmation:** the SDK 2 demo sends no velocity, SNR or noise per point.
 The driver sets `Point::v`, `snr_db` and `noise_db` to NaN (not a number) on this dialect, so
 code that uses them must check with `std::isnan`. The demo does send a signed Doppler bin
 index, and `v` could be computed as bin x Doppler resolution, but the driver does not derive the
 Doppler resolution from the radar cfg yet, so it leaves `v` as NaN rather than guess. `peakVal`
 is a log magnitude, not a dB SNR, so it is not reported as `snr_db` either.
+
+**A wrong dialect fails quietly.** If the firmware on the board does not match the descriptor's
+`tlv_dialect` (for example an SDK 3 demo on a board set to `sdk2`, or the other way round), most
+frames still pass the frame checks but parse as empty point clouds, with no error or warning. To
+check, run with `runtime.log_level: "debug"` and read the `SerialStreamer: frame ...` lines: the
+`platform` word should be `0xA1443` for `sdk2`, `0xA1843` or `0xA6843` for `sdk3`, and `0x2243`
+for `mcuplus_cascade`, and frames with targets in view should show a non-zero point count.
 
 ## Skipped cfg commands
 

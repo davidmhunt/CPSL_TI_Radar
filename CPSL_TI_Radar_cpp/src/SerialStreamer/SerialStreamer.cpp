@@ -1,6 +1,7 @@
 #include "SerialStreamer.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <system_error>
@@ -124,8 +125,11 @@ bool SerialStreamer::process_next_message(void){
         }
         if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug)){
             const cpsl::radar::UartHeader & h = work_.header;
-            cpsl::radar::log_debug("SerialStreamer: frame ", h.frame_number, ", ", total, " bytes, ",
-                                   h.num_tlvs, " TLVs, ", work_.points.size(), " points");
+            //the platform word tells which demo is sending (a tlv_dialect check)
+            char platform[16];
+            std::snprintf(platform, sizeof platform, "0x%X", h.platform);
+            cpsl::radar::log_debug("SerialStreamer: frame ", h.frame_number, ", platform ", platform, ", ",
+                                   total, " bytes, ", h.num_tlvs, " TLVs, ", work_.points.size(), " points");
         }
         discard(total);
         commit(completed_at);

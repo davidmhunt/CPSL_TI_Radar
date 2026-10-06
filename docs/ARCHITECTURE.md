@@ -300,13 +300,16 @@ Without a TLV 7, `snr_db` and `noise_db` are 0 on `sdk3` and
 `mcuplus_cascade`. A frame without a TLV 1 (no detections, or detected
 objects turned off in `guiMonitor`) is an empty cloud.
 
-**Approved compromise (`sdk2`).** The SDK 2 demo sends no velocity, SNR or
+**Documented compromise (`sdk2`), pending user confirmation.** The SDK 2 demo sends no velocity, SNR or
 noise, so on the IWR1443 `Point::v`, `snr_db` and `noise_db` are NaN; check
 them with `std::isnan`. The demo does send a signed Doppler bin index, and
 `v` could be the bin times the Doppler resolution, but the driver does not
 compute the Doppler resolution from the radar cfg, so it reports NaN rather
 than guess. The format comes from TI's SDK 2.1 source
 (`docs/research/sdk2_uart_format_2026-10-05.md`); no IWR1443 has run it yet.
+A firmware that does not match `tlv_dialect` mostly yields empty clouds
+with no error; `config/boards/README.md` ("TLV dialects") says how to spot
+it from the `platform` word in the debug-level frame lines.
 
 **Buffers.** The receive buffer, the parsed frame's points, the published
 points and the consumer's `PointCloud::points` are reused: `take_frame`
