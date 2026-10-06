@@ -54,7 +54,10 @@ def run(*args, cwd=REPO):
 
 def test_fixtures_cover_every_tracked_config():
     assert len(V1_FILES) == 39
-    assert sorted(p.name for p in V1_FILES) == sorted(p.name for p in SYSTEM.glob("*.json"))
+    # configs born in v2 (no v1 form, so no migration fixture)
+    native_v2 = {"radar_0_IWR1843_SAR.json"}
+    assert sorted(p.name for p in V1_FILES) == sorted(
+        p.name for p in SYSTEM.glob("*.json") if p.name not in native_v2)
     for p in V1_FILES:
         assert not mig.is_v2(json.loads(p.read_text())), p.name
 

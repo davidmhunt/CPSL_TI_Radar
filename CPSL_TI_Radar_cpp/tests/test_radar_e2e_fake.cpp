@@ -565,3 +565,34 @@ TEST_CASE(worker_cpu_pins_the_dca_worker_thread) {
 }
 
 TEST_MAIN()
+
+TEST_CASE(sar_board_sends_calibdata_and_frame_is_3366000_bytes) {
+    // core-22: IWR1843_SAR board + the shipped SAR cfg (dataFmt 1)
+    Rig rig(load("sar", [](json& j) {
+        j["board"] = "IWR1843_SAR";
+        j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    }));
+    if (!rig.radar) return;
+    CHECK_EQ(rig.bytes_per_frame, size_t(3366000));
+    CHECK(static_cast<bool>(rig.radar->configure()));
+    CHECK_EQ(rig.cli->count("calibData 0 0 0\n"), size_t(1));  // sent, not skipped
+    CHECK_EQ(rig.cli->count("lvdsStreamCfg -1 0 1 0\n"), size_t(1));
+    rig.radar->stop();
+}
+
+TEST_CASE(sar_board_refuses_serial_stream) {
+    const std::string out = kRoot + "/sar_serial";
+    std::filesystem::create_directories(out);
+    json j;
+    {
+        std::ifstream f(dca_test::write_system_config("sar_serial", out, true));
+        j = json::parse(f);
+    }
+    j["board"] = "IWR1843_SAR";
+    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    j["serial_stream"] = {{"enabled", true}, {"port", "/dev/null-not-opened"}};
+    const std::string path = kRoot + "/sar_serial.json";
+    std::ofstream(path) << j.dump(2);
+    auto r = RadarConfig::load(path);
+    CHECK(!static_cast<bool>(r));
+}

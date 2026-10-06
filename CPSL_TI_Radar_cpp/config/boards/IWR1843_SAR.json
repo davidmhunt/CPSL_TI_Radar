@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "name": "IWR1843_SAR",
+  "sdk": "mmwave_sdk_3",
+  "cli": {
+    "baud": 115200,
+    "ack": "Done",
+    "error_tokens": [
+      "Error",
+      "not recognized"
+    ],
+    "prompt": ":/>",
+    "prompt_wait_ms": 500,
+    "cmd_timeout_ms": 100,
+    "stop_timeout_ms": 4000,
+    "start_cmd": "sensorStart",
+    "stop_cmd": "sensorStop",
+    "skip_prefixes": [
+      "%",
+      "#"
+    ]
+  },
+  "lifecycle": {
+    "config_once_per_boot": false
+  },
+  "cfg_dialect": {
+    "rx_mask_fields": [
+      1
+    ],
+    "frame_period_field": 5,
+    "skip_commands": [],
+    "required_commands": [
+      "adcbufCfg",
+      "lvdsStreamCfg",
+      "analogMonitor",
+      "calibData"
+    ],
+    "forbidden_commands": [
+      "guiMonitor",
+      "cfarCfg",
+      "multiObjBeamForming",
+      "calibDcRangeSig",
+      "clutterRemoval",
+      "compRangeBiasAndRxChanPhase",
+      "measureRangeBiasAndRxChanPhase",
+      "aoaFovCfg",
+      "cfarFovCfg",
+      "extendedMaxVelocity",
+      "configDataPort"
+    ]
+  },
+  "data_uart": {
+    "supported": false
+  },
+  "lvds": {
+    "supported": true,
+    "lanes": 2,
+    "layout": "two_lane_iq_pairs",
+    "iq_order": "q_first"
+  },
+  "dca1000": {
+    "packet_bytes": 1472,
+    "packet_delay_us": 100,
+    "fpga_timer_s": 30
+  }
+}

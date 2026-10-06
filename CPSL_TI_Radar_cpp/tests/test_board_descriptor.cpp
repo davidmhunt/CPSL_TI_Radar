@@ -573,3 +573,72 @@ TEST_CASE(data_uart_unsupported_board) {
 }
 
 TEST_MAIN()
+
+// ---------------------------------------------------------------------------
+// IWR1843_SAR descriptor (core-22 Step 3/4)
+// ---------------------------------------------------------------------------
+
+static const std::string kSarCfg = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+
+static std::string read_text(const std::string& path) {
+    std::ifstream f(path);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+TEST_CASE(sar_descriptor_differs_from_iwr1843_only_as_intended) {
+    json sar = read_json(kBoards + "/IWR1843_SAR.json");
+    json base = read_json(kBoards + "/IWR1843.json");
+    CHECK_EQ(sar["name"].get<std::string>(), std::string("IWR1843_SAR"));
+    // apply the intended differences to the stock descriptor: the rest must be identical
+    base["name"] = "IWR1843_SAR";
+    base["cli"]["stop_timeout_ms"] = 4000;
+    base["cfg_dialect"]["skip_commands"] = json::array();
+    base["cfg_dialect"]["required_commands"] = sar["cfg_dialect"]["required_commands"];
+    base["cfg_dialect"]["forbidden_commands"] = sar["cfg_dialect"]["forbidden_commands"];
+    base["data_uart"] = json{{"supported", false}};
+    CHECK(base == sar);
+
+    BoardDescriptor d = must_load("IWR1843_SAR");
+    CHECK(d.cfg_dialect.skip_commands.empty());  // calibData is sent
+    CHECK(d.cfg_dialect.required_commands == v({"adcbufCfg", "lvdsStreamCfg", "analogMonitor", "calibData"}));
+    CHECK_EQ(d.cfg_dialect.forbidden_commands.size(), size_t(11));
+    CHECK(!d.data_uart.supported);
+    CHECK(d.lvds.supported);
+    CHECK(d.lvds.iq_order == must_load("IWR1843").lvds.iq_order);
+    std::vector<std::string> lines;
+    {
+        std::istringstream in(read_text(kSarCfg));
+        for (std::string line; std::getline(in, line);)
+            if (!line.empty() && line[0] != '%') lines.push_back(line);
+    }
+    CfgCommandPlan p = filter_cfg_commands(lines, d);
+    bool calib = false;
+    for (const auto& c : p.send) calib = calib || c.rfind("calibData", 0) == 0;
+    CHECK(calib);
+    CHECK(p.skipped.empty());
+}
+
+TEST_CASE(sar_cross_check_accepts_sar_cfg_and_rejects_others) {
+    BoardDescriptor d = must_load("IWR1843_SAR");
+    CfgCheckResult ok = check(d, kSarCfg, true, false);
+    CHECK(ok.ok());
+    const std::string text = read_text(kSarCfg);
+    // stock-style cfg: forbidden commands
+    CfgCheckResult f = check(d, write_cfg("sar_stock.cfg", text + "guiMonitor -1 1 1 0 0 0 1\ncfarCfg -1 0 2 8 4 3 0 15 1\n"), true, false);
+    CHECK(any_has(f.errors, "command guiMonitor is forbidden for board IWR1843_SAR"));
+    CHECK(any_has(f.errors, "command cfarCfg is forbidden"));
+    // missing calibData
+    std::string nocal;
+    std::istringstream in(text);
+    for (std::string line; std::getline(in, line);)
+        if (line.rfind("calibData", 0) != 0) nocal += line + "\n";
+    CHECK(any_has(check(d, write_cfg("sar_nocal.cfg", nocal), true, false).errors, "required command calibData is missing"));
+    // dataFmt 2 (core-24)
+    std::string fmt2 = text;
+    const std::string a = "lvdsStreamCfg -1 0 1 0";
+    fmt2.replace(fmt2.find(a), a.size(), "lvdsStreamCfg -1 1 2 0");
+    CHECK(!check(d, write_cfg("sar_fmt2.cfg", fmt2), true, false).ok());
+    // serial stream on this board is refused
+    CHECK(!check(d, kSarCfg, false, true).ok());
+    CHECK(!check(d, kSarCfg, true, true).ok());
+}

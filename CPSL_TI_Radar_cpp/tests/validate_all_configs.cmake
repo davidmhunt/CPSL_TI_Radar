@@ -12,8 +12,8 @@
 
 file(GLOB configs "${CONFIG_DIR}/system/*.json")
 list(LENGTH configs n)
-if(n LESS 39)
-  message(FATAL_ERROR "expected at least 39 tracked system configs, found ${n}")
+if(n LESS 40)
+  message(FATAL_ERROR "expected at least 40 tracked system configs, found ${n}")
 endif()
 
 set(failed 0)
@@ -39,6 +39,25 @@ execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/front_radar
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0 OR NOT out MATCHES "skipped: +calibData 0 0 0 \\(board skip_commands\\)")
   message(FATAL_ERROR "IWR1843 --validate does not list calibData as skipped:\n${out}${err}")
+endif()
+
+# core-22: the SAR system config validates (exit 0 is covered by the glob above);
+# the same board with a stock cfg is rejected naming the forbidden command
+execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/radar_0_IWR1843_SAR.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "SAR system config failed --validate (exit ${rc}):\n${out}${err}")
+endif()
+file(REMOVE_RECURSE "${TMP_DIR}")
+file(MAKE_DIRECTORY "${TMP_DIR}")
+file(READ "${CONFIG_DIR}/system/radar_0_IWR1843_SAR.json" j)
+string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/radar/nav_configs/1843_RadVel.cfg\"")
+string(JSON j SET "${j}" board "\"${CONFIG_DIR}/boards/IWR1843_SAR.json\"")
+file(WRITE "${TMP_DIR}/sar_stock_cfg.json" "${j}")
+execute_process(COMMAND "${DRIVER}" --validate "${TMP_DIR}/sar_stock_cfg.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(rc EQUAL 0 OR NOT "${out}${err}" MATCHES "forbidden")
+  message(FATAL_ERROR "IWR1843_SAR with a stock cfg was not rejected naming a forbidden command (exit ${rc}):\n${out}${err}")
 endif()
 
 execute_process(COMMAND "${DRIVER}" --validate "${V1_FIXTURE}"
