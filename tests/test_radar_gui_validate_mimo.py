@@ -47,7 +47,7 @@ def lv(r, code):
 
 MIX = {"tx_pattern_invalid", "tx_not_in_channelcfg", "tx_pattern_not_periodic", "tx_missing_from_loop",
        "tx_loops_odd", "tx_order_convention", "simo_multi_tx", "bpm_unsupported", "subframes_unsupported",
-       "extra_profiles_ignored", "cascade_chirp_mask_ignored", "ddma_cpl_not_band_multiple"}
+       "extra_profiles_ignored", "chirps_span_profiles", "cascade_chirp_mask_ignored", "ddma_cpl_not_band_multiple"}
 
 
 def mimo_codes(r):
@@ -85,9 +85,9 @@ def test_not_periodic_pattern_is_warning_not_error():
     assert not lv(rep(tdm([1, 4, 1, 4])), "tx_pattern_not_periodic")
 
 
-def test_tx_missing_from_loop_warns():
+def test_tx_missing_from_loop_is_info():
     r = rep(tdm([1, 1], tx=5))        # channelCfg enables TX3, no chirp uses it
-    assert lv(r, "tx_missing_from_loop") == ["warning"]
+    assert lv(r, "tx_missing_from_loop") == ["info"] and r.ok
 
 
 def test_three_tx_odd_loops_warns():
@@ -178,6 +178,18 @@ def test_profile_not_used_by_the_frame_is_ignored_warning():
     assert not lv(rep(ADV, "IWR1843", "demo"), "extra_profiles_ignored")   # every profile used by a subframe
 
 
+def test_chirps_spanning_two_profiles_is_error():
+    extra = "profileCfg 1 60 7 7 40 0 0 100 1 256 8000 0 0 158\n"
+    t = edit(REPEAT, "chirpCfg 0 0", extra + "chirpCfg 0 0")
+    bad = re.sub(r"chirpCfg 1 1 0", "chirpCfg 1 1 1", t)
+    r = rep(bad)
+    assert lv(r, "chirps_span_profiles") == ["error"] and not r.ok
+    i = next(i for i in r.issues if i.code == "chirps_span_profiles")
+    assert "multiprofile" in i.message and i.confidence == "high"
+    assert not lv(rep(t), "chirps_span_profiles")      # extra profile declared but unused: warning only
+    assert not lv(rep(REPEAT), "chirps_span_profiles")
+
+
 # --- cascade / DDMA ------------------------------------------------------------------------------------
 
 def test_cascade_chirp_mask_differing_from_channelcfg_is_info():
@@ -223,4 +235,4 @@ def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
         assert r.ok, (str(p), [i.message for i in r.errors])
         seen |= {(i.level, i.code) for i in r.issues} & {(l, c) for l in ("warning", "info", "error") for c in MIX}
     # raw-ADC cfgs enable TX channels no chirp uses; 6843 ODS cfgs use the 1,2,4 order: both reported, neither an error
-    assert seen == {("warning", "tx_missing_from_loop"), ("warning", "tx_order_convention")}, seen
+    assert seen == {("info", "tx_missing_from_loop"), ("warning", "tx_order_convention")}, seen

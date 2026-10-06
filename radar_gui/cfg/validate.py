@@ -111,6 +111,14 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
             pid = cfg.chirp_profile_id(i)
             if pid is not None:
                 used.add(pid)
+    for label, a, b, _ in frames:
+        pids = {cfg.chirp_profile_id(i) for i in range(a, b + 1)} - {None}
+        if len(pids) > 1:
+            add("error", "chirps_span_profiles",
+                f"{label}: chirps {a}-{b} reference profiles {sorted(pids)}; the demo data path takes RF parameters from "
+                f"one profile per (sub)frame and rejects a frame whose chirps use more than one "
+                f"(mmwdemo_rfparser.c:788; {_M2} s2, docs/research/gui_board_limits_cascade_multiprofile.md)",
+                f"{_M2} s2", "high")
     extra = sorted(declared - used)
     if extra and used:
         add("warning", "extra_profiles_ignored",
@@ -192,9 +200,9 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
             used_tx |= x
         absent = txmask & ~used_tx
         if absent:
-            add("warning", "tx_missing_from_loop",
+            add("info", "tx_missing_from_loop",
                 f"{label}: channelCfg enables TX mask {txmask} but no chirp of the loop uses TX bit(s) {absent:#x}; "
-                f"those TX never transmit", f"{_M1} s1", "medium")
+                f"those TX never transmit (harmless: shipped hardware-run cfgs do this)", f"{_M1} s1", "medium")
         if n_tx == 3 and loops % 2:
             add("warning", "tx_loops_odd",
                 f"{label}: 3-TX pattern with odd numLoops {loops}; the range DPU de-interleaves with a stride of 6 chirps "
