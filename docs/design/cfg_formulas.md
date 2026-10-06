@@ -26,7 +26,7 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 | Range resolution | `dR = c / (2 B)` | `range_res` |
 | Max range | `Rmax = 0.9 * c * fs / (2 slope)` (halved if `fmt 0`) | `ideal`, `USABLE_IF` |
 | Velocity resolution | `dv = lambda / (2 * n_chirps * Tc)` | `vel_res` |
-| Max velocity | TDM (single chip): `vmax = lambda / (4 * chirps_per_loop * Tc)`; cascade DDMA: `vmax = lambda / (4 * Tc)` | `max_v` |
+| Max velocity | `n_TX`, `T_loop`, Doppler bins/step and `vmax` per MIMO scheme: see `mimo_modes.md` (source). Reports `vmax_full_ms` (= `max_velocity_ms`) and `vmax_per_tx_ms`; GUI headline pending user ruling | `max_v`, `vmax_full_ms`, `vmax_per_tx_ms` |
 | Azimuth resolution | `dTheta = 2 / N_az` rad (`degrees()` for deg) | `az_res` |
 | Frame rate | `rate = 1000 / period` Hz | `frame_layout()` |
 | Active time, duty | `active = n_chirps * Tc * 1e-3` (ms); `duty = active / period` | `active_ms`, `duty_cycle` |
@@ -46,8 +46,8 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 1. **Speed of light.** Code `C = 299_792_458.0` (exact). Hand calculations with `c = 3e8` differ by 0.07 % in `dR`, `Rmax`, `lambda`, `vmax`, `dv`.
 2. **0.9 factor (`USABLE_IF`).** Not derived. Textbook `Rmax = fs*c/(2*slope)`; code takes 90 % as "usable IF band", inherited from `tools/radar_viewer/cfggen.py` (empirical). Reported as `max_range_m`; un-derated is `max_range_ideal_m`. The solver applies it both ways, so a hand check against the ideal formula is off by exactly 0.9.
 3. **Range resolution uses sampled bandwidth** `B = slope*N/fs`, not the swept `slope*ramp` (`sweep_mhz`).
-4. **Max velocity multiplier is `chirps_per_loop`** in `metrics`, but `popcount(tx_mask)` in the solver. Equal for shipped TDM cfgs; differ if chirps do not map one-to-one to TX.
-5. **DDMA slow time.** `dv` uses `n_chirps = chirps_per_loop * loops` as the Doppler observation length (total active frame time; cascade: 8 chirps per loop). Unverified against the firmware.
+4. **TDM `n_TX` and `vmax`** use `n_TX*Tc` per `mimo_modes.md`, not `chirps_per_loop*Tc`. Solver still uses `popcount(tx_mask)`.
+5. **DDMA slow time.** `dv` uses `n_chirps = chirps_per_loop * loops` as the Doppler observation length (total active frame time; cascade: 8 chirps per loop). Confirmed by the cascade memo (M2 s4, `rfparserDDMA.c:786-807`).
 6. **Azimuth `2/N_az` is a boresight small-angle approximation**: `lambda / (N_az * d * cos(theta))` with `d = lambda/2`, `theta = 0`. Degrades off-boresight (`1/cos(theta)`); ignores windowing. FUTURE(gui-12): replace the uniform half-wavelength virtual array with real per-board geometry (6843 ODS/AOP, 2-chip cascade).
 7. **Real-only ADC.** Only `fmt 0` halves `Rmax` and uses 2 B/sample; any other fmt is treated as complex 4 B/sample.
 8. **`fc` and `lambda`.** Textbook uses `fc = start`; code uses the sampled-band centre `start + slope*adcStart + B/2`, so `lambda` is shorter (B = 4 GHz: `fc` shifts 2 GHz, ~2.6 %).
