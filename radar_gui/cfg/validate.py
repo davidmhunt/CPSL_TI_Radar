@@ -5,12 +5,16 @@ from dataclasses import asdict, dataclass, field
 
 from . import firmware as fwmod
 from .limits import BOARD_LIMITS, SAR_FIRMWARE_FMT2, Limit, dca1000_ceiling_mbps, dca1000_params, firmware_limits, host_limits
-from .metrics import BOARDS, Metrics, metrics
+from .metrics import BOARDS, CASCADE, Metrics, frame_layout, metrics, popcount, tdm_slots
 from .parse import Cfg, CfgError
 
 # Several shipped cfgs overshoot the nominal 81/64 GHz edge by ~0.15 MHz (slope 35 x ramp 114.29) and run fine.
 BAND_TOLERANCE_MHZ = 5.0
-REQUIRED = ("profileCfg", "chirpCfg", "frameCfg", "channelCfg")
+REQUIRED = ("profileCfg", "chirpCfg", "channelCfg")   # plus a frame: frameCfg OR advFrameCfg + subFrameCfg
+_MIMO_DOC = "docs/design/mimo_modes.md"
+_M1 = "docs/research/gui_multichirp_tdm.md"
+_M2 = "docs/research/gui_board_limits_cascade_multiprofile.md"
+_WEAK = ("unverified", "low")
 
 
 @dataclass
@@ -50,6 +54,160 @@ def _is_demo(cfg: Cfg) -> bool:
     return cfg.has("guiMonitor") or cfg.has("cfarCfg")
 
 
+def _frames(cfg: Cfg, cascade: bool) -> list[tuple[str, int, int, int]]:
+    """(label, first chirp, last chirp, loops) of the plain frame or of each advanced-frame subframe."""
+    subs = cfg.subframes
+    if subs:
+        return [(f"subframe {sf['index']}", sf["chirp_start"], sf["chirp_start"] + sf["num_chirps"] - 1,
+                 sf["num_loops"]) for sf in subs]
+    f = frame_layout(cfg, cascade)
+    return [("frame", f["start"], f["end"], f["loops"])]
+
+
+def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | None) -> list[Issue]:
+    """Per-scheme chirp-pattern, BPM, subframe and profile rules (gui-15; docs/design/mimo_modes.md section 4).
+    `mm` is the firmware's `mimo` block for `board` (None: no firmware known, only structural rules run).
+    A rule whose own confidence or whose firmware's mimo confidence is unverified/low never yields an error."""
+    out: list[Issue] = []
+    scheme = m.scheme
+    fwconf = mm["confidence"] if mm else "unverified"
+    fwsrc = mm["source"] if mm else ""
+
+    def add(level, code, msg, source, conf):
+        weak = conf in _WEAK or fwconf in _WEAK
+        if weak and level == "error":
+            level, msg = "warning", msg + f" [{'unverified' if fwconf in _WEAK else conf} rule on this firmware]"
+        out.append(Issue(level, code, msg, source, conf if conf in _WEAK else (fwconf if fwconf in _WEAK else conf)))
+
+    cascade = board == CASCADE
+    try:
+        frames = _frames(cfg, cascade)
+        seq = dict(cfg.chirp_sequence)
+    except CfgError:
+        return out
+    ch = cfg.first("channelCfg").floats()
+
+    # --- advFrameCfg / subframes
+    subs = cfg.subframes
+    if subs and mm is not None:
+        cap = mm["subframes"]
+        if cap == 0:
+            add("error", "subframes_unsupported",
+                f"advFrameCfg ({len(subs)} subframes) is not supported by this firmware on {board}"
+                + (" (DDMA chain: 'Advanced Subframe Config is not currently supported', mss_main.c:3888-3891)"
+                   if scheme == "ddma" else " (frame mode only)"), f"{_M2} s2; {fwsrc}", "high" if fwconf == "high" else fwconf)
+        elif cap is None:
+            add("warning", "subframes_unsupported", f"advFrameCfg: subframe support on {board} is not established "
+                f"for this firmware", fwsrc, "unverified")
+        elif len(subs) > cap:
+            add("error", "subframes_unsupported", f"advFrameCfg declares {len(subs)} subframes; this firmware accepts at most {cap}"
+                " (RL_MAX_SUBFRAMES, rl_sensor.h)", f"{_M2} s2; {fwsrc}", fwconf)
+
+    # --- profiles: the demo chain reads RF parameters from one profile per (sub)frame
+    declared = {int(c.floats()[0]) for c in cfg.all("profileCfg") if c.floats()}
+    used = set()
+    for _, a, b, _ in frames:
+        for i in range(a, b + 1):
+            pid = cfg.chirp_profile_id(i)
+            if pid is not None:
+                used.add(pid)
+    extra = sorted(declared - used)
+    if extra and used:
+        add("warning", "extra_profiles_ignored",
+            f"profileCfg id(s) {extra} are not used by the frame's chirps; the demo data path reads one profile per "
+            f"(sub)frame ('we support only one profile', mmwdemo_rfparser.c:788) and ignores the rest",
+            f"{_M2} s2", "high")
+
+    bpm = cfg.bpm_enabled
+    if bpm and mm is not None and not mm["bpm"]:
+        add("error", "bpm_unsupported",
+            f"bpmCfg is enabled but this firmware does not support BPM on {board} (descriptor mimo.bpm = false)",
+            f"{_M1} s2; {fwsrc}", fwconf)
+
+    if scheme == "ddma":
+        # chirp masks are overwritten by the parser; cpl should be a multiple of the Doppler band count
+        chmask = int(ch[1]) | (int(ch[4]) if len(ch) > 4 else 0)
+        for label, a, b, _ in frames:
+            diff = sorted({seq[i] for i in range(a, b + 1) if i in seq and seq[i] != chmask})
+            if diff:
+                add("info", "cascade_chirp_mask_ignored",
+                    f"{label}: chirpCfg TX mask(s) {diff} differ from channelCfg TX {chmask}; the DDMA parser overwrites "
+                    f"them with channelCfg (mmwdemo_rfparserDDMA.c:717-733), all enabled TX fire on every chirp",
+                    f"{_MIMO_DOC} s1; {_M1} s3", "high")
+            cpl = b - a + 1
+            if m.n_bands > 1 and cpl % m.n_bands:
+                add("warning", "ddma_cpl_not_band_multiple",
+                    f"{label}: {cpl} chirps per loop is not a multiple of the {m.n_bands} Doppler bands; the phase "
+                    f"pattern repeats every {m.n_bands} chirps (inferred, not enforced by the firmware; every TI cfg uses 8)",
+                    f"{_M2} s2", "low")
+        return out
+
+    # --- TDM single-chip patterns
+    txmask = int(ch[1])
+    for label, a, b, loops in frames:
+        masks = [seq[i] for i in range(a, b + 1) if i in seq]
+        cpl = b - a + 1
+        if len(masks) != cpl:
+            continue   # metrics already reports chirps with no chirpCfg
+        pc = [popcount(x) for x in masks]
+        if mm and mm["max_chirps_per_loop"] is not None and cpl > mm["max_chirps_per_loop"]:
+            add("error", "tx_pattern_invalid",
+                f"{label}: {cpl} chirps per loop exceeds the {mm['max_chirps_per_loop']} the firmware accepts "
+                f"(validChirpTxEnBits[32], mmwdemo_rfparser.c:782-800)", f"{_M1} s1; {fwsrc}", fwconf)
+        if any(x == 0 for x in masks):
+            add("error", "tx_pattern_invalid", f"{label}: a chirp enables no TX", f"{_M1} s1 (RP:522-560)", "high")
+        outside = sorted({x for x in masks if x and not x & txmask})
+        if outside:
+            add("error", "tx_not_in_channelcfg",
+                f"{label}: chirp TX mask(s) {outside} have no TX enabled in channelCfg (TX mask {txmask}); the parser "
+                f"requires (chirp mask & channelCfg TX) > 0 (mmwdemo_rfparser.c:836)", f"{_M1} s1", "high")
+        if len({(x & (x - 1)) == 0 for x in masks if x}) > 1:
+            add("error", "tx_pattern_invalid",
+                f"{label}: mixes one-TX and multi-TX chirps (masks {masks}); the parser rejects it (mmwdemo_rfparser.c:526-560)",
+                f"{_M1} s1", "high")
+            continue
+        multi = all(x > 1 and x & (x - 1) for x in masks)
+        if bpm:
+            bad = sorted({x for x in masks if x != 0b101})
+            if bad:
+                add("error", "tx_pattern_invalid",
+                    f"{label}: bpmCfg is on but chirp mask(s) {bad} are not 5 (TX1+TX3); BPM needs both azimuth TX on "
+                    f"every chirp (mmwdemo_rfparser.c:530-540)", f"{_M1} s1", "high")
+            continue
+        if multi:
+            add("info", "simo_multi_tx",
+                f"{label}: multi-TX mask {sorted(set(masks))} on every chirp without bpmCfg is SIMO: the TX transmit "
+                f"together, n_TX = 1, {m.n_rx} virtual antennas (enable bpmCfg for 2-TX BPM)",
+                f"{_M1} s1 (RP:608-616)", "high")
+            continue
+        # one TX per chirp (plain TDM): periodic with period n_TX, every TX of channelCfg present, azimuth first
+        n_tx = tdm_slots(masks, False)[0]
+        if cpl % n_tx or any(masks[i] != masks[i % n_tx] for i in range(cpl)):
+            add("warning", "tx_pattern_not_periodic",
+                f"{label}: TX pattern {masks} is not periodic with the {n_tx} TX time slot(s) per loop; the range DPU "
+                f"de-interleaves chirp k to TX k mod n_TX, so a non-cyclic pattern probably misdecodes (inferred, not tested)",
+                f"{_M1} s1/s4", "low")
+        used_tx = 0
+        for x in masks:
+            used_tx |= x
+        absent = txmask & ~used_tx
+        if absent:
+            add("warning", "tx_missing_from_loop",
+                f"{label}: channelCfg enables TX mask {txmask} but no chirp of the loop uses TX bit(s) {absent:#x}; "
+                f"those TX never transmit", f"{_M1} s1", "medium")
+        if n_tx == 3 and loops % 2:
+            add("warning", "tx_loops_odd",
+                f"{label}: 3-TX pattern with odd numLoops {loops}; the range DPU de-interleaves with a stride of 6 chirps "
+                f"(two loops), so an odd count leaves a partial stride (inferred)", f"{_M1} s1 (rangeprochwa.c:1027)", "medium")
+        first = masks[:n_tx]
+        if 0b010 in first and first[-1] != 0b010:
+            add("warning", "tx_order_convention",
+                f"{label}: TX2 (elevation) chirp is not last in the loop {first}; TI's order is azimuth first, elevation "
+                f"last (1,4,2); whether another order mislabels virtual antennas is unverified",
+                f"{_M1} s4 (experiment 2)", "low")
+    return out
+
+
 def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     """Check `cfg` against `board`'s limits; `firmware` (id) selects that firmware's limits, default: the board's."""
     if board not in BOARDS:
@@ -74,12 +232,15 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     for name in REQUIRED:
         if not cfg.has(name):
             add("structure", "missing_" + name, f"cfg has no {name}")
+    advanced = cfg.has("advFrameCfg")
+    if not cfg.has("frameCfg") and not (advanced and cfg.has("subFrameCfg")):
+        add("structure", "missing_frameCfg", "cfg has no frameCfg (nor advFrameCfg with subFrameCfg)")
     if any(i.level == "error" for i in issues):
         return Report(board, False, issues)
 
-    # argument counts per dialect (board descriptor cfg_dialect)
+    # argument counts per dialect (board descriptor cfg_dialect); an advanced-frame cfg has no frameCfg
     fc, cc = cfg.first("frameCfg"), cfg.first("channelCfg")
-    if len(fc.args) != lim["frame_cfg_args"].value:
+    if fc is not None and len(fc.args) != lim["frame_cfg_args"].value:
         add(lim["frame_cfg_args"], "frame_cfg_layout",
             f"frameCfg has {len(fc.args)} fields; {board} expects {lim['frame_cfg_args'].value}")
     if len(cc.args) != lim["channel_cfg_args"].value:
@@ -90,10 +251,14 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
 
     try:
         _fw = fwmod.get(firmware) if firmware else fwmod.default_for(board)
-        m = metrics(cfg, board, fwmod.mimo(board, _fw)["scheme"] if _fw else None)
+        mm = fwmod.mimo(board, _fw) if _fw else None
+        m = metrics(cfg, board, mm["scheme"] if mm else None)
     except CfgError as e:
         add("parse", "bad_cfg", str(e))
         return Report(board, False, issues)
+
+    # --- MIMO / chirp pattern / subframes / profiles (gui-15)
+    issues += mimo_issues(cfg, board, m, mm, _fw)
 
     # --- array sizes
     if m.n_rx > lim["n_rx"].value:
