@@ -138,13 +138,17 @@ port or socket. `--frames N` and `--duration S` end a run; `--stats` prints a ve
 `Runner` is replaced by `cpsl::radar::Radar` (`RadarConfig::load` → `Radar::open` → `configure` →
 `start` → `next_adc_frame` / `next_point_cloud` → `stop`). Calls return a `Status` instead of
 printing or throwing; messages go to a log sink filtered by `runtime.log_level`. The ADC frame
-layout is unchanged (`[rx][sample][chirp]`). Points are `Point{x,y,z,v,snr_db,noise_db}`. Link
+layout is unchanged (`[rx][sample][chirp]`, the same nested `std::vector` type). Delivery changed:
+`next_adc_frame` swaps a pooled buffer into your `AdcFrame` (no copy) and hands out every frame in
+order from a queue of `runtime.frame_queue_depth` (default 4; `1` keeps only the newest frame,
+as v1 did); frames dropped from a full queue are counted in `frames_overwritten`. Points are `Point{x,y,z,v,snr_db,noise_db}`. Link
 `CPSL_TI_Radar::driver`. [`CPSL_TI_Radar_ROS`](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
 still uses `Runner` and does not build against v2.0 until it moves to `Radar`.
 
 ### Output files
 
-`adc_data.bin` keeps its byte layout and is written to `output.dir` (the current directory when
+`adc_data.bin` keeps its byte layout (for chirp, rx, sample: int16 real then imaginary; see
+`docs/ARCHITECTURE.md` "Output files") and is written to `output.dir` (the current directory when
 unset), which the driver creates if it does not exist. The raw LVDS file `LVDS_Raw_0.bin` is only written with `output.save_raw_lvds: true`.
 
 ## ROS Integration

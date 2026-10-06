@@ -138,7 +138,7 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); no test opens a serial port. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering and the frame queue, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); no test opens a serial port. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
 
 To run the same suite under AddressSanitizer and UndefinedBehaviorSanitizer (any report fails the test), use the `asan-ubsan` preset from `CPSL_TI_Radar_cpp/` (it builds in `build-asan-ubsan/`):
 
@@ -157,6 +157,7 @@ cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --pre
 cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release -j
 ctest --test-dir build-release -C bench -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
+build-release/bench/bench_latency                              # frame complete -> next_adc_frame return, µs
 ```
 
 The `drv_*` rows (variant `(d)`) replay the same kind of stream through the driver's own `DCA1000Handler` (assembler, converter, frame publish and, for `drv_save`, `adc_data.bin`), the code the DCA worker thread runs. `drv_save` writes to a temp directory (`--tmp-dir`, default `/dev/shm`). Driver log messages go to a counting sink at `--log-level` (default `info`); the count per rep is in the "replay input" notes.
@@ -236,8 +237,16 @@ int main() {
 }
 ```
 
+`next_adc_frame` blocks until a frame is ready and returns tens of microseconds after it is
+complete. Frames come out in order from a queue of `runtime.frame_queue_depth` frames (default
+4); if you fall behind, the oldest are dropped and counted in `stats().frames_overwritten`. The
+frame is swapped into `frame.data`, not copied, and the buffer it held goes back to the driver's
+pool, so reuse one `AdcFrame` (as above) and nothing is allocated per frame. Calling `stop()` from
+another thread wakes a waiting `next_adc_frame` at once.
+
 `next_point_cloud` does the same for the serial TLV stream. `docs/ARCHITECTURE.md` lists every
-call, the stop sequence, the stall policy and the threads.
+call, the stop sequence, the stall policy and the threads, and the `adc_data.bin` layout ("Output
+files").
 
 ## Running
 
@@ -279,11 +288,12 @@ v1 -> v2 migration section).
 | `dca1000.enabled`, `.fpga_ip`, `.host_ip`, `.cmd_port`, `.data_port` | no | Raw ADC through the DCA1000. The four address fields are required when enabled; the section may be omitted when off. |
 | `dca1000.rcvbuf_bytes` | no | `SO_RCVBUF` requested for the data socket (default 67108864; see the host settings above). |
 | `output.dir` | no | Where `adc_data.bin` and `LVDS_Raw_0.bin` are written, relative to the JSON file. Unset: the current directory. The driver creates it (with its parents) when it opens the radar; `--validate` says whether it exists or will be created, and fails if a part of the path is a file or the parent is not writable. |
-| `output.save_adc_frames` | no | Write every ADC frame to `adc_data.bin` (default `false`). |
+| `output.save_adc_frames` | no | Write every ADC frame to `adc_data.bin` (default `false`): `bytes_per_frame` per frame, for chirp, rx, sample the int16 real then imaginary part, no header (layout unchanged since v1; one write per frame). |
 | `output.save_raw_lvds` | no | Write the raw LVDS payload to `LVDS_Raw_0.bin` (default `false`; only needed to debug packet loss). |
 | `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`: the least severe message printed. `debug` adds a DCA1000 counter line once a second (the v1 `"verbose": true` printed a block per frame), every CLI command and reply, and each skipped cfg command. |
 | `runtime.stall_timeout_ms` | no | `0` (default) is off. Above 0: when no frame arrives for that many ms while streaming, the driver warns and the run stops (instead of after 2 s without frames). |
-| `runtime.frame_queue_depth`, `.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults 4, `null`, `null`, 99, 80) but not applied yet. |
+| `runtime.frame_queue_depth` | no | Completed ADC frames waiting for `next_adc_frame` (1-1024, default 4). When the queue is full the oldest frame is dropped and counted in `frames_overwritten` (`overwritten=` in `--stats`); `1` keeps only the latest frame. Each slot holds one frame buffer, allocated when the radar is opened. Dropped frames are still in `adc_data.bin`. |
+| `runtime.rx_cpu`, `.worker_cpu`, `.rx_priority`, `.worker_priority` | no | **Reserved**: validated (defaults `null`, `null`, 99, 80) but not applied yet. |
 
 At least one of `serial_stream` and `dca1000` must be enabled.
 

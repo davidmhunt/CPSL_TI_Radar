@@ -46,10 +46,11 @@ sink.
 
 **Stop and shutdown.** SIGINT/SIGTERM only set an atomic flag
 (`src/utilities/StopSignal`, `SA_RESETHAND`: a second Ctrl-C terminates).
-`main` polls it, leaves its frame loop and calls `Radar::stop()`, then
+`main` checks it on every pass of its loop, leaves the loop and calls `Radar::stop()`, then
 returns normally. `stop()` is idempotent and safe from several threads: one
 lifecycle mutex, so a second caller waits for the first and gets the same
-`Status`. It joins the worker threads, then `DCA1000Handler::stop()`
+`Status`. It first wakes a consumer blocked in `next_adc_frame`
+(`Code::stopped`), then joins the worker threads, then `DCA1000Handler::stop()`
 (packet source: RX thread, `recordStop`; then flush and close
 `adc_data.bin` / `LVDS_Raw_0.bin`), then `sensorStop`. Every step runs even
 if an earlier one failed. `CLIController` sends over a
@@ -85,7 +86,8 @@ stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
 serial: valid TLV frames). `packets` … `skipped` are the `FrameAssembler`
 counters (see "DCA1000 UDP packet format"), sampled at each completed frame
 and at stop. `overrun` is `rx_overrun_count` (RX ring full), `overwritten`
-counts frames replaced before `next_*` took them (latest frame wins),
+counts frames dropped before `next_*` took them (DCA: the oldest frame of a
+full frame queue, see "DCA1000 RX path"; serial: the previous TLV frame),
 `rcvbuf` is the `SO_RCVBUF` the kernel granted, `missed` counts gaps in the
 demo's frame number.
 
@@ -151,7 +153,10 @@ reader thread; `DCA1000Socket` adds the RX thread. Serial baud handling
 - **RX thread** (SCHED_RR 99): tight `recvfrom` loop pushing raw 1472-byte
   packets into a 512-slot lock-free ring buffer.
 - **Worker thread** (`Radar`'s DCA worker): pops packets, places them by byte
-  offset (`FrameAssembler`), converts the ADC cube, does file I/O.
+  offset (`FrameAssembler`), converts the ADC cube into a pooled buffer,
+  queues it for the consumer, then writes `adc_data.bin`. An exception in
+  the loop ends the stream, not the process: it is logged and
+  `next_adc_frame` returns `Code::io_error` with the reason.
 - `SO_RCVBUF` requests `dca1000.rcvbuf_bytes` (default 64 MB; needs
   `net.core.rmem_max` raised); data socket timeout 500 ms.
 - `dropped_packets`, `dropped_packet_events`, `late packets`, `duplicate
@@ -161,14 +166,23 @@ reader thread; `DCA1000Socket` adds the RX thread. Serial baud handling
   most once a second. Nothing on the per-packet or per-frame path logs or
   prints (design P10).
 
-The worker converts a completed frame outside any lock, then publishes the
-cube and the `new_frame_available` flag together under one mutex, so the
-flag is never visible before the cube it announces (core-11 G2;
-`test_dca_frame_publish`). `Radar::next_adc_frame` polls every 5 ms and
-copies the cube (with its index, missing-byte count and completion time)
-and clears the flag under the same mutex.
-`DCA1000Handler::configure_pipeline()` + `ingest_packet()` run this path
-without a socket (tests).
+**Frame queue** (core-14 P7, design D10). Completed frames wait in a
+drop-oldest single-producer queue of `runtime.frame_queue_depth` frames
+(default 4; `1` keeps only the newest frame). The worker converts a frame
+outside any lock into its work buffer, then, under one mutex, swaps that
+buffer into the queue's next slot; if the queue is full it first drops the
+oldest frame and counts it in `frames_overwritten`. Only after that does it
+notify a condition variable, so a frame is never visible before its cube
+(core-11 G2) and a woken consumer always finds it (`test_dca_frame_publish`).
+`Radar::next_adc_frame` blocks on that condition variable (it returns tens
+of µs after the frame is published, where the core-13 timer loop cost
+about 3 ms on average) and takes
+the oldest frame by swapping buffers with the caller's `AdcFrame`. Frames
+therefore come out in order and once each; every frame a consumer did not
+get is counted in `frames_overwritten` (`test_radar_e2e_fake` races a
+consumer against the producer). `stop()` wakes a waiting consumer at once
+(`Code::stopped`). `DCA1000Handler::configure_pipeline()` + `ingest_packet()`
+run this path without a socket (tests, `bench_pipeline` `drv_*` rows).
 
 ## DCA1000 UDP packet format
 
@@ -197,12 +211,39 @@ with zeros / never emitted.
 
 ## ADC cube layout
 
-Indexed `[Rx channel][sample][chirp]` as `complex<int16_t>`. The board
-descriptor's `lvds.layout` picks the decoder in `ADCCubeConverter`:
+Indexed `[Rx channel][sample][chirp]` as `complex<int16_t>`: `AdcFrame::data`
+is the same nested `std::vector` type as in v1 (design D5; core-14 kept it).
+The board descriptor's `lvds.layout` picks the decoder in `ADCCubeConverter`:
 `lane_per_rx` (interleaved, IWR1443) or `two_lane_iq_pairs`
 (non-interleaved, IWR1843/6843), and `lvds.iq_order` says which component
 comes first. With SDK 3+ and a single RX channel, use an even number of ADC
 samples.
+
+**Buffers (core-14 P2, P3).** The cubes are a pool of nested buffers,
+allocated when the radar is opened: one per frame-queue slot plus the
+worker's work buffer. They are swapped, never copied: the converter writes
+a frame into the work buffer in place, the work buffer is swapped into the
+queue, and `next_adc_frame` swaps the queued buffer with the one the caller
+passes in (which joins the pool). Reuse one `AdcFrame` and nothing is
+allocated per frame (`bench_pipeline` measures 0 allocations/frame). The
+converter makes one pass over the packed bytes in output order: for each
+`[rx][sample]` row it walks the chirps, so writes are sequential and only
+the reads stride (0.19 ns/byte on an Intel N150, against 1.6 for the v1
+four-pass converter). A frame shorter than its shape reads as zeros.
+
+### Output files
+
+With `output.save_adc_frames`, every completed frame (including frames the
+consumer never took) is appended to `adc_data.bin` in `output.dir`: for
+chirp, for rx, for sample, the int16 real part then the int16 imaginary
+part, host byte order (little-endian on x86/ARM). That is
+`bytes_per_frame` per frame, no header; the layout is unchanged since v1.
+The frame is written with **one** `write()` from a staging buffer that the
+converter fills in file order in one sequential pass (core-14 P9; v1 made
+two 2-byte writes per sample, about 252 000 per frame). The write happens
+after the frame is queued, so the consumer does not wait for the disk. With
+`output.save_raw_lvds`, `LVDS_Raw_0.bin` gets every packet's payload as it
+arrives (no reordering or zero fill). `stop()` flushes and closes both.
 
 ## Configuration
 
