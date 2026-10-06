@@ -215,18 +215,27 @@ async function loadFirmware(board, want) {
 }
 function showFirmware() {
   const f = C.fw.find(x => x.id === $('cFw').value);
-  if (!f) { $('cOutputs').textContent = ''; return; }
+  if (!f) { $('cOutputs').textContent = ''; $('cScheme').textContent = ''; return; }
   const o = [f.outputs.tlv && 'TLV point cloud (serial)', f.outputs.lvds && 'raw ADC (LVDS \u2192 DCA1000)'].filter(Boolean);
   $('cOutputs').textContent = 'Outputs: ' + o.join(' / ') + ' \u2014 ' + f.description;
+  $('cScheme').textContent = schemeText(f.mimo);
   $('sSerial').checked = f.system_enables.serial; $('sDca').checked = f.system_enables.dca1000;
   dcaVis();
+}
+// Read-only MIMO scheme line (the full panel is gui-16).
+function schemeText(m) {
+  if (!m) return '';
+  if (m.scheme === 'ddma') return 'MIMO: DDMA \u2014 all TX every chirp, phase-coded (view-only)';
+  return 'MIMO: TDM' + (m.bpm ? ' (BPM available)' : '');
 }
 // Best firmware for a loaded cfg's flavour among the board's list (falls back to the default).
 function inferFirmware(text) {
   const demo = /^\s*(guiMonitor|cfarCfg)\b/m.test(text);
   const lv = /^\s*lvdsStreamCfg\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/m.exec(text);
   const lvds = demo && lv && (lv[3] !== '0' || lv[4] === '1');
-  const f = C.fw.find(f => demo ? (f.outputs.tlv && f.outputs.lvds === !!lvds) : !f.outputs.tlv);
+  // demo cfgs: prefer a TLV firmware whose LVDS output matches the cfg, else any TLV one
+  const f = demo ? (C.fw.find(f => f.outputs.tlv && f.outputs.lvds === !!lvds) || C.fw.find(f => f.outputs.tlv))
+                 : C.fw.find(f => !f.outputs.tlv);
   return f ? f.id : null;
 }
 function dcaVis() { $('dcaFields').style.opacity = $('sDca').checked ? 1 : .4; }
