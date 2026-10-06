@@ -12,6 +12,7 @@
 #include "dca_test_support.hpp"
 #include "DCA1000Handler.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -130,6 +131,29 @@ TEST_CASE(polling_consumer_never_gets_a_stale_or_torn_frame) {
     CHECK_EQ(torn, 0);
     CHECK_EQ(last, frames);
     CHECK(received > 1);
+}
+
+TEST_CASE(frames_are_swapped_through_a_pool_not_copied) {
+    // design P2: a consumer that keeps reusing one Cube sees only the pool's
+    // few buffers come back (swapped, never copied or reallocated)
+    Fixture f("publish_pool");
+    CHECK(f.h.configure_pipeline(f.sys, f.radar));
+    Cube out;  // empty: it joins the pool on the first take and is reshaped once
+    std::vector<const void*> seen;
+    for (int k = 0; k < 12; k++) {
+        f.push_frame(static_cast<uint64_t>(k), static_cast<uint16_t>(k + 1));
+        uint64_t index = 0;
+        size_t missing = 0;
+        std::chrono::steady_clock::time_point at;
+        CHECK(f.h.take_frame(out, index, missing, at));
+        CHECK_EQ(index, static_cast<uint64_t>(k));
+        CHECK_EQ(cube_tag(out), k + 1);
+        const void* p = out.empty() || out[0].empty() ? nullptr : out[0][0].data();
+        if (std::find(seen.begin(), seen.end(), p) == seen.end()) seen.push_back(p);
+    }
+    // the work buffer, the published slot and the consumer's own buffer
+    std::cout << "    distinct buffers seen by the consumer: " << seen.size() << std::endl;
+    CHECK(seen.size() <= 3);
 }
 
 TEST_CASE(debug_status_is_periodic_not_per_frame_or_per_packet) {

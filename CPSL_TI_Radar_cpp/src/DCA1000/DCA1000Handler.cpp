@@ -8,7 +8,6 @@
  * @brief Default constructor (un-initialized)
  */
 DCA1000Handler::DCA1000Handler():
-    new_frame_available(false),
     frame_mutex(),
     system_config_reader(),
     radar_config_reader(),
@@ -22,9 +21,7 @@ DCA1000Handler::DCA1000Handler():
     save_adc_frames(false),
     save_raw_lvds(false),
     adc_cube_out_file(nullptr),
-    raw_lvds_out_file(nullptr),
-    adc_data_cube(),
-    latest_frame_byte_buffer()
+    raw_lvds_out_file(nullptr)
 {}
 
 /**
@@ -182,34 +179,34 @@ void DCA1000Handler::ingest_packet(const uint8_t* data, int len){
  */
 bool DCA1000Handler::check_new_frame_available(){
     std::lock_guard<std::mutex> lock(frame_mutex);
-    return new_frame_available;
+    return count_ > 0;
 }
 
-/**
- * @brief Get the latest adc data cube and set the new_frame_available variable to false
- * 
- * @return std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> 
- */
-std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> DCA1000Handler::get_latest_adc_cube()
+DCA1000Handler::Cube DCA1000Handler::get_latest_adc_cube()
 {
-    //copy the cube and clear the flag under the one lock the producer publishes
-    //with, so a frame published in between is never lost or delivered stale
-    std::lock_guard<std::mutex> lock(frame_mutex);
-    new_frame_available = false;
-    return adc_data_cube;
+    Cube cube;
+    uint64_t index = 0;
+    size_t missing = 0;
+    std::chrono::steady_clock::time_point at;
+    take_frame(cube, index, missing, at);
+    return cube;
 }
 
 bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                                 std::chrono::steady_clock::time_point& completed_at){
+    //take the frame under the one lock the producer publishes with, so a
+    //frame published in between is never lost or delivered stale
     std::lock_guard<std::mutex> lock(frame_mutex);
-    if(!new_frame_available){
+    if(count_ == 0){
         return false;
     }
-    new_frame_available = false;
-    out = adc_data_cube;
-    index = latest_index_;
-    missing_bytes = latest_missing_;
-    completed_at = latest_completed_at_;
+    Slot& s = queue_[head_];
+    out.swap(s.cube);  //the caller's old buffer stays in the slot as a free buffer
+    index = s.index;
+    missing_bytes = s.missing;
+    completed_at = s.completed_at;
+    head_ = (head_ + 1) % queue_.size();
+    count_ -= 1;
     return true;
 }
 
@@ -227,18 +224,26 @@ void DCA1000Handler::init_buffers()
         num_rx_channels = radar_config_reader.get_num_rx_antennas();
 
         //configure processing of completed frames
-        latest_frame_byte_buffer = std::vector<uint8_t>(bytes_per_frame, 0);
-        new_frame_available = false;
         received_frames = 0;
 
-        //adc_cube buffer — indexed by [Rx channel, sample, chirp]
-        adc_data_cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>(
+        //the frame buffer pool, allocated once here: the work buffer and one
+        //published slot, each indexed by [Rx channel, sample, chirp]
+        const Cube shaped(
             num_rx_channels, std::vector<std::vector<std::complex<std::int16_t>>>(
                 samples_per_chirp, std::vector<std::complex<std::int16_t>>(
                     chirps_per_frame, std::complex<std::int16_t>(0, 0)
                 )
             )
         );
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            work_ = Slot();
+            work_.cube = shaped;
+            queue_.assign(1, Slot());
+            queue_[0].cube = shaped;
+            head_ = 0;
+            count_ = 0;
+        }
 
         //hold a frame open for a few packets past its end so a reordered packet can still land
         assembler_.configure(bytes_per_frame,
@@ -294,26 +299,38 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
     //increment the frame tracking
     received_frames += 1;
 
-    //convert outside the lock, then publish: the cube and its flag change
-    //together under frame_mutex, so the flag is never visible before its cube
-    Cube cube = converter_.convert(assembler_.get_frame_bytes());
+    //convert in place into the work buffer, outside the lock (only this
+    //thread touches work_)
+    converter_.convert(assembler_.get_frame_bytes(), work_.cube);
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    work_.index = index;
+    work_.missing = missing_bytes;
+    work_.completed_at = now;
+
+    //the consumer may take the buffer as soon as it is published, so the file
+    //gets it first
+    if(save_adc_frames){
+        write_adc_data_cube_to_file(work_.cube);
+    }
 
     if(publish_hook_){
         publish_hook_();
     }
 
-    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    //publish: swap the work buffer into a slot under frame_mutex, so a frame
+    //is never visible before its cube; the slot's previous (free or
+    //overwritten) buffer becomes the next work buffer
     {
         std::lock_guard<std::mutex> lock(frame_mutex);
-        adc_data_cube.swap(cube);
-        if(new_frame_available){
-            //latest wins: the previous frame was never taken
+        if(count_ == queue_.size()){
+            //the oldest published frame was never taken: drop it
+            head_ = (head_ + 1) % queue_.size();
+            count_ -= 1;
             stats_.frames_overwritten += 1;
         }
-        new_frame_available = true;
-        latest_index_ = index;
-        latest_missing_ = missing_bytes;
-        latest_completed_at_ = now;
+        const size_t tail = (head_ + count_) % queue_.size();
+        std::swap(queue_[tail], work_);
+        count_ += 1;
         stats_.assembler = assembler_.get_stats();
         stats_.frames = received_frames;
     }
@@ -325,11 +342,6 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
     if(cpsl::radar::log_enabled(cpsl::radar::LogLevel::debug) && now - last_status_ >= kStatusPeriod){
         last_status_ = now;
         print_status();
-    }
-
-    //only this thread writes adc_data_cube, so reading it here needs no lock
-    if(save_adc_frames){
-        write_adc_data_cube_to_file();
     }
 }
 
@@ -362,7 +374,7 @@ bool DCA1000Handler::init_out_file(){
     return true;
 }
 
-void DCA1000Handler::write_adc_data_cube_to_file(void){
+void DCA1000Handler::write_adc_data_cube_to_file(const Cube& adc_data_cube){
     
     //initialize real and complex values
     std::int16_t real = 0;

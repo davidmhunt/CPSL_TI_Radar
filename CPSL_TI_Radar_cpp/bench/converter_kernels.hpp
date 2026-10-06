@@ -45,18 +45,19 @@ public:
     virtual const void* data_ptr() const = 0;  // for the optimizer barrier
 };
 
-// (a) today's converter, unchanged, called the way DCA1000Handler calls it:
-//     adc_data_cube = converter_.convert(assembler_.get_frame_bytes());
+// (a) the driver's ADCCubeConverter, called the way DCA1000Handler calls it:
+//     converter_.convert(assembler_.get_frame_bytes(), work_.cube);
+//     into a reused (pooled) buffer (core-14 P2)
 class TodayKernel : public Kernel {
 public:
     const char* id() const override { return "a"; }
-    const char* label() const override { return "today ADCCubeConverter"; }
+    const char* label() const override { return "driver ADCCubeConverter"; }
     void configure(const FrameShape& s) override {
         conv_.configure(s.rx, s.samples, s.chirps, cpsl::radar::LvdsLayout::two_lane_iq_pairs,
                         cpsl::radar::IqOrder::q_first);  // IWR1843 descriptor
         out_ = NestedCube(s.rx, std::vector<std::vector<Sample>>(s.samples, std::vector<Sample>(s.chirps)));
     }
-    void convert(const std::vector<uint8_t>& b) override { out_ = conv_.convert(b); }
+    void convert(const std::vector<uint8_t>& b) override { conv_.convert(b, out_); }
     Sample at(size_t r, size_t s, size_t c) const override { return out_[r][s][c]; }
     const void* data_ptr() const override { return &out_; }
 

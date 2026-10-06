@@ -29,8 +29,10 @@ namespace cpsl {
 namespace radar {
 
 // One raw-ADC frame from the DCA1000. `data` is indexed [rx][sample][chirp],
-// as in v1 (design D5). Each call to next_adc_frame copies into it, reusing
-// its buffers once they have the frame's shape.
+// as in v1 (design D5). next_adc_frame swaps a pooled buffer into `data`
+// (no copy) and the buffer `data` held goes back to the driver's pool, so
+// keep reusing the same AdcFrame: after the first frames nothing is
+// allocated per frame.
 struct AdcFrame {
     uint64_t index = 0;                                 // stream offset / bytes per frame
     std::chrono::steady_clock::time_point completed_at;  // when the last byte was placed

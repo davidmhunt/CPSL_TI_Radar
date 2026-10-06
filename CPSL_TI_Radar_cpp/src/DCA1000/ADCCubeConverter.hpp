@@ -16,7 +16,9 @@
 //   q_first (design §1; core-17 settles it from a bench capture).
 //
 // Call configure() once after the radar parameters are known, then convert()
-// for each received frame.
+// for each received frame. convert(bytes, out) writes into a caller-owned
+// (pooled) cube; it is (re)shaped only if its shape is wrong, so a reused
+// buffer is not reallocated.
 
 #include <vector>
 #include <complex>
@@ -33,8 +35,15 @@ public:
                    size_t chirps_per_frame, cpsl::radar::LvdsLayout layout,
                    cpsl::radar::IqOrder iq_order);
 
-    // Returns the filled ADC cube for the given frame bytes.
+    // Fill `out` (every element) with the given frame bytes.
+    void convert(const std::vector<uint8_t>& frame_bytes, ADCCube& out);
+
+    // Convenience: a new cube filled with the given frame bytes (allocates).
     ADCCube convert(const std::vector<uint8_t>& frame_bytes);
+
+    // Give `cube` the configured [rx][sample][chirp] shape; no allocation
+    // when it already has it.
+    void shape(ADCCube& cube) const;
 
 private:
     size_t num_rx_channels_ = 0;
@@ -42,7 +51,6 @@ private:
     size_t chirps_per_frame_ = 0;
     cpsl::radar::LvdsLayout layout_ = cpsl::radar::LvdsLayout::two_lane_iq_pairs;
     cpsl::radar::IqOrder iq_order_ = cpsl::radar::IqOrder::q_first;
-    ADCCube cube_;
 
     std::vector<std::int16_t> convert_from_bytes_to_ints(
         const std::vector<uint8_t>& in_vector);
@@ -51,8 +59,8 @@ private:
     std::vector<std::complex<std::int16_t>> interleave_data(
         std::vector<std::vector<std::int16_t>>& in_vector);
 
-    void fill_interleaved(const std::vector<uint8_t>& frame_bytes);
-    void fill_noninterleaved(const std::vector<uint8_t>& frame_bytes);
+    void fill_interleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube);
+    void fill_noninterleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube);
 };
 
 #endif // ADCCUBECONVERTER_H

@@ -183,4 +183,38 @@ TEST_CASE(configure_sizes_cube_before_first_frame) {
     CHECK(cube[2][7][1] == Cx(0, 0));
 }
 
+TEST_CASE(convert_into_a_reused_buffer_keeps_its_storage) {
+    // design P2: the driver converts into pooled cubes; a correctly shaped
+    // buffer is filled in place (same storage), a wrongly shaped one is
+    // reshaped once
+    for (int layout = 0; layout < 2; layout++) {
+        ADCCubeConverter conv;
+        const bool two_lane = layout == 0;
+        if (two_lane) conv.configure(4, 8, 3, IWR18_68_LVDS);
+        else conv.configure(2, 5, 4, IWR1443_LVDS);
+        const size_t rx = two_lane ? 4 : 2, samples = two_lane ? 8 : 5, chirps = two_lane ? 3 : 4;
+        auto stream = [&](int salt) {
+            return two_lane ? noninterleaved_stream(rx, samples, chirps, salt)
+                            : interleaved_stream(rx, samples, chirps, salt);
+        };
+        ADCCubeConverter::ADCCube cube;  // empty: the first convert shapes it
+        conv.convert(stream(0), cube);
+        check_cube(cube, rx, samples, chirps, 0);
+        std::vector<const Cx*> storage;
+        for (const auto& r : cube)
+            for (const auto& s : r) storage.push_back(s.data());
+        conv.convert(stream(5), cube);
+        check_cube(cube, rx, samples, chirps, 5);
+        size_t i = 0;
+        bool same = true;
+        for (const auto& r : cube)
+            for (const auto& s : r) same = same && s.data() == storage[i++];
+        CHECK(same);
+        // a buffer of another shape (e.g. handed back by a consumer) is reshaped
+        ADCCubeConverter::ADCCube odd(1, std::vector<std::vector<Cx>>(2, std::vector<Cx>(9, Cx(7, 7))));
+        conv.convert(stream(3), odd);
+        check_cube(odd, rx, samples, chirps, 3);
+    }
+}
+
 TEST_MAIN()

@@ -13,27 +13,37 @@ void ADCCubeConverter::configure(size_t num_rx, size_t samples_per_chirp,
     chirps_per_frame_  = chirps_per_frame;
     layout_            = layout;
     iq_order_          = iq_order;
-    cube_ = ADCCube(
-        num_rx, std::vector<std::vector<std::complex<std::int16_t>>>(
-            samples_per_chirp, std::vector<std::complex<std::int16_t>>(
-                chirps_per_frame, std::complex<std::int16_t>(0, 0)
-            )
-        )
-    );
+}
+
+void ADCCubeConverter::shape(ADCCube& cube) const {
+    // resize() to the current size is a no-op, so a correctly shaped buffer
+    // is never reallocated
+    cube.resize(num_rx_channels_);
+    for (auto& rx : cube) {
+        rx.resize(samples_per_chirp_);
+        for (auto& s : rx) s.resize(chirps_per_frame_);
+    }
+}
+
+void ADCCubeConverter::convert(const std::vector<uint8_t>& frame_bytes, ADCCube& out)
+{
+    shape(out);
+    switch (layout_) {
+        case LvdsLayout::lane_per_rx:
+            fill_interleaved(frame_bytes, out);
+            break;
+        case LvdsLayout::two_lane_iq_pairs:
+            fill_noninterleaved(frame_bytes, out);
+            break;
+    }
 }
 
 ADCCubeConverter::ADCCube ADCCubeConverter::convert(
     const std::vector<uint8_t>& frame_bytes)
 {
-    switch (layout_) {
-        case LvdsLayout::lane_per_rx:
-            fill_interleaved(frame_bytes);
-            break;
-        case LvdsLayout::two_lane_iq_pairs:
-            fill_noninterleaved(frame_bytes);
-            break;
-    }
-    return cube_;
+    ADCCube cube;
+    convert(frame_bytes, cube);
+    return cube;
 }
 
 std::vector<std::int16_t> ADCCubeConverter::convert_from_bytes_to_ints(
@@ -87,7 +97,7 @@ std::vector<std::complex<std::int16_t>> ADCCubeConverter::interleave_data(
 
 // lane_per_rx (IWR1443, SDK 2): interleaved format; the two components are
 // stored in separate Rx-grouped rows (first group real when i_first, the v1 behaviour)
-void ADCCubeConverter::fill_interleaved(const std::vector<uint8_t>& frame_bytes)
+void ADCCubeConverter::fill_interleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube_)
 {
     std::vector<std::int16_t> adc_ints = convert_from_bytes_to_ints(frame_bytes);
     std::vector<std::vector<std::int16_t>> reshaped = reshape_to_2D(
@@ -107,7 +117,7 @@ void ADCCubeConverter::fill_interleaved(const std::vector<uint8_t>& frame_bytes)
 }
 
 // two_lane_iq_pairs (IWR1843 / IWR6843, SDK 3+): non-interleaved format, I/Q pairs on 2 lanes
-void ADCCubeConverter::fill_noninterleaved(const std::vector<uint8_t>& frame_bytes)
+void ADCCubeConverter::fill_noninterleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube_)
 {
     std::vector<std::int16_t> adc_ints = convert_from_bytes_to_ints(frame_bytes);
     std::vector<std::vector<std::int16_t>> reshaped = reshape_to_2D(adc_ints, 4);

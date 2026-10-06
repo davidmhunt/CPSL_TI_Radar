@@ -25,12 +25,17 @@
  * (FrameAssembler), converted to the [rx][sample][chirp] cube
  * (ADCCubeConverter), published to the consumer and written to
  * adc_data.bin / LVDS_Raw_0.bin. This class is the only writer of those files.
+ *
+ * Frame buffers (design P2): the cubes are a pool of nested
+ * [rx][sample][chirp] buffers that are reused and swapped, never copied. The
+ * worker converts each frame in place into its work buffer, then swaps that
+ * buffer into the published slot (the slot's old buffer becomes the next
+ * work buffer). take_frame() swaps the published buffer with the caller's,
+ * so the caller's previous buffer goes back to the pool.
  */
 class DCA1000Handler {
 //variables
 public:
-    bool new_frame_available;
-
     using Cube = std::vector<std::vector<std::vector<std::complex<std::int16_t>>>>;
 
     //counters, snapshotted when each frame is published and at stop()
@@ -42,8 +47,7 @@ public:
 
 private:
 
-    //guards adc_data_cube, new_frame_available and the published frame's
-    //index/missing/time/stats together (published as one)
+    //guards the published slots (queue_, head_, count_) and stats_ together
     std::mutex frame_mutex;
 
     //tests only: runs after a frame is converted, before it is published
@@ -76,14 +80,22 @@ private:
     std::shared_ptr<std::ofstream> adc_cube_out_file;
     std::shared_ptr<std::ofstream> raw_lvds_out_file;
 
-    //assembling the adc data cube
-    //NOTE: indexed by [Rx channel, sample, chirp]
-    Cube adc_data_cube;
-
-    //the published frame (under frame_mutex)
-    uint64_t latest_index_ = 0;
-    size_t latest_missing_ = 0;
-    std::chrono::steady_clock::time_point latest_completed_at_{};
+    //one pooled frame buffer and the frame it holds
+    struct Slot {
+        Cube cube;                 //indexed by [Rx channel, sample, chirp]
+        uint64_t index = 0;        //stream offset / bytes_per_frame
+        size_t missing = 0;        //zero-filled bytes
+        std::chrono::steady_clock::time_point completed_at{};
+    };
+    //the frame being converted (worker thread only)
+    Slot work_;
+    //published frames, oldest at head_ (under frame_mutex). One slot: the
+    //latest frame wins and an untaken frame it replaces is counted in
+    //Stats::frames_overwritten. Slots outside [head_, head_ + count_) hold
+    //free buffers.
+    std::vector<Slot> queue_;
+    size_t head_ = 0;
+    size_t count_ = 0;
     Stats stats_;
     //steady_clock time (ns since its epoch) of the last completed frame; 0 = none yet
     std::atomic<int64_t> last_frame_ns_{0};
@@ -95,9 +107,6 @@ private:
 
     //frame assembly (sequence checking, drop detection, frame buffering)
     FrameAssembler assembler_;
-
-    //processing completed frames
-    std::vector<uint8_t> latest_frame_byte_buffer; //most recently captured complete frame byte buffer
 
 //functions
 public:
@@ -136,11 +145,14 @@ public:
     //pop one packet (waits up to 500 ms) and ingest it; false if none arrived
     bool process_next_packet();
 
-    //checking for new frame availability
+    //true if a published frame is waiting for take_frame()
     bool check_new_frame_available();
+    //tests: take the published frame (as take_frame) and return it; an empty
+    //cube if there is none
     Cube get_latest_adc_cube();
-    //the published frame, if it is new: copied into `out` with its index,
-    //missing (zero-filled) byte count and completion time; clears the flag
+    //the published frame, if there is one: swapped into `out` (no copy; the
+    //buffer `out` held goes back to the pool) with its index, missing
+    //(zero-filled) byte count and completion time
     bool take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                     std::chrono::steady_clock::time_point& completed_at);
     Stats get_stats();
@@ -158,7 +170,7 @@ private:
 
     //handling files
     bool init_out_file();
-    void write_adc_data_cube_to_file();
+    void write_adc_data_cube_to_file(const Cube& cube);
     bool close_output_files();
 };
 
