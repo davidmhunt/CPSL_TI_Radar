@@ -88,6 +88,13 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 - The `flash` compose service bind-mounts `/dev` so ports that
   re-enumerate after a power-cycle stay visible.
 
+## Bench status (iwr1843_sar_lvds)
+
+- Image sha256 `53948f4d20ca501490dd3d1dbe48229622af5346914dfe33daec33980864267a` flashed 2026-10-06 via `./fw flash` (bench-confirmed).
+- Verified at the bench: Set A + 10 min no-reflector soak, 299,880 chirps, 0 gaps, 0 missing, 6.66 MB/s.
+- NOT yet verified (firmware-18, needs reflector + GUI): phase continuity, tuned gain/HPF point, boundary steps/Tb, ADC full scale, I/Q order, saturation-vs-gain.
+- Tools (`./bench`, from `firmware_dev/`): long, restart, chan, finite, start0, adc, fmt4, fmt1, bsize, bytes, late, irq, tune, sat, soak, endurance, tb.
+
 ## Open v2.0 items
 
 - Cascade TI binaries: `.gitignore` still has exceptions for `.aer5f`/`.ae66`/`.appimage`
