@@ -224,3 +224,125 @@ def test_shipped_cfg_parses_and_validates(path):
     assert rep.metrics is not None, [i.message for i in rep.issues]
     # shipped cfgs run on hardware: any error here is either a real cfg problem or a wrong rule
     assert rep.ok, [i.message for i in rep.errors]
+
+
+# ---------------------------------------------------------------------------------------------
+# generate() (gui-02 Step 2)
+
+import time
+
+from radar_gui.cfg import generate
+
+GEN_CASES = [("IWR1443", "tlv"), ("IWR1443", "raw"), ("IWR1843", "tlv"), ("IWR1843", "lvds"),
+             ("IWR1843", "raw"), ("IWR6843", "tlv"), ("IWR6843", "lvds"), ("AWR2243_CASCADE", "tlv")]
+TYPICAL = [dict(max_range_m=10, max_velocity_ms=5, range_res_m=0.1, frame_rate_hz=10),
+           dict(max_range_m=20, max_velocity_ms=8, range_res_m=0.15, frame_rate_hz=20),
+           dict(max_range_m=5, max_velocity_ms=3, frame_rate_hz=5)]
+
+
+@pytest.mark.parametrize("board,mode", GEN_CASES)
+@pytest.mark.parametrize("targets", TYPICAL)
+def test_generate_round_trips_targets_and_validates_clean(board, mode, targets):
+    r = generate(board, dict(targets, output_mode=mode))
+    assert r.ok, [i.message for i in r.report.errors]
+    assert not r.report.errors
+    assert r.text.strip().startswith("%")
+    # parse the returned text again, independently of the generator's own report
+    m = metrics(parse_cfg(r.text), board)
+    assert m.max_range_m == pytest.approx(targets["max_range_m"], rel=0.02)
+    assert m.max_velocity_ms == pytest.approx(targets["max_velocity_ms"], rel=0.02)
+    assert m.frame_rate_hz == pytest.approx(targets["frame_rate_hz"], rel=0.01)
+    if "range_res_m" in targets:
+        assert m.range_res_m == pytest.approx(targets["range_res_m"], rel=0.06)
+    assert m.duty_cycle <= 0.9
+    # no warnings for the typical targets either, apart from the cascade's standing notes
+    # (cascade at 5 m needs a sample rate between TI's tested 5000/10000 ksps, which is a legitimate warning)
+    assert not [i for i in r.report.warnings if i.code != "sample_rate_untested"], \
+        [i.message for i in r.report.warnings]
+    assert m.mode == ("ddma" if board == "AWR2243_CASCADE" else "tdm")
+    assert validate(parse_cfg(r.text), board).ok
+
+
+def test_generate_velocity_resolution_and_explicit_overrides():
+    r = generate("IWR1843", max_range_m=10, max_velocity_ms=5, velocity_res_ms=0.1)
+    assert r.metrics.velocity_res_ms == pytest.approx(0.1, rel=0.1)
+    r = generate("IWR1843", max_range_m=10, max_velocity_ms=5, range_res_m=0.1, num_samples=64, num_loops=48)
+    assert (r.metrics.num_samples, r.metrics.n_loops) == (64, 48)
+    assert any(i.code == "range_res_ignored" for i in r.report.issues)
+
+
+def test_generate_tx_rx_selection():
+    r = generate("IWR6843", max_range_m=10, max_velocity_ms=4, tx_mask=7, rx_mask=0b0111)
+    assert (r.metrics.n_tx, r.metrics.n_rx, r.metrics.chirps_per_loop) == (3, 3, 3)
+    assert r.metrics.max_velocity_ms == pytest.approx(4, rel=0.02)   # 3 TX -> longer loop -> shorter chirps
+    one = generate("IWR1843", max_range_m=10, max_velocity_ms=4, tx_mask=1)
+    assert one.metrics.n_tx == 1
+    assert generate("IWR1843", max_range_m=10, max_velocity_ms=4, tx_mask=9).report.errors[0].code == "bad_mask"
+    cas = generate("AWR2243_CASCADE", max_range_m=10, max_velocity_ms=4, tx_mask=1)
+    assert cas.metrics.n_tx == 6 and any(i.code == "mask_fixed" for i in cas.report.issues)
+
+
+def test_generate_output_modes():
+    assert "lvdsStreamCfg -1 0 0 0" in generate("IWR1843", max_range_m=10, max_velocity_ms=5).text
+    lv = generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="lvds")
+    assert "lvdsStreamCfg -1 0 1 0" in lv.text and lv.metrics.lvds_data_fmt == 1
+    raw = generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="raw")
+    assert "guiMonitor" not in raw.text and "testFmkCfg" in raw.text
+    for board, mode in [("IWR1443", "lvds"), ("IWR6843", "raw"), ("AWR2243_CASCADE", "lvds")]:
+        r = generate(board, max_range_m=10, max_velocity_ms=5, output_mode=mode)
+        assert not r.ok and r.text == "" and r.report.errors[0].code == "mode_unsupported"
+    assert generate("IWR1843", max_range_m=10, max_velocity_ms=5, output_mode="x").report.errors[0].code \
+        == "bad_output_mode"
+
+
+def test_generate_infeasible_range_resolution_is_reported_not_raised():
+    for board in ("IWR1843", "AWR2243_CASCADE"):
+        r = generate(board, max_range_m=100, max_velocity_ms=5, range_res_m=0.02)
+        codes = {i.code for i in r.report.errors}
+        assert not r.ok and "range_unreachable" in codes and codes & {"band", "slope"}, codes
+        assert r.text   # best-effort cfg is still returned
+
+
+def test_generate_infeasible_velocity_is_reported():
+    r = generate("IWR1843", max_range_m=10, max_velocity_ms=80, range_res_m=0.05)
+    assert not r.ok and any(i.code == "velocity_unreachable" for i in r.report.errors)
+    r = generate("AWR2243_CASCADE", max_range_m=15, max_velocity_ms=60)
+    assert not r.ok and any(i.code == "velocity_unreachable" for i in r.report.errors)
+
+
+def test_generate_too_long_chirps_for_frame_rate_is_reported():
+    r = generate("IWR1843", max_range_m=10, max_velocity_ms=5, frame_rate_hz=500, num_loops=200)
+    assert not r.ok and any(i.code == "frame_too_short" for i in r.report.errors)
+
+
+def test_generate_bad_input_is_structured():
+    for board, t, code in [("IWR9999", dict(max_range_m=1, max_velocity_ms=1), "unknown_board"),
+                           ("IWR1843", dict(max_velocity_ms=1), "bad_target"),
+                           ("IWR1843", dict(max_range_m="far", max_velocity_ms=1), "bad_target"),
+                           ("IWR1843", dict(max_range_m=-3, max_velocity_ms=1), "bad_target"),
+                           ("IWR1843", dict(max_range_m=3, max_velocity_ms=1, frame_rate_hz=0), "bad_target")]:
+        r = generate(board, t)
+        assert not r.ok and r.text == "" and r.report.errors[0].code == code
+    r = generate("IWR1843", dict(max_range_m=10, max_velocity_ms=5, bogus=1))
+    assert r.ok and any(i.code == "unknown_target" for i in r.report.warnings)
+
+
+def test_generate_result_is_json_safe_and_fast():
+    t0 = time.perf_counter()
+    for board, mode in GEN_CASES:
+        r = generate(board, dict(TYPICAL[0], output_mode=mode))
+        json.dumps(r.to_dict(), allow_nan=False)
+    bad = generate("IWR1843", max_range_m=100, max_velocity_ms=5, range_res_m=0.02)
+    json.dumps(bad.to_dict(), allow_nan=False)
+    assert (time.perf_counter() - t0) / (len(GEN_CASES) + 1) < 0.05   # keystroke-rate budget, per call
+
+
+def test_generated_text_only_changes_what_depends_on_targets():
+    """Boilerplate comes from the shipped template: same command set, only timing lines differ."""
+    r = generate("AWR2243_CASCADE", max_range_m=15.2, max_velocity_ms=19.4, frame_rate_hz=20)
+    ship = parse_cfg_file(Path(__file__).resolve().parents[1] / "CPSL_TI_Radar_cpp/config/radar/cascade"
+                          / "cascade_shortrange.cfg")
+    assert [c.name for c in parse_cfg(r.text).commands] == [c.name for c in ship.commands]
+    # reproduces TI's short-range design: 192 samples, ~5 Msps, ~44 MHz/us
+    assert r.metrics.num_samples == 192 and r.metrics.sample_rate_ksps == 5000
+    assert r.metrics.slope_mhz_us == pytest.approx(44.4, rel=0.03)
