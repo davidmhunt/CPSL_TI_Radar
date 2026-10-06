@@ -4,7 +4,9 @@ version = "2.0.0.dev0"
 description = "Host-side drivers, configs, and tools for TI mmWave radars (IWR1443/1843/6843, AWR2243 cascade)"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.142.2",
     "pyserial>=3.5",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [tool.uv]
@@ -13,6 +15,7 @@ package = false
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]
 # Optional: only for the analysis notebooks in utilities/ (uv run --group notebooks ...).
@@ -25,6 +28,7 @@ notebooks = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 # ROS 2 (sourced in the shell) puts its pytest plugins on PYTHONPATH; launch_testing
 # needs deps this venv lacks, so keep those plugins out of the project test run.
 addopts = ["-p", "no:launch_testing", "-p", "no:launch_ros"]

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPSL Radar</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>CPSL Radar</h1>
+  <span class="pill"><span class="dot" id="dot"></span><span id="state">connecting</span></span>
+  <span class="pill" id="cfgName" style="display:none"></span>
+  <span id="statusMsg"></span>
+  <div class="stats">
+    <div class="stat"><span>Frame</span><b id="sFrame">–</b></div>
+    <div class="stat"><span>Points</span><b id="sPts">–</b></div>
+    <div class="stat"><span>Rate</span><b id="sRate">–</b></div>
+    <div class="stat" id="gapStat"><span>Gaps</span><b id="sGaps">–</b></div>
+    <div class="stat" id="errStat"><span>Errors</span><b id="sErr">–</b></div>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="mainCard">
+    <h2>
+      <span class="seg" id="viewSeg"><button data-v="top" class="on">Top view</button><button data-v="3d">3D</button></span>
+    </h2>
+    <span class="hint" id="hint">x = right, y = forward (m)</span>
+    <canvas id="main"></canvas>
+    <div id="tip"></div>
+  </section>
+
+  <aside class="side">
+    <section class="card" id="frontCard">
+      <h2>Front view (x – z)</h2>
+      <canvas id="front"></canvas>
+    </section>
+
+    <section class="card">
+      <h2>Points per frame</h2>
+      <canvas id="spark" class="spark"></canvas>
+    </section>
+
+    <section class="card">
+      <h2>Display</h2>
+      <div class="controls">
+        <label>Color by
+          <span class="seg" id="colorSeg">
+            <button data-c="v" class="on">Velocity</button><button data-c="snr">SNR</button><button data-c="z">Height</button>
+          </span>
+        </label>
+        <div class="legend"><span id="legLo"></span><span class="bar" id="legBar"></span><span id="legHi"></span></div>
+        <label><span class="row"><span>Max range</span><span id="rangeVal"></span></span>
+          <input type="range" id="range" min="2" max="40" step="1" value="10"></label>
+        <label><span class="row"><span>Trail (frames kept)</span><span id="trailVal"></span></span>
+          <input type="range" id="trail" min="1" max="40" step="1" value="1"></label>
+        <label><span class="row"><span>Point size</span><span id="sizeVal"></span></span>
+          <input type="range" id="size" min="1" max="8" step="0.5" value="3"></label>
+        <label><span class="row"><span>Min SNR (dB)</span><span id="snrVal"></span></span>
+          <input type="range" id="minSnr" min="0" max="40" step="1" value="0"></label>
+        <div style="display:flex; gap:8px">
+          <button class="btn" id="pause">Pause</button>
+          <button class="btn" id="resetView">Reset 3D view</button>
+        </div>
+      </div>
+    </section>
+  </aside>
+</main>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
