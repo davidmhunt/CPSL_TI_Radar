@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <stdexcept>
 #include <fstream>
 #include <thread>
 
@@ -283,6 +284,99 @@ TEST_CASE(concurrent_stop_waits_for_the_first_and_shares_its_status) {
     CHECK(ta >= 290);  // neither caller returned before the stop had finished
     CHECK(tb >= 290);
     CHECK_EQ(rig.cli->count("sensorStop\n"), size_t(2));  // cfg + one stop
+}
+
+// core-13 review S1: destroying a running Radar stops it (sensorStop sent,
+// threads joined) without an explicit stop()
+TEST_CASE(destructor_stops_a_running_radar) {
+    Rig rig(load("dtor"));
+    if (!rig.radar) return;
+    CHECK(static_cast<bool>(rig.radar->configure()));
+    CHECK(static_cast<bool>(rig.radar->start()));
+    rig.send_frame(0, 1);
+    const clk::time_point t0 = clk::now();
+    while (rig.radar->stats().frames < 1 && ms_since(t0) < 3000) std::this_thread::sleep_for(milliseconds(5));
+    rig.radar.reset();
+    CHECK_EQ(rig.cli->count("sensorStop\n"), size_t(2));  // one in the cfg, one from the destructor
+    CHECK(!rig.packets->started());                        // the packet source was stopped
+}
+
+// core-13 review S1: a consumer blocked in next_adc_frame (on the frame
+// queue's condition variable) returns Code::stopped as soon as stop() runs,
+// not at the end of its timeout
+TEST_CASE(stop_wakes_a_consumer_blocked_in_next_adc_frame) {
+    Rig rig(load("wake_on_stop"));
+    if (!rig.radar) return;
+    Radar& r = *rig.radar;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    Status why;
+    bool got = true;
+    long long waited = -1;
+    clk::time_point returned_at;
+    std::thread consumer([&] {
+        AdcFrame f;
+        const clk::time_point t0 = clk::now();
+        got = r.next_adc_frame(f, milliseconds(10000), &why);
+        returned_at = clk::now();
+        waited = ms_since(t0);
+    });
+    std::this_thread::sleep_for(milliseconds(100));
+    const clk::time_point t_stop = clk::now();
+    CHECK(static_cast<bool>(r.stop()));
+    const long long stop_ms = ms_since(t_stop);
+    consumer.join();
+    const long long woke_ms = std::chrono::duration_cast<milliseconds>(returned_at - t_stop).count();
+    std::cout << "    consumer returned " << woke_ms << " ms after stop() began (stop() took " << stop_ms
+              << " ms)" << std::endl;
+    CHECK(!got);
+    CHECK(why.code == Code::stopped);
+    CHECK(waited >= 90 && waited < 3000);
+    CHECK(woke_ms < 200);  // woken at the start of stop(), not after it
+}
+
+// A packet source whose pop() throws after a few packets (e.g. bad_alloc in
+// the driver's worker thread)
+class ThrowingSource : public ReplayPacketSource {
+public:
+    bool pop(uint8_t* buf, int& len, std::chrono::milliseconds timeout) override {
+        if (pops_.fetch_add(1) >= 3) throw std::runtime_error("boom from the packet source");
+        return ReplayPacketSource::pop(buf, len, timeout);
+    }
+
+private:
+    std::atomic<int> pops_{0};
+};
+
+// core-13 review S8: an exception in the DCA worker thread ends the stream,
+// not the process; next_adc_frame reports it and stop() still works
+TEST_CASE(worker_exception_is_reported_not_fatal) {
+    const RadarConfig cfg = load("worker_throws");
+    auto cli = std::make_shared<FakeCli>();
+    auto src = std::make_shared<ThrowingSource>();
+    auto opened = Radar::open(cfg, {cli, src});
+    CHECK(static_cast<bool>(opened));
+    if (!opened) return;
+    Radar& r = **opened;
+    WarnCapture errors;
+    CHECK(static_cast<bool>(r.configure()));
+    CHECK(static_cast<bool>(r.start()));
+    uint32_t seq = 1;
+    for (const auto& p : dca_test::frame_packets(0, static_cast<size_t>(cfg.frame_shape().bytes), 1, seq)) src->push(p);
+    AdcFrame f;
+    Status why;
+    const clk::time_point t0 = clk::now();
+    CHECK(!r.next_adc_frame(f, milliseconds(5000), &why));
+    CHECK(why.code == Code::io_error);
+    CHECK(why.message.find("boom from the packet source") != std::string::npos);
+    CHECK(ms_since(t0) < 3000);  // woken by the failure, not the timeout
+    bool logged = false;
+    for (const std::string& e : errors.get()) logged = logged || e.find("worker stopped: boom") != std::string::npos;
+    CHECK(logged);
+    CHECK(!r.next_adc_frame(f, milliseconds(10), &why));
+    CHECK(why.code == Code::io_error);
+    CHECK(static_cast<bool>(r.stop()));
+    CHECK_EQ(cli->count("sensorStop\n"), size_t(2));
 }
 
 TEST_CASE(config_once_per_boot) {

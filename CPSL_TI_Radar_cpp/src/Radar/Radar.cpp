@@ -88,15 +88,45 @@ struct Radar::Impl {
     std::atomic<uint64_t> stalls{0};
     std::atomic<uint64_t> serial_overwritten{0};
 
+    // a worker thread that ended on an exception (or the serial port's I/O
+    // error) leaves its reason here; next_adc_frame / next_point_cloud
+    // report it as Code::io_error (core-13 review S8)
+    mutable std::mutex fail_m;
+    std::string dca_failure, serial_failure;
+
+    void fail_stream(std::string& slot, const std::string& why) {
+        log_error("Radar: ", why);
+        std::lock_guard<std::mutex> l(fail_m);
+        if (slot.empty()) slot = why;
+    }
+    std::string failure(const std::string& slot) const {
+        std::lock_guard<std::mutex> l(fail_m);
+        return slot;
+    }
+
+    // runs a worker loop body; an exception ends the stream, never the process
+    template <class Body>
+    void guarded(std::string& slot, const char* what, Body body) {
+        try {
+            body();
+        } catch (const std::exception& e) {
+            fail_stream(slot, std::string(what) + " worker stopped: " + e.what());
+        } catch (...) {
+            fail_stream(slot, std::string(what) + " worker stopped: unknown exception");
+        }
+    }
+
     std::string where() const { return cfg.path(); }
 
-    Status stream_state(const char* stream, bool enabled) const {
+    Status stream_state(const char* stream, bool enabled, const std::string& failure_slot) const {
         if (!enabled) return Status(Code::disabled, std::string(stream) + " is not enabled in " + where());
         const int st = state.load();
         if (st == stopped) return Status(Code::stopped, "the radar was stopped");
         if (st != running) return Status(Code::invalid_state, "the radar is not started");
         // stop() has begun (it sets stop_flag first, then wakes the waiters)
         if (stop_flag.load()) return Status(Code::stopped, "the radar is stopping");
+        const std::string why = failure(failure_slot);
+        if (!why.empty()) return Status(Code::io_error, why);
         return Status::ok();
     }
 
@@ -259,20 +289,26 @@ Status Radar::start() {
             if (!s) return s;
             m.dca_worker = std::thread([&m] {
                 raise_worker_priority();
-                while (!m.stop_flag.load(std::memory_order_relaxed)) {
-                    m.dca.process_next_packet();  // waits up to 500 ms for a packet
-                }
+                m.guarded(m.dca_failure, "the DCA1000", [&m] {
+                    while (!m.stop_flag.load(std::memory_order_relaxed)) {
+                        m.dca.process_next_packet();  // waits up to 500 ms for a packet
+                    }
+                });
+                if (!m.failure(m.dca_failure).empty()) m.dca.close_frames();  // wake a waiting consumer
             });
         }
         if (m.serial_on) {
             m.serial_worker = std::thread([&m] {
-                while (!m.stop_flag.load(std::memory_order_relaxed)) {
-                    // waits up to data_uart.timeout_ms for a frame
-                    if (!m.serial.process_next_message() && m.serial.io_error()) {
-                        log_error("Radar: the serial data port failed; serial streaming stopped");
-                        break;
+                m.guarded(m.serial_failure, "the serial data", [&m] {
+                    while (!m.stop_flag.load(std::memory_order_relaxed)) {
+                        // waits up to data_uart.timeout_ms for a frame
+                        if (!m.serial.process_next_message() && m.serial.io_error()) {
+                            m.fail_stream(m.serial_failure,
+                                          "the serial data port failed; serial streaming stopped");
+                            break;
+                        }
                     }
-                }
+                });
             });
         }
         // running from here: stop() now joins the threads and stops the sensor
@@ -364,7 +400,7 @@ bool Radar::next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Sta
     Impl& m = *impl_;
     const steady::time_point deadline = steady::now() + timeout;
     for (;;) {
-        Status st = m.stream_state("dca1000", m.dca_on);
+        Status st = m.stream_state("dca1000", m.dca_on, m.dca_failure);
         if (!st) return set(std::move(st));
         // block on the frame queue's condition variable (woken by a publish
         // or by stop()), but no longer than the stall policy allows
@@ -382,7 +418,7 @@ bool Radar::next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Sta
             return set(Status(Code::stalled, "no ADC frame for " + std::to_string(m.stall_ms) + " ms"));
         }
         if (steady::now() >= deadline) {
-            st = m.stream_state("dca1000", m.dca_on);  // woken by stop(): say so
+            st = m.stream_state("dca1000", m.dca_on, m.dca_failure);  // woken by stop(): say so
             if (!st) return set(std::move(st));
             return set(Status(Code::timeout, "no ADC frame within the timeout"));
         }
@@ -400,7 +436,7 @@ bool Radar::next_point_cloud(PointCloud& out, std::chrono::milliseconds timeout,
     std::vector<std::vector<float>> points;
     std::vector<std::vector<float>> side;
     for (;;) {
-        Status st = m.stream_state("serial_stream", m.serial_on);
+        Status st = m.stream_state("serial_stream", m.serial_on, m.serial_failure);
         if (!st) return set(std::move(st));
         uint32_t frame_number = 0;
         uint64_t overwritten = 0;

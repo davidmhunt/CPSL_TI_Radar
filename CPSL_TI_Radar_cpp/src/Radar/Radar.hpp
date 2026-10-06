@@ -119,7 +119,9 @@ public:
     // false: none, and `why` (if given) says why: Code::timeout,
     // Code::stalled (no frame for runtime.stall_timeout_ms; reported once per
     // stall, with a warning and Stats::stalls + 1), Code::stopped (also when
-    // stop() is called while waiting), Code::invalid_state (not started) or
+    // stop() is called while waiting), Code::io_error (the stream's worker
+    // thread ended on an exception or a port error; the message says why;
+    // the process is never terminated), Code::invalid_state (not started) or
     // Code::disabled (stream off in the config). Completed frames wait in a
     // drop-oldest queue of runtime.frame_queue_depth frames (default 4; 1 =
     // the latest frame wins); a frame dropped because the queue was full is
