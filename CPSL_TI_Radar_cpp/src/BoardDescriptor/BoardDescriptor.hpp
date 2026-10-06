@@ -61,8 +61,16 @@ struct BoardDescriptor {
         // Optional. cfg commands this board's firmware rejects; they are left in
         // the .cfg file but never sent (see filter_cfg_commands). Default empty.
         std::vector<std::string> skip_commands;
+        // Optional, default empty. Commands the cfg must contain / must not
+        // contain for this board's firmware; enforced by cross_check_radar_cfg.
+        std::vector<std::string> required_commands;
+        std::vector<std::string> forbidden_commands;
     };
     struct DataUart {
+        // Optional, default true. false: the firmware has no data UART (no TLV
+        // output); baud/header_bytes/tlv_dialect/timeout_ms are then not
+        // required, and serial_stream.enabled is an error on this board.
+        bool supported = true;
         uint32_t baud = 0;
         uint32_t header_bytes = 0;
         TlvDialect tlv_dialect = TlvDialect::sdk3;

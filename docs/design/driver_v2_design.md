@@ -53,6 +53,10 @@ descriptor names the decoder so the rest stays data.
 | `lifecycle.config_once_per_boot` | bool. If true, `configure()` refuses a second cfg in one process and `stop()` prints the power-cycle note | `Runner.cpp:94-101,217-220` |
 | `cfg_dialect.rx_mask_fields` | `channelCfg` field indices whose set bits are summed into the Rx count | `RadarConfigReader.cpp:285-289` |
 | `cfg_dialect.frame_period_field` | `frameCfg` field index of the period (5, or 6 on the cascade) | field-count guess `RadarConfigReader.cpp:270-274` |
+| `cfg_dialect.skip_commands` | optional, `[]`: cfg commands never sent (one word each; not the start/stop command) | core-10 |
+| `cfg_dialect.required_commands` | optional, `[]`: commands the cfg must contain; a missing one is a cross-check error naming command and board | core-22 |
+| `cfg_dialect.forbidden_commands` | optional, `[]`: commands the firmware lacks; any use in the cfg is a cross-check error | core-22 |
+| `data_uart.supported` | optional, `true`. `false` = no data UART (no TLV): `data_uart` is then just `{"supported": false}` and `serial_stream.enabled` on the board is an error | core-22 |
 | `data_uart.header_bytes` | 40 (SDK 3, MCU+) or 36 (SDK 2, confirmed: `docs/research/sdk2_uart_format_2026-10-05.md`) | fixed 32+8 |
 | `data_uart.tlv_dialect` | `sdk3` (type 1 = float x/y/z/v, type 7 = int16 SNR/noise) \| `sdk2` (Q-format objects) \| `mcuplus_cascade` (sdk3 plus types 10/11/12) | `TLVProcessing.*`. Selects the decoder in `parse_uart_frame` since core-16 |
 | `lvds.supported` | bool | cascade DCA1000 rejection `SystemConfigReader.cpp:477-482` |
@@ -86,6 +90,7 @@ message rather than producing garbage data:
   `bytes_per_frame` and needs a `*_real` layout that does not exist yet, so
   it is rejected.
 - `lvdsStreamCfg` must enable ADC streaming when `dca1000.enabled`.
+- `cfg_dialect.required_commands` must all appear and `forbidden_commands` must not (core-22).
 
 **What still lives in code.** Each layout, each TLV dialect and the DCA1000
 command protocol are C++ decoders. Each is selected by its string from a

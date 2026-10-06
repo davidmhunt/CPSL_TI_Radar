@@ -482,4 +482,94 @@ TEST_CASE(filter_with_empty_skip_list_is_a_no_op) {
     CHECK(p.skipped.empty());
 }
 
+// cfg_dialect.required_commands / forbidden_commands and data_uart.supported (core-22 Step 1)
+TEST_CASE(shipped_boards_are_unchanged_by_the_new_keys) {
+    for (const char* n : {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}) {
+        BoardDescriptor d = must_load(n);
+        CHECK(d.cfg_dialect.required_commands.empty());
+        CHECK(d.cfg_dialect.forbidden_commands.empty());
+        CHECK(d.data_uart.supported);
+        CHECK(d.data_uart.baud > 0);
+        CHECK(d.data_uart.header_bytes == 36 || d.data_uart.header_bytes == 40);
+    }
+    // golden values that the new keys must not disturb
+    BoardDescriptor b = must_load("IWR1843");
+    CHECK(b.cfg_dialect.skip_commands == v({"calibData"}));
+    CHECK_EQ(b.data_uart.header_bytes, 40u);
+    CHECK_EQ(b.lvds.lanes, 2u);
+}
+
+TEST_CASE(required_forbidden_validation) {
+    for (const char* key : {"required_commands", "forbidden_commands"}) {
+        const std::string base = std::string("/cfg_dialect/") + key;
+        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = "x"; }), base + ": expected an array"));
+        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array({"a b"}); }),
+                  base + "/0: \"a b\" must be one command word"));
+        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array({"x", "x"}); }),
+                  "listed twice"));
+        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array({2}); }),
+                  base + "/0: expected a string"));
+        CHECK_EQ(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array(); }), std::string(""));
+    }
+    CHECK(has(reject("IWR1843",
+                     [](json& j) {
+                         j["cfg_dialect"]["required_commands"] = json::array({"foo"});
+                         j["cfg_dialect"]["forbidden_commands"] = json::array({"foo"});
+                     }),
+              "also in forbidden_commands"));
+    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["required_commands"] = json::array({"calibData"}); }),
+              "also in skip_commands"));
+}
+
+static BoardDescriptor with_dialect(const json& overrides) {
+    json j = read_json(kBoards + "/IWR1843.json");
+    j.merge_patch(overrides);
+    BoardDescriptor d;
+    std::string err;
+    bool ok = BoardDescriptor::from_json(j, "IWR1843", "test:dialect", d, err);
+    if (!ok) std::cerr << "load failed: " << err << std::endl;
+    CHECK(ok);
+    return d;
+}
+
+TEST_CASE(cross_check_enforces_required_and_forbidden_commands) {
+    BoardDescriptor d = with_dialect(json{{"cfg_dialect", {{"skip_commands", json::array()},
+                                                           {"required_commands", json::array({"calibData"})},
+                                                           {"forbidden_commands", json::array({"guiMonitor"})}}}});
+    const std::string good = sdk3_cfg("adcCfg 2 1", "adcbufCfg -1 0 1 1 1", "lvdsStreamCfg -1 0 1 0");
+    CHECK_EQ(check(d, write_cfg("rf_missing.cfg", good), true, false).errors.size(), size_t(1));
+    CfgCheckResult m = check(d, write_cfg("rf_missing2.cfg", good), true, false);
+    CHECK(any_has(m.errors, "required command calibData is missing"));
+    CHECK(any_has(m.errors, "IWR1843"));
+    CHECK(check(d, write_cfg("rf_ok.cfg", good + "\ncalibData 0 0 0\n"), true, false).ok());
+    CfgCheckResult f = check(d, write_cfg("rf_forbid.cfg", good + "\ncalibData 0 0 0\nguiMonitor -1 1 0 0 0 0 0\n"),
+                             true, false);
+    CHECK(any_has(f.errors, "command guiMonitor is forbidden for board IWR1843"));
+    CHECK(any_has(f.errors, "line "));
+    // commented-out lines do not count either way
+    CHECK(check(d, write_cfg("rf_comment.cfg", good + "\ncalibData 0 0 0\n% guiMonitor 1\n"), true, false).ok());
+    // enforced even when only the serial stream is selected
+    CHECK(!check(d, write_cfg("rf_serial.cfg", good + "\ncalibData 0 0 0\nguiMonitor 1\n"), false, true).ok());
+}
+
+TEST_CASE(data_uart_unsupported_board) {
+    // tlv_dialect / header_bytes etc. not required
+    json j = read_json(kBoards + "/IWR1843.json");
+    j["data_uart"] = json{{"supported", false}};
+    BoardDescriptor d;
+    std::string err;
+    CHECK(BoardDescriptor::from_json(j, "IWR1843", "test:nouart", d, err));
+    CHECK(!d.data_uart.supported);
+    // ... and extra data_uart keys are then unknown
+    CHECK(has(reject("IWR1843", [](json& jj) { jj["data_uart"]["supported"] = false; }), "unknown key"));
+    // supported:true spelled out is the default and loads with the full block
+    CHECK_EQ(reject("IWR1843", [](json& jj) { jj["data_uart"]["supported"] = true; }), std::string(""));
+    CHECK(has(reject("IWR1843", [](json& jj) { jj["data_uart"]["supported"] = "no"; }), "/data_uart/supported"));
+    // serial_stream on such a board is an error; DCA-only is fine
+    const std::string cfg = write_cfg("nouart.cfg", sdk3_cfg("adcCfg 2 1", "adcbufCfg -1 0 1 1 1", "lvdsStreamCfg -1 0 1 0"));
+    CfgCheckResult r = check(d, cfg, false, true);
+    CHECK(any_has(r.errors, "data_uart.supported false"));
+    CHECK(check(d, cfg, true, false).ok());
+}
+
 TEST_MAIN()

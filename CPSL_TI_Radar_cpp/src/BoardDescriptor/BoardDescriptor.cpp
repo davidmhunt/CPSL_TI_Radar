@@ -1,5 +1,6 @@
 #include "BoardDescriptor.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
@@ -244,15 +245,18 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     {
         const json& c = j.at("cfg_dialect");
         const std::string p = "/cfg_dialect";
-        if (!r.object(c, p, {"rx_mask_fields", "frame_period_field"}, {"skip_commands"}) ||
+        if (!r.object(c, p, {"rx_mask_fields", "frame_period_field"},
+                      {"skip_commands", "required_commands", "forbidden_commands"}) ||
             !r.uint_array(c, "rx_mask_fields", p, 1, 64, d.cfg_dialect.rx_mask_fields) ||
             !r.uint(c, "frame_period_field", p, 1, 64, d.cfg_dialect.frame_period_field)) {
             return false;
         }
-        // skip_commands: optional, may be empty; each entry one command word
-        if (c.contains("skip_commands")) {
-            const json& v = c.at("skip_commands");
-            const std::string sp = p + "/skip_commands";
+        // skip_commands / required_commands / forbidden_commands: optional,
+        // may be empty; each entry one command word
+        auto word_list = [&](const char* key, bool guard_start_stop, std::vector<std::string>& out) -> bool {
+            if (!c.contains(key)) return true;
+            const json& v = c.at(key);
+            const std::string sp = p + "/" + key;
             if (!v.is_array()) return r.fail(sp, "expected an array of command names");
             std::set<std::string> seen;
             for (size_t i = 0; i < v.size(); i++) {
@@ -262,11 +266,25 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
                 if (cmd.empty() || cmd.find_first_of(" \t\r\n") != std::string::npos) {
                     return r.fail(ip, "\"" + cmd + "\" must be one command word (no spaces)");
                 }
-                if (cmd == d.cli.start_cmd || cmd == d.cli.stop_cmd) {
+                if (guard_start_stop && (cmd == d.cli.start_cmd || cmd == d.cli.stop_cmd)) {
                     return r.fail(ip, "\"" + cmd + "\" is the board's start/stop command and cannot be skipped");
                 }
                 if (!seen.insert(cmd).second) return r.fail(ip, "\"" + cmd + "\" is listed twice");
-                d.cfg_dialect.skip_commands.push_back(cmd);
+                out.push_back(cmd);
+            }
+            return true;
+        };
+        if (!word_list("skip_commands", true, d.cfg_dialect.skip_commands) ||
+            !word_list("required_commands", false, d.cfg_dialect.required_commands) ||
+            !word_list("forbidden_commands", false, d.cfg_dialect.forbidden_commands)) {
+            return false;
+        }
+        for (const std::string& cmd : d.cfg_dialect.required_commands) {
+            for (const std::string& o : d.cfg_dialect.forbidden_commands) {
+                if (cmd == o) return r.fail(p + "/required_commands", "\"" + cmd + "\" is also in forbidden_commands");
+            }
+            for (const std::string& o : d.cfg_dialect.skip_commands) {
+                if (cmd == o) return r.fail(p + "/required_commands", "\"" + cmd + "\" is also in skip_commands (never sent)");
             }
         }
     }
@@ -275,7 +293,14 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     {
         const json& u = j.at("data_uart");
         const std::string p = "/data_uart";
-        if (!r.object(u, p, {"baud", "header_bytes", "tlv_dialect", "timeout_ms"}) ||
+        if (u.is_object() && u.contains("supported")) {
+            if (!r.boolean(u, "supported", p, d.data_uart.supported)) return false;
+        }
+        if (!d.data_uart.supported) {
+            // no data UART: nothing else may be given
+            if (!r.object(u, p, {"supported"})) return false;
+        } else {
+        if (!r.object(u, p, {"baud", "header_bytes", "tlv_dialect", "timeout_ms"}, {"supported"}) ||
             !r.uint(u, "baud", p, 1, 0xFFFFFFFFu, d.data_uart.baud) ||
             !r.uint(u, "header_bytes", p, 8, 4096, d.data_uart.header_bytes) ||
             !r.enumeration<TlvDialect>(u, "tlv_dialect", p,
@@ -292,6 +317,7 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
             return r.fail(p + "/header_bytes", "must be " + std::to_string(want) + " for tlv_dialect " +
                                                    to_string(d.data_uart.tlv_dialect) +
                                                    " (36 for sdk2, 40 for sdk3 and mcuplus_cascade)");
+        }
         }
     }
 
@@ -501,6 +527,10 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
         err("board " + b.name + " has lvds.supported false: DCA1000 raw-ADC streaming is not supported");
     }
 
+    if (streams.serial && !b.data_uart.supported) {
+        err("board " + b.name + " has data_uart.supported false: serial_stream.enabled is not allowed (no TLV data port)");
+    }
+
     std::ifstream f(cfg_path);
     if (!f.is_open()) {
         err("cannot open radar cfg");
@@ -508,6 +538,7 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
     }
 
     std::vector<CfgLine> adc_cfg, adcbuf_cfg, lvds_cfg;
+    std::set<std::string> seen_cmds;
     std::string text;
     int line_no = 0;
     while (std::getline(f, text)) {
@@ -522,9 +553,21 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
             if (l.tok[0].compare(0, pre.size(), pre) == 0) comment = true;
         }
         if (comment) continue;
+        seen_cmds.insert(l.tok[0]);
+        if (std::find(b.cfg_dialect.forbidden_commands.begin(), b.cfg_dialect.forbidden_commands.end(), l.tok[0]) !=
+            b.cfg_dialect.forbidden_commands.end()) {
+            err("line " + std::to_string(l.line_no) + ": command " + l.tok[0] + " is forbidden for board " + b.name +
+                " (its firmware does not implement it)");
+        }
         if (l.tok[0] == "adcCfg") adc_cfg.push_back(l);
         else if (l.tok[0] == "adcbufCfg") adcbuf_cfg.push_back(l);
         else if (l.tok[0] == "lvdsStreamCfg") lvds_cfg.push_back(l);
+    }
+
+    for (const std::string& cmd : b.cfg_dialect.required_commands) {
+        if (!seen_cmds.count(cmd)) {
+            err("required command " + cmd + " is missing (board " + b.name + " needs it)");
+        }
     }
 
     if (!streams.dca1000 || !b.lvds.supported) return res;
