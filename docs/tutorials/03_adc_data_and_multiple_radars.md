@@ -2,13 +2,19 @@
 
 ## Read a capture
 
-Set `"output": {"dir": "out/front", "save_adc_frames": true}` in the system config (the dir is relative to the JSON file and is created for you; with no `dir` key, as in the shipped stress-test config, the file lands where you launched, `CPSL_TI_Radar_cpp/build` in tutorial 2). Every completed frame is appended to `<dir>/adc_data.bin`. The file has no header: per frame, for chirp, for rx, for sample, an int16 real part then an int16 imaginary part, little-endian. Lost packets stay in the file as zeros, so the size is exactly `bytes/frame` (from `--validate`) times the frame count after a clean stop. Anything else means a killed process:
-
-From the repository root (config in `CPSL_TI_Radar_cpp/config/system/`, `dir` as above; else use `find`):
+Capture first. With the DCA1000 cabled and configured as in tutorials [1](01_build_and_host_setup.md) and [2](02_first_run.md) (the serial demo config of tutorial 2 writes no `adc_data.bin`), run the DCA1000 example config for 30 frames:
 
 ```bash
-stat -c %s CPSL_TI_Radar_cpp/config/system/out/front/adc_data.bin   # expect bytes/frame x frames
-find . -name adc_data.bin -mmin -60 -size +0 -not -path "./.git/*"
+cd CPSL_TI_Radar_cpp/build
+./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --frames 30
+```
+
+That config sets `save_adc_frames` true and has no `output.dir`, so every completed frame is appended to `adc_data.bin` in the launch folder (`CPSL_TI_Radar_cpp/build`). To choose the folder, add `"dir": "out/front"` to its `output` block (relative to the JSON file, created for you). The file has no header: per frame, for chirp, for rx, for sample, an int16 real part then an int16 imaginary part, little-endian. Lost packets stay in the file as zeros, so after a clean stop the size is exactly `bytes/frame` (from `--validate`) times the frame count. Anything else means a killed process:
+
+From the repository root:
+
+```bash
+stat -c %s CPSL_TI_Radar_cpp/build/adc_data.bin   # expect bytes/frame x 30
 ```
 
 Load it in NumPy. Take rx, samples and chirps from the `frame:` line of `--validate` (for the stress-test config: 4 rx x 250 samples x 126 chirps):
@@ -16,19 +22,19 @@ Load it in NumPy. Take rx, samples and chirps from the `frame:` line of `--valid
 ```python
 import numpy as np
 rx, samples, chirps = 4, 250, 126
-raw = np.fromfile("CPSL_TI_Radar_cpp/config/system/out/front/adc_data.bin", dtype=np.int16).reshape(-1, chirps, rx, samples, 2)
+raw = np.fromfile("CPSL_TI_Radar_cpp/build/adc_data.bin", dtype=np.int16).reshape(-1, chirps, rx, samples, 2)
 cube = (raw[..., 0] + 1j * raw[..., 1]).transpose(0, 2, 3, 1)   # (frame, rx, sample, chirp)
 print(cube.shape)
 ```
 
 `reshape` fails if the file is not a whole number of frames. The cube's last three axes match `AdcFrame::data[rx][sample][chirp]`, which is what a live consumer sees ([tutorial 12](12_consume_frames.md)).
 
-For range, Doppler and azimuth processing, use the notebook. It reads the radar `.cfg` to get the chirp structure, so give it both files (from the repository root):
+For range, Doppler and azimuth processing, use the notebook. It reads the radar `.cfg` to get the chirp structure, so give it both files, the cfg being the one the run used (from the repository root):
 
 ```bash
 cd utilities
-CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test_baseline_numframes0.cfg \
-ADC_DATA_FILE=../CPSL_TI_Radar_cpp/config/system/out/front/adc_data.bin \
+CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg \
+ADC_DATA_FILE=../CPSL_TI_Radar_cpp/build/adc_data.bin \
 uv run --group notebooks jupyter nbconvert --to notebook --execute process_adc_data.ipynb --output /tmp/out.ipynb
 ```
 
