@@ -21,3 +21,15 @@ set_tests_properties(bench_pipeline PROPERTIES LABELS bench TIMEOUT 600)
 add_executable(bench_latency bench_latency.cpp)
 target_link_libraries(bench_latency PRIVATE Radar)
 target_compile_definitions(bench_latency PRIVATE CONFIG_DIR="${PROJECT_SOURCE_DIR}/config")
+
+# bench_serial_latency: serial TLV frame latency over a pty, last byte of a
+# frame written -> Radar::next_point_cloud return (directive core-16 P8).
+# Run it directly for the numbers:
+#   <dir>/bench/bench_serial_latency [--frames N] [--period-ms N] [--points N]
+# A short run is also a plain ctest test: it fails if any frame is missing or
+# is delivered after the next frame's magic word was written.
+add_executable(bench_serial_latency bench_serial_latency.cpp)
+target_link_libraries(bench_serial_latency PRIVATE Radar util)
+target_compile_definitions(bench_serial_latency PRIVATE CONFIG_DIR="${PROJECT_SOURCE_DIR}/config")
+add_test(NAME test_serial_latency_pty COMMAND bench_serial_latency --frames 40 --period-ms 25)
+set_tests_properties(test_serial_latency_pty PROPERTIES TIMEOUT 60)
