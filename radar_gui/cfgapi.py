@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from .cfg import firmware as fwmod
-from .cfg import BOARDS, CfgError, generate, limits_dict, metrics, parse_cfg, validate
+from .cfg import BOARDS, CfgError, apply_params, generate, params_from_cfg, limits_dict, metrics, parse_cfg, validate
 
 REPO = Path(__file__).resolve().parent.parent
 # Shipped cfg trees (read-only here) listed by GET /api/cfgs
@@ -44,6 +44,13 @@ class AnalyzeReq(BaseModel):
     cfg_text: str | None = None            # analyse this cfg ...
     targets: dict | None = None            # ... or generate one from these targets
     firmware: str | None = None            # firmware id for generation (default: the board's)
+
+
+class ParamsReq(BaseModel):
+    board: str
+    base_cfg_text: str                     # the cfg whose profile/chirp/frame/channel lines are rewritten
+    params: dict | None = None             # radar_gui.cfg.params schema; partial is fine, None = just read the base
+    firmware: str | None = None
 
 
 class SaveReq(BaseModel):
@@ -149,6 +156,27 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
         if req.targets is not None:
             return _generated(req.board, req.targets, req.firmware)
         raise HTTPException(422, "give cfg_text or targets")
+
+    @r.post("/api/cfg/params")
+    def params(req: ParamsReq):
+        """Direct chirp-parameter mode (gui-11): apply `params` to `base_cfg_text`, then validate as usual.
+        Bad values come back as error issues (ok false), never as a 5xx."""
+        _bad_board(req.board)
+        try:
+            text = apply_params(req.base_cfg_text, req.params or {})
+        except CfgError as e:
+            return {"board": req.board, "ok": False, "source": "params", "text": req.base_cfg_text, "metrics": None,
+                    "issues": [{"level": "error", "code": "params", "message": str(e), "source": "", "confidence": ""}],
+                    "params": None, "report": {"ok": False, "issues": [{"level": "error", "code": "params",
+                                                                         "message": str(e)}]}}
+        res = _analyze_text(req.board, text, req.firmware)
+        res["source"] = "params"
+        try:
+            res["params"] = params_from_cfg(parse_cfg(text), req.board)
+        except CfgError:
+            res["params"] = None
+        res["report"] = {"ok": res["ok"], "issues": res["issues"]}
+        return res
 
     def _generated(board, targets, firmware=None):
         g = generate(board, targets, firmware=firmware).to_dict()

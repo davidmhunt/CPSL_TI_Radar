@@ -79,6 +79,7 @@ class Metrics:
     chirp_avg_rate_mbps: float    # bytes_per_chirp / chirp time (ADC buffer drains between chirps)
     lvds_data_fmt: int | None     # lvdsStreamCfg dataFmt, None when no lvdsStreamCfg
     num_frames: int | None = None
+    adc_end_us: float = 0.0       # adc_start + sampling window: must stay inside the ramp (gui-11)
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -221,4 +222,4 @@ def metrics(cfg: Cfg, board: str | None = None) -> Metrics:
         avg_data_rate_mbps=per_frame * 8 / (period * 1e3) if period > 0 else 0.0,
         burst_rate_mbps=fs * 1e3 * n_rx * bps * 8 / 1e6,
         chirp_avg_rate_mbps=per_chirp * 8 / tc, lvds_data_fmt=lv_fmt,
-        num_frames=fr["frames"], notes=notes)
+        num_frames=fr["frames"], adc_end_us=adc_start + sampling_us, notes=notes)

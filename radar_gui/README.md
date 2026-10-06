@@ -46,6 +46,7 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 | `POST /api/cfg/generate` | `{board, targets, firmware?}` -> same shape (`targets`, `achieved`, `name` included); `firmware` = descriptor id, default the board's; `output_mode` in targets is a deprecated alias (backend only; the UI no longer sends it) |
 | `GET /api/cfg/firmware[?board=]` | firmware descriptors (id, boards, outputs, system_enables, pending), default first for a board. Descriptors: `CPSL_TI_Radar_cpp/config/firmware/<id>.json` (schema in `radar_gui/cfg/firmware.py`); limits are loaded from them |
 | `GET /api/cfgs`, `GET /api/cfg/file?id=` | shipped (`config/radar`, `tools/radar_viewer/configs`) + user cfgs; read one |
+| `POST /api/cfg/params` | `{board, base_cfg_text, params, firmware?}` -> analyze shape + `report`, `params` (gui-11): `params` (schema in `radar_gui/cfg/params.py`) is applied to the base cfg's profile/chirp/frame/channel lines, then validated; bad values are error issues, not 4xx/5xx |
 | `POST /api/cfg/save` | write the `.cfg` + system JSON (new names only) |
 
 Tests: `uv run pytest tests/test_radar_gui_skeleton.py tests/test_radar_gui_cfgapi.py` (the driver `--validate` test
