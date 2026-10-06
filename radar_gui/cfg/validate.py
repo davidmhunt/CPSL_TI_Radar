@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
+from . import firmware as fwmod
 from .limits import (BOARD_LIMITS, firmware_limits, DCA1000_ETHERNET_HEADROOM_MBPS, DCA1000_ETHERNET_MBPS, DUTY_WARN,
                      SAR_FIRMWARE_FMT2, Limit)
 from .metrics import BOARDS, Metrics, metrics
@@ -160,6 +161,11 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
 
     # --- LVDS / DCA1000
     if m.lvds_data_fmt is not None and m.lvds_data_fmt != 0:
+        _fw = fwmod.get(firmware) if firmware else fwmod.default_for(board)
+        if _fw is not None and board in _fw["outputs"] and not _fw["outputs"][board]["lvds"]:
+            issues.append(Issue("error", "lvds_not_in_firmware",
+                                f"lvdsStreamCfg is enabled but firmware {_fw['id']!r} has no LVDS output on {board}",
+                                f"config/firmware/{_fw['id']}.json", "repo"))
         if not lim["lvds_supported"].value:
             add(lim["lvds_supported"], "lvds_unsupported", f"lvdsStreamCfg is enabled but {board} has no LVDS output",
                 "warning")

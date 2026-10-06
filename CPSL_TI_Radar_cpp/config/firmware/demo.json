@@ -1,29 +1,29 @@
 {
   "schema": 2,
-  "id": "dca1000_raw",
-  "description": "DCA1000 raw-ADC streaming firmware (Firmware/DCA1000_Streaming): no on-chip processing, ADC over LVDS only.",
+  "id": "demo",
+  "description": "TI mmw demo, one binary per board (Firmware/IWR_Demos; firmware_dev ti_stock_demos for 1843/6843): TLV point cloud over the serial data port; on 1843/6843 raw ADC over LVDS to a DCA1000 is enabled by the cfg (lvdsStreamCfg), not by a separate firmware. The 1443 demo has no LVDS output.",
   "outputs": {
     "IWR1443": {
-      "tlv": false,
-      "lvds": true
+      "tlv": true,
+      "lvds": false
     },
     "IWR1843": {
-      "tlv": false,
+      "tlv": true,
       "lvds": true
     },
     "IWR6843": {
-      "tlv": false,
+      "tlv": true,
       "lvds": true
     }
   },
   "templates": {
-    "IWR1443": "radar/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
-    "IWR1843": "radar/DCA1000/custom_configs/short_range.cfg",
-    "IWR6843": "radar/DCA1000/custom_configs/short_range.cfg"
+    "IWR1443": "radar/IWR_Demos/1443config.cfg",
+    "IWR1843": "radar/nav_configs/1843_RadVel_10Hz.cfg",
+    "IWR6843": "radar/IWR_Demos/6843.cfg"
   },
   "system_enables": {
-    "serial": false,
-    "dca1000": true
+    "serial": true,
+    "dca1000": false
   },
   "limits": {
     "IWR1443": {
@@ -332,10 +332,19 @@
   },
   "mimo": {
     "scheme": "tdm",
-    "bpm": false,
-    "max_chirps_per_loop": null,
-    "subframes": null,
-    "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: raw binary, no parser, so no verified pattern rules; IWR6843 support per memo 60bb302 (gui_board_limits_cascade_multiprofile.md)",
-    "confidence": "unverified"
+    "bpm": true,
+    "max_chirps_per_loop": 32,
+    "subframes": 4,
+    "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) sections 1-2: SDK 3.6 rfparser (RP:586-660, 774-778), one binary for 1843/6843",
+    "confidence": "high",
+    "boards": {
+      "IWR1443": {
+        "bpm": false,
+        "max_chirps_per_loop": null,
+        "subframes": null,
+        "confidence": "unverified",
+        "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: 1443 demo is SDK 2.x, not in tree; BPM/limits unestablished, bpm left false"
+      }
+    }
   }
 }

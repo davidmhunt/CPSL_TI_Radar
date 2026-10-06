@@ -34,16 +34,23 @@ def test_boards_and_page(client):
 
 def test_firmware_list_per_board_and_generate_with_firmware(client):
     allfw = client.get("/api/cfg/firmware").json()["firmware"]
-    assert {f["id"] for f in allfw} >= {"demo_stock", "demo_lvds", "dca1000_raw", "cascade_ddm", "iwr1843_sar_lvds"}
+    assert {f["id"] for f in allfw} >= {"demo", "dca1000_raw", "cascade_ddm", "iwr1843_sar_lvds"}
+    assert not {"demo_stock", "demo_lvds"} & {f["id"] for f in allfw}
     f1843 = client.get("/api/cfg/firmware", params={"board": "IWR1843"}).json()["firmware"]
-    assert [f["id"] for f in f1843][0] == "demo_stock" and {f["id"] for f in f1843} == {"demo_stock", "demo_lvds", "dca1000_raw"}
-    assert all("outputs" in f and f["template"] for f in f1843)
+    assert [f["id"] for f in f1843] == ["demo", "dca1000_raw"]
+    assert all("outputs" in f and f["template"] and f["mimo"]["scheme"] == "tdm" for f in f1843)
+    f1443 = client.get("/api/cfg/firmware", params={"board": "IWR1443"}).json()["firmware"]
+    assert f1443[0]["outputs"] == {"tlv": True, "lvds": False} and f1443[0]["mimo"]["bpm"] is False
+    assert not any(f["outputs"]["lvds"] and f["outputs"]["tlv"] for f in f1443)
+    f6843 = client.get("/api/cfg/firmware", params={"board": "IWR6843"}).json()["firmware"]
+    assert [f["id"] for f in f6843] == ["demo", "dca1000_raw"] and f6843[0]["outputs"] == {"tlv": True, "lvds": True}
+    assert client.get("/api/cfg/firmware", params={"board": "AWR2243_CASCADE"}).json()["firmware"][0]["mimo"]["scheme"] == "ddma"
     assert {f["id"] for f in client.get("/api/cfg/firmware", params={"board": "AWR2243_CASCADE"}).json()["firmware"]} \
         == {"cascade_ddm"}
     assert client.get("/api/cfg/firmware", params={"board": "NOPE"}).status_code == 422
-    g = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T, "firmware": "demo_lvds"}).json()
-    assert g["ok"] and g["targets"]["firmware"] == "demo_lvds"
-    bad = client.post("/api/cfg/generate", json={"board": "IWR1443", "targets": T, "firmware": "demo_lvds"}).json()
+    g = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": {**T, "lvds": True}, "firmware": "demo"}).json()
+    assert g["ok"] and g["targets"]["firmware"] == "demo" and "lvdsStreamCfg -1 0 1 0" in g["text"]
+    bad = client.post("/api/cfg/generate", json={"board": "IWR1443", "targets": T, "firmware": "cascade_ddm"}).json()
     assert not bad["ok"] and bad["issues"][0]["code"] == "firmware_board_mismatch"
 
 
@@ -155,7 +162,7 @@ def test_ui_has_firmware_selector_and_no_output_mode():
 def test_firmware_list_per_board_default_first_and_sar_not_offered(client):
     for b in ("IWR1443", "IWR1843", "IWR6843"):
         fws = client.get("/api/cfg/firmware", params={"board": b}).json()["firmware"]
-        assert fws[0]["id"] == "demo_stock" and fws[0]["default"]
+        assert fws[0]["id"] == "demo" and fws[0]["default"]
         assert all(f["outputs"] and not f["pending"] for f in fws) and "iwr1843_sar_lvds" not in [f["id"] for f in fws]
     assert "IWR1843_SAR" not in client.get("/api/cfg/boards").json()["boards"]
 
@@ -166,26 +173,29 @@ def test_analyze_cfg_reports_firmware_issues(client):
     assert not bad["ok"] and bad["issues"][0]["code"] == "firmware_board_mismatch"
     pend = client.post("/api/cfg/analyze", json={"board": "IWR1843_SAR", "cfg_text": text, "firmware": "iwr1843_sar_lvds"})
     assert pend.status_code == 422                                         # not a GUI board
-    ok = client.post("/api/cfg/analyze", json={"board": "IWR1843", "cfg_text": text, "firmware": "demo_stock"}).json()
+    ok = client.post("/api/cfg/analyze", json={"board": "IWR1843", "cfg_text": text, "firmware": "demo"}).json()
     assert not any(i["code"].startswith("firmware_") for i in ok["issues"])
 
 
 def test_save_uses_firmware_system_enables(client):
     def saved(fw, **kw):
-        body = _save_body(client, f"fw_{fw}_{len(kw)}", **kw)
+        body = _save_body(client, f"fw_{fw}_{len(kw)}_{len(saved.n)}", **kw)
+        saved.n.append(1)
         body.pop("serial_enabled", None); body.pop("dca1000_enabled", None)
         body.update(kw, firmware=fw)
         r = client.post("/api/cfg/save", json=body)
         assert r.status_code == 200, r.text
         return json.loads(Path(r.json()["json_path"]).read_text())
-    s = saved("demo_stock")
+    saved.n = []
+    s = saved("demo")
     assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
     s = saved("dca1000_raw")
     assert not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
-    s = saved("demo_lvds")
+    lvds_text = generate("IWR1843", {**T, "lvds": True}).text     # the demo's LVDS output is on in the cfg
+    s = saved("demo", cfg_text=lvds_text)
     assert s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
     # explicit request values still win (the UI checkboxes)
-    s = saved("demo_stock", dca1000_enabled=True)
+    s = saved("demo", dca1000_enabled=True)
     assert s["dca1000"]["enabled"]
 
 

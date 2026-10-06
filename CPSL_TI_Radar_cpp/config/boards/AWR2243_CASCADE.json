@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "name": "AWR2243_CASCADE",
+  "firmwares": ["cascade_ddm"],
   "sdk": "mmwave_mcuplus",
   "cli": {
     "baud": 115200,

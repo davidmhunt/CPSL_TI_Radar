@@ -86,9 +86,10 @@ def _fw_issue(board: str, firmware: str | None) -> dict | None:
     if fw is None:
         return {"level": "error", "code": "unknown_firmware", "source": "", "confidence": "",
                 "message": f"unknown firmware {firmware!r}; expected one of {list(fwmod.load_all())}"}
-    if board not in fw["boards"]:
-        return {"level": "error", "code": "firmware_board_mismatch", "source": src, "confidence": "repo",
-                "message": f"firmware {firmware!r} does not support {board} (it runs on {fw['boards']})"}
+    if not fwmod.supports(fw, board):
+        return {"level": "error", "code": "firmware_board_mismatch", "source": f"config/boards/{board}.json",
+                "confidence": "repo",
+                "message": f"{board} does not list firmware {firmware!r} (it lists {[d['id'] for d in fwmod.for_board(board)]})"}
     if fw.get("pending"):
         return {"level": "error", "code": "firmware_pending", "source": src, "confidence": "repo",
                 "message": f"firmware {firmware!r}: {fw['pending']}"}
@@ -115,7 +116,15 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
     fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
     en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
     serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
-    dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled
+    if req.dca1000_enabled is not None:
+        dca = req.dca1000_enabled
+    else:   # a demo with LVDS in its cfg (lvdsStreamCfg enabled) also needs the DCA1000 stream
+        try:
+            lv = parse_cfg(req.cfg_text).first("lvdsStreamCfg")
+            lv_on = bool(lv and len(lv.args) >= 3 and int(lv.floats()[2]) != 0)
+        except (CfgError, ValueError):
+            lv_on = False
+        dca = en["dca1000"] or bool(lv_on and fw and fwmod.outputs(fw, req.board)["lvds"])
     return {
         "schema_version": 2,
         "board": req.board,

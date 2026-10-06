@@ -25,6 +25,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 
 | Field | Value(s) | Evidence |
 |-------|----------|----------|
+| `firmwares` | per board, default first: `demo`, `dca1000_raw` (1443/1843/6843); `cascade_ddm`; `iwr1843_sar_lvds` | Optional key (gui-10). Ids of the firmware descriptors (`config/firmware/<id>.json`) this board supports, default first. Host-GUI metadata read by `radar_gui/cfg/firmware.py`; the C++ driver accepts and ignores it. |
 | `cli.baud` | 115200 | `SystemConfigReader.cpp:15` default |
 | `cli.ack` | `Done` | `CLIController.cpp:223,246` |
 | `cli.prompt`, `prompt_wait_ms` | `mmwDemo:/>`, 500 (IWR1843: `:/>`, a substring match so the SAR image's `mm_sar_lvds:/>` also ends the wait) | `CLIController.cpp:225-230`. The same prompt string is set in the SDK 3.6 demo (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:1325`) and in the cascade demo (`firmware_dev/projects/awr2243_cascade_ddm/.../mss/mmw_cli.c:2220`). **IWR1443 (SDK 2): not checked against source.** |

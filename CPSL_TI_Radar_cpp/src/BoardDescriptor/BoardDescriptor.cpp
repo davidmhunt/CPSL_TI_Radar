@@ -181,7 +181,7 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     BoardDescriptor d;
 
     if (!r.object(j, "", {"schema", "name", "sdk", "cli", "lifecycle", "cfg_dialect", "data_uart", "lvds"},
-                  {"dca1000"})) {
+                  {"dca1000", "firmwares"})) {   // "firmwares": host-GUI metadata (radar_gui/cfg/firmware.py), not read by the driver
         return false;
     }
 

@@ -30,9 +30,9 @@ from .parse import CfgError, parse_cfg
 from .validate import Issue, Report, validate
 
 # Deprecated `output_mode` target -> firmware id (kept so older callers keep working; use `firmware`).
-_LEGACY_MODE_FIRMWARE = {"tlv": None, "lvds": "demo_lvds", "raw": "dca1000_raw"}   # tlv = the board's default
+_LEGACY_MODE_FIRMWARE = {"tlv": None, "lvds": "demo", "raw": "dca1000_raw"}   # tlv = the board's default; lvds = demo + lvds target
 TARGET_KEYS = ("max_range_m", "max_velocity_ms", "range_res_m", "frame_rate_hz", "velocity_res_ms",
-               "num_samples", "num_loops", "tx_mask", "rx_mask", "firmware", "output_mode", "cfar_range_db",
+               "num_samples", "num_loops", "tx_mask", "rx_mask", "firmware", "output_mode", "lvds", "cfar_range_db",
                "cfar_doppler_db", "name")
 
 # Generator design constants (conservative; the validator holds the real per-board limits).
@@ -163,7 +163,9 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
       velocity_res_ms                optional; sets the loop count (chirps per frame)
       num_samples, num_loops         optional explicit overrides (win over range_res_m / velocity_res_ms)
       tx_mask, rx_mask               single chip: TX1..3 / RX1..4 bit masks (default TX1+TX3 = 5, RX all = 15)
-      output_mode                    DEPRECATED alias for `firmware` (tlv=board default, lvds=demo_lvds, raw=dca1000_raw)
+      lvds                           bool, default false: a TLV firmware (`demo` on 1843/6843) also streams raw ADC over
+                                     LVDS (lvdsStreamCfg on). Not available where the firmware has no LVDS output (1443).
+      output_mode                    DEPRECATED alias for `firmware` (tlv=board default, lvds=demo + lvds=true, raw=dca1000_raw)
       cfar_range_db, cfar_doppler_db detection thresholds (demo cfgs; not 1443)
       name                           output file name (default derived from the targets)
 
@@ -187,6 +189,8 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
             return _fail(board, t_in, issues + [Issue("error", "bad_output_mode",
                                                       f"output_mode is deprecated (use firmware); got {mode_in!r}")])
         fw_in = _LEGACY_MODE_FIRMWARE[str(mode_in).lower()]
+        if str(mode_in).lower() == "lvds":
+            t_in["lvds"] = True
         if fw_in is None and fwmod.default_for(board):
             fw_in = fwmod.default_for(board)["id"]
         issues.append(Issue("info", "output_mode_deprecated", f"output_mode is deprecated; using firmware {fw_in!r}"))
@@ -199,16 +203,23 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
                          f"unknown firmware {fw_in!r}; expected one of {list(fwmod.load_all())}")])
     if fw is None:
         return _fail(board, t_in, issues + [Issue("error", "firmware_board_mismatch", f"no firmware for {board}")])
-    if board not in fw["boards"]:
+    if not fwmod.supports(fw, board):
         ok_fw = [d["id"] for d in fwmod.for_board(board)]
         return _fail(board, t_in, issues + [Issue("error", "firmware_board_mismatch",
-                     f"firmware {fw['id']!r} does not support {board} (it runs on {fw['boards']}); "
-                     f"{board} supports: {ok_fw}", f"config/firmware/{fw['id']}.json", "repo")])
+                     f"{board} does not list firmware {fw['id']!r}; {board} supports: {ok_fw}",
+                     f"config/boards/{board}.json", "repo")])
     if fw.get("pending"):
         return _fail(board, t_in, issues + [Issue("error", "firmware_pending",
                      f"firmware {fw['id']!r}: {fw['pending']}", f"config/firmware/{fw['id']}.json", "repo")])
     t_in["firmware"] = fw["id"]
-    mode = fwmod.legacy_mode(fw)
+    want_lvds = t_in.get("lvds")
+    if isinstance(want_lvds, str):
+        want_lvds = want_lvds.strip().lower() in ("1", "true", "yes", "on")
+    want_lvds = bool(want_lvds)
+    if want_lvds and fwmod.outputs(fw, board)["tlv"] and not fwmod.outputs(fw, board)["lvds"]:
+        return _fail(board, t_in, issues + [Issue("error", "lvds_unsupported_by_firmware",
+                     f"firmware {fw['id']!r} has no LVDS output on {board}", f"config/firmware/{fw['id']}.json", "repo")])
+    mode = fwmod.flavour(fw, board, want_lvds)
     lim = firmware_limits(board, fw["id"])
     try:
         rng = _num(t_in, "max_range_m")

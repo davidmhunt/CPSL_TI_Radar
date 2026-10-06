@@ -1,13 +1,12 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "cascade_ddm",
   "description": "AM273x + AWR2243 2-chip cascade DDM demo (firmware_dev awr2243_cascade_ddm): TLV point cloud over serial; config accepted once per power-up.",
-  "boards": [
-    "AWR2243_CASCADE"
-  ],
   "outputs": {
-    "tlv": true,
-    "lvds": false
+    "AWR2243_CASCADE": {
+      "tlv": true,
+      "lvds": false
+    }
   },
   "templates": {
     "AWR2243_CASCADE": "radar/cascade/cascade_shortrange.cfg"
@@ -16,9 +15,6 @@
     "serial": true,
     "dca1000": false
   },
-  "default_for": [
-    "AWR2243_CASCADE"
-  ],
   "limits": {
     "AWR2243_CASCADE": {
       "n_tx": {
@@ -124,5 +120,14 @@
         "confidence": "repo"
       }
     }
+  },
+  "mimo": {
+    "scheme": "ddma",
+    "bpm": false,
+    "max_chirps_per_loop": null,
+    "subframes": 0,
+    "note": "chirps per loop must be a multiple of 8 (DDMA bands rule, gui-13); all 6 TX fire on every chirp",
+    "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 3: DDMA parser ignores the chirp mask; TDM only as a compile-time variant not in the shipped build",
+    "confidence": "high"
   }
 }

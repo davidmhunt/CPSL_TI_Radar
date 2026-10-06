@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "name": "IWR1443",
+  "firmwares": ["demo", "dca1000_raw"],
   "sdk": "mmwave_sdk_2",
   "cli": {
     "baud": 115200,

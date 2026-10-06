@@ -591,6 +591,7 @@ TEST_CASE(sar_descriptor_differs_from_iwr1843_only_as_intended) {
     CHECK_EQ(sar["name"].get<std::string>(), std::string("IWR1843_SAR"));
     // apply the intended differences to the stock descriptor: the rest must be identical
     base["name"] = "IWR1843_SAR";
+    base["firmwares"] = sar["firmwares"];   // host-GUI metadata (gui-10), differs per board
     base["cli"]["stop_timeout_ms"] = 4000;
     base["cfg_dialect"]["skip_commands"] = json::array();
     base["cfg_dialect"]["required_commands"] = sar["cfg_dialect"]["required_commands"];
