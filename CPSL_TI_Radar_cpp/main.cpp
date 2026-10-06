@@ -120,7 +120,8 @@ static void print_stats(const radar::Radar& r, double t){
           << " duplicate=" << s.duplicate << " incomplete=" << s.incomplete_frames
           << " skipped=" << s.skipped_frames << " overrun=" << s.rx_overrun
           << " overwritten=" << s.frames_overwritten << " stalls=" << s.stalls
-          << " rcvbuf=" << s.rcvbuf_bytes << "\n";
+          << " rcvbuf=" << s.rcvbuf_bytes << " kernel_drops=" << s.kernel_drops
+          << " ring_full=" << s.rx_ring_full << "\n";
     }
     if (r.serial_enabled()) {
         o << "stats v1 serial t=" << t << " frames=" << s.serial_frames << " missed=" << s.serial_missed

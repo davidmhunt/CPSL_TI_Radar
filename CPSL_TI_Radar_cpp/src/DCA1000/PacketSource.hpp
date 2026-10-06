@@ -64,8 +64,13 @@ public:
     virtual size_t acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout);
     virtual void release(size_t n);
 
-    // packets discarded because the RX ring was full
+    // packets discarded in user space because the RX ring was full (0 since
+    // core-15: a full ring makes the RX thread wait, see ring_full_count())
     virtual uint32_t overrun_count() const { return 0; }
+    // times the RX thread found its ring full and stopped reading
+    virtual uint32_t ring_full_count() const { return 0; }
+    // datagrams the kernel dropped because the socket buffer was full
+    virtual uint32_t kernel_drops() const { return 0; }
     // SO_RCVBUF the kernel granted (0 = not a socket)
     virtual size_t rcvbuf_bytes() const { return 0; }
 
@@ -87,6 +92,8 @@ public:
     size_t acquire(PacketView* out, size_t max, std::chrono::milliseconds timeout) override;
     void release(size_t n) override;
     uint32_t overrun_count() const override { return socket_.get_overrun_count(); }
+    uint32_t ring_full_count() const override { return socket_.get_ring_full_count(); }
+    uint32_t kernel_drops() const override { return socket_.get_kernel_drops(); }
     size_t rcvbuf_bytes() const override { return socket_.get_granted_rcvbuf(); }
 
     // FPGA commands (each true when the DCA1000 answered with status 0)

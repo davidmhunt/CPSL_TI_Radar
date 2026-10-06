@@ -419,6 +419,8 @@ public:
     }
     void release(size_t n) override { socket_.release_packets(static_cast<int>(n)); }
     uint32_t overrun_count() const override { return socket_.get_overrun_count(); }
+    uint32_t ring_full_count() const override { return socket_.get_ring_full_count(); }
+    uint32_t kernel_drops() const override { return socket_.get_kernel_drops(); }
     size_t rcvbuf_bytes() const override { return socket_.get_granted_rcvbuf(); }
     uint64_t delivered() const { return delivered_.load(std::memory_order_relaxed); }
 
@@ -596,6 +598,7 @@ int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const
     worker.join();
     const long long kdrops = kernel_drops(data_port);  // before the socket closes
     h.stop();                                          // joins the RX thread
+    const uint32_t driver_kdrops = src->kernel_drops(), ring_full = src->ring_full_count();
     rusage self1{}, main1{};
     getrusage(RUSAGE_THREAD, &main1);
     getrusage(RUSAGE_SELF, &self1);
@@ -624,17 +627,20 @@ int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const
                                 : "once, mid-run");
     std::printf("udp frames=%llu of=%zu golden=%s sent=%llu delivered=%llu discards=%llu kernel_drops=%lld "
                 "unaccounted=%lld stalls=%llu cpu_ns_per_byte=%.3f cpu_ms=%.1f vol_cs=%ld invol_cs=%ld "
-                "cs_per_packet=%.3f dropped=%u incomplete=%u skipped=%u late=%u rate=%s\n",
+                "cs_per_packet=%.3f dropped=%u incomplete=%u skipped=%u late=%u rate=%s driver_kernel_drops=%u "
+                "ring_full=%u\n",
                 static_cast<unsigned long long>(st.frames), frames, golden ? "yes" : "no",
                 static_cast<unsigned long long>(sent), static_cast<unsigned long long>(delivered),
                 static_cast<unsigned long long>(discards), kdrops, unaccounted,
                 static_cast<unsigned long long>(stalls.load()), ns / static_cast<double>(frame_payload), ns * 1e-6,
                 vcsw, ivcsw, sent ? static_cast<double>(vcsw + ivcsw) / static_cast<double>(sent) : 0.0,
                 st.assembler.dropped_packets, st.assembler.incomplete_frames, st.assembler.skipped_frames,
-                st.assembler.late_packets, rate);
+                st.assembler.late_packets, rate, driver_kdrops, ring_full);
     std::printf("\n  cpu_ns_per_byte / vol_cs / invol_cs: the RX and worker threads only (process getrusage minus\n"
                 "  the sender and main threads), per frame payload byte. discards: packets the RX thread threw\n"
-                "  away (DCA1000Socket overrun count). kernel_drops: the socket's drops column in /proc/net/udp.\n"
+                "  away (DCA1000Socket overrun count). kernel_drops: the socket's drops column in /proc/net/udp;\n"
+                "  driver_kernel_drops: the same count as the driver reports it (Stats::kernel_drops, P6).\n"
+                "  ring_full: times the RX thread found its ring full and stopped reading.\n"
                 "  unaccounted = sent - delivered - discards - kernel_drops (0 when every loss is counted).\n"
                 "  golden: every frame complete, nothing dropped.\n");
     std::error_code ec;

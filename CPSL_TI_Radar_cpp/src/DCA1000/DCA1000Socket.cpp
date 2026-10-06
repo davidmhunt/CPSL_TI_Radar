@@ -5,15 +5,33 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sched.h>
+#include <linux/sock_diag.h>
 #include <algorithm>
+
+namespace {
+
+// the kernel's drop count for this socket (sk_drops), -1 if unavailable
+int64_t socket_drops(int fd) {
+    if (fd < 0) return -1;
+    uint32_t mem[SK_MEMINFO_VARS] = {};
+    socklen_t len = sizeof(mem);
+    if (getsockopt(fd, SOL_SOCKET, SO_MEMINFO, mem, &len) != 0 || len <= SK_MEMINFO_DROPS * sizeof(uint32_t)) return -1;
+    return mem[SK_MEMINFO_DROPS];
+}
+
+}  // namespace
 
 DCA1000Socket::DCA1000Socket()
     : rx_ring_(),
       rx_ring_head_(0),
       rx_ring_tail_(0),
       rx_overrun_count_(0),
+      rx_ring_full_count_(0),
+      kernel_drops_seen_(0),
+      kernel_drops_base_(0),
       rx_thread_running_(false),
-      worker_waiting_(false)
+      worker_waiting_(false),
+      rx_waiting_(false)
 {}
 
 DCA1000Socket::~DCA1000Socket() {
@@ -72,6 +90,13 @@ bool DCA1000Socket::init(const std::string& fpga_ip, const std::string& system_i
     granted_rcvbuf_ = actual_rcvbuf > 0 ? static_cast<size_t>(actual_rcvbuf) : 0;
     cpsl::radar::log_info("[DCA1000] SO_RCVBUF granted: ", actual_rcvbuf, " bytes");
 
+    // the kernel's drop counter for the data socket arrives with each
+    // datagram (design P6); get_kernel_drops() reports it
+    int one = 1;
+    if (setsockopt(data_socket_, SOL_SOCKET, SO_RXQ_OVFL, &one, sizeof(one)) != 0) {
+        cpsl::radar::log_warn("[DCA1000] SO_RXQ_OVFL not available: kernel drops are read with SO_MEMINFO only");
+    }
+
     // Bind sockets
     if (bind(cmd_socket_, reinterpret_cast<struct sockaddr*>(&cmd_address_),
              sizeof(cmd_address_)) < 0) {
@@ -97,6 +122,11 @@ void DCA1000Socket::start_rx() {
     rx_ring_head_.store(0, std::memory_order_relaxed);
     rx_ring_tail_.store(0, std::memory_order_relaxed);
     rx_overrun_count_.store(0, std::memory_order_relaxed);
+    rx_ring_full_count_.store(0, std::memory_order_relaxed);
+    // kernel drops are counted from here (the counters are per socket)
+    const int64_t d = socket_drops(data_socket_);
+    kernel_drops_base_.store(d > 0 ? static_cast<uint32_t>(d) : 0, std::memory_order_relaxed);
+    kernel_drops_seen_.store(kernel_drops_base_.load(std::memory_order_relaxed), std::memory_order_relaxed);
     rx_thread_running_.store(true, std::memory_order_relaxed);
     rx_thread_ = std::thread(&DCA1000Socket::rx_thread_func, this);
     struct sched_param sp;
@@ -109,7 +139,14 @@ void DCA1000Socket::start_rx() {
 
 void DCA1000Socket::stop_rx() {
     rx_thread_running_.store(false, std::memory_order_relaxed);
+    {
+        // wake an RX thread waiting for ring space
+        std::lock_guard<std::mutex> lock(rx_space_mutex_);
+    }
+    rx_space_cv_.notify_one();
     if (rx_thread_.joinable()) rx_thread_.join();
+    // drops after the last received datagram carry no SO_RXQ_OVFL message
+    note_kernel_drops(socket_drops(data_socket_));
 }
 
 bool DCA1000Socket::send_command(std::vector<uint8_t>& cmd) {
@@ -170,7 +207,13 @@ int DCA1000Socket::acquire_packets(PacketView* out, int max, int timeout_ms) {
 void DCA1000Socket::release_packets(int n) {
     if (n <= 0) return;
     const int tail = rx_ring_tail_.load(std::memory_order_relaxed);
-    rx_ring_tail_.store((tail + n) % RX_RING_SIZE, std::memory_order_release);
+    rx_ring_tail_.store((tail + n) % RX_RING_SIZE, std::memory_order_seq_cst);
+    // the RX thread waits for space only when the ring was full (P6); the
+    // same flag handshake as worker_waiting_
+    if (rx_waiting_.load(std::memory_order_seq_cst)) {
+        { std::lock_guard<std::mutex> lock(rx_space_mutex_); }
+        rx_space_cv_.notify_one();
+    }
 }
 
 bool DCA1000Socket::pop_packet(uint8_t* buf, int& len, int timeout_ms) {
@@ -189,23 +232,56 @@ uint32_t DCA1000Socket::get_overrun_count() const {
     return rx_overrun_count_.load(std::memory_order_relaxed);
 }
 
+uint32_t DCA1000Socket::get_ring_full_count() const {
+    return rx_ring_full_count_.load(std::memory_order_relaxed);
+}
+
+void DCA1000Socket::note_kernel_drops(int64_t cumulative) {
+    if (cumulative < 0) return;
+    const uint32_t c = static_cast<uint32_t>(cumulative);
+    uint32_t seen = kernel_drops_seen_.load(std::memory_order_relaxed);
+    // the count only grows (modulo 2^32)
+    while (static_cast<int32_t>(c - seen) > 0 &&
+           !kernel_drops_seen_.compare_exchange_weak(seen, c, std::memory_order_relaxed)) {
+    }
+}
+
+uint32_t DCA1000Socket::get_kernel_drops() const {
+    // SO_RXQ_OVFL as last seen by the RX thread, or SO_MEMINFO now if newer
+    uint32_t seen = kernel_drops_seen_.load(std::memory_order_relaxed);
+    const int64_t now = socket_drops(data_socket_);
+    if (now >= 0 && static_cast<int32_t>(static_cast<uint32_t>(now) - seen) > 0) seen = static_cast<uint32_t>(now);
+    return seen - kernel_drops_base_.load(std::memory_order_relaxed);
+}
+
 void DCA1000Socket::rx_thread_func() {
     // recvmmsg straight into the free ring slots (design P5): one syscall
     // takes up to kRecvBatch datagrams. MSG_WAITFORONE blocks (up to the
     // socket's SO_RCVTIMEO, 500 ms, so stop_rx() stays bounded) for the
     // first datagram only, then takes whatever else is already queued.
+    // Each datagram may carry the kernel's drop count (SO_RXQ_OVFL).
+    constexpr size_t kCtrl = CMSG_SPACE(sizeof(uint32_t));
     std::array<mmsghdr, kRecvBatch> msgs{};
     std::array<iovec, kRecvBatch> iov{};
+    alignas(cmsghdr) std::array<std::array<uint8_t, kCtrl>, kRecvBatch> ctrl{};
     while (rx_thread_running_.load(std::memory_order_relaxed)) {
         const int head = rx_ring_head_.load(std::memory_order_relaxed);
         const int tail = rx_ring_tail_.load(std::memory_order_acquire);
         const int free_slots = (tail - head - 1 + RX_RING_SIZE) % RX_RING_SIZE;
 
         if (free_slots == 0) {
-            // Ring full: drain socket to prevent kernel buffer overflow
-            rx_overrun_count_.fetch_add(1, std::memory_order_relaxed);
-            uint8_t discard[1472];
-            recvfrom(data_socket_, discard, sizeof(discard), 0, nullptr, nullptr);
+            // Ring full (design P6): stop reading until the worker frees a
+            // slot. Nothing is discarded here: the datagrams wait in the
+            // socket's SO_RCVBUF, and only if that fills does the kernel drop
+            // (counted in get_kernel_drops()).
+            rx_ring_full_count_.fetch_add(1, std::memory_order_relaxed);
+            std::unique_lock<std::mutex> lock(rx_space_mutex_);
+            rx_waiting_.store(true, std::memory_order_seq_cst);
+            rx_space_cv_.wait_for(lock, std::chrono::milliseconds(100), [this, tail] {
+                return rx_ring_tail_.load(std::memory_order_seq_cst) != tail ||
+                       !rx_thread_running_.load(std::memory_order_relaxed);
+            });
+            rx_waiting_.store(false, std::memory_order_relaxed);
             continue;
         }
 
@@ -218,12 +294,23 @@ void DCA1000Socket::rx_thread_func() {
             msgs[i].msg_hdr = msghdr{};
             msgs[i].msg_hdr.msg_iov = &iov[i];
             msgs[i].msg_hdr.msg_iovlen = 1;
+            msgs[i].msg_hdr.msg_control = ctrl[i].data();
+            msgs[i].msg_hdr.msg_controllen = kCtrl;
             msgs[i].msg_len = 0;
         }
         const int got = recvmmsg(data_socket_, msgs.data(), static_cast<unsigned>(n), MSG_WAITFORONE, nullptr);
         if (got <= 0) continue;  // timeout (stop check) or EINTR
         for (int i = 0; i < got; i++) {
             rx_ring_[head + i].bytes_received = static_cast<int>(msgs[i].msg_len);
+        }
+        // the newest datagram carries the newest cumulative drop count
+        msghdr& last = msgs[got - 1].msg_hdr;
+        for (cmsghdr* c = CMSG_FIRSTHDR(&last); c != nullptr; c = CMSG_NXTHDR(&last, c)) {
+            if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SO_RXQ_OVFL) {
+                uint32_t drops = 0;
+                std::memcpy(&drops, CMSG_DATA(c), sizeof(drops));
+                note_kernel_drops(drops);
+            }
         }
         rx_ring_head_.store((head + got) % RX_RING_SIZE, std::memory_order_seq_cst);
         // wake the worker only if it is (about to be) asleep; taking the

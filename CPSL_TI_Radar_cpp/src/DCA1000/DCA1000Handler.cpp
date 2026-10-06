@@ -304,7 +304,9 @@ void DCA1000Handler::print_status(){
       << ", duplicate " << stats.duplicate_packets
       << ", incomplete frames " << stats.incomplete_frames
       << ", skipped frames " << stats.skipped_frames
-      << ", rx overruns " << (source_ ? source_->overrun_count() : 0);
+      << ", rx overruns " << (source_ ? source_->overrun_count() : 0)
+      << ", rx ring full " << (source_ ? source_->ring_full_count() : 0)
+      << ", kernel drops " << (source_ ? source_->kernel_drops() : 0);
     cpsl::radar::log_debug(o.str());
 }
 

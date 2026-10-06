@@ -64,7 +64,9 @@ struct Stats {
     uint64_t duplicate = 0;           // packets received twice
     uint64_t incomplete_frames = 0;   // frames completed with zero-filled bytes
     uint64_t skipped_frames = 0;      // frames with no byte received (never completed)
-    uint64_t rx_overrun = 0;          // packets discarded because the RX ring was full
+    uint64_t rx_overrun = 0;          // packets discarded in user space (RX ring full): 0 since core-15
+    uint64_t rx_ring_full = 0;        // times the RX ring was full and the RX thread stopped reading
+    uint64_t kernel_drops = 0;        // packets the kernel dropped (SO_RCVBUF full; SO_RXQ_OVFL)
     uint64_t frames = 0;              // frames completed (and saved, when saving)
     uint64_t frames_overwritten = 0;  // completed frames dropped from a full frame queue before next_adc_frame took them
     uint64_t rcvbuf_bytes = 0;        // SO_RCVBUF granted by the kernel

@@ -478,6 +478,8 @@ Stats Radar::stats() const {
         s.frames_overwritten = d.frames_overwritten;
         if (m.packets) {
             s.rx_overrun = m.packets->overrun_count();
+            s.rx_ring_full = m.packets->ring_full_count();
+            s.kernel_drops = m.packets->kernel_drops();
             s.rcvbuf_bytes = m.packets->rcvbuf_bytes();
         }
     }

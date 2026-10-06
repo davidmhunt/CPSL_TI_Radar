@@ -4,7 +4,11 @@
 // Manages the two UDP sockets used to communicate with the DCA1000 FPGA board,
 // plus a dedicated real-time RX thread that drains the data socket into a
 // lock-free ring buffer, up to kRecvBatch datagrams per recvmmsg() call,
-// received straight into the ring slots.
+// received straight into the ring slots. When the ring is full the RX thread
+// stops reading until the worker frees a slot (back-pressure, design P6):
+// nothing is discarded in user space; the socket's SO_RCVBUF holds the
+// backlog, and what the kernel drops when that overflows is counted
+// (get_kernel_drops()).
 //
 // Ring buffer protocol (single producer, single consumer): rx_ring_head_ is
 // written by the RX thread and read by the worker thread; rx_ring_tail_ is
@@ -75,7 +79,15 @@ public:
     // Returns false if no packet arrives within the timeout.
     bool pop_packet(uint8_t* buf, int& len, int timeout_ms = 500);
 
+    // packets discarded in user space because the ring was full. Always 0
+    // since core-15 (P6): a full ring makes the RX thread stop reading, so
+    // the kernel buffer absorbs the burst instead
     uint32_t get_overrun_count() const;
+    // times the RX thread found the ring full and waited for the worker
+    uint32_t get_ring_full_count() const;
+    // datagrams the kernel dropped on the data socket since start_rx()
+    // (SO_RCVBUF full): SO_RXQ_OVFL, completed by SO_MEMINFO
+    uint32_t get_kernel_drops() const;
 
     // SO_RCVBUF the kernel granted in init() (0 before init)
     size_t get_granted_rcvbuf() const { return granted_rcvbuf_; }
@@ -95,6 +107,10 @@ private:
     std::atomic<int>      rx_ring_head_;
     std::atomic<int>      rx_ring_tail_;
     std::atomic<uint32_t> rx_overrun_count_;
+    std::atomic<uint32_t> rx_ring_full_count_;
+    // cumulative socket drop count (sk_drops) last seen, and its value at start_rx()
+    std::atomic<uint32_t> kernel_drops_seen_;
+    std::atomic<uint32_t> kernel_drops_base_;
     std::atomic<bool>     rx_thread_running_;
     std::thread           rx_thread_;
     // the worker sleeps on rx_ring_cv_ only after setting worker_waiting_
@@ -104,6 +120,11 @@ private:
     std::atomic<bool>       worker_waiting_;
     std::condition_variable rx_ring_cv_;
     std::mutex              rx_ring_cv_mutex_;
+    // the RX thread waits here when the ring is full (P6); release_packets()
+    // notifies it only when rx_waiting_ is set (the same handshake)
+    std::atomic<bool>       rx_waiting_;
+    std::condition_variable rx_space_cv_;
+    std::mutex              rx_space_mutex_;
 
     int cmd_socket_  = -1;
     int data_socket_ = -1;
@@ -116,6 +137,7 @@ private:
     size_t granted_rcvbuf_ = 0;
 
     void rx_thread_func();
+    void note_kernel_drops(int64_t cumulative);
 };
 
 #endif // DCA1000SOCKET_H

@@ -6,6 +6,9 @@
 //       in batches; a sleeping worker is woken by the RX thread.
 //   P5  the RX thread takes a queued backlog with recvmmsg, in order, across
 //       the end of the ring array; stop_rx() stays bounded by SO_RCVTIMEO.
+//   P6  a full ring makes the RX thread stop reading (no user-space
+//       discard); the socket buffer absorbs the backlog, and what overflows
+//       it is counted as kernel drops.
 #include "test_harness.hpp"
 #include "DCA1000Socket.hpp"
 
@@ -209,6 +212,70 @@ TEST_CASE(a_queued_backlog_is_taken_in_order) {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - t0).count();
     std::cout << "    stop_rx() took " << ms << " ms" << std::endl;
     CHECK(ms < 1500);
+}
+
+// drain everything until `quiet_ms` pass with no packet; returns the indices
+std::vector<uint32_t> drain(DCA1000Socket& sock, int quiet_ms) {
+    std::vector<uint32_t> got;
+    DCA1000Socket::PacketView v[32];
+    for (;;) {
+        const int n = sock.acquire_packets(v, 32, quiet_ms);
+        if (n == 0) break;
+        for (int i = 0; i < n; i++) {
+            uint32_t idx = 0;
+            std::memcpy(&idx, v[i].data, 4);
+            got.push_back(idx);
+        }
+        sock.release_packets(n);
+    }
+    return got;
+}
+
+TEST_CASE(a_full_ring_waits_and_the_socket_buffer_absorbs_the_backlog) {
+    Loopback lb(8 * 1024 * 1024);
+    CHECK(lb.ok);
+    if (!lb.ok) return;
+    lb.sock.start_rx();
+    // a stalled worker: 1500 packets (the ring holds 511) and nothing read
+    const uint32_t kPackets = 1500;
+    for (uint32_t i = 0; i < kPackets; i++) {
+        CHECK(lb.send_packet(i));
+        if (i % 100 == 99) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    CHECK(lb.sock.get_ring_full_count() >= 1u);
+    const std::vector<uint32_t> got = drain(lb.sock, 300);
+    CHECK_EQ(got.size(), static_cast<size_t>(kPackets));
+    bool in_order = true;
+    for (size_t i = 0; i < got.size(); i++) in_order = in_order && got[i] == i;
+    CHECK(in_order);
+    CHECK_EQ(lb.sock.get_overrun_count(), 0u);
+    CHECK_EQ(lb.sock.get_kernel_drops(), 0u);
+}
+
+TEST_CASE(overflowing_the_socket_buffer_is_counted_as_kernel_drops) {
+    Loopback lb(64 * 1024);  // the kernel grants about twice this
+    CHECK(lb.ok);
+    if (!lb.ok) return;
+    lb.sock.start_rx();
+    const uint32_t kPackets = 3000;
+    for (uint32_t i = 0; i < kPackets; i++) lb.send_packet(i);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::vector<uint32_t> got = drain(lb.sock, 300);
+    // packets after the drain carry the drop count in SO_RXQ_OVFL
+    for (uint32_t i = kPackets; i < kPackets + 10; i++) lb.send_packet(i);
+    const std::vector<uint32_t> tail = drain(lb.sock, 300);
+    got.insert(got.end(), tail.begin(), tail.end());
+    const uint32_t drops = lb.sock.get_kernel_drops();
+    std::cout << "    delivered " << got.size() << ", kernel drops " << drops << ", ring full "
+              << lb.sock.get_ring_full_count() << std::endl;
+    CHECK(drops > 0u);
+    CHECK_EQ(got.size() + drops, static_cast<size_t>(kPackets + 10));
+    CHECK_EQ(lb.sock.get_overrun_count(), 0u);
+    bool increasing = true;
+    for (size_t i = 1; i < got.size(); i++) increasing = increasing && got[i] > got[i - 1];
+    CHECK(increasing);
+    CHECK_EQ(tail.size(), static_cast<size_t>(10));
 }
 
 TEST_MAIN()
