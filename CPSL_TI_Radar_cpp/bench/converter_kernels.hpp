@@ -3,15 +3,17 @@
 // These exist ONLY to put numbers on design decision D5 (nested vs flat
 // AdcFrame). They are not driver code and nothing in src/ uses them.
 //
-// All three variants decode the same wire format as today's
+// All three variants decode the same wire format as the driver's
 // ADCCubeConverter::fill_noninterleaved (IWR1843/IWR6843, lvds.layout
 // two_lane_iq_pairs, iq_order q_first): the byte stream is little-endian
 // int16 words, chirp-major then Rx then sample, and every group of four words
 // [w0 w1 w2 w3] carries two consecutive samples as
 //     sample k   = complex(real = w2, imag = w0)
 //     sample k+1 = complex(real = w3, imag = w1)
-// (ADCCubeConverter.cpp interleave_data). Equivalence with variant (a) is
-// checked at bench start-up on random data.
+// Equivalence with variant (a) is checked at bench start-up on random data.
+// Since core-14 P3, (a) is the driver's own nested converter looping in
+// output order; (b) keeps the input-order loop it was compared with in the
+// core-09 review (F1).
 #ifndef BENCH_CONVERTER_KERNELS_HPP
 #define BENCH_CONVERTER_KERNELS_HPP
 

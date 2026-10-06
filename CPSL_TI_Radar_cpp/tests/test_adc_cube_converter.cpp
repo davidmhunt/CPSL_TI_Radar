@@ -183,6 +183,60 @@ TEST_CASE(configure_sizes_cube_before_first_frame) {
     CHECK(cube[2][7][1] == Cx(0, 0));
 }
 
+// IWR1843/6843 with an odd sample count per (chirp, rx): the word groups pair
+// consecutive samples of the whole frame, n = (chirp * rx + r) * samples + s,
+// so a pair may straddle two (chirp, rx) blocks (the v1 converter paired the
+// same way)
+static Bytes noninterleaved_global_stream(size_t rx, size_t samples, size_t chirps) {
+    Bytes b;
+    const size_t total = rx * samples * chirps;
+    auto at = [&](size_t n) {
+        const size_t c = n / (rx * samples), r = (n / samples) % rx, s = n % samples;
+        return value(r, s, c);
+    };
+    for (size_t n = 0; n + 1 < total; n += 2) {
+        put_i16(b, at(n).imag());
+        put_i16(b, at(n + 1).imag());
+        put_i16(b, at(n).real());
+        put_i16(b, at(n + 1).real());
+    }
+    return b;
+}
+
+TEST_CASE(noninterleaved_pairs_straddle_blocks_when_samples_are_odd) {
+    ADCCubeConverter conv;
+    conv.configure(1, 3, 4, IWR18_68_LVDS);  // 3 samples per (chirp, rx): odd
+    check_cube(conv.convert(noninterleaved_global_stream(1, 3, 4)), 1, 3, 4);
+    ADCCubeConverter three;
+    three.configure(3, 5, 2, IWR18_68_LVDS);  // 15 samples per chirp, 30 per frame
+    check_cube(three.convert(noninterleaved_global_stream(3, 5, 2)), 3, 5, 2);
+}
+
+TEST_CASE(short_frame_reads_missing_words_as_zero_on_both_layouts) {
+    {
+        ADCCubeConverter conv;
+        conv.configure(2, 4, 3, IWR18_68_LVDS);
+        Bytes b = noninterleaved_stream(2, 4, 3);
+        b.resize(b.size() / 2);  // chirp 0 and half of chirp 1
+        ADCCubeConverter::ADCCube cube(2, std::vector<std::vector<Cx>>(4, std::vector<Cx>(3, Cx(9, 9))));
+        conv.convert(b, cube);
+        CHECK(cube[0][0][0] == value(0, 0, 0));
+        CHECK(cube[1][3][0] == value(1, 3, 0));
+        CHECK(cube[0][3][1] == value(0, 3, 1));
+        CHECK(cube[1][0][1] == Cx(0, 0));
+        CHECK(cube[1][3][2] == Cx(0, 0));
+    }
+    {
+        ADCCubeConverter conv;
+        conv.configure(2, 3, 2, IWR1443_LVDS);
+        Bytes b = interleaved_stream(2, 3, 2);
+        b.resize(b.size() / 2);  // chirp 0 only
+        auto cube = conv.convert(b);
+        CHECK(cube[1][2][0] == value(1, 2, 0));
+        CHECK(cube[0][0][1] == Cx(0, 0));
+    }
+}
+
 TEST_CASE(convert_into_a_reused_buffer_keeps_its_storage) {
     // design P2: the driver converts into pooled cubes; a correctly shaped
     // buffer is filled in place (same storage), a wrongly shaped one is

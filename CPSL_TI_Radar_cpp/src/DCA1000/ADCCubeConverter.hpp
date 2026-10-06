@@ -18,7 +18,11 @@
 // Call configure() once after the radar parameters are known, then convert()
 // for each received frame. convert(bytes, out) writes into a caller-owned
 // (pooled) cube; it is (re)shaped only if its shape is wrong, so a reused
-// buffer is not reallocated.
+// buffer is not reallocated. The conversion is one pass over the packed
+// bytes in output order (rx, sample, chirp): writes are sequential along each
+// cube[rx][sample] vector, reads stride through the frame. No intermediate
+// buffer and no allocation per frame (core-14 P3). A frame shorter than the
+// configured shape reads the missing words as 0.
 
 #include <vector>
 #include <complex>
@@ -51,13 +55,6 @@ private:
     size_t chirps_per_frame_ = 0;
     cpsl::radar::LvdsLayout layout_ = cpsl::radar::LvdsLayout::two_lane_iq_pairs;
     cpsl::radar::IqOrder iq_order_ = cpsl::radar::IqOrder::q_first;
-
-    std::vector<std::int16_t> convert_from_bytes_to_ints(
-        const std::vector<uint8_t>& in_vector);
-    std::vector<std::vector<std::int16_t>> reshape_to_2D(
-        std::vector<std::int16_t>& in_vector, size_t num_rows);
-    std::vector<std::complex<std::int16_t>> interleave_data(
-        std::vector<std::vector<std::int16_t>>& in_vector);
 
     void fill_interleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube);
     void fill_noninterleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube);
