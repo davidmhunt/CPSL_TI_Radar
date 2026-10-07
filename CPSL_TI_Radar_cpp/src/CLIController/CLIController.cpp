@@ -9,6 +9,51 @@
 
 using namespace std;
 
+namespace {
+
+//The reply text of one command for the cli echo line: the echoed command, the
+//ack ("Done") and the prompt are dropped, \r removed, the remaining lines
+//joined with " | " and the result capped at 200 chars. The GUI parses the
+//echo line (radar_gui/driver.py); see docs/ARCHITECTURE.md.
+string echo_reply(const string& resp, const string& command, const string& ack, const string& prompt) {
+    auto trim = [](string t) {
+        const char* ws = " \t\r\n";
+        const size_t b = t.find_first_not_of(ws);
+        if (b == string::npos) return string();
+        return t.substr(b, t.find_last_not_of(ws) - b + 1);
+    };
+    string out;
+    size_t pos = 0;
+    while (pos <= resp.size()) {
+        size_t nl = resp.find('\n', pos);
+        if (nl == string::npos) nl = resp.size();
+        string ln = trim(resp.substr(pos, nl - pos));
+        pos = nl + 1;
+        if (ln.empty() || ln == trim(command) || ln == trim(ack)) continue;
+        if (!prompt.empty()) {
+            //drop the prompt, also when it trails a reply on the same line
+            const size_t at = ln.find(prompt);
+            if (at != string::npos) {
+                //the prompt is "<name>:/>" and the board prints the name before
+                //it (mmwDemo:/>): drop that trailing word too
+                ln = ln.substr(0, at);
+                const size_t sp = ln.find_last_of(" \t");
+                ln = trim(sp == string::npos ? string() : ln.substr(0, sp));
+            }
+            if (ln.empty()) continue;
+        }
+        if (!out.empty()) out += " | ";
+        out += ln;
+    }
+    for (char& c : out) {
+        if (c == '"') c = '\'';
+    }
+    if (out.size() > 200) out = out.substr(0, 200) + "...";
+    return out;
+}
+
+}  // namespace
+
 /**
  * @brief Default contructor (leaves un-initialized)
  * 
@@ -99,15 +144,17 @@ bool CLIController::send_config_to_IWR() {
             cpsl::radar::filter_cfg_commands(lines, system_config_reader.getBoard());
 
         for (const string& skipped : plan.skipped) {
-            cpsl::radar::log_debug("Skipped command (board ", system_config_reader.getBoard().name,
-                                   " skip_commands): ", skipped);
+            cpsl::radar::log_info("cli [skip] ", skipped, " (skip_commands)");
         }
 
         //skipped commands are never sent, so they do not count as unacknowledged
         bool all_done = true;
         bool any_io_error = false;
+        size_t index = 0;
         for (const string& command : plan.send) {
-            if(!CLIController::sendCommand(command, system_config_reader.getRadarCliTimeoutMs())){
+            ++index;
+            const string tag = to_string(index) + "/" + to_string(plan.send.size());
+            if(!CLIController::sendCommand(command, system_config_reader.getRadarCliTimeoutMs(), tag)){
                 all_done = false;
                 any_io_error = any_io_error || io_error_;
             }
@@ -131,7 +178,7 @@ bool CLIController::send_config_to_IWR() {
 bool CLIController::sendStartCommand()
 {
     return CLIController::sendCommand(system_config_reader.getBoard().cli.start_cmd,
-                                      system_config_reader.getRadarCliTimeoutMs());
+                                      system_config_reader.getRadarCliTimeoutMs(), "start");
 }
 
 /**
@@ -141,7 +188,7 @@ bool CLIController::sendStartCommand()
  */
 bool CLIController::sendStopCommand()
 {
-    return CLIController::sendCommand(system_config_reader.getBoard().cli.stop_cmd, stop_timeout_ms());
+    return CLIController::sendCommand(system_config_reader.getBoard().cli.stop_cmd, stop_timeout_ms(), "stop");
 }
 
 int CLIController::stop_timeout_ms() const
@@ -189,10 +236,11 @@ std::error_code CLIController::read_until_with_timeout(
  * @brief Send a command to the IWR
  * 
  * @param command command to be sent to the board
+ * @param tag "i/N" (cfg line), "start" or "stop": printed in the cli echo line
  * @return true if the board responded with "Done"; false on a timeout, a
  *  missing ack, or an I/O error (which also sets io_error()). Never throws.
  */
-bool CLIController::sendCommand(const string& command, int timeout_ms) {
+bool CLIController::sendCommand(const string& command, int timeout_ms, const string& tag) {
 
     //io_error() describes this command only (core-11 review S2: it used to stick)
     io_error_ = false;
@@ -202,7 +250,7 @@ bool CLIController::sendCommand(const string& command, int timeout_ms) {
         return false;
     }
 
-    cpsl::radar::log_debug("Sent command: ", command);
+    const auto t_start = std::chrono::steady_clock::now();
 
     try {
         //send the command over the serial port
@@ -220,6 +268,8 @@ bool CLIController::sendCommand(const string& command, int timeout_ms) {
         const cpsl::radar::BoardDescriptor::Cli& cli = system_config_reader.getBoard().cli;
         string resp;
         std::error_code ec = read_until_with_timeout(resp, cli.ack, timeout_ms);
+        const long long elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - t_start).count();
 
         //the board prints its prompt after the ack and drops input while it does
         //(the AM273x cascade demo loses the first characters of the next command),
@@ -233,7 +283,23 @@ bool CLIController::sendCommand(const string& command, int timeout_ms) {
             }
         }
 
-        cpsl::radar::log_debug("Received response: ", resp);
+        //one echo line per command (info level), written after the reply:
+        //  cli [3/27] channelCfg ... -> DONE (12 ms)
+        //  cli [27/27] sensorStart -> ERROR (8 ms) "Error: ... | Error -1"
+        //  cli [5/27] foo -> TIMEOUT no 'Done' in 100 ms "<partial reply>"
+        //An I/O error has no echo line (it is logged as an error below).
+        if (!ec || ec == std::errc::timed_out) {
+            const string reply = echo_reply(resp, command, cli.ack, cli.prompt);
+            const string quoted = reply.empty() ? string() : " \"" + reply + "\"";
+            if (!ec) {
+                cpsl::radar::log_info("cli [", tag, "] ", command, " -> DONE (", elapsed_ms, " ms)", quoted);
+            } else if (reply.find("Error") != string::npos || reply.find("not recognized") != string::npos) {
+                cpsl::radar::log_info("cli [", tag, "] ", command, " -> ERROR (", elapsed_ms, " ms)", quoted);
+            } else {
+                cpsl::radar::log_info("cli [", tag, "] ", command, " -> TIMEOUT no '", cli.ack, "' in ",
+                                      timeout_ms, " ms", quoted);
+            }
+        }
 
         //handle error codes
         if (ec == std::errc::timed_out) {

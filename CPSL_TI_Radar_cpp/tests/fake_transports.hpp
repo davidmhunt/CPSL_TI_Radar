@@ -52,7 +52,10 @@ public:
         writes_ok++;
         auto d = reply_delay.find(cmd);
         const clock::time_point at = clock::now() + (d == reply_delay.end() ? std::chrono::milliseconds(0) : d->second);
-        if (cmd == prompt_error_on) {
+        auto rt = reply_text.find(cmd);
+        if (rt != reply_text.end()) {
+            pending_.push_back({at, "\r\n" + cmd + "\r\n" + rt->second + prompt});
+        } else if (cmd == prompt_error_on) {
             pending_.push_back({at, "\r\n" + cmd + "\r\nDone\r\n"});
             prompt_error_ = true;
         } else {
@@ -114,6 +117,7 @@ public:
     size_t fail_after = 0;
     std::map<std::string, std::chrono::milliseconds> reply_delay;
     std::string prompt_error_on;
+    std::map<std::string, std::string> reply_text;  // full reply (replaces "Done\r\n") for a command
     std::string prompt = "mmwDemo:/>";  // what the fake prints after "Done"
 
 private:

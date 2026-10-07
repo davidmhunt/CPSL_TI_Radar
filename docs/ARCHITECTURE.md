@@ -65,6 +65,17 @@ sent (e.g. the radar's USB was unplugged) and `file_error` when an output
 file failed to flush; the executable then exits 1. A missing
 acknowledgement is only a warning.
 
+**CLI echo line.** `CLIController` logs one info-level line per command, after
+the board's reply: `cli [3/27] channelCfg ... -> DONE (12 ms)`,
+`cli [27/27] sensorStart -> ERROR (8 ms) "Error: ... | Error -1"` (no ack and an
+`Error`/`not recognized` reply), `cli [5/27] foo -> TIMEOUT no 'Done' in 100 ms "<partial reply>"`,
+and `cli [skip] calibData 0 0 0 (skip_commands)`. The tag is `i/N` for cfg
+lines, `start` or `stop`; the quoted reply (echoed command, ack and prompt
+removed, newlines as ` | `, capped at 200 chars + `...`, `"` as `'`) is omitted
+when empty. An I/O error has no echo line (an error line instead). Runs with
+`log_level` `warn`/`error` hide it. The GUI (`radar_gui/driver.py`) parses this
+format; `tests/test_cli_echo.cpp` pins it.
+
 **Stall policy.** `runtime.stall_timeout_ms` > 0: when a stream completes no
 frame for that long while running, the next `next_adc_frame` /
 `next_point_cloud` call logs a warning, adds 1 to `Stats::stalls` and

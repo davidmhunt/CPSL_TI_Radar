@@ -53,7 +53,8 @@ public:
 private:
 
     //timeout_ms: how long to wait for the ack (and the most the write may take)
-    bool sendCommand(const std::string& command, int timeout_ms);
+    //tag: "i/N", "start" or "stop" in the cli echo line (info level)
+    bool sendCommand(const std::string& command, int timeout_ms, const std::string& tag);
     //append to `response` until it contains `delim`, or timeout_ms passes
     std::error_code read_until_with_timeout(
         std::string & response,
