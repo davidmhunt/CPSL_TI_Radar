@@ -26,7 +26,7 @@ from typing import Any, Mapping
 
 from . import firmware as fwmod
 from .limits import CAS, firmware_limits
-from .metrics import BOARDS, C, USABLE_IF, Metrics, tdm_slots
+from .metrics import BOARDS, C, USABLE_IF, Metrics, az_tx_mask, tdm_slots
 from .parse import CfgError, parse_cfg
 from .validate import Issue, Report, validate
 
@@ -164,7 +164,7 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
       frame_rate_hz                  default 10
       velocity_res_ms                optional; sets the loop count (chirps per frame)
       num_samples, num_loops         optional explicit overrides (win over range_res_m / velocity_res_ms)
-      tx_mask, rx_mask               single chip: TX1..3 / RX1..4 bit masks (default TX1+TX3 = 5, RX all = 15). The chirps
+      tx_mask, rx_mask               single chip: TX1..3 / RX1..4 bit masks (default = the board's azimuth pair: TX1+TX3 = 5, ODS TX1+TX2 = 3; RX all = 15). The chirps
                                      are one TX each in TI's azimuth-first order (TX1, TX3, TX2 = masks 1,4,2)
       bpm                            bool, default false (plain TDM, bpmCfg disabled). true: BPM = mask 5 on 2 chirps with
                                      bpmCfg enabled; only where the firmware descriptor says mimo.bpm (else bpm_unsupported)
@@ -235,7 +235,7 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
         n_given = _num(t_in, "num_samples")
         loops_given = _num(t_in, "num_loops")
         cfar_r, cfar_d = _num(t_in, "cfar_range_db"), _num(t_in, "cfar_doppler_db")
-        tx_mask = int(t_in["tx_mask"]) if t_in.get("tx_mask") not in (None, "") else 0b101
+        tx_mask = int(t_in["tx_mask"]) if t_in.get("tx_mask") not in (None, "") else az_tx_mask(fwmod.elevation_tx_bit(board))
         rx_mask = int(t_in["rx_mask"]) if t_in.get("rx_mask") not in (None, "") else 0b1111
         if rng is None or vmax is None:
             raise CfgError("max_range_m and max_velocity_ms are required")
@@ -273,9 +273,10 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
         cpl = 2
         factor = tdm_slots(chirp_masks, True)[0]
     else:
-        chirp_masks = [b for b in (1, 4, 2) if tx_mask & b]       # azimuth first (mimo_modes.md s4)
+        ebit = fwmod.elevation_tx_bit(board)                       # ISK 2 -> 1,4,2; ODS 4 -> 1,2,4
+        chirp_masks = [b for b in (1, 2, 4) if b != ebit and tx_mask & b] + ([ebit] if tx_mask & ebit else [])  # azimuth first
         cpl = len(chirp_masks)                                     # chirps per loop
-        factor = tdm_slots(chirp_masks, False)[0]                  # n_TX slots: velocity ambiguity multiplier
+        factor = tdm_slots(chirp_masks, False, ebit)[0]                  # n_TX slots: velocity ambiguity multiplier
 
     # sample count
     note_res = None

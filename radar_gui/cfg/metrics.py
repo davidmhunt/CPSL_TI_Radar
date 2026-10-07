@@ -26,9 +26,16 @@ C = 299_792_458.0
 USABLE_IF = 0.9           # cfggen.py USABLE_IF: ~90 % of the IF band is usable
 CASCADE = "AWR2243_CASCADE"
 BOARDS = ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", CASCADE)
-# TX1 and TX3 are the azimuth pair on the single-chip EVMs (TX2 is the elevation-offset one).
-# Assumption from the EVM antenna layout; ODS/AOP 6843 modules differ (see Metrics.notes).
+# TX1 and TX3 are the azimuth pair on the single-chip EVMs (TX2 is the elevation-offset one); on the IWR6843ODS the
+# azimuth pair is TX1+TX2 and TX3 is the elevation TX (docs/research/iwr6843_ods_antenna_2026-10-07.md). The board's
+# elevation TX bit comes from `firmware.elevation_tx_bit(board)`; the azimuth TX = the other TX of the 3-TX mask.
+# AOP modules are not modelled (see Metrics.notes).
 SINGLE_CHIP_AZ_TX_MASK = 0b101
+
+
+def az_tx_mask(elev_bit: int = 0b010) -> int:
+    """Chirp-mask bits of the azimuth TX for a board whose elevation TX is `elev_bit` (ISK 2 -> 0b101, ODS 4 -> 0b011)."""
+    return 0b111 & ~elev_bit
 LVDS_DATAFMT2_META_BYTES = 64   # docs/firmware.md: dataFmt 2 = ADC + two 32-byte per-chirp metadata slots
 
 
@@ -237,10 +244,11 @@ def _pow2(x: int) -> int:
     return 1 if x <= 1 else 1 << (x - 1).bit_length()
 
 
-def tdm_slots(masks: list[int], bpm: bool) -> tuple[int, int, list[str]]:
+def tdm_slots(masks: list[int], bpm: bool, elev_bit: int = 0b010) -> tuple[int, int, list[str]]:
     """(n_TX time slots per loop, azimuth TX count, notes) for a TDM chirp pattern (mimo_modes.md header):
-    BPM -> 2; multi-TX mask on every chirp without bpm -> SIMO 1; else distinct azimuth TX (TX1/TX3) of
-    the OR of the masks, +1 when a chirp uses TX2 (elevation)."""
+    BPM -> 2; multi-TX mask on every chirp without bpm -> SIMO 1; else distinct azimuth TX of the OR of the
+    masks (TX1/TX3 on the ISK, TX1/TX2 on the ODS; `elev_bit` = the board's elevation TX), +1 when a chirp
+    uses the elevation TX."""
     notes: list[str] = []
     used = 0
     for m in masks:
@@ -251,8 +259,8 @@ def tdm_slots(masks: list[int], bpm: bool) -> tuple[int, int, list[str]]:
         return 1, 1, ["multi-TX mask on every chirp without bpmCfg = SIMO: TX transmit together, n_TX = 1"]
     if any(popcount(m) > 1 for m in masks):
         notes.append("mixes one-TX and multi-TX chirps (unsupported pattern); n_TX counted by the azimuth/elevation rule")
-    az = popcount(used & SINGLE_CHIP_AZ_TX_MASK)
-    elev = 1 if used & 0b010 else 0
+    az = popcount(used & az_tx_mask(elev_bit))
+    elev = 1 if used & elev_bit else 0
     n_tx = az + elev
     if n_tx == 0:
         n_tx = max(1, popcount(used))
@@ -273,7 +281,7 @@ def _deriv(scheme: str, n_tx: int, n_bands: int) -> dict:
     tdm = scheme == "tdm"
     d = lambda formula, conf="derived": {"formula": formula, "scheme": scheme, "confidence": conf}
     out = {
-        "n_tx": d("distinct azimuth TX (TX1/TX3) in the chirp masks, +1 if a TX2 (elevation) chirp exists; "
+        "n_tx": d("distinct azimuth TX in the chirp masks (TX1/TX3; TX1/TX2 on the ODS), +1 if an elevation-TX chirp exists (TX2; TX3 on the ODS); "
                   "bpmCfg on = 2; multi-TX mask on every chirp without bpmCfg (SIMO) = 1" if tdm else
                   "TX count of channelCfg (every enabled TX fires on every chirp)"),
         "loop_period_us": d("n_TX * Tc" if tdm else "Tc (every TX is sampled each chirp)"),
@@ -389,11 +397,19 @@ def _one(cfg: Cfg, board: str | None, cascade: bool, scheme: str, fr: dict) -> M
         n_az = n_tx * n_rx
         notes.append("DDMA azimuth aperture assumes a uniform half-wavelength virtual array (unverified)")
     else:
-        n_tx, az_tx, tnotes = tdm_slots(seq, bpm)
+        ebit = fwmod.elevation_tx_bit(board) if board else 0b010
+        n_tx, az_tx, tnotes = tdm_slots(seq, bpm, ebit)
         notes += tnotes
         n_az = az_tx * n_rx
-        notes.append("azimuth resolution assumes TX1/TX3 azimuth pair at the EVM layout; "
-                     "6843 ODS/AOP antenna layouts differ (unverified)")
+        if ebit == 0b100:
+            notes.append("azimuth resolution uses the IWR6843ODS pairing (azimuth TX1+TX2, elevation TX3; TI SWRU546E "
+                         "sec. 3.7); AOP layout is not modelled (unverified)")
+            if bpm:
+                notes.append("bpmCfg drives TX1+TX3 in the stock demo (mss_main.c:1767-1796) but on the ODS TX1+TX3 are "
+                             "not the azimuth pair; the 2-TX azimuth aperture here assumes the demo's EVM pairing (unverified)")
+        else:
+            notes.append("azimuth resolution assumes TX1/TX3 azimuth pair at the EVM layout; "
+                         "6843 AOP antenna layout differs (unverified)")
     n_virtual = n_tx * n_rx
 
     n_chirps = chirps_per_loop * fr["loops"]

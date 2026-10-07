@@ -37,7 +37,7 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 | Burst rate | `fs*1e3 * n_rx * bps * 8 / 1e6` (Mbit/s, sampling) | `burst_rate_mbps` |
 | Per-chirp rate | `per_chirp * 8 / Tc`: bytes*8 / us = Mbit/s | `chirp_avg_rate_mbps` |
 
-`N_az`: cascade = `n_tx * n_rx`; single chip = (azimuth TX in use: `TX1`/`TX3`, mask `0b101`, min 1) `* n_rx`.
+`N_az`: cascade = `n_tx * n_rx`; single chip = (azimuth TX in use: `TX1`/`TX3`, mask `0b101`; IWR6843ODS `TX1`/`TX2`, mask `0b011`, per the board's `elevation_tx_bit`, memo `docs/research/iwr6843_ods_antenna_2026-10-07.md`; min 1) `* n_rx`.
 
 **Solver (`generate._design`, inverse of the above).** Given target range `R`, `v_target`, `dv_target`, sample count `N`: slope `= 0.9 * fs*1e3 * c / (2R) / 1e12` (rounded to 0.001); ramp `= ceil(100*(adcStart + t_s + margin))/100`; `Tc = c / (4 * factor * fc * v_target)` (us), `idle = round(Tc - ramp, 2)`, `factor = popcount(tx_mask)` (TDM) or `1` (DDMA); `N = round(R / (0.9 * dR) / 2) * 2` if `range_res_m` given (`dR = R/(0.9 N)`); `chirps = lambda / (2 * dv_target * Tc)`, `loops = ceil(chirps / chirps_per_loop)` (`generate._loop_options`). Candidates are re-checked by `metrics`/`validate`; `duty <= 0.5` preferred (`DUTY_PREFERRED`), else `0.9`.
 

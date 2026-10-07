@@ -181,6 +181,14 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
                 add("error", "tx_pattern_invalid",
                     f"{label}: bpmCfg is on but chirp mask(s) {bad} are not 5 (TX1+TX3); BPM needs both azimuth TX on "
                     f"every chirp (mmwdemo_rfparser.c:530-540)", f"{_M1} s1", "high")
+            elif fwmod.elevation_tx_bit(board) == 0b100:
+                # Stock 6843 demo (xwr68xx mss_main.c:1763-1796, SDK 3.6): the BPM phases are hardcoded to TX1 (+) and
+                # TX3 (-), "for 68xx device"; the demo does not know the ODS layout, so BPM is flagged, not re-targeted.
+                add("warning", "bpm_ods_pairing",
+                    f"{label}: bpmCfg drives TX1+TX3 (mask 5) in the stock demo (mss_main.c:1767-1796), but on {board} the "
+                    f"azimuth pair is TX1+TX2 (TX3 is elevation), so BPM does not give a pure 2-TX azimuth aperture here "
+                    f"(inferred from the antenna layout, not bench-tested)",
+                    "docs/research/iwr6843_ods_antenna_2026-10-07.md", "low")
             continue
         if multi:
             add("info", "simo_multi_tx",
@@ -189,7 +197,7 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
                 f"{_M1} s1 (RP:608-616)", "high")
             continue
         # one TX per chirp (plain TDM): periodic with period n_TX, every TX of channelCfg present, azimuth first
-        n_tx = tdm_slots(masks, False)[0]
+        n_tx = tdm_slots(masks, False, fwmod.elevation_tx_bit(board))[0]
         if cpl % n_tx or any(masks[i] != masks[i % n_tx] for i in range(cpl)):
             add("warning", "tx_pattern_not_periodic",
                 f"{label}: TX pattern {masks} is not periodic with the {n_tx} TX time slot(s) per loop; the range DPU "
