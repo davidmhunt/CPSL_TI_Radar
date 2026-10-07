@@ -1,0 +1,38 @@
+Using config: CPSL_TI_Radar_cpp/config/system/radar_0_IWR1843_demo.json
+Skipped command (board IWR1843 skip_commands): calibData 0 0 0
+Sent command: sensorStop
+Received response: sensorStop
+Ignored: Sensor is already stopped
+Done
+mmwDemo:/>
+Sent command: flushCfg
+Received response: flushCfg
+Done
+mmwDemo:/>
+Sent command: dfeDataOutputMode 1
+Received response: dfeDataOutputMode 1
+Done
+mmwDemo:/>
+Sent command: cfarFovCfg -1 1 -1 1.00
+Received response: cfarFovCfg -1 1 -1 1.00
+Done
+mmwDemo:/>
+Sent command: sensorStart
+Received response: sensorStart
+Error: Full configuration must be provided before sensor can be started the first time
+Error -1
+mmwDemo:/>
+warning: CLIController: no 'Done' for 'sensorStart' within 100 ms
+warning: Radar: sensorStart was not acknowledged with 'Done'
+SerialStreamer: no complete frame within 1000 ms
+stats v1 serial t=1.002 frames=0 missed=0 overwritten=0 stalls=0
+SerialStreamer: no complete frame within 1000 ms
+stats v1 serial t=2.004 frames=0 missed=0 overwritten=0 stalls=0
+no frame for 2 s, stopping
+Received 0 frames, 0 missed
+Sent command: sensorStop
+Received response: sensorStop
+Ignored: Sensor is already stopped
+Done
+mmwDemo:/>
+stats v1 serial t=2.109 frames=0 missed=0 overwritten=0 stalls=0

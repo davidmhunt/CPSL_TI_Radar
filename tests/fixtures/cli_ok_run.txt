@@ -1,0 +1,10 @@
+Using config: x
+cli [skip] calibData 0 0 0 (skip_commands)
+cli [stop] sensorStop -> DONE (9 ms) "Ignored: Sensor is already stopped"
+cli [1/7] flushCfg -> DONE (9 ms)
+cli [2/7] dfeDataOutputMode 1 -> DONE (10 ms)
+cli [3/7] channelCfg 15 5 0 -> DONE (11 ms)
+cli [4/7] adcCfg 2 1 -> DONE (12 ms)
+cli [5/7] profileCfg 0 77 429 7 57.14 0 0 70 1 256 5209 0 0 30 -> DONE (13 ms)
+cli [6/7] frameCfg 0 0 32 0 100 1 0 -> DONE (14 ms)
+cli [7/7] sensorStart -> DONE (15 ms)

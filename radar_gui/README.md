@@ -96,10 +96,17 @@ Runs happen in `runs/gui/<UTC>_<json stem>/` (gitignored; override `RADAR_GUI_RU
     uv run python -m radar_gui --source mock --driver-bin tests/fakes/fake_driver.py   # no hardware
 
 Wire format (additions to `/stream`): `driver_state` (full status minus the log; also sent on connect), `driver_stats` (`stream`, `stats`
-with `rate_hz`), `driver_log` (`line`). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
+with `rate_hz`), `driver_log` (`line`), `driver_cli` (`entry`, `run`, `first_fail`: one board command and its reply; see below). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
 (body `{config, frames?, duration?}`; only configs listed by `/configs` are accepted). Tests: `tests/test_radar_gui_driver.py` (fake driver
 `tests/fakes/fake_driver.py`, modes via `FAKE_DRIVER_MODE`). Shots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui05.json`
 (own server, fake driver; the spec's `user_cfgs` carry the system JSONs, `@PORT@` stands for a scratch file used as the CLI port).
+
+**Board command transcript (gui-34).** The driver's CLI traffic is parsed into `status.cli` (`[{seq, i, n, tag, cmd, ok, verdict
+DONE|ERROR|TIMEOUT|SKIP, reply, ms}]`, first 500) and `cli_first_fail` (the first failing `seq`), from either the info-level
+`cli [i/N] <cmd> -> DONE|ERROR|TIMEOUT (<ms> ms) "<reply>"` line or, for older binaries at `log_level` debug, the `Sent command:` /
+`Received response:` pair plus the reply lines up to the prompt. `SerialSource` records the same shape for its own configure attempt
+(`GET /api/source` -> `cli`, `cli_first_fail`). The Run tab (under the log) and the Live Source card show it as a collapsible
+"Board commands" panel that opens on the first failing line.
 
 ## Remote access over Tailscale
 

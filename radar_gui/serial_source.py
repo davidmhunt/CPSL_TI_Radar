@@ -93,6 +93,8 @@ class SerialSource(Source):
         self.once = bool(self.desc.get("lifecycle", {}).get("config_once_per_boot"))
         self.dialect = self.desc["data_uart"]["tlv_dialect"]
         self.state, self.msg = "starting", ""
+        self._last_raw = b""
+        self.cli: list[dict] = []        # board command transcript of the latest configure attempt (gui-34)
         self.claimed = self.started = False
         self.info = self._info()
 
@@ -106,6 +108,19 @@ class SerialSource(Source):
         except Exception:  # a cfg the analyser rejects still streams; keep the default hint
             pass
         return info
+
+    @property
+    def cli_first_fail(self):
+        """1-based position in `cli` of the first command the board did not answer Done to, else None."""
+        return next((e["seq"] for e in self.cli if e["verdict"] in ("ERROR", "TIMEOUT")), None)
+
+    def _record(self, line, ok, reply, ms, i=None, n=None, tag=None):
+        verdict = "DONE" if ok else ("ERROR" if self._has_error(reply) else "TIMEOUT")
+        self.cli.append({"seq": len(self.cli) + 1, "i": i, "n": n, "tag": tag, "cmd": line, "ok": ok, "verdict": verdict,
+                         "reply": reply, "ms": ms})
+
+    def _has_error(self, reply):
+        return any(t in reply for t in self.desc["cli"].get("error_tokens", []))
 
     def _status(self, state, msg=""):
         self.state, self.msg = state, msg
@@ -142,6 +157,18 @@ class SerialSource(Source):
                 break
         return resp
 
+    def _timed_send(self, cli, line, i=None, n=None, tag=None):
+        """_send_line plus a transcript entry (reply as ' | '-joined lines without the echo / prompt, capped)."""
+        t0 = time.monotonic()
+        ok, reply = self._send_line(cli, line)
+        ms = round((time.monotonic() - t0) * 1000)
+        prompt = self.desc["cli"].get("prompt", "")
+        parts = [p.strip() for p in self._last_raw.decode(errors="replace").replace("\r", "").split("\n")]
+        parts = [p for p in parts if p and p != line and not (prompt and p.endswith(prompt)) and not (ok and p == "Done")]
+        text = " | ".join(parts)
+        self._record(line, ok, text if len(text) <= 200 else text[:199] + "\u2026", ms, i, n, tag)
+        return ok, reply
+
     def _send_line(self, cli, line):
         """(ok, reply). Waits for the prompt too on the cascade, whose CLI drops input while it prints it."""
         c = self.desc["cli"]
@@ -149,6 +176,7 @@ class SerialSource(Source):
         prompt = c.get("prompt", "").encode()
         cli.write((line + "\n").encode())
         resp = self._read_until(cli, [ack] + errs, max(c.get("cmd_timeout_ms", 1000), 1000) / 1000)
+        self._last_raw = resp
         text = resp.decode(errors="replace").strip().replace("\n", " ")
         if any(e in resp for e in errs) or ack not in resp:
             return False, text
@@ -158,12 +186,13 @@ class SerialSource(Source):
 
     async def _configure(self) -> bool:
         n = len(self.lines)
+        self.cli = []
         self._status("configuring", f"configuring 0/{n}")
         cli = await asyncio.to_thread(self.opener, self.cli_port, self.desc["cli"]["baud"])
         try:
             await asyncio.to_thread(cli.reset_input_buffer)
             for i, line in enumerate(self.lines, 1):
-                ok, reply = await asyncio.to_thread(self._send_line, cli, line)
+                ok, reply = await asyncio.to_thread(self._timed_send, cli, line, i, n)
                 if not ok:
                     msg = f"line {i}/{n} '{line}' was not accepted ({reply[:80] or 'no reply'})."
                     if self.once:
@@ -265,8 +294,13 @@ class SerialSource(Source):
         except OSError:
             return
         try:
+            t0 = time.monotonic()
             cli.write((stop + "\n").encode())
-            self._read_until(cli, [self.desc["cli"].get("ack", "Done").encode()], self.stop_wait_s)
+            resp = self._read_until(cli, [self.desc["cli"].get("ack", "Done").encode()], self.stop_wait_s)
+            ok = self.desc["cli"].get("ack", "Done").encode() in resp
+            self._last_raw = resp
+            self._record(stop, ok, "" if ok else resp.decode(errors="replace").strip().replace("\n", " | ")[:200],
+                         round((time.monotonic() - t0) * 1000), tag="stop")
         except OSError:
             pass
         finally:

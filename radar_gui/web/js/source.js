@@ -2,8 +2,10 @@
 // Serial: board + cfg pickers, CLI/data ports defaulting to the board's usual by-id paths, skip-cfg for
 // once-per-boot boards. Status text arrives through main.js (setStatus) -> srcStatus().
 import { $ } from './state.js';
+import { mountCliPanel } from './cli_panel.js';
 
 const C = { kind: 'mock', boards: [], cfgs: [], files: [], cur: null, ready: false, busy: false };
+let cmdPanel = null;
 const KIND_LABEL = { mock: 'Mock', replay: 'Replay', serial: 'Serial' };
 
 async function api(path, body) {
@@ -60,7 +62,7 @@ function describeNow() {
 }
 export async function refreshSource() {
   const { j } = await api('/api/source');
-  if (j) { C.cur = j; describeNow(); if (!C.ready) { C.kind = j.kind; } layout(); }
+  if (j) { C.cur = j; describeNow(); if (cmdPanel && j.kind === 'serial') cmdPanel.update(j.cli); else if (cmdPanel) cmdPanel.clear(); if (!C.ready) { C.kind = j.kind; } layout(); }
 }
 export async function initSource() {
   const [b, c, f] = await Promise.all([api('/api/source/boards'), api('/api/cfgs'), api('/api/source/files')]);
@@ -75,6 +77,7 @@ export async function initSource() {
     fs.append(og);
   }
   if (!C.files.length) fs.append(new Option('(no replay files found)', ''));
+  cmdPanel = mountCliPanel($('srcCmds'), { compact: true });
   await refreshSource();
   C.ready = true; boardChanged();
 }
@@ -107,7 +110,11 @@ async function stop() {
 // Called by main.js on every status message: the source's progress / hints (configuring i/N, cfg_failed + power-cycle
 // hint, stalled, no_board, compact-points) are shown in the card as well as the header.
 const BAD = ['error', 'cfg_failed', 'no_board', 'stalled', 'disconnected'];
+let lastState = null;
 export function srcStatus(state, text) {
+  // the transcript is fetched when the configure attempt resolves (not on every "configuring i/N" tick)
+  if (state !== lastState && ['cfg_failed', 'waiting', 'streaming', 'stalled'].includes(state) && C.ready) refreshSource();
+  lastState = state;
   const el = $('srcStat'); const show = !!text || BAD.includes(state);
   el.hidden = !show; el.textContent = show ? `${state.replace('_', ' ')}${text ? ': ' + text : ''}` : '';
   el.className = 'runmsg ' + (BAD.includes(state) ? 'bad' : state === 'streaming' ? 'ok' : 'warn');

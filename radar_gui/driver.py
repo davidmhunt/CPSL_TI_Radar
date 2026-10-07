@@ -28,6 +28,35 @@ DEFAULT_RUN_ROOT = REPO / "runs" / "gui"
 LOG_LINES = 500
 _FRAME_RE = re.compile(r"^frame:\s+(\d+) rx x (\d+) samples x (\d+) chirps, ([\d.]+) ms period")
 _BPF_RE = re.compile(r"^bytes/frame:\s*(\d+)")
+CLI_MAX = 500          # transcript entries kept (the beginning of the run: that is where a rejected cfg shows)
+CLI_REPLY_MAX = 200
+# Board CLI transcript (gui-34). Two driver formats: the info-level echo (one line per command, written after the reply)
+#   cli [3/27] channelCfg 15 7 0 -> Done (12 ms)
+#   cli [27/27] sensorStart -> ERROR (8 ms) "Error: Full configuration ... | Error -1"
+#   cli [5/27] foo -> TIMEOUT no 'Done' in 100 ms "<partial reply>"       cli [skip] calibData 0 0 0 (skip_commands)
+# and, as a fallback for older binaries run at log_level debug, the "Sent command:" / "Received response:" pair
+# followed by the raw reply lines up to the board prompt.
+_CLI_ECHO_RE = re.compile(r"^\s*cli \[(?P<tag>[^\]]+)\] (?P<cmd>.+?) -> (?P<verdict>DONE|ERROR|TIMEOUT)\b(?P<rest>.*)$", re.I)
+_MS_RE = re.compile(r"\((\d+(?:\.\d+)?) ?ms\)")
+_CLI_SKIP_RE = re.compile(r"^\s*cli \[skip\] (?P<cmd>.+?)(?: \([^)]*\))?\s*$")
+_DBG_SKIP_RE = re.compile(r"^Skipped command \([^)]*\): (?P<cmd>.+?)\s*$")
+_DBG_SENT_RE = re.compile(r"^Sent command: (?P<cmd>.+?)\s*$")
+_DBG_WARN_RE = re.compile(r"^warning: CLIController: no '[^']*' for '(?P<cmd>.+?)' within (?P<ms>\d+) ms")
+_PROMPT_END = ":/>"
+_ERR_TOKENS = ("Error", "not recognized")
+_STOP_PENDING = ("stats v1", "warning:", "error:", "SerialStreamer", "Received ", "no frame")
+
+
+def clean_reply(lines, drop_done: bool) -> str:
+    """Reply lines -> one line: newlines as ' | ', optional lone 'Done' dropped, capped at CLI_REPLY_MAX chars."""
+    keep = [ln for ln in lines if not (drop_done and ln == "Done")]
+    text = " | ".join(keep)
+    return text if len(text) <= CLI_REPLY_MAX else text[:CLI_REPLY_MAX - 1] + "\u2026"
+
+
+def first_fail(cli) -> int | None:
+    """1-based position (seq) of the first ERROR/TIMEOUT entry, else None."""
+    return next((e["seq"] for e in cli if e["verdict"] in ("ERROR", "TIMEOUT")), None)
 
 
 class DriverError(Exception):
@@ -81,6 +110,7 @@ class DriverManager:
         self._mu = threading.RLock()
         self._reset()
         self.state = "idle"
+        self.run_id = 0     # counts runs; the page clears its transcript when it changes (gui-34)
 
     def _reset(self):
         self.proc = None
@@ -89,6 +119,7 @@ class DriverManager:
         self.log = collections.deque(maxlen=LOG_LINES)
         self.parser = bench_lib.Parser()
         self._prev = {}
+        self.cli, self._cli_pend, self._cli_seq = [], None, 0
         self.expect = {}
         self.sigint_sent = False
         self.t_start = 0.0
@@ -147,6 +178,7 @@ class DriverManager:
                 if duration:
                     cmd += ["--duration", str(float(duration))]
                 self._reset()
+                self.run_id += 1
                 self.config, self.run_dir, self.files_dir = str(config), str(cwd), files_dir
                 self.expect = {"bytes_per_frame": val["bytes_per_frame"],
                                "period_ms": (val["frame"] or {}).get("period_ms")}
@@ -217,6 +249,7 @@ class DriverManager:
         t = time.monotonic()
         with self._mu:
             self.log.append(line)
+            cli_events = self._cli_line(line)
             n = len(self.parser.events)
             self.parser.feed(t, line)
             msg = None
@@ -235,8 +268,76 @@ class DriverManager:
         self.emit(msg or {"type": "driver_log", "line": line})
         if msg:
             self.emit({"type": "driver_log", "line": line})
+        for ev in cli_events:
+            self.emit(ev)
+
+    # ---- board command transcript (gui-34) -------------------------------------------------------
+    def _cli_add(self, **e) -> dict:
+        self._cli_seq += 1
+        entry = {"seq": self._cli_seq, "i": None, "n": None, "tag": None, "cmd": "", "ok": False, "verdict": "ERROR",
+                 "reply": "", "ms": None, **e}
+        if len(self.cli) < CLI_MAX:
+            self.cli.append(entry)
+        return {"type": "driver_cli", "run": self.run_id, "entry": entry, "first_fail": first_fail(self.cli)}
+
+    def _cli_close(self) -> list:
+        """Finish the pending debug-format command: ERROR if the reply has an error token, DONE if it has Done, else TIMEOUT."""
+        p, self._cli_pend = self._cli_pend, None
+        if p is None:
+            return []
+        lines = [ln for ln in p["lines"] if ln and ln != p["cmd"] and not ln.endswith(_PROMPT_END)]
+        if any(ln.startswith(_ERR_TOKENS) or "not recognized" in ln for ln in lines):
+            verdict = "ERROR"
+        elif any(ln.startswith("Done") for ln in lines):
+            verdict = "DONE"
+        else:
+            verdict = "TIMEOUT"
+        return [self._cli_add(cmd=p["cmd"], ok=verdict == "DONE", verdict=verdict,
+                              reply=clean_reply(lines, verdict == "DONE"))]
+
+    def _cli_line(self, line) -> list:
+        """Feed one driver output line; returns the driver_cli events it completed. Caller holds the lock."""
+        text = line.replace("\r", "").strip()
+        if (m := _CLI_ECHO_RE.match(text)):
+            tag = m.group("tag").strip()
+            ij = re.fullmatch(r"(\d+)/(\d+)", tag)
+            verdict, rest = m.group("verdict").upper(), m.group("rest")
+            q = rest.find(' "')
+            head, reply = (rest, "") if q < 0 else (rest[:q], rest[q + 2:].rstrip().removesuffix('"'))
+            ms = _MS_RE.search(head)
+            ms = None if ms is None else (int(float(ms.group(1))) if float(ms.group(1)).is_integer() else float(ms.group(1)))
+            return self._cli_close() + [self._cli_add(
+                i=int(ij.group(1)) if ij else None, n=int(ij.group(2)) if ij else None, tag=None if ij else tag,
+                cmd=m.group("cmd"), ok=verdict == "DONE", verdict=verdict, reply=clean_reply([reply], False) if reply else "", ms=ms)]
+        if (m := _CLI_SKIP_RE.match(text)) or (m := _DBG_SKIP_RE.match(text)):
+            return self._cli_close() + [self._cli_add(tag="skip", cmd=m.group("cmd"), ok=True, verdict="SKIP")]
+        if (m := _DBG_SENT_RE.match(text)):
+            out = self._cli_close()
+            self._cli_pend = {"cmd": m.group("cmd"), "lines": []}
+            return out
+        if (m := _DBG_WARN_RE.match(text)):
+            if self._cli_pend is not None and self._cli_pend["cmd"] == m.group("cmd"):
+                out = self._cli_close()
+            else:
+                out = []
+            last = self.cli[-1] if self.cli else None
+            if last and last["cmd"] == m.group("cmd") and last["verdict"] == "TIMEOUT" and last["ms"] is None:
+                last["ms"] = int(m.group("ms"))
+                out = out or [{"type": "driver_cli", "run": self.run_id, "entry": last, "first_fail": first_fail(self.cli)}]
+            return out
+        if self._cli_pend is None:
+            return []
+        if text.startswith("Received response:"):
+            return []
+        if text.endswith(_PROMPT_END) or text.startswith(_STOP_PENDING):
+            return self._cli_close()
+        if len(self._cli_pend["lines"]) < 20:
+            self._cli_pend["lines"].append(text)
+        return []
 
     def _finish(self, code):
+        for ev in self._cli_close():
+            self.emit(ev)
         self.exit_code = code
         clean = code == 0 or (self.sigint_sent and code in (-signal.SIGINT, 130))
         if self.forced:
@@ -275,5 +376,6 @@ class DriverManager:
             return {"state": self.state, "pid": self.proc.pid if self.proc and self.state in ("running", "stopping") else None,
                     "config": self.config, "run_dir": self.run_dir, "exit_code": self.exit_code,
                     "error": self.error, "stats": dict(self.stats), "log": list(self.log)[-100:] if log else [],
+                    "run": self.run_id, "cli": [dict(e) for e in self.cli] if log else [], "cli_first_fail": first_fail(self.cli),
                     "files": list(self.files), "bin_verdict": self.bin_verdict,
                     "radar_owner": self.lock.owner}

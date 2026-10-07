@@ -26,6 +26,9 @@ Actions (each followed by a short settle delay for the debounced re-analysis):
     {"load": "cascade_shortrange"}                pick a cfg in #cLoad (substring of text/value)
     {"set": "#id", "value": "10000"}              set input/select, dispatch input+change
     {"click": "#id"}   {"wait": 1.5}
+    ("set" values may use @PORT@ = an existing scratch file, @CLI@ = the pty link of a spec "helpers" fake board, e.g.
+     "helpers": [{"cmd": ["python", "tests/fakes/fake_board_pty.py", "@CLI@", "--reject", "sensorStart"]}], and
+     "server": ["tests/fakes/gui_fake_serial.py"] which lifts the serial-port allowlist so the pty path is accepted)
     {"click_text": "BPM (2 TX)", "within": "#mChirpTable", "times": 1}   click a button by its text   {"js": "return document.title"}
 The app is a fixed-height layout whose columns scroll internally, so use a tall
 window (default 1400x2400) when shooting an element or the whole page.
@@ -55,6 +58,9 @@ if (!window.__hooked) { window.__hooked = true;
  const ce = console.error; console.error = function(...a){ window.__errs.push('console.error: ' + a.join(' ')); ce.apply(console, a); };
 }
 """
+
+
+SUBST = {}   # "@CLI@" / "@PORT@" in a "set" value: the helper's pty path / the scratch port file (see "helpers")
 
 
 def load_spec(path):
@@ -182,7 +188,10 @@ def run_action(d, a):
     elif "load" in a:
         r = d.js(SET_JS, "#cLoad", a["load"]); settle = 2.0
     elif "set" in a:
-        r = d.js(SET_JS, a["set"], a.get("value", ""))
+        v = a.get("value", "")
+        for k, x in SUBST.items():
+            v = v.replace(k, x)
+        r = d.js(SET_JS, a["set"], v)
     elif "click" in a:
         r = d.js("const e=document.querySelector(arguments[0]);if(!e)return 'missing';e.click();return 'ok'", a["click"])
     elif "click_text" in a:
@@ -268,11 +277,27 @@ def main(argv=None):
                 udir = os.path.join(out, "_usercfg"); os.makedirs(udir, exist_ok=True)
                 fake_port = os.path.join(udir, "fake_port")   # a path that exists and nobody holds, for system JSON "cli.port"
                 open(fake_port, "w").close()
+                SUBST["@PORT@"] = fake_port
+                SUBST["@CLI@"] = os.path.join(udir, "fake_cli")
+                # optional "helpers": [{"cmd": [...]}] started before the GUI, "@DIR@" = scratch dir, "@CLI@" = pty link
+                for h in (sp.get("helpers", []) if isinstance(sp, dict) else []):
+                    hc = [x.replace("@DIR@", udir).replace("@CLI@", SUBST["@CLI@"]) for x in h["cmd"]]
+                    hc = [sys.executable if x == "python" else (os.path.join(ROOT, x) if x.endswith(".py") and not os.path.isabs(x) else x)
+                          for x in hc]
+                    procs.append(subprocess.Popen(hc, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                                  start_new_session=True))
+                    for _ in range(50):
+                        if os.path.islink(SUBST["@CLI@"]):
+                            break
+                        time.sleep(0.1)
                 for fn, txt in user_cfgs.items():
                     with open(os.path.join(udir, fn), "w") as f:
                         f.write(txt.replace("@PORT@", fake_port))
                 env["RADAR_GUI_USER_CFG_DIR"] = udir
-            cmd = ["uv", "run", "python", "-m", "radar_gui", "--source", "mock", "--port", str(port)]
+            server = ["-m", "radar_gui"]   # optional spec "server": ["tests/fakes/gui_fake_serial.py"] = a script run instead (fake serial ports)
+            if a.scenarios != "builtin" and isinstance(sp, dict) and sp.get("server"):
+                server = [os.path.join(ROOT, x) if x.endswith(".py") and not os.path.isabs(x) else x for x in sp["server"]]
+            cmd = ["uv", "run", "python", *server, "--source", "mock", "--port", str(port)]
             if a.driver_bin:
                 cmd += ["--driver-bin", os.path.abspath(a.driver_bin)]
             procs.append(subprocess.Popen(

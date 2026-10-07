@@ -224,3 +224,24 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 #drvPill { cursor: default; }
 @media (max-width: 1100px) { #runMain { grid-template-columns: minmax(0, 1fr); height: auto; } }
 .card canvas.spark { flex: none; height: 90px; }
+
+/* Board command transcript (gui-34) */
+.clipanel { margin-top: 8px; min-width: 0; }
+.clipanel summary { margin-bottom: 4px; }
+.clipanel .clibad { color: var(--bad); font-weight: 600; }
+.cliscroll { max-height: 260px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--line); border-radius: 4px; }
+.clitbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; font-family: ui-monospace, monospace; }
+.clitbl th { text-align: left; color: var(--muted); font-weight: 600; padding: 3px 6px; position: sticky; top: 0; background: var(--panel, #161b22); }
+.clitbl td { padding: 2px 6px; vertical-align: top; overflow-wrap: anywhere; border-top: 1px solid var(--line); }
+.clitbl th:nth-child(1), .clitbl td:nth-child(1) { width: 4.2em; } .clitbl th:nth-child(3), .clitbl td:nth-child(3) { width: 5.6em; }
+.clitbl th:nth-child(5), .clitbl td:nth-child(5) { width: 3.6em; }
+.clitbl tr.skip td { color: var(--muted); }
+.clitbl tr.bad td { color: var(--bad); background: rgba(248,81,73,.10); }
+.clitbl tr.bad td.cliv { font-weight: 700; }
+.clipanel.compact .clitbl { table-layout: auto; }
+.clipanel.compact .clitbl td { border-top: 0; padding: 1px 6px; }
+.clipanel.compact .clitbl td.clin { width: 2.2em; color: var(--muted); } .clipanel.compact .clitbl td.cliv { width: auto; text-align: right; white-space: nowrap; }
+.clipanel.compact .clitbl td.clirep { padding-bottom: 3px; color: var(--muted); }
+.clipanel.compact .clitbl tbody { border-top: 1px solid var(--line); }
+.clipanel.compact .clitbl tbody.bad td, .clipanel.compact .clitbl tbody.bad td.clirep { color: var(--bad); background: rgba(248,81,73,.10); }
+.clipanel.compact .clitbl td.clicmd { overflow-wrap: break-word; }

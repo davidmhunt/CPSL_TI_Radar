@@ -1,0 +1,7 @@
+Using config: CPSL_TI_Radar_cpp/config/system/radar_0_IWR1843_demo.json
+cli [skip] calibData 0 0 0 (skip_commands)
+cli [stop] sensorStop -> DONE (9 ms) "Ignored: Sensor is already stopped"
+cli [1/3] flushCfg -> DONE (12 ms)
+cli [2/3] foo 1 2 -> TIMEOUT no 'Done' in 100 ms "partial"
+cli [3/3] sensorStart -> ERROR (8 ms) "Error: Full configuration must be provided before sensor can be started the first time | Error -1"
+stats v1 serial t=1.002 frames=0 missed=0 overwritten=0 stalls=0

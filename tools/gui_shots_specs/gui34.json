@@ -1,0 +1,403 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "stall",
+  "FAKE_DRIVER_CLI": "by-config",
+  "FAKE_DRIVER_RATE": "10"
+ },
+ "helpers": [
+  {
+   "cmd": [
+    "python",
+    "tests/fakes/fake_board_pty.py",
+    "@CLI@",
+    "--reject",
+    "sensorStart"
+   ]
+  }
+ ],
+ "user_cfgs": {
+  "bench_1843_tlv.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"bench_1843_tlv.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "bench_1843_ok.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"bench_1843_tlv.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "bench_1843_tlv.cfg": "% fake\n",
+  "rig1843.cfg": "sensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nsensorStart\n"
+ },
+ "scenarios": [
+  {
+   "name": "a_run_fail_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    900
+   ],
+   "actions": [
+    {
+     "set": "#rCfg",
+     "value": "bench_1843_tlv"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "run_fail_1400_panel.png",
+     "selector": "#rCli"
+    },
+    {
+     "file": "run_fail_1400_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#rCli",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_run_fail_1120",
+   "tab": "run",
+   "window": [
+    1120,
+    900
+   ],
+   "actions": [
+    {
+     "wait": 2
+    }
+   ],
+   "shots": [
+    {
+     "file": "run_fail_1120_panel.png",
+     "selector": "#rCli"
+    },
+    {
+     "file": "run_fail_1120_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#rCli",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_run_fail_800",
+   "tab": "run",
+   "window": [
+    800,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 2
+    }
+   ],
+   "shots": [
+    {
+     "file": "run_fail_800_panel.png",
+     "selector": "#rCli"
+    },
+    {
+     "file": "run_fail_800_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#rCli",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "b_stop",
+   "tab": "run",
+   "window": [
+    1400,
+    900
+   ],
+   "actions": [
+    {
+     "click": "#rStop"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [],
+   "dumps": [
+    {
+     "file": "state.txt",
+     "selector": "#rState",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "c_run_allok_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    900
+   ],
+   "actions": [
+    {
+     "set": "#rCfg",
+     "value": "bench_1843_ok"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "run_allok_1400_panel.png",
+     "selector": "#rCli"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#rCli",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c_run_allok_800",
+   "tab": "run",
+   "window": [
+    800,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 2
+    }
+   ],
+   "shots": [
+    {
+     "file": "run_allok_800_panel.png",
+     "selector": "#rCli"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#rCli",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "d_stop",
+   "tab": "run",
+   "window": [
+    1400,
+    900
+   ],
+   "actions": [
+    {
+     "click": "#rStop"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [],
+   "dumps": [
+    {
+     "file": "state.txt",
+     "selector": "#rState",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "e_source_fail_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "set": "#srcCfg",
+     "value": "rig1843"
+    },
+    {
+     "set": "#srcCli",
+     "value": "@CLI@"
+    },
+    {
+     "set": "#srcData",
+     "value": "@PORT@"
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "source_fail_1400_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "source_fail_1400_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#srcCmds",
+     "what": "text"
+    },
+    {
+     "file": "stat.txt",
+     "selector": "#srcStat",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "e_source_fail_1120",
+   "tab": "live",
+   "window": [
+    1120,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 2
+    }
+   ],
+   "shots": [
+    {
+     "file": "source_fail_1120_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "source_fail_1120_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#srcCmds",
+     "what": "text"
+    },
+    {
+     "file": "stat.txt",
+     "selector": "#srcStat",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "e_source_fail_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 2
+    }
+   ],
+   "shots": [
+    {
+     "file": "source_fail_800_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "source_fail_800_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "panel.txt",
+     "selector": "#srcCmds",
+     "what": "text"
+    },
+    {
+     "file": "stat.txt",
+     "selector": "#srcStat",
+     "what": "text"
+    }
+   ]
+  }
+ ],
+ "server": [
+  "tests/fakes/gui_fake_serial.py"
+ ]
+}

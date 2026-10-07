@@ -2,9 +2,11 @@
 // Backend: /api/driver/* (see radar_gui/README.md); live updates arrive as driver_state / driver_stats / driver_log
 // messages on the shared /stream WebSocket (routed here by main.js).
 import { $ } from './state.js';
+import { mountCliPanel } from './cli_panel.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LOG_MAX = 500;
+let cliPanel = null;   // mounted on first showRun (needs the DOM)
 const R = { ready: false, configs: [], state: 'idle', st: null, log: [], stats: {}, validated: null, wantPath: null, expectHz: null };
 
 async function api(path, body) {
@@ -112,11 +114,17 @@ function buttons() {
   $('rValidate').disabled = live || !cfgPath();
   $('rCfg').disabled = live; $('rFrames').disabled = live; $('rDur').disabled = live;
 }
+// A new run id means a new driver run: drop the previous run's transcript. (Merging, not replacing, because the
+// start response can arrive after the first WebSocket cli events of the same run.)
+let cliRun = null;
+function sawRun(r) { if (r != null && r !== cliRun) { cliRun = r; if (cliPanel) cliPanel.clear(); } }
 function applyStatus(st) {
   R.st = { ...(R.st || {}), ...st };
   R.state = st.state;
   if (st.stats && Object.keys(st.stats).length) R.stats = st.stats;
   if (st.log && st.log.length) { R.log = st.log.slice(-LOG_MAX); renderLog(); }
+  sawRun(st.run);
+  if (cliPanel && Array.isArray(st.cli)) cliPanel.merge(st.cli);   // absent on a backend older than gui-34
   render();
 }
 function render() {
@@ -197,16 +205,21 @@ function renderLog() {
 }
 
 // ---------- websocket ----------
-let seenState = false;
+let seenState = false, cliSync = null;
 export function onDriverMessage(m) {
   if (m.type === 'driver_log') {
     R.log.push(m.line); if (R.log.length > LOG_MAX) R.log.shift();
     if (R.ready) renderLog();
+  } else if (m.type === 'driver_cli') {
+    sawRun(m.run); if (cliPanel) cliPanel.upsert(m.entry);
+    // The WebSocket queue is 8 deep and drops the oldest on a burst (a configure sends dozens of lines at once), so
+    // re-read the full transcript from the status once the burst is over.
+    clearTimeout(cliSync); cliSync = setTimeout(() => { if (R.ready) refresh(); }, 500);
   } else if (m.type === 'driver_stats') {
     R.stats[m.stream] = m.stats; if (R.ready) renderStreams();
   } else if (m.type === 'driver_state') {
     const first = !seenState; seenState = true;
-    const { type, ...st } = m;
+    const { type, ...st } = m; sawRun(st.run);
     R.state = st.state; R.st = { ...(R.st || {}), ...st };
     if (R.ready) { render(); if (first) refresh(); }
   }
@@ -215,7 +228,7 @@ async function refresh() { const { ok, j } = await api('/api/driver/status'); if
 
 export function showRun() {
   if (R.ready) { refresh(); return; }
-  R.ready = true;
+  R.ready = true; cliPanel = mountCliPanel($('rCli'));
   $('rCfg').addEventListener('change', cfgChanged);
   $('rValidate').onclick = validate; $('rStart').onclick = start; $('rStop').onclick = stop;
   $('rHideStats').addEventListener('change', renderLog);

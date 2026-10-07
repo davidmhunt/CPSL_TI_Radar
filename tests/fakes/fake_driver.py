@@ -4,7 +4,8 @@
 argv: <system.json> [--validate] [--stats] [--frames N] [--duration S]
 Mode comes from FAKE_DRIVER_MODE (default "run"): run | crash | ignore-sigint | validate-invalid |
 write-bin | stall.  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
-FAKE_DRIVER_PERIOD_MS (default 100).
+FAKE_DRIVER_PERIOD_MS (default 100). FAKE_DRIVER_CLI=debug|info|ok (or by-config: ok when the config name contains "_ok", else debug) replays the board command transcript of
+tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using config", ending in a rejected sensorStart.
 """
 import os
 import signal
@@ -43,6 +44,15 @@ else:
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
 
 print(f"Using config: {cfg}", flush=True)
+if os.environ.get("FAKE_DRIVER_CLI"):
+    kind = os.environ["FAKE_DRIVER_CLI"]
+    if kind == "by-config":
+        kind = "ok" if "_ok" in os.path.basename(cfg) else "debug"
+    fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "fixtures", f"cli_{kind}_run.txt")
+    with open(fx, newline="") as f:
+        for ln in f.read().split("\n"):
+            if ln and not ln.startswith(("stats v1", "Using config")):
+                print(ln.replace("\r", "\r"), flush=True)
 binf = open("adc_data.bin", "wb") if mode == "write-bin" else None
 frames, t0, last_print, limit_f, limit_s = 0, time.monotonic(), -1.0, opt("--frames", int), opt("--duration", float)
 

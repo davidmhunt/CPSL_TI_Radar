@@ -88,6 +88,8 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
         for k in ("state", "msg"):
             if hasattr(s, k):
                 out["source_" + k] = getattr(s, k)
+        if hasattr(s, "cli"):   # serial source: board command transcript of the latest configure (gui-34)
+            out["cli"], out["cli_first_fail"] = list(s.cli), s.cli_first_fail
         return out
 
     @r.get("/api/source")
