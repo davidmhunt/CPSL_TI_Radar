@@ -472,3 +472,37 @@ def test_switch_replay_mock_replay_keeps_streaming(tmp_path):
             fr = frames_from(ws, 3)
             assert len(fr) == 3
             assert c.get("/api/state").json()["source"] == kind
+
+
+# ---- security: replay allowlist and confined dump target ---------------------------------------------------------
+def test_replay_file_allowlist(api, tmp_path, monkeypatch):
+    c, _, _ = api
+    dumps = tmp_path / "dumps"
+    dumps.mkdir()
+    (dumps / "cap.bin").write_bytes(SAMPLE.read_bytes())
+    monkeypatch.setenv("RADAR_GUI_DUMP_DIR", str(dumps))
+    secret = tmp_path / "secret.bin"                       # a readable file outside the allowlist
+    secret.write_bytes(SAMPLE.read_bytes())
+    with c:
+        listed = c.get("/api/source/files").json()
+        assert listed["dump_dir"] == str(dumps)
+        paths = {f["path"] for f in listed["files"]}
+        assert str(SAMPLE.resolve()) in paths and str(dumps / "cap.bin") in paths and str(secret) not in paths
+        assert c.post("/api/source", json={"kind": "replay", "file": str(secret)}).status_code == 422
+        assert c.post("/api/source", json={"kind": "replay", "file": "/etc/passwd"}).status_code == 422
+        assert c.post("/api/source", json={"kind": "replay", "file": str(dumps / ".." / "secret.bin")}).status_code == 422
+        assert c.post("/api/source", json={"kind": "replay", "file": str(SAMPLE)}).status_code == 200
+        assert c.post("/api/source", json={"kind": "replay", "file": str(dumps / "cap.bin")}).status_code == 200
+
+
+def test_dump_target_confined_to_dump_dir(api, tmp_path, monkeypatch):
+    c, _, _ = api
+    dumps = tmp_path / "dumps"
+    monkeypatch.setenv("RADAR_GUI_DUMP_DIR", str(dumps))
+    body = {"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg", "cli_port": "cli", "data_port": "data"}
+    with c:
+        for bad in ("/tmp/evil.bin", "../evil.bin", "a/b.bin", "..", ".hidden"):
+            assert c.post("/api/source", json={**body, "dump": bad}).status_code == 422, bad
+        r = c.post("/api/source", json={**body, "dump": "cap1.bin"})
+        assert r.status_code == 200 and r.json()["spec"]["dump"] == str(dumps / "cap1.bin")
+        assert c.post("/api/source/stop").status_code == 200

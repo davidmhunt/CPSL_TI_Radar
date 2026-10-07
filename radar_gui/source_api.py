@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -12,8 +13,37 @@ from . import cfgapi
 from .serial_source import PortBusy, SerialSource, SerialSourceError, load_board
 from .sources import MockSource, ReplaySource
 
-BY_ID = "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with_CMSIS-DAP_00000000"
-DEFAULT_PORTS = {"AWR2243_CASCADE": (BY_ID + "-if00", BY_ID + "-if03")}   # the cascade's XDS110 interfaces
+_XDS = "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.{}__Embed_with_CMSIS-DAP_{}"
+# Defaults only (the bench's XDS110 interfaces); the Source card lets the user edit both ports.
+DEFAULT_PORTS = {"AWR2243_CASCADE": (_XDS.format("29", "00000000") + "-if00", _XDS.format("29", "00000000") + "-if03"),
+                 "IWR1843": (_XDS.format("05", "R2101050") + "-if00", _XDS.format("05", "R2101050") + "-if03")}
+REPO = Path(__file__).resolve().parent.parent
+FIXTURES = REPO / "tests" / "fixtures"
+DUMP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
+
+
+def dump_dir() -> Path:
+    """GUI-owned directory for serial `dump` captures (runs/ is gitignored); also replayable."""
+    return Path(os.environ.get("RADAR_GUI_DUMP_DIR") or REPO / "runs" / "gui" / "dumps")
+
+
+def replay_files(extra=None) -> list[dict]:
+    """The replay allowlist: tests/fixtures/**/*.bin, the dumps dir's *.bin, and the file the GUI was started with."""
+    out, seen = [], set()
+
+    def add(p, group):
+        p = Path(p).resolve()
+        if p not in seen and p.is_file():
+            seen.add(p)
+            out.append({"path": str(p), "name": p.name, "group": group})
+    for p in sorted(FIXTURES.rglob("*.bin")):
+        add(p, "fixtures")
+    dd = dump_dir()
+    for p in sorted(dd.glob("*.bin")) if dd.is_dir() else []:
+        add(p, "dumps")
+    if extra:
+        add(extra, "startup")
+    return out
 SERIAL_BOARDS = ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", "AWR2243_CASCADE")
 
 
@@ -26,7 +56,7 @@ class SourceReq(BaseModel):
     skip_configure: bool = False
     file: str | None = None            # replay: TLV dump (default: the one the GUI was started with)
     rate_hz: float = 10.0
-    dump: str | None = None            # serial: also write the raw data-port bytes here (fixture capture)
+    dump: str | None = None            # serial: capture the raw data-port bytes to <dumps dir>/<this name> (a bare file name)
 
 
 def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
@@ -56,6 +86,11 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
     def get_source():
         return describe()
 
+    @r.get("/api/source/files")
+    def files():
+        """Replay files the GUI will accept (POST /api/source rejects any other path) and where dumps are written."""
+        return {"files": replay_files(hub.replay_file), "dump_dir": str(dump_dir())}
+
     @r.get("/api/source/boards")
     def boards():
         out = []
@@ -80,6 +115,14 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
             if not path:
                 raise HTTPException(422, "replay needs a file (the GUI was not started with one)")
             try:
+                resolved = str(Path(path).resolve())
+            except (OSError, RuntimeError, ValueError):
+                resolved = None
+            if resolved not in {f["path"] for f in replay_files(hub.replay_file)}:
+                raise HTTPException(422, "replay file not allowed: pick one from GET /api/source/files "
+                                         "(tests/fixtures/*.bin or this GUI's dumps directory)")
+            path = resolved
+            try:
                 new = ReplaySource(path, rate_hz=req.rate_hz)
             except (OSError, ValueError) as e:
                 raise HTTPException(422, f"replay: {e}") from e
@@ -94,8 +137,16 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
             if (cfgapi.guess_board(req.cfg_id.partition(":")[2]) == "AWR2243_CASCADE") != (req.board == "AWR2243_CASCADE"):
                 raise HTTPException(422, f"cfg {req.cfg_id!r} is not for board {req.board}")
             spec.update(cli_port=cli, data_port=data)
+            dump = None
+            if req.dump:
+                if not DUMP_NAME.match(req.dump) or ".." in req.dump:
+                    raise HTTPException(422, "dump must be a plain file name (letters, digits, _ . -); "
+                                             "it is written under the GUI's dumps directory")
+                dump_dir().mkdir(parents=True, exist_ok=True)
+                dump = str(dump_dir() / req.dump)
+                spec["dump"] = dump
             try:
-                new = make_serial(req.board, path, cli, data, skip_configure=req.skip_configure, dump=req.dump)
+                new = make_serial(req.board, path, cli, data, skip_configure=req.skip_configure, dump=dump)
             except SerialSourceError as e:
                 raise HTTPException(422, str(e)) from e
         try:

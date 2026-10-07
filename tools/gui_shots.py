@@ -19,7 +19,7 @@ environment, e.g. FAKE_DRIVER_MODE, RADAR_GUI_DRIVER=tests/fakes/fake_driver.py;
      "shots": [{"file": "x.png", "selector": "#mimoCard"}],   # selector optional
                                                    # -> element shot; omitted -> full page
      "dumps": [{"file": "x.txt", "selector": "#l_data_fmt", "what": "options"}]}
-                                                   # what: options | text | html | values (visible inputs/selects as id = value)
+                                                   # what: options | text | html | overflow | values (visible inputs/selects as id = value)
 Actions (each followed by a short settle delay for the debounced re-analysis):
     {"mode": "direct"|"targets"}                  click the Targets/Chirp-parameters switch
     {"board": "IWR1843"}  {"firmware": "text"}    select by value or option text (substring)
@@ -164,6 +164,7 @@ const el = document.querySelector(arguments[0]); if (!el) return 'missing ' + ar
 const w = arguments[1];
 if (w === 'options') return [...el.options].map(o => (o.selected ? '* ' : '  ') + o.value + ' : ' + o.text).join('\\n');
 if (w === 'html') return el.outerHTML;
+if (w === 'overflow') { const d = document.documentElement; return 'page scrollWidth ' + d.scrollWidth + ' innerWidth ' + innerWidth + (d.scrollWidth > innerWidth ? ' HORIZONTAL OVERFLOW' : ' ok') + '; element scrollWidth ' + el.scrollWidth + ' clientWidth ' + el.clientWidth + (el.scrollWidth > el.clientWidth ? ' ELEMENT OVERFLOW' : ' ok'); }
 if (w === 'values') return [...el.querySelectorAll('input,select')].filter(e => !e.closest('[hidden]') && e.offsetParent).map(e => (e.id || e.name) + ' = ' + (e.type === 'checkbox' ? e.checked : e.value)).join('\\n');
 return el.innerText;
 """

@@ -1,0 +1,495 @@
+{
+ "scenarios": [
+  {
+   "name": "a_idle_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "idle_mock_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    },
+    {
+     "file": "now.txt",
+     "selector": "#srcNow",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_idle_1120",
+   "tab": "live",
+   "window": [
+    1120,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "idle_mock_1120.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    },
+    {
+     "file": "now.txt",
+     "selector": "#srcNow",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_idle_800",
+   "tab": "live",
+   "window": [
+    800,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "idle_mock_800.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    },
+    {
+     "file": "now.txt",
+     "selector": "#srcNow",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "b_replay_switch",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=replay]"
+    },
+    {
+     "wait": 0.5
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "replay_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "now.txt",
+     "selector": "#srcNow",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c_serial_form_1843",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "serial_1843_1400.png"
+    },
+    {
+     "file": "serial_1843_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "values.txt",
+     "selector": "#srcCard",
+     "what": "values"
+    },
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "d_serial_form_cascade",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "AWR2243_CASCADE"
+    },
+    {
+     "set": "#srcSkip",
+     "value": "1"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "serial_cascade_1400.png"
+    },
+    {
+     "file": "serial_cascade_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "values.txt",
+     "selector": "#srcCard",
+     "what": "values"
+    },
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "e_serial_cascade_1120",
+   "tab": "live",
+   "window": [
+    1120,
+    1300
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "AWR2243_CASCADE"
+    },
+    {
+     "set": "#srcSkip",
+     "value": "1"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "serial_cascade_1120.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "e_serial_cascade_800",
+   "tab": "live",
+   "window": [
+    800,
+    1300
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "AWR2243_CASCADE"
+    },
+    {
+     "set": "#srcSkip",
+     "value": "1"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "serial_cascade_800.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "f_serial_refused_port_missing_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "set": "#srcCli",
+     "value": "/dev/ttyNONE_cli"
+    },
+    {
+     "set": "#srcData",
+     "value": "/dev/ttyNONE_data"
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "refused_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "msg.txt",
+     "selector": "#srcMsg",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "g_serial_refused_800",
+   "tab": "live",
+   "window": [
+    800,
+    1300
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "set": "#srcCli",
+     "value": "/dev/ttyNONE_cli"
+    },
+    {
+     "set": "#srcData",
+     "value": "/dev/ttyNONE_data"
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "refused_800.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "#srcCard",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "h_error_422_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "set": "#srcCli",
+     "value": "/dev/ttyNONE_cli"
+    },
+    {
+     "set": "#srcData",
+     "value": "/dev/ttyNONE_data"
+    },
+    {
+     "js": "const s=document.getElementById('srcCfg'); s.append(new Option('cascade_shortrange.cfg (forced)','driver:cascade/cascade_shortrange.cfg',true,true)); s.value='driver:cascade/cascade_shortrange.cfg'; s.dispatchEvent(new Event('change')); return 1"
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 1.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "error_422_1400.png"
+    },
+    {
+     "file": "error_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "msg.txt",
+     "selector": "#srcMsg",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "i_status_rendering_injected",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "AWR2243_CASCADE"
+    },
+    {
+     "js": "import('/js/source.js').then(m=>m.srcStatus('cfg_failed','line 12 `sensorStart` rejected: Error -3. The board accepts a cfg once per power-up: power-cycle the board.')); return 1"
+    },
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "cfg_failed_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "stat.txt",
+     "selector": "#srcStat",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}

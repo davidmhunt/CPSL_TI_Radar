@@ -31,7 +31,9 @@ class Hub:
         self.rate = 0.0
 
     def cfg_msg(self):
-        return {"type": "cfg", "name": f"{self.source.name} source", **self.source.info}
+        sp = self.spec
+        name = f"{self.source.name} source" + (f" · {sp['board']}" if sp.get("board") else "")
+        return {"type": "cfg", "name": name, **self.source.info}
 
     def publish(self, msg):
         for q in list(self.clients):

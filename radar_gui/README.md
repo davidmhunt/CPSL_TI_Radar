@@ -65,6 +65,14 @@ codes outline the table. Below the rows, a **phase table** (gui-23) lists every 
 (`chirp_tx_masks` edits there are ignored with `cascade_chirp_mask_ignored`). `tests/test_radar_gui_cfgapi.py::test_chirp_table_payloads`
 pins the payload shapes (no browser harness).
 
+## Live tab Source card (gui-06)
+
+The **Source** card on the Live tab switches what feeds the point cloud, at runtime: **Mock**, **Replay** (a TLV dump) or **Serial** (a real board's TLV point cloud, GUI-owned serial path: configures the radar over its CLI port, then reads the data port).
+
+Serial, step by step: choose **Serial**, pick the **Board** (IWR1443/1843/6843/6843ODS/AWR2243_CASCADE; the CLI/data baud and TLV dialect come from `config/boards/<board>.json`), pick a **Radar cfg** (shipped or saved from Configure, filtered to the board), check the **CLI port** and **Data port** (pre-filled with the board's usual XDS110 by-id paths for the IWR1843 and the cascade, `/dev/ttyACM0`/`ACM1` otherwise; edit them if your bench differs), then **Start serial**. For boards that accept a cfg only once per power-up (the cascade) tick *Already configured this power-up* to skip the cfg and just read the stream. Status (`configuring i/N`, `streaming`, `stalled`, `no board`, `cfg failed` with a power-cycle hint, the compact-points hint) shows in the card and the header; the header pill names the live source and Frame/Points/Rate follow it. **Stop** releases the ports and the radar lock (a driver run on the same ports is refused while the source holds them, 409). "Also capture raw bytes" writes the data-port bytes to `runs/gui/dumps/<board>_<time>.bin` (gitignored), replayable from the same card.
+
+API: `GET /api/source`, `POST /api/source` (`{kind, board, cfg_id, cli_port, data_port, skip_configure, file, dump}`), `POST /api/source/stop`, `GET /api/source/boards`, `GET /api/source/files`. The GUI is unauthenticated, so the paths are confined: replay accepts only `tests/fixtures/**/*.bin`, `*.bin` in the dumps directory (`runs/gui/dumps/`, or `RADAR_GUI_DUMP_DIR`) and the file the GUI was started with, anything else is 422; `dump` must be a plain file name and is always written inside the dumps directory.
+
 ## Run tab (gui-05)
 
 Open `http://127.0.0.1:8000/#run` (or the **Run** tab): pick a system JSON (saved ones from `config/user/` first, then `config/system/`;

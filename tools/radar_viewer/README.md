@@ -2,6 +2,8 @@
 
 Live point-cloud viewer for the AWR2243 2-chip cascade EVM. Lives in `CPSL_TI_Radar/tools/`.
 
+> The web GUI (`radar_gui/`) now has a serial source on its Live tab that configures the board and streams the same TLV point cloud (IWR boards and the cascade); see `radar_gui/README.md`, "Live tab Source card". This viewer is kept for its antenna-calibration monitor, which is not ported.
+
 ```bash
 cd tools/radar_viewer
 python3 server.py            # then open http://localhost:8080

@@ -3,20 +3,23 @@ import { $, S } from './state.js';
 import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
 import { showConfigure } from './cfg.js';
+import { initSource, srcStatus, resetStats } from './source.js';
 import { showRun, onDriverMessage, openInRun } from './run.js';
 
 // ---------- stream ----------
-const STATE_DOT = { streaming: 'ok', starting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad' };
+const STATE_DOT = { streaming: 'ok', starting: 'warn', configuring: 'warn', waiting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad',
+  cfg_failed: 'bad', no_board: 'bad', stalled: 'bad' };
 function setStatus(state, msg) {
   $('state').textContent = state.replace('_', ' ');
   $('dot').className = 'dot ' + (STATE_DOT[state] || '');
-  $('statusMsg').textContent = state === 'streaming' ? '' : msg;
+  $('statusMsg').textContent = msg || '';
+  srcStatus(state, msg);
 }
 function onMessage(m) {
   if (m.type === 'status') setStatus(m.state, m.msg);
   else if (m.type && m.type.startsWith('driver_')) onDriverMessage(m);
   else if (m.type === 'cfg') {
-    S.cfg = m;
+    S.cfg = m; S.frames.length = 0; S.last = null; resetStats();
     $('cfgName').textContent = m.name || ''; $('cfgName').style.display = m.name ? '' : 'none';
     if (m.max_range_m && !S.rangeTouched) { $('range').value = Math.round(m.max_range_m); $('range').dispatchEvent(new Event('input')); }
     redraw();
@@ -116,5 +119,6 @@ $('tabs').addEventListener('click', e => { const b = e.target.closest('button');
 if (location.hash === '#configure') tab('cfg'); else if (location.hash === '#run') tab('run');
 
 if (location.hash === '#3d') $('viewSeg').children[1].click();  // link straight to the 3D view
+initSource();
 connect();
 redraw();

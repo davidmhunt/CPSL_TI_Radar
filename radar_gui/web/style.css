@@ -30,6 +30,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; pa
 #mainCard.is3d canvas { cursor: grab; }
 .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
 #frontCard { height: 220px; flex: none; }
+.side > .card { flex: none; }
 .controls { padding: 4px 12px 12px; display: grid; gap: 12px; }
 label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 label .row { display: flex; justify-content: space-between; color: var(--text); }
@@ -198,6 +199,9 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 #rPill { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--text); }
 .runmsg { border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 8px 10px; font-size: 13px;
   white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); }
+.runmsg.warn { border-color: var(--warn); color: var(--warn); }
+.runmsg { overflow-wrap: anywhere; }
+#srcCard input[type=text] { width: 100%; min-width: 0; }
 .runmsg.bad { border-color: var(--bad); color: var(--bad); } .runmsg.ok { border-color: var(--ok); color: var(--ok); }
 .runpre { margin: 0; font: 12px/1.35 ui-monospace, Menlo, monospace; color: var(--muted); white-space: pre-wrap;
   overflow-wrap: anywhere; overflow: auto; max-height: 260px; }
@@ -219,3 +223,4 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 .ftbl th, .ftbl td { padding: 3px 6px; border-bottom: 1px solid var(--grid); overflow-wrap: anywhere; }
 #drvPill { cursor: default; }
 @media (max-width: 1100px) { #runMain { grid-template-columns: minmax(0, 1fr); height: auto; } }
+.card canvas.spark { flex: none; height: 90px; }
