@@ -10,16 +10,21 @@ from fastapi.staticfiles import StaticFiles
 from .cfgapi import make_router
 from .driver import DriverManager
 from .driver_api import make_router as make_driver_router
+from .source_api import make_router as make_source_router
 from .sources import Source
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
 
 class Hub:
-    """Runs the source once and fans frames out to every connected browser (newest wins)."""
+    """Runs the current source and fans frames out to every connected browser (newest wins).
+    `set_source` swaps the source at runtime (gui-06)."""
 
     def __init__(self, source: Source):
         self.source, self.clients = source, set()
+        self.task = None
+        self.spec = {"kind": source.name}   # what POST /api/source would need to recreate it
+        self.replay_file = getattr(source, "path", None)   # remembered so replay -> mock -> replay needs no file
         self.status = {"type": "status", "state": "starting", "msg": "Starting"}
         self.frames = self.errors = self.gaps = 0
         self.last_t = None
@@ -39,8 +44,44 @@ class Hub:
         self.status = {"type": "status", "state": state, "msg": msg}
         self.publish(self.status)
 
+    def start(self):
+        self.task = asyncio.create_task(self.run())
+
+    async def stop_source(self):
+        task, self.task = self.task, None
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        self.source.release()
+
+    async def set_source(self, new: Source, spec: dict | None = None):
+        """Swap the running source. A source that needs the radar lock claims it first (raises PortBusy; the old
+        source then keeps running), unless the old source holds it itself: then the old one is stopped first."""
+        if not self.source.holds_lock:
+            new.claim()
+            await self.stop_source()
+        else:
+            await self.stop_source()
+            try:
+                new.claim()
+            except Exception as e:
+                self.set_status("ended", f"Source stopped ({e})")
+                raise
+        self.source, self.spec = new, spec or {"kind": new.name}
+        self.replay_file = getattr(new, "path", None) or self.replay_file
+        self.frames = self.errors = self.gaps = 0
+        self.last_t, self.rate = None, 0.0
+        if hasattr(new, "on_status"):
+            new.on_status = self.set_status
+        self.publish(self.cfg_msg())
+        self.start()
+
     async def run(self):
-        self.set_status("streaming", "")
+        if not getattr(self.source, "drives_status", False):
+            self.set_status("streaming", "")
+        elif hasattr(self.source, "on_status"):
+            self.source.on_status = self.set_status
         try:
             async for fr in self.source.frames():
                 now = time.monotonic()
@@ -49,7 +90,9 @@ class Hub:
                     self.rate = 0.8 * self.rate + 0.2 * inst if self.rate else inst
                 self.last_t = now
                 self.frames += 1
-                fr.update(rate=self.rate, gaps=self.gaps, errors=self.errors)
+                fr.setdefault("gaps", self.gaps)
+                fr.setdefault("errors", self.errors)
+                fr["rate"] = self.rate
                 self.publish(fr)
             self.set_status("ended", "Source finished")
         except asyncio.CancelledError:
@@ -59,7 +102,7 @@ class Hub:
 
 
 def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_dir=None, run_root=None,
-               min_stop_grace: float = 5.0) -> FastAPI:
+               min_stop_grace: float = 5.0, serial_factory=None) -> FastAPI:
     hub = Hub(source)
     loop_ref = {}
 
@@ -74,17 +117,16 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     @contextlib.asynccontextmanager
     async def lifespan(app):
         loop_ref["loop"] = asyncio.get_running_loop()
-        task = asyncio.create_task(hub.run())
+        hub.start()
         yield
         await asyncio.to_thread(driver.shutdown)
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        await hub.stop_source()
 
     app = FastAPI(title="CPSL radar GUI", lifespan=lifespan)
     app.state.hub, app.state.driver = hub, driver
     app.include_router(make_router(user_cfg_dir))
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
+    app.include_router(make_source_router(hub, user_cfg_dir, serial_factory))
 
     @app.get("/api/health")
     def health():
@@ -92,7 +134,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
 
     @app.get("/api/state")
     def state():
-        return {"source": source.name, "rate_hz": source.rate_hz, "status": hub.status,
+        return {"source": hub.source.name, "rate_hz": hub.source.rate_hz, "status": hub.status,
                 "frames_sent": hub.frames, "cfg": hub.cfg_msg()}
 
     @app.websocket("/stream")

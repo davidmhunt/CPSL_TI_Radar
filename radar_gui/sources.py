@@ -13,6 +13,14 @@ class Source:
     rate_hz = 10.0
     info = {"max_range_m": 10, "fov": [-60, 60]}  # hints for the page
 
+    holds_lock = False   # True for a source that owns the radar (SerialSource)
+
+    def claim(self):
+        """Take whatever exclusive resource the source needs; raise PortBusy if it is taken. Default: none."""
+
+    def release(self):
+        pass
+
     async def frames(self):
         raise NotImplementedError
         yield  # pragma: no cover
@@ -61,9 +69,10 @@ class ReplaySource(Source):
     """Replays a recorded TLV byte dump (back-to-back frame packets) in a loop."""
     name = "replay"
 
-    def __init__(self, path, rate_hz=10.0, loop=True, max_frames=None):
+    def __init__(self, path, rate_hz=10.0, loop=True, max_frames=None, dialect="sdk3"):
+        self.dialect = dialect
         with open(path, "rb") as f:
-            self.packets = list(tlv.split_packets(f.read()))
+            self.packets = list(tlv.split_packets(f.read(), dialect))
         if not self.packets:
             raise ValueError(f"no TLV frames found in {path}")
         self.path, self.rate_hz, self.loop, self.max_frames = path, rate_hz, loop, max_frames
@@ -74,7 +83,7 @@ class ReplaySource(Source):
             for pkt in self.packets:
                 if self.max_frames is not None and sent >= self.max_frames:
                     return
-                yield tlv.parse_frame(pkt)
+                yield tlv.parse_frame(pkt, self.dialect)
                 sent += 1
                 await asyncio.sleep(1 / self.rate_hz)
             if not self.loop:
