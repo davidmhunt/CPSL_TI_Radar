@@ -52,7 +52,7 @@ const DV = [
 // Which input an issue code points at.
 const ISSUE_FIELDS = {
   slope: ['slope_mhz_us'], idle: ['idle_us'], sample_rate: ['sample_rate_ksps'], sample_rate_low: ['sample_rate_ksps'],
-  sample_rate_untested: ['sample_rate_ksps'], samples: ['num_samples'], adc_buffer: ['num_samples'], radar_cube: ['num_samples', 'n_loops'],
+  sample_rate_untested: ['sample_rate_ksps'], sample_rate_lowpower: ['sample_rate_ksps', 'low_power'], samples: ['num_samples'], adc_buffer: ['num_samples'], radar_cube: ['num_samples', 'n_loops'],
   chirps: ['n_loops'], loops: ['n_loops'], frame_period: ['frame_period_ms', 'n_loops'], frame_too_short: ['frame_period_ms', 'n_loops'],
   sampling_outside_ramp: ['adc_start_us', 'ramp_us', 'num_samples', 'sample_rate_ksps'], band: ['start_ghz', 'slope_mhz_us', 'ramp_us'],
   band_edge: ['start_ghz', 'slope_mhz_us', 'ramp_us'], too_many_rx: ['rx_mask'], too_many_tx: ['tx_mask'],
@@ -73,6 +73,13 @@ function buildParams() {
       inp.addEventListener('input', () => { if (C.mode === 'direct') schedule(); });
       lab.append(inp); grid.append(lab);
     }
+    if (g === 'Profile (chirp)') {   // gui-26: lowPower 0 <0|1>; shown only when the seed has low_power
+      const lab = el('label', '', 'ADC mode <span class="unit">lowPower</span>'); lab.id = 'pl_low_power';
+      const sel = el('select'); sel.id = 'p_low_power'; sel.innerHTML = '<option value="0">regular</option><option value="1">low power</option>';
+      sel.addEventListener('change', () => { if (C.mode === 'direct') schedule(); });
+      lab.append(sel); grid.append(lab);
+      { const h = el('div', 'muted lvdshint', 'ADC mode: default regular (0); low power caps the ADC rate at 9375 ksps (IWR1443/1843) or 12500 ksps (IWR6843). Over the cap is a warning, not an error.'); h.style.gridColumn = '1 / -1'; grid.append(h); }
+    }
     const dg = el('div', 'dgrid');
     for (const [k, label, unit, gr] of DV.filter(d => d[3] === g)) dg.append(el('div', 'dv', `<span>${esc(label)}</span><b id="d_${k}">–</b> <small>${esc(unit)}</small>`));
     box.append(dg);
@@ -87,6 +94,8 @@ function fillParams(p) {   // p: a params dict from the endpoint -> inputs + der
     $(pid(k)).value = v == null ? '' : kind === 'm' ? v.join(', ') : +(+v).toPrecision(8);
   }
   C.seed = JSON.parse(JSON.stringify(p)); C.tbl = null; C.tblDirty = false;
+  $('pl_low_power').hidden = $('pl_low_power').nextElementSibling.hidden = p.low_power == null;
+  if (p.low_power != null) $('p_low_power').value = String(p.low_power);
   const lv = p.lvds_stream;
   if (lv) { $('l_subframe').value = lv.subframe; fillDataFmt(lv.data_fmt); $('l_data_fmt').value = lv.data_fmt; $('l_header').checked = !!lv.header; $('l_sw').checked = !!lv.sw; }
   lvdsVis();
@@ -107,6 +116,7 @@ function collectParams() {
   }
   if (Object.keys(prof).length) out.profiles = [prof];
   Object.assign(out, tableParams(sd));
+  if (sd.low_power != null && +$('p_low_power').value !== sd.low_power) out.low_power = +$('p_low_power').value;
   const slv = sd.lvds_stream;
   if (slv && !$('lvdsParams').hidden) {
     const cur = { subframe: +$('l_subframe').value, data_fmt: +$('l_data_fmt').value, header: $('l_header').checked ? 1 : 0, sw: $('l_sw').checked ? 1 : 0 };

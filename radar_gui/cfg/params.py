@@ -16,6 +16,8 @@ Schema (single profile; the profile fields live in `profiles[0]`, so gui-14..16 
                                 descriptor says `mimo.bpm` (else ParamsError); default/false = plain TDM, bpmCfg disabled
     lvds_stream                 {subframe, header, data_fmt, sw} = lvdsStreamCfg (gui-22); only when the cfg has the
                                 line. data_fmt 0 = HW (ADC) stream off, 1 = ADC data, 2 = ADC + metadata (SAR firmware)
+    low_power                   0 = regular ADC, 1 = low-power ADC = `lowPower 0 <adcMode>` (gui-26); single chip only, and
+                                only when the cfg has the line (the cascade cfgs carry `lowPower 0 0` but it is not offered)
     derived                     read-only (ignored by apply_params): metrics-derived bandwidth, ramp, sample window ...
 
 Coupling (gui-15, docs/design/mimo_modes.md s4): single chip -> channelCfg tx_mask = OR(chirp_tx_masks) whenever
@@ -111,6 +113,9 @@ def params_from_cfg(cfg: Cfg, board: str | None = None) -> dict:
     if lv is not None and len(lv.args) >= 4:
         a = _num_list(lv.args[:4], "lvdsStreamCfg")
         out["lvds_stream"] = {k: int(a[i - 1]) for k, i in _LVDS.items()}
+    lp = cfg.first("lowPower")
+    if lp is not None and len(lp.args) >= 2 and not cascade:
+        out["low_power"] = int(_num_list(lp.args[:2], "lowPower")[1])
     d = m.to_dict()
     out["derived"] = {k: d[k] for k in _DERIVED}
     return out
@@ -275,6 +280,18 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any], *, board: str | 
             if key in lv_in:
                 _set(tok, i, lv_in[key], int, "lvds_stream." + key)
         new[lv.line] = " ".join(tok)
+
+    # lowPower 0 <adcMode> (gui-26): only when changed
+    lpc = cfg.first("lowPower")
+    if params.get("low_power") is not None:
+        if "low_power" not in base:
+            raise ParamsError("low_power: the base cfg has no lowPower line (or the board is the cascade)")
+        lpv = _num(params["low_power"], int, "low_power")
+        if lpv not in (0, 1):
+            raise ParamsError(f"low_power: expected 0 (regular) or 1 (low power), got {params['low_power']!r}")
+        tok = tokens(lpc)
+        _set(tok, 2, lpv, int, "low_power")
+        new[lpc.line] = " ".join(tok)
 
     out = []
     for n, raw in enumerate(base_cfg_text.splitlines(), 1):

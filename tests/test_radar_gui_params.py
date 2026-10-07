@@ -189,3 +189,53 @@ def test_iwr1443_demo_with_lvds_on_flags_not_in_firmware():
     from radar_gui.cfg import generate, validate
     cfg = parse_cfg(generate("IWR1443", max_range_m=10, max_velocity_ms=5).text + "\nlvdsStreamCfg -1 0 1 0\n")
     assert "lvds_not_in_firmware" in {i.code for i in validate(cfg, "IWR1443", "demo").errors}
+
+
+# ---- lowPower 0 <adcMode> (gui-26) ----
+def _lowpower_cfgs():
+    out = []
+    for p in sorted((RADAR).rglob("*.cfg")) + sorted((ROOT / "firmware_dev" / "projects").rglob("*.cfg")):
+        t = p.read_text(errors="replace")
+        if "lowPower" in t:
+            try:
+                params_from_cfg(parse_cfg(t))
+            except (CfgError, AttributeError):
+                continue
+            out.append(p)
+    return out
+
+
+@pytest.mark.parametrize("path", _lowpower_cfgs(), ids=lambda p: p.name)
+def test_low_power_round_trip_exact(path):
+    t = path.read_text(errors="replace")
+    p = params_from_cfg(parse_cfg(t))
+    if "cascade" in path.name:
+        assert "low_power" not in p                 # cascade: not offered
+        return
+    assert p["low_power"] in (0, 1)
+    assert apply_params(t, p).rstrip("\n").splitlines() == t.rstrip("\n").splitlines()
+
+
+def test_low_power_toggle_changes_one_line_and_warning_follows():
+    from radar_gui.cfg import validate
+    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    t = t.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 293 7 44 0 0 60.0 1 63 10000")
+    assert params_from_cfg(parse_cfg(t), "IWR1843")["low_power"] == 0
+    on = apply_params(t, {"low_power": 1}, board="IWR1843")
+    a, b = t.splitlines(), on.splitlines()
+    diff = [(x, y) for x, y in zip(a, b) if x != y]
+    assert len(a) == len(b) and len(diff) == 1 and diff[0][1].split("%")[0].split() == "lowPower 0 1".split()
+    codes = lambda s: {i.code for i in validate(parse_cfg(s), "IWR1843").issues}
+    assert "sample_rate_lowpower" in codes(on) and "sample_rate_lowpower" not in codes(t)
+    off = apply_params(on, {"low_power": 0}, board="IWR1843")
+    assert off.splitlines() == a and "sample_rate_lowpower" not in codes(off)
+    assert apply_params(t, {"low_power": 0}) == apply_params(t, {})        # unchanged = untouched
+
+
+def test_low_power_bad_values():
+    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    with pytest.raises(CfgError):
+        apply_params(t, {"low_power": 2})
+    cas = (ROOT / "tools" / "radar_viewer" / "configs" / "cascade_R15m_V5ms_20Hz.cfg").read_text()
+    with pytest.raises(CfgError):
+        apply_params(cas, {"low_power": 1}, board="AWR2243_CASCADE")
