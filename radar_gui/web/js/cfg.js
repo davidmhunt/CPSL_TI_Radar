@@ -266,7 +266,9 @@ function showFirmware() {
   const o = [f.outputs.tlv && 'TLV point cloud (serial)', f.outputs.lvds && 'raw ADC (LVDS \u2192 DCA1000)'].filter(Boolean);
   $('cOutputs').textContent = 'Outputs: ' + o.join(' / ') + ' \u2014 ' + f.description;
   C.fwMimo = f.mimo; renderMimo(C.metrics);
-  $('sSerial').checked = f.system_enables.serial; $('sDca').checked = f.system_enables.dca1000;
+  const noTlv = !f.outputs.tlv;   // LVDS-only firmware (SAR, dca1000_raw): no TLV output, so the serial TLV stream cannot be enabled
+  $('sSerial').disabled = noTlv; $('sSerial').title = noTlv ? 'This firmware has no TLV (serial) output.' : '';
+  $('sSerial').checked = f.system_enables.serial && !noTlv; $('sDca').checked = f.system_enables.dca1000;
   dcaVis(); lvdsVis();
 }
 // ---------- LVDS stream (cfg) group (gui-22): shown only where the firmware has an LVDS output on this board ----------
@@ -281,6 +283,10 @@ function fillDataFmt(cur) {   // HW-stream options = the dataFmt values the sele
   if (!set.includes(keep) && !Number.isNaN(keep)) sel.append(opt(keep, keep + ' (not supported by this firmware)'));
   if (f && f.lvds_data_fmts_confidence === 'unverified') sel.title = 'Accepted values for this firmware are unverified (no source in the repo).'; else sel.removeAttribute('title');
   sel.value = String(keep);
+  const h = $('lvdsFmtHint');
+  if (h && !h.dataset.dflt) h.dataset.dflt = h.textContent;
+  if (h && f && f.id === 'iwr1843_sar_lvds') h.textContent = 'HW stream (SAR firmware): 0 = off, 1 = ADC data, 2 = ADC + metadata, 4 = CP ADC + chirp quality. Other values are rejected by the SAR validator.';
+  else if (h) h.textContent = h.dataset.dflt;
 }
 function lvdsVis() {
   const f = curFw(), o = f && f.outputs;
@@ -288,7 +294,7 @@ function lvdsVis() {
   $('lvdsTargets').hidden = !(o && o.tlv && o.lvds);          // raw-ADC firmwares always stream; nothing to toggle in the targets view
   $('lvdsParams').hidden = !(o && o.lvds && C.seed && C.seed.lvds_stream);
   // raw-only firmware whose template has no lvdsStreamCfg: say why the group is absent (gui-28)
-  $('lvdsNote').hidden = !(o && o.lvds && !o.tlv && C.seed && !C.seed.lvds_stream);
+  $('lvdsNote').hidden = !(f && f.id === 'dca1000_raw' && o && o.lvds && !o.tlv && C.seed && !C.seed.lvds_stream);
   lvdsWarn();
 }
 function cfgLvdsOn(text) {

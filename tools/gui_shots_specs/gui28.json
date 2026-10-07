@@ -12,7 +12,7 @@
   "shots": [{"file": "after_switch_cascade.png", "selector": "#paramsCard"}],
   "dumps": [{"file": "values.txt", "selector": "#paramsCard", "what": "values"}, {"file": "cfg_head.txt", "selector": "#cText", "what": "text"}]},
  {"name": "b3_firmware_switch_raw", "fresh": false, "window": [1400, 2000],
-  "actions": [{"board": "IWR1843"}, {"wait": 1.5}, {"firmware": "dca1000_raw"}, {"wait": 2}],
+  "actions": [{"board": "IWR1443"}, {"wait": 1.5}, {"firmware": "dca1000_raw"}, {"wait": 2}],
   "shots": [{"file": "after_switch_raw.png", "selector": "#paramsCard"}],
   "dumps": [{"file": "values.txt", "selector": "#paramsCard", "what": "values"}, {"file": "cfg_head.txt", "selector": "#cText", "what": "text"}]},
  {"name": "c_phase_after_preset", "window": [1400, 2000],
@@ -20,7 +20,7 @@
   "shots": [{"file": "after_bpm_preset.png", "selector": "#mChirpTable"}],
   "dumps": [{"file": "table.txt", "selector": "#mChirpTable", "what": "text"}]},
  {"name": "d_raw_lvds_note", "window": [1400, 2000],
-  "actions": [{"board": "IWR1843"}, {"firmware": "dca1000_raw"}, {"mode": "direct"}, {"wait": 1.5}],
+  "actions": [{"board": "IWR1443"}, {"firmware": "dca1000_raw"}, {"mode": "direct"}, {"wait": 1.5}],
   "shots": [{"file": "raw_direct.png", "selector": "#paramsCard"}],
   "dumps": [{"file": "note.txt", "selector": "#lvdsNote", "what": "text"}]}
 ]

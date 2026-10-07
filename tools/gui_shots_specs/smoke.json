@@ -37,14 +37,14 @@
    ]
   },
   {
-   "name": "gui24_1843_dca1000_raw",
+   "name": "gui24_1443_dca1000_raw",
    "window": [
     1400,
     1300
    ],
    "actions": [
     {
-     "board": "IWR1843"
+     "board": "IWR1443"
     },
     {
      "firmware": "dca1000_raw"
