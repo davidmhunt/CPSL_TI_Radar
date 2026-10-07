@@ -1,0 +1,6 @@
+# HYPOTHESIS, synthetic from cascade mmw_cli.c:2228 (overridePlatformString AM273X); no cascade reply recorded
+version
+Platform                : AM273X
+Done
+
+mmwDemo:/>

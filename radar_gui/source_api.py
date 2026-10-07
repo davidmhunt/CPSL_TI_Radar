@@ -62,6 +62,7 @@ class SourceReq(BaseModel):
     cli_port: str | None = None
     data_port: str | None = None
     skip_configure: bool = False
+    skip_firmware_check: bool = False  # serial: do not ask the board what firmware it runs before the cfg (gui-33)
     file: str | None = None            # replay: TLV dump (default: the one the GUI was started with)
     rate_hz: float = 10.0
     dump: str | None = None            # serial: capture the raw data-port bytes to <dumps dir>/<this name> (a bare file name)
@@ -90,6 +91,7 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
                 out["source_" + k] = getattr(s, k)
         if hasattr(s, "cli"):   # serial source: board command transcript of the latest configure (gui-34)
             out["cli"], out["cli_first_fail"] = list(s.cli), s.cli_first_fail
+            out["firmware"] = getattr(s, "firmware", None)   # gui-33: identity check result, None = not checked
         return out
 
     @r.get("/api/source")
@@ -158,7 +160,8 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
                 dump = str(dump_dir() / req.dump)
                 spec["dump"] = dump
             try:
-                new = make_serial(req.board, path, cli, data, skip_configure=req.skip_configure, dump=dump)
+                extra = {"skip_firmware_check": True} if req.skip_firmware_check else {}
+                new = make_serial(req.board, path, cli, data, skip_configure=req.skip_configure, dump=dump, **extra)
             except SerialSourceError as e:
                 raise HTTPException(422, str(e)) from e
         try:

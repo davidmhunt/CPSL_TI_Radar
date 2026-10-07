@@ -152,5 +152,28 @@
     "note": "chirps per loop must be a multiple of 8 (DDMA bands rule, gui-13); all 6 TX fire on every chirp",
     "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 3: DDMA parser ignores the chirp mask; TDM only as a compile-time variant not in the shipped build",
     "confidence": "high"
+  },
+  "identify": {
+    "AWR2243_CASCADE": {
+      "level": "unverified",
+      "timeout_ms": 5000,
+      "once_safe": false,
+      "flash_hint": "./fw flash cascade_ddm <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "HYPOTHESIS: overridePlatformString AM273X (cascade mmw_cli.c:2228); mcuplus CLI source not on this host; the cascade takes a cfg once per power-up, so it is not queried until bench-checked (gui-33 Step 7)",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*AM273X"
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        }
+      ]
+    }
   }
 }

@@ -1,0 +1,8 @@
+# synthetic from SDK 3.6 cli_mmwave.c:332-360 (not bench-recorded)
+version
+Platform                : xWR68xx
+mmWave SDK Version      : 03.06.02.00
+Device Info             : IWR68xx ES 02.00
+Done
+
+mmwDemo:/>

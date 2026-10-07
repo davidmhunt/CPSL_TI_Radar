@@ -743,5 +743,103 @@
         "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: 1443 demo is SDK 2.x, not in tree; BPM/limits unestablished, bpm left false"
       }
     }
+  },
+  "identify": {
+    "IWR1843": {
+      "level": "bench",
+      "timeout_ms": 3000,
+      "once_safe": true,
+      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "version: bench-recorded 2026-10-07 (SDK 3.6 demo, xWR18xx, 03.06.02.00; gui-09 Log, bench_flash_iwr1843_demo.md s6). sarStats 'not recognized': source-derived (SDK cli.c:223), not yet bench-recorded.",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*xWR18xx",
+            "mmWave SDK Version\\s*:\\s*03\\.06\\."
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        },
+        {
+          "cmd": "sarStats",
+          "require": [
+            "not recognized"
+          ],
+          "reject": [],
+          "show": {}
+        }
+      ]
+    },
+    "IWR6843": {
+      "level": "source",
+      "timeout_ms": 3000,
+      "once_safe": true,
+      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "source-derived (SDK 3.6 cli_mmwave.c:330-332, xwr68xx demo overridePlatformString); not bench-recorded",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*xWR68xx",
+            "mmWave SDK Version\\s*:\\s*03\\.06\\."
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        }
+      ]
+    },
+    "IWR6843ODS": {
+      "level": "source",
+      "timeout_ms": 3000,
+      "once_safe": true,
+      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "source-derived (SDK 3.6 cli_mmwave.c:330-332); not bench-recorded",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*xWR68xx",
+            "mmWave SDK Version\\s*:\\s*03\\.06\\."
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        }
+      ]
+    },
+    "IWR1443": {
+      "level": "source",
+      "timeout_ms": 3000,
+      "once_safe": true,
+      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "source-derived (cli_mmwave.c:326); SDK version of Firmware/IWR_Demos/xwr14xx_mmw_demo.bin unknown, so no SDK regex; the demo prompt mmwDemo:/> is required in the reply",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*xWR14xx",
+            "mmwDemo:/>"
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        }
+      ]
+    }
   }
 }

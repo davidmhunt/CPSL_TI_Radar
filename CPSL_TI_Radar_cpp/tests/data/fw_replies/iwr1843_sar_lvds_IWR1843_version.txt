@@ -1,0 +1,8 @@
+# synthetic from firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:761 + SDK cli_mmwave.c:330 (not bench-recorded)
+version
+Platform                : xWR18xx
+mmWave SDK Version      : 03.06.02.00
+Device Info             : IWR18xx ES 02.00
+Done
+
+mmwDemo:/>

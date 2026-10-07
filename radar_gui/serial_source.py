@@ -4,7 +4,7 @@ TLV dialect come from CPSL_TI_Radar_cpp/config/boards/<board>.json (`cli`, `data
 
 Only pyserial-touching code is `open_serial`; everything else talks to a `SerialPort` (read/write/reset_input_buffer/
 close), so tests pass fakes. Blocking port I/O runs in worker threads; status goes through `on_status(state, msg)`
-on the event loop. Status states: configuring, cfg_failed, waiting, streaming, stalled, no_board, error."""
+on the event loop. Status states: configuring, cfg_failed, wrong_firmware (gui-33), waiting, streaming, stalled, no_board, error."""
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +13,7 @@ import os
 import time
 from typing import Callable, Protocol
 
+from . import fwident
 from . import ports as portsmod
 from . import tlv
 from .cfg import firmware as fwmod
@@ -57,6 +58,16 @@ def load_board(board: str) -> dict:
     return d
 
 
+def expected_firmware(board: str) -> str | None:
+    """The firmware a serial source needs on `board`: the first one it lists that outputs TLV (IWR1843 -> demo,
+    AWR2243_CASCADE -> cascade_ddm); None if the board lists none."""
+    for fid in fwmod.board_firmwares(board) or []:
+        d = fwmod.get(fid)
+        if d and (d.get("outputs") or {}).get(board, {}).get("tlv"):
+            return fid
+    return None
+
+
 def cfg_lines(path, desc: dict) -> list[str]:
     cli, dia = desc["cli"], desc.get("cfg_dialect") or {}
     prefixes, skip = tuple(cli.get("skip_prefixes") or ()), set(dia.get("skip_commands") or ())
@@ -82,7 +93,7 @@ class SerialSource(Source):
     def __init__(self, board, cfg_path, cli_port, data_port, skip_configure=False, dump=None, *,
                  opener: Callable[[str, int], SerialPort] = open_serial, exists=os.path.exists,
                  lock=portsmod.radar_lock, check=portsmod.check_ports, on_status=None,
-                 stall_s=3.0, poll_s=0.5, settle_s=1.5, stop_wait_s=0.3):
+                 stall_s=3.0, poll_s=0.5, settle_s=1.5, stop_wait_s=0.3, skip_firmware_check=False):
         self.board, self.desc = board, load_board(board)
         self.cfg_path, self.cli_port, self.data_port = str(cfg_path), cli_port, data_port
         self.lines = cfg_lines(cfg_path, self.desc)
@@ -95,6 +106,9 @@ class SerialSource(Source):
         self.state, self.msg = "starting", ""
         self._last_raw = b""
         self.cli: list[dict] = []        # board command transcript of the latest configure attempt (gui-34)
+        self.skip_firmware_check = bool(skip_firmware_check)
+        self.fw_expected = expected_firmware(board)
+        self.firmware: dict | None = None    # latest firmware identity check (gui-33): fwident.identify result + expected
         self.claimed = self.started = False
         self.info = self._info()
 
@@ -112,7 +126,7 @@ class SerialSource(Source):
     @property
     def cli_first_fail(self):
         """1-based position in `cli` of the first command the board did not answer Done to, else None."""
-        return next((e["seq"] for e in self.cli if e["verdict"] in ("ERROR", "TIMEOUT")), None)
+        return next((e["seq"] for e in self.cli if e["verdict"] in ("ERROR", "TIMEOUT") and e.get("tag") != "id"), None)
 
     def _record(self, line, ok, reply, ms, i=None, n=None, tag=None):
         verdict = "DONE" if ok else ("ERROR" if self._has_error(reply) else "TIMEOUT")
@@ -184,6 +198,40 @@ class SerialSource(Source):
             self._read_until(cli, [prompt], c.get("prompt_wait_ms", 500) / 1000)
         return True, text
 
+    def _probe(self, cli, cmd, timeout_ms):
+        """Send one identify probe, read until the ack / an error token / the timeout; (reply text, None if no reply)."""
+        c = self.desc["cli"]
+        needles = [c.get("ack", "Done").encode()] + [t.encode() for t in c.get("error_tokens", [])]
+        cli.reset_input_buffer()
+        t0 = time.monotonic()
+        cli.write((cmd + "\n").encode())
+        resp = self._read_until(cli, needles, timeout_ms / 1000)
+        if any(n in resp for n in needles):      # let the rest of the reply (and the prompt) arrive
+            resp += self._read_until(cli, [c.get("prompt", "").encode() or b"\0"], 0.15)
+        text = resp.decode(errors="replace").replace("\r", "")
+        parts = [p.strip() for p in text.split("\n")]
+        prompt = c.get("prompt", "")
+        parts = [p for p in parts if p and p != cmd and not (prompt and p.endswith(prompt)) and p != "Done"]
+        shown = " | ".join(parts)
+        self.cli.append({"seq": len(self.cli) + 1, "i": None, "n": None, "tag": "id", "cmd": cmd, "ok": bool(text.strip()),
+                         "verdict": "DONE" if text.strip() else "TIMEOUT", "reply": shown if len(shown) <= 200 else shown[:199] + "\u2026",
+                         "ms": round((time.monotonic() - t0) * 1000)})
+        return text if text.strip() else None
+
+    def _check_firmware(self, cli) -> dict | None:
+        """Ask the board what it runs (before any cfg line) and compare with the expected firmware; None = not checked."""
+        fw = self.fw_expected
+        if self.skip_firmware_check or not fw:
+            self.firmware = None
+            return None
+        res = fwident.identify(fw, self.board, {}, once=self.once) if self.once else None
+        if res is None or res["verdict"] != "skipped":
+            to = fwident.timeout_ms(fw, self.board)
+            replies = {p["cmd"]: self._probe(cli, p["cmd"], to) for p in fwident.probes(fw, self.board)}
+            res = fwident.identify(fw, self.board, replies, once=self.once)
+        self.firmware = {"expected": fw, **res}
+        return self.firmware
+
     async def _configure(self) -> bool:
         n = len(self.lines)
         self.cli = []
@@ -191,6 +239,13 @@ class SerialSource(Source):
         cli = await asyncio.to_thread(self.opener, self.cli_port, self.desc["cli"]["baud"])
         try:
             await asyncio.to_thread(cli.reset_input_buffer)
+            fwr = await asyncio.to_thread(self._check_firmware, cli)
+            if fwr and fwr["verdict"] == "mismatch":
+                self._status("wrong_firmware", fwident.mismatch_message(fwr["expected"], self.board, fwr, self.cli_port)
+                             + ". Or tick 'Skip firmware check' to send the cfg anyway. Ports released.")
+                return False
+            if fwr and fwr["verdict"] == "unknown":
+                self._status("configuring", f"configuring 0/{n} (firmware not verified: {fwr['detail']})")
             for i, line in enumerate(self.lines, 1):
                 ok, reply = await asyncio.to_thread(self._timed_send, cli, line, i, n)
                 if not ok:

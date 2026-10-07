@@ -179,6 +179,7 @@ def cfg_file(tmp_path, name="rig.cfg", extra=()):
 
 def make_src(board_name, cfg, brd, **kw):
     kw.setdefault("on_status", None)
+    kw.setdefault("skip_firmware_check", True)   # gui-33: these tests pin the cfg exchange; test_radar_gui_fwident.py covers the check
     return SerialSource(board_name, cfg, "cli", "data", opener=brd.opener, exists=brd.exists,
                         check=lambda p: None, lock=kw.pop("lock", ports.RadarLock()), settle_s=0.01, poll_s=0.01, **kw)
 
@@ -396,7 +397,7 @@ def api(tmp_path):
     cfg_file(user, "cascade_rig.cfg")
     brd = FakeBoard()
     factory = partial(SerialSource, opener=brd.opener, exists=brd.exists, check=lambda p: None,
-                      settle_s=0.01, poll_s=0.01)
+                      settle_s=0.01, poll_s=0.01, skip_firmware_check=True)   # FakeBoard answers Done to everything
     c = TestClient(create_app(MockSource(rate_hz=5), user_cfg_dir=user, serial_factory=factory))
     yield c, brd, tmp_path
     ports.radar_lock.release()

@@ -1,0 +1,5 @@
+# synthetic from SDK 3.6 packages/ti/utils/cli/src/cli.c:223 (not yet bench-recorded)
+sarStats
+'sarStats' is not recognized as a CLI command
+
+mmwDemo:/>

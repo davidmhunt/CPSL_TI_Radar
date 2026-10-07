@@ -1,0 +1,8 @@
+# synthetic from SDK cli_mmwave.c:326 (SDK of the shipped 1443 demo unknown; not bench-recorded)
+version
+Platform                : xWR14xx
+mmWave SDK Version      : 02.01.00.04
+Device Info             : IWR14xx ES 02.00
+Done
+
+mmwDemo:/>

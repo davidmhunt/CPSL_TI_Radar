@@ -45,6 +45,7 @@
           <label>CLI port <input type="text" id="srcCli" spellcheck="false"></label>
           <label>Data port <input type="text" id="srcData" spellcheck="false"></label>
           <label class="chk" id="srcSkipRow" hidden><input type="checkbox" id="srcSkip"> Already configured this power-up (skip cfg)</label>
+          <label class="chk"><input type="checkbox" id="srcSkipFw"> Skip firmware check (send the cfg without asking the board what it runs)</label>
           <label class="chk"><input type="checkbox" id="srcDump"> Also capture raw bytes (runs/gui/dumps)</label>
           <div class="muted" id="srcBoardNote"></div>
         </div>
@@ -54,6 +55,7 @@
         </div>
         <div id="srcMsg" class="runmsg" hidden></div>
         <div id="srcStat" class="runmsg" hidden></div>
+        <div id="srcFw" class="runmsg" hidden></div>
         <div id="srcCmds" hidden></div>
       </div>
     </section>

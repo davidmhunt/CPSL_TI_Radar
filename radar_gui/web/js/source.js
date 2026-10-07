@@ -27,6 +27,7 @@ function layout() {
   $('srcFileRow').hidden = C.kind !== 'replay';
   $('srcSerial').hidden = C.kind !== 'serial';
   const b = board();
+  $('srcSkipFw').parentElement.hidden = C.kind !== 'serial';
   $('srcSkipRow').hidden = !(C.kind === 'serial' && b && b.once_per_boot);
   $('srcBoardNote').textContent = b ? `${b.tlv_dialect} TLV, CLI ${b.cli_baud} baud, data ${b.data_baud} baud` +
     (b.once_per_boot ? '. Accepts a cfg once per power-up.' : '') : '';
@@ -52,7 +53,17 @@ function boardChanged() {
   if (b) { $('srcCli').value = b.cli_port; $('srcData').value = b.data_port; }
   fillCfgs(); layout();
 }
+// gui-33: `Firmware: demo · SDK 03.06.02.00 · xWR18xx ✓`, red on a mismatch; hidden on a backend without the check.
+function showFirmware(f) {
+  const el = $('srcFw'); el.hidden = !f;
+  if (!f) return;
+  const fl = f.fields || {}, found = [fl.sdk && 'SDK ' + fl.sdk, fl.platform].filter(Boolean).join(' · ') || f.found;
+  const mark = { match: '\u2713', mismatch: '\u2717 wrong firmware', unknown: '? not verified', skipped: '(not checked)' }[f.verdict] || f.verdict;
+  el.textContent = `Firmware: ${f.expected}${found && f.verdict !== 'skipped' ? ' \u00b7 ' + found : ''} ${mark}` + (f.verdict === 'mismatch' ? `. Flash it: ${f.flash_hint}` : '');
+  el.className = 'runmsg ' + (f.verdict === 'match' ? 'ok' : f.verdict === 'mismatch' ? 'bad' : 'warn');
+}
 function describeNow() {
+  showFirmware(C.cur && C.cur.kind === 'serial' ? C.cur.firmware : null);
   const c = C.cur; if (!c) return;
   const sp = c.spec || {};
   let t = `Live: ${c.kind}`;
@@ -88,7 +99,8 @@ async function start() {
   if (C.kind === 'replay') body.file = $('srcFile').value;
   if (C.kind === 'serial') {
     Object.assign(body, { board: $('srcBoard').value, cfg_id: $('srcCfg').value, cli_port: $('srcCli').value.trim() || null,
-      data_port: $('srcData').value.trim() || null, skip_configure: !$('srcSkipRow').hidden && $('srcSkip').checked });
+      data_port: $('srcData').value.trim() || null, skip_configure: !$('srcSkipRow').hidden && $('srcSkip').checked,
+      skip_firmware_check: $('srcSkipFw').checked });
     if ($('srcDump').checked) body.dump = `${body.board}_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.bin`;
   }
   const res = await api('/api/source', body);
@@ -109,11 +121,11 @@ async function stop() {
 
 // Called by main.js on every status message: the source's progress / hints (configuring i/N, cfg_failed + power-cycle
 // hint, stalled, no_board, compact-points) are shown in the card as well as the header.
-const BAD = ['error', 'cfg_failed', 'no_board', 'stalled', 'disconnected'];
+const BAD = ['error', 'cfg_failed', 'wrong_firmware', 'no_board', 'stalled', 'disconnected'];
 let lastState = null;
 export function srcStatus(state, text) {
   // the transcript is fetched when the configure attempt resolves (not on every "configuring i/N" tick)
-  if (state !== lastState && ['cfg_failed', 'waiting', 'streaming', 'stalled'].includes(state) && C.ready) refreshSource();
+  if (state !== lastState && ['cfg_failed', 'wrong_firmware', 'waiting', 'streaming', 'stalled'].includes(state) && C.ready) refreshSource();
   lastState = state;
   const el = $('srcStat'); const show = !!text || BAD.includes(state);
   el.hidden = !show; el.textContent = show ? `${state.replace('_', ' ')}${text ? ': ' + text : ''}` : '';

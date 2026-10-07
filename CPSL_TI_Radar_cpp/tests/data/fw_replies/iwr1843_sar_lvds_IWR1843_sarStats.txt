@@ -1,0 +1,5 @@
+# synthetic from firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:804 (not bench-recorded; counter lines elided)
+sarStats
+Done
+
+mmwDemo:/>

@@ -1,0 +1,163 @@
+{
+  "comment": "Shared by pytest (radar_gui/fwident.py) and ctest (gui-33 Step 2). replies: probe cmd -> fixture file in this directory (null = board did not answer). level: demo/IWR1843 version is bench-recorded; every other entry is source-derived or a hypothesis.",
+  "cases": [
+    {
+      "id": "demo_1843_on_demo",
+      "fw": "demo",
+      "board": "IWR1843",
+      "replies": {
+        "version": "demo_IWR1843_version.txt",
+        "sarStats": "demo_IWR1843_sarStats.txt"
+      },
+      "verdict": "match",
+      "note": "bench-recorded version; sarStats source-derived"
+    },
+    {
+      "id": "sar_expected_on_demo_board",
+      "fw": "iwr1843_sar_lvds",
+      "board": "IWR1843",
+      "replies": {
+        "version": "demo_IWR1843_version.txt",
+        "sarStats": "demo_IWR1843_sarStats.txt"
+      },
+      "verdict": "mismatch",
+      "note": "the gui-09 A1 case, inverted"
+    },
+    {
+      "id": "demo_expected_on_sar_board",
+      "fw": "demo",
+      "board": "IWR1843",
+      "replies": {
+        "version": "iwr1843_sar_lvds_IWR1843_version.txt",
+        "sarStats": "iwr1843_sar_lvds_IWR1843_sarStats.txt"
+      },
+      "verdict": "mismatch",
+      "note": ""
+    },
+    {
+      "id": "sar_1843_on_sar",
+      "fw": "iwr1843_sar_lvds",
+      "board": "IWR1843",
+      "replies": {
+        "version": "iwr1843_sar_lvds_IWR1843_version.txt",
+        "sarStats": "iwr1843_sar_lvds_IWR1843_sarStats.txt"
+      },
+      "verdict": "match",
+      "note": ""
+    },
+    {
+      "id": "demo_1843_on_6843_board",
+      "fw": "demo",
+      "board": "IWR1843",
+      "replies": {
+        "version": "demo_IWR6843_version.txt",
+        "sarStats": "demo_IWR1843_sarStats.txt"
+      },
+      "verdict": "mismatch",
+      "note": "xWR68xx answer on an 1843 JSON"
+    },
+    {
+      "id": "demo_1843_no_reply",
+      "fw": "demo",
+      "board": "IWR1843",
+      "replies": {
+        "version": null,
+        "sarStats": null
+      },
+      "verdict": "unknown",
+      "note": ""
+    },
+    {
+      "id": "demo_1843_partial_reply",
+      "fw": "demo",
+      "board": "IWR1843",
+      "replies": {
+        "version": "demo_IWR1843_version.txt",
+        "sarStats": null
+      },
+      "verdict": "unknown",
+      "note": "one probe unanswered, none failed"
+    },
+    {
+      "id": "demo_1843_wrong_version_sarstats_unanswered",
+      "fw": "demo",
+      "board": "IWR1843",
+      "replies": {
+        "version": "demo_IWR6843_version.txt",
+        "sarStats": null
+      },
+      "verdict": "mismatch",
+      "note": "a failing probe wins over a missing one"
+    },
+    {
+      "id": "demo_6843",
+      "fw": "demo",
+      "board": "IWR6843",
+      "replies": {
+        "version": "demo_IWR6843_version.txt"
+      },
+      "verdict": "match",
+      "note": ""
+    },
+    {
+      "id": "demo_6843ods",
+      "fw": "demo",
+      "board": "IWR6843ODS",
+      "replies": {
+        "version": "demo_IWR6843_version.txt"
+      },
+      "verdict": "match",
+      "note": ""
+    },
+    {
+      "id": "demo_1443",
+      "fw": "demo",
+      "board": "IWR1443",
+      "replies": {
+        "version": "demo_IWR1443_version.txt"
+      },
+      "verdict": "match",
+      "note": ""
+    },
+    {
+      "id": "demo_1443_on_dca1000_raw_board",
+      "fw": "demo",
+      "board": "IWR1443",
+      "replies": {
+        "version": "dca1000_raw_IWR1443_version.txt"
+      },
+      "verdict": "mismatch",
+      "note": "LVDS Stream prompt, not mmwDemo"
+    },
+    {
+      "id": "dca1000_raw_1443",
+      "fw": "dca1000_raw",
+      "board": "IWR1443",
+      "replies": {
+        "version": "dca1000_raw_IWR1443_version.txt"
+      },
+      "verdict": "match",
+      "note": ""
+    },
+    {
+      "id": "dca1000_raw_on_demo_1443",
+      "fw": "dca1000_raw",
+      "board": "IWR1443",
+      "replies": {
+        "version": "demo_IWR1443_version.txt"
+      },
+      "verdict": "mismatch",
+      "note": ""
+    },
+    {
+      "id": "cascade_skipped",
+      "fw": "cascade_ddm",
+      "board": "AWR2243_CASCADE",
+      "replies": {
+        "version": "cascade_ddm_AWR2243_CASCADE_version.txt"
+      },
+      "verdict": "skipped",
+      "note": "once-per-power-up, once_safe false"
+    }
+  ]
+}

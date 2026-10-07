@@ -1,0 +1,8 @@
+# synthetic from iwr_raw_rosnode/firmware/lvds_stream/xwr14xx/cli.c:351 (prompt) + SDK 2.1 cli_mmwave.c (not bench-recorded)
+version
+Platform                : xWR14xx
+mmWave SDK Version      : 02.01.00.04
+Device Info             : IWR14xx ES 02.00
+Done
+
+LVDS Stream:/>

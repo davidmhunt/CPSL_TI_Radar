@@ -20,6 +20,9 @@ files via include/json; gui-04) holds, schema 2:
                     "source", "confidence", optional "note", optional "boards": {board: {overrides of the above}}}
                    the MIMO scheme is a property of the firmware, not inferred from the board (gui-10 ruling);
                    confidence: "high" | "medium" | "low" | "unverified"
+  identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note}}  (gui-33) what the board answers
+                   to `version` / `sarStats` when this firmware runs; matched by radar_gui/fwident.py (schema checked there).
+                   level: "bench" (reply recorded on hardware) | "source" (derived from firmware source) | "unverified".
   pending          optional string; present = stub (no cfg generation/validation yet)
   driver_board     optional {gui board: driver board}  (gui-30) the C++ driver board (config/boards/<name>.json) a system JSON
                    writes for this firmware on that GUI board, and whose cfg_dialect (required/forbidden commands) the cfg is
@@ -109,6 +112,9 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
             for b, v in db.items():
                 if not (BOARDS_DIR / f"{v}.json").is_file():
                     bad.append(f"driver_board[{b}]: {v!r} has no config/boards/{v}.json")
+    from .. import fwident
+
+    bad += fwident.check_identify(d.get("identify"), boards)
     fm = d.get("lvds_data_fmts")
     if fm is None:
         if isinstance(out, dict) and any(isinstance(o, dict) and o.get("lvds") for o in out.values()):

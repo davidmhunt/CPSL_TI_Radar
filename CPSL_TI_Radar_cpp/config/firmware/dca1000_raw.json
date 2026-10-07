@@ -184,5 +184,29 @@
     "subframes": null,
     "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: raw binary, no parser, so no verified pattern rules",
     "confidence": "unverified"
+  },
+  "identify": {
+    "IWR1443": {
+      "level": "source",
+      "timeout_ms": 3000,
+      "once_safe": true,
+      "flash_hint": "./fw flash dca1000_raw <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "source-derived (iwr_raw_rosnode lvds_stream/xwr14xx/cli.c:351, SDK 2.1 per binary strings); prompt LVDS Stream:/> required in the reply",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*xWR14xx",
+            "LVDS Stream:/>"
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        }
+      ]
+    }
   }
 }

@@ -195,5 +195,38 @@
     "subframes": 0,
     "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: same SDK 3.6 parser, frame mode only, no BPM evidence (conservative false)",
     "confidence": "medium"
+  },
+  "identify": {
+    "IWR1843": {
+      "level": "source",
+      "timeout_ms": 3000,
+      "once_safe": true,
+      "flash_hint": "./fw flash iwr1843_sar_lvds <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "note": "source-derived: version same as the demo (mmw_cli.c:761 overridePlatformString xWR18xx); sarStats answers Done on the SAR image only (mmw_cli.c:804); not bench-recorded",
+      "probes": [
+        {
+          "cmd": "version",
+          "require": [
+            "Platform\\s*:\\s*xWR18xx"
+          ],
+          "reject": [],
+          "show": {
+            "platform": "Platform\\s*:\\s*([^\\s]+)",
+            "sdk": "mmWave SDK Version\\s*:\\s*([^\\s]+)",
+            "device": "Device Info\\s*:\\s*([^\\r\\n]+)"
+          }
+        },
+        {
+          "cmd": "sarStats",
+          "require": [
+            "Done"
+          ],
+          "reject": [
+            "not recognized"
+          ],
+          "show": {}
+        }
+      ]
+    }
   }
 }
