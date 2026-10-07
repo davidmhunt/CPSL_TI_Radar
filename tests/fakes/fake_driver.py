@@ -6,6 +6,8 @@ Mode comes from FAKE_DRIVER_MODE (default "run"): run | crash | ignore-sigint | 
 write-bin | stall.  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
 FAKE_DRIVER_PERIOD_MS (default 100). FAKE_DRIVER_CLI=debug|info|ok (or by-config: ok when the config name contains "_ok", else debug) replays the board command transcript of
 tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using config", ending in a rejected sensorStart.
+FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
+default 0) imitate a log_level debug run for the GUI lag measurement (gui-09 D8).
 """
 import os
 import signal
@@ -16,6 +18,8 @@ mode = os.environ.get("FAKE_DRIVER_MODE", "run")
 rate = float(os.environ.get("FAKE_DRIVER_RATE", "20"))
 bpf = int(os.environ.get("FAKE_DRIVER_BPF", "1000"))
 period = int(os.environ.get("FAKE_DRIVER_PERIOD_MS", "100"))
+stats_s = float(os.environ.get("FAKE_DRIVER_STATS_MS", "200")) / 1000.0
+log_lps = float(os.environ.get("FAKE_DRIVER_LOG_LPS", "0"))
 args = sys.argv[1:]
 cfg = next((a for a in args if not a.startswith("-")), "")
 
@@ -65,9 +69,14 @@ def stats():
     print(f"stats v1 serial t={t:.3f} frames={frames} missed=0 overwritten=0 stalls=0", flush=True)
 
 
+extra = 0.0
 while not stop["flag"]:
     time.sleep(1.0 / rate)
     t = time.monotonic() - t0
+    extra += log_lps / rate
+    while extra >= 1.0:
+        extra -= 1.0
+        print(f"[debug] dca packet seq={frames * 10} bytes=1456 ring=3/64 t={t:.4f}", flush=True)
     if mode != "stall":
         frames += 1
         if binf:
@@ -75,7 +84,7 @@ while not stop["flag"]:
     if mode == "crash" and t > 0.3:
         print("error: lost the DCA1000 stream", file=sys.stderr, flush=True)
         sys.exit(3)
-    if t - last_print >= 0.2:  # fast stats cadence so tests finish quickly
+    if t - last_print >= stats_s:  # fast stats cadence so tests finish quickly
         stats()
         last_print = t
     if (limit_f and frames >= limit_f) or (limit_s and t >= limit_s):

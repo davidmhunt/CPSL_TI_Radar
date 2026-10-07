@@ -96,7 +96,7 @@ Runs happen in `runs/gui/<UTC>_<json stem>/` (gitignored; override `RADAR_GUI_RU
     uv run python -m radar_gui --source mock --driver-bin tests/fakes/fake_driver.py   # no hardware
 
 Wire format (additions to `/stream`): `driver_state` (full status minus the log; also sent on connect), `driver_stats` (`stream`, `stats`
-with `rate_hz`), `driver_log` (`line`), `driver_cli` (`entry`, `run`, `first_fail`: one board command and its reply; see below). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
+with `rate_hz`), `driver_log_batch` (`lines`, `run`: output lines buffered and sent every 150 ms, in order; a backend older than gui-09 Step 4c sent one `driver_log` with `line` per line, which the page still accepts), `driver_cli` (`entry`, `run`, `first_fail`: one board command and its reply; see below). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
 (body `{config, frames?, duration?}`; only configs listed by `/configs` are accepted). Tests: `tests/test_radar_gui_driver.py` (fake driver
 `tests/fakes/fake_driver.py`, modes via `FAKE_DRIVER_MODE`). Shots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui05.json`
 (own server, fake driver; the spec's `user_cfgs` carry the system JSONs, `@PORT@` stands for a scratch file used as the CLI port).

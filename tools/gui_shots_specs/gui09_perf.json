@@ -1,0 +1,108 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "run",
+  "FAKE_DRIVER_RATE": "10",
+  "FAKE_DRIVER_PERIOD_MS": "100",
+  "FAKE_DRIVER_BPF": "504000",
+  "FAKE_DRIVER_STATS_MS": "100",
+  "FAKE_DRIVER_LOG_LPS": "300"
+ },
+ "user_cfgs": {
+  "bench_1843_tlv.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"bench_1843_tlv.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "bench_1843_tlv.cfg": "% fake\n",
+  "rig1843.cfg": "flushCfg\nsensorStart\n"
+ },
+ "scenarios": [
+  {
+   "name": "perf_debug_log_load",
+   "tab": "run",
+   "window": [
+    1400,
+    900
+   ],
+   "actions": [
+    {
+     "set": "#rCfg",
+     "value": "bench_1843_tlv"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2
+    },
+    {
+     "js": "const p=window.__perf; for (const k in p) p[k]=0; window.__fr={n:0,max:0,last:performance.now()}; const f=()=>{const t=performance.now(); window.__fr.n++; window.__fr.max=Math.max(window.__fr.max,t-window.__fr.last); window.__fr.last=t; requestAnimationFrame(f)}; requestAnimationFrame(f); return 1"
+    },
+    {
+     "wait": 10
+    },
+    {
+     "js": "const e=document.createElement('pre'); e.id='perfOut'; document.body.appendChild(e); e.textContent=JSON.stringify({perf:window.__perf, raf:window.__fr, secs:10}); return 1"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "perf.txt",
+     "selector": "#perfOut",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "avg_rate_after_exit",
+   "tab": "run",
+   "window": [
+    1400,
+    900
+   ],
+   "fresh": true,
+   "actions": [
+    {
+     "set": "#rCfg",
+     "value": "bench_1843_tlv"
+    },
+    {
+     "set": "#rFrames",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "js": "const e=document.createElement('pre'); e.id='liveOut'; document.body.appendChild(e); e.textContent=document.getElementById('rStreams').innerText; return 1"
+    },
+    {
+     "wait": 4
+    }
+   ],
+   "shots": [
+    {
+     "file": "after_exit.png",
+     "selector": "#rStreams"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "live_streams.txt",
+     "selector": "#liveOut",
+     "what": "text"
+    },
+    {
+     "file": "after_exit_streams.txt",
+     "selector": "#rStreams",
+     "what": "text"
+    },
+    {
+     "file": "log_tail.txt",
+     "selector": "#rLog",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}

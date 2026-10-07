@@ -26,6 +26,7 @@ import bench_lib  # noqa: E402
 DEFAULT_BIN = REPO / "CPSL_TI_Radar_cpp" / "build" / "CPSL_TI_Radar_CPP"
 DEFAULT_RUN_ROOT = REPO / "runs" / "gui"
 LOG_LINES = 500
+LOG_FLUSH_S = 0.15   # driver_log lines are sent to the page as one driver_log_batch per this interval (gui-09 D8)
 _FRAME_RE = re.compile(r"^frame:\s+(\d+) rx x (\d+) samples x (\d+) chirps, ([\d.]+) ms period")
 _BPF_RE = re.compile(r"^bytes/frame:\s*(\d+)")
 CLI_MAX = 500          # transcript entries kept (the beginning of the run: that is where a rejected cfg shows)
@@ -120,6 +121,7 @@ class DriverManager:
         self.parser = bench_lib.Parser()
         self._prev = {}
         self.cli, self._cli_pend, self._cli_seq = [], None, 0
+        self._logbuf, self._flush_timer = [], None
         self.expect = {}
         self.sigint_sent = False
         self.t_start = 0.0
@@ -249,6 +251,11 @@ class DriverManager:
         t = time.monotonic()
         with self._mu:
             self.log.append(line)
+            self._logbuf.append(line)
+            if self._flush_timer is None:
+                self._flush_timer = threading.Timer(LOG_FLUSH_S, self._flush_log)
+                self._flush_timer.daemon = True
+                self._flush_timer.start()
             cli_events = self._cli_line(line)
             n = len(self.parser.events)
             self.parser.feed(t, line)
@@ -265,11 +272,18 @@ class DriverManager:
                 self._prev[kind] = ev
                 self.stats[kind] = {**{k: v for k, v in ev.items() if k not in ("kind", "t")}, "rate_hz": rate}
                 msg = {"type": "driver_stats", "stream": kind, "stats": self.stats[kind]}
-        self.emit(msg or {"type": "driver_log", "line": line})
         if msg:
-            self.emit({"type": "driver_log", "line": line})
+            self.emit(msg)
         for ev in cli_events:
             self.emit(ev)
+
+    def _flush_log(self):
+        """Send the buffered output lines as one driver_log_batch (order kept). A page that drops the oldest message on
+        a burst then loses at most one batch, and the status re-read after a driver_cli burst restores it."""
+        with self._mu:
+            lines, self._logbuf, self._flush_timer = self._logbuf, [], None
+            if lines:
+                self.emit({"type": "driver_log_batch", "run": self.run_id, "lines": lines})
 
     # ---- board command transcript (gui-34) -------------------------------------------------------
     def _cli_add(self, **e) -> dict:
@@ -336,6 +350,10 @@ class DriverManager:
         return []
 
     def _finish(self, code):
+        t, self._flush_timer = self._flush_timer, None
+        if t is not None:
+            t.cancel()
+        self._flush_log()   # the tail of the output must reach the page before the exit state
         for ev in self._cli_close():
             self.emit(ev)
         self.exit_code = code

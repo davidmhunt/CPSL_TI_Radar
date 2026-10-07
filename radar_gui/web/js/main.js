@@ -38,6 +38,8 @@ function onMessage(m) {
     if (m.max_range_m && !S.rangeTouched) { $('range').value = Math.round(m.max_range_m); $('range').dispatchEvent(new Event('input')); }
     redraw();
   } else if (m.type === 'frame') {
+    // gui-09 D8: while a driver run is live the Live view is not drawn (the mock/serial stream would only compete for the main thread)
+    if (driverHeader()) { S.last = m; lastFrame = m; return; }
     S.last = m;
     S.counts.push(m.pts.length); if (S.counts.length > 200) S.counts.shift();
     lastFrame = m; header(m);

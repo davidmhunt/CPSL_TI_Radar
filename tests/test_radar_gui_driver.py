@@ -88,9 +88,9 @@ def test_start_stats_ws_and_stop(env):
         assert (tmp / "runs").is_dir() and "rig" in r.json()["run_dir"]
         seen = set()
         end = time.time() + 10
-        while time.time() < end and not {"driver_stats", "driver_log", "driver_state"} <= seen:
+        while time.time() < end and not {"driver_stats", "driver_log_batch", "driver_state"} <= seen:
             seen.add(ws.receive_json()["type"])
-        assert {"driver_stats", "driver_log", "driver_state"} <= seen
+        assert {"driver_stats", "driver_log_batch", "driver_state"} <= seen
         time.sleep(0.6)
         st = c.get("/api/driver/status").json()
         assert st["pid"] and st["stats"]["dca"]["frames"] > 0 and st["stats"]["serial"]["frames"] > 0
@@ -242,3 +242,27 @@ def test_run_tab_is_served(env):
         html = c.get("/").text
         assert 'data-tab="run"' in html and 'id="runMain"' in html
         assert c.get("/js/run.js").status_code == 200
+
+
+def test_log_batches_keep_order_and_lose_nothing(env, monkeypatch):
+    """gui-09 D8: output lines reach the page as driver_log_batch, in order, and the tail is flushed before the exit state."""
+    make, cfg, _, _ = env
+    monkeypatch.setenv("FAKE_DRIVER_LOG_LPS", "200")
+    monkeypatch.setenv("FAKE_DRIVER_RATE", "50")
+    with make() as c, c.websocket_connect("/stream") as ws:
+        assert c.post("/api/driver/start", json={"config": str(cfg), "frames": 100}).status_code == 200
+        lines, batches, end, state = [], 0, time.time() + 15, None
+        while time.time() < end and state not in ("exited", "failed"):
+            m = ws.receive_json()
+            if m["type"] == "driver_log_batch":
+                batches += 1
+                lines += m["lines"]
+            elif m["type"] == "driver_state":
+                state = m["state"]
+        assert state == "exited"
+        full = c.get("/api/driver/status").json()["log"]
+        assert lines[-len(full):] == full and lines[0].startswith("Using config")
+        seqs = [int(l.split("seq=")[1].split()[0]) for l in lines if l.startswith("[debug]")]
+        assert seqs == sorted(seqs) and len(seqs) >= 150
+        assert batches < len(lines) / 3   # batched, not one message per line
+        assert lines[-1] == "Stopped."

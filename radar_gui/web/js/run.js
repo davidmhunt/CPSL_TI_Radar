@@ -163,20 +163,24 @@ const STREAM_FIELDS = {
   serial: [['missed', 'missed', true]],
 };
 function renderStreams() {
+  PERF.renderStreams++;
   const box = $('rStreams'), keys = Object.keys(R.stats);
   $('rStreamsNote').textContent = R.expectHz ? `expected ${R.expectHz.toFixed(1)} Hz from the config` : '';
   if (!keys.length) { box.innerHTML = '<div class="muted pad">No stats yet. Start a run to see frames, drops and rates.</div>'; return; }
+  const ended = R.state === 'exited' || R.state === 'failed';   // D9: after exit the last-interval rate is ~0; show frames / run time
   box.innerHTML = keys.map(k => {
     const s = R.stats[k], fields = STREAM_FIELDS[k] || [];
     const shown = new Set(['frames', 'rate_hz', ...fields.map(f => f[0]), 'packets']);
     const bad = fields.some(f => s[f[0]] > 0);
-    const rateBad = R.expectHz && s.rate_hz != null && s.rate_hz < 0.9 * R.expectHz;
+    const avg = ended && s.t_driver > 0 && s.frames != null ? s.frames / s.t_driver : null;
+    const rate = avg != null ? avg : s.rate_hz;
+    const rateBad = R.expectHz && rate != null && rate < 0.9 * R.expectHz;
     const other = Object.entries(s).filter(([n, v]) => !shown.has(n) && typeof v === 'number' && v > 0 && !/^(rcvbuf|t_driver)$/.test(n))
       .map(([n, v]) => `${n}=${fmtN(v)}`).join(' · ');
     return `<div class="stream${bad ? ' bad' : ''}"><div class="sname">${esc(k === 'dca' ? 'DCA1000' : k)} <span class="badge ${bad ? 'bad' : 'ok'}">${bad ? 'drops' : 'clean'}</span></div>
       <div class="tiles2">
         <div class="tile"><span>frames</span><b>${fmtN(s.frames)}</b></div>
-        <div class="tile${rateBad ? ' badt' : ''}"><span>rate</span><b>${fmtRate(s.rate_hz)}</b></div>
+        <div class="tile${rateBad ? ' badt' : ''}"><span>${avg != null ? 'avg rate' : 'rate'}</span><b>${fmtRate(rate)}</b></div>
         ${fields.map(([n, label]) => `<div class="tile${s[n] > 0 ? ' badt' : ''}"><span>${esc(label)}</span><b>${fmtN(s[n])}</b></div>`).join('')}
       </div>${other ? `<div class="muted other">other counters: ${esc(other)}</div>` : ''}</div>`;
   }).join('');
@@ -197,26 +201,63 @@ function renderOutput(st) {
 }
 
 // ---------- log ----------
+// gui-09 D8: WebSocket messages only mark state dirty; the DOM is updated at most once per animation frame. The log is
+// appended to (with a line cap), not rebuilt: a full rebuild happens only when the whole log is replaced or the filter flips.
+export const PERF = window.__perf = { renderLog: 0, appendLog: 0, renderStreams: 0, logMs: 0, msgs: 0 };
+const pend = { rebuild: false, lines: [], streams: false, raf: 0 };
+function schedule() { if (!pend.raf) pend.raf = requestAnimationFrame(flush); }
+function flush() {
+  pend.raf = 0;
+  if (pend.rebuild) renderLog(); else if (pend.lines.length) appendLog(pend.lines);
+  if (pend.streams) renderStreams();
+  pend.rebuild = pend.streams = false; pend.lines = [];
+}
+const shown = l => !($('rHideStats').checked && l.startsWith('stats v1'));
 function renderLog() {
-  const hide = $('rHideStats').checked, el = $('rLog');
+  const t0 = performance.now(), el = $('rLog');
+  PERF.renderLog++; pend.rebuild = false; pend.lines = [];
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-  el.textContent = R.log.filter(l => !(hide && l.startsWith('stats v1'))).join('\n');
+  el.textContent = R.log.filter(shown).map(l => l + '\n').join('');
   if (near) el.scrollTop = el.scrollHeight;
+  PERF.logMs += performance.now() - t0;
+}
+function appendLog(lines) {
+  const t0 = performance.now(), el = $('rLog');
+  PERF.appendLog++;
+  const vis = lines.filter(shown);
+  if (vis.length) {
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    const frag = document.createDocumentFragment();
+    for (const l of vis) frag.appendChild(document.createTextNode(l + '\n'));
+    el.appendChild(frag);
+    while (el.childNodes.length > LOG_MAX) el.removeChild(el.firstChild);
+    if (near) el.scrollTop = el.scrollHeight;
+  }
+  PERF.logMs += performance.now() - t0;
+}
+function addLines(lines) {
+  for (const l of lines) R.log.push(l);
+  if (R.log.length > LOG_MAX) R.log.splice(0, R.log.length - LOG_MAX);
+  if (!R.ready) return;
+  if (pend.rebuild) { schedule(); return; }
+  pend.lines.push(...lines); schedule();
 }
 
 // ---------- websocket ----------
 let seenState = false, cliSync = null;
 export function onDriverMessage(m) {
-  if (m.type === 'driver_log') {
-    R.log.push(m.line); if (R.log.length > LOG_MAX) R.log.shift();
-    if (R.ready) renderLog();
+  PERF.msgs++;
+  if (m.type === 'driver_log') {            // one line (backend older than gui-09 Step 4c)
+    addLines([m.line]);
+  } else if (m.type === 'driver_log_batch') {
+    addLines(m.lines);
   } else if (m.type === 'driver_cli') {
     sawRun(m.run); if (cliPanel) cliPanel.upsert(m.entry);
     // The WebSocket queue is 8 deep and drops the oldest on a burst (a configure sends dozens of lines at once), so
     // re-read the full transcript from the status once the burst is over.
     clearTimeout(cliSync); cliSync = setTimeout(() => { if (R.ready) refresh(); }, 500);
   } else if (m.type === 'driver_stats') {
-    R.stats[m.stream] = m.stats; if (R.ready) renderStreams();
+    R.stats[m.stream] = m.stats; if (R.ready) { pend.streams = true; schedule(); }
   } else if (m.type === 'driver_state') {
     const first = !seenState; seenState = true;
     const { type, ...st } = m; sawRun(st.run);
@@ -231,6 +272,6 @@ export function showRun() {
   R.ready = true; cliPanel = mountCliPanel($('rCli'));
   $('rCfg').addEventListener('change', cfgChanged);
   $('rValidate').onclick = validate; $('rStart').onclick = start; $('rStop').onclick = stop;
-  $('rHideStats').addEventListener('change', renderLog);
+  $('rHideStats').addEventListener('change', () => { pend.rebuild = true; schedule(); });
   loadConfigs().then(refresh);
 }
