@@ -73,3 +73,26 @@ def test_timeout(capsys):
     def run(args, timeout=15):
         raise subprocess.TimeoutExpired("tailscale", 15)
     assert TailscaleServe(8000, run=run).start() is None
+
+
+def test_stop_falls_back_to_reset_when_off_fails():
+    calls = []
+    base = fake(calls)
+
+    def run(args, timeout=15):
+        if args[-1] == "off":
+            calls.append(args)
+            return R(returncode=1, stdout="", stderr="unknown")
+        return base(args, timeout)
+    t = TailscaleServe(8000, run=run)
+    assert t.start()
+    t.stop()
+    assert calls[-2] == ["serve", "--https=443", "off"] and calls[-1] == ["serve", "reset"]
+
+
+def test_stop_no_reset_when_not_ours():
+    calls = []
+    t = TailscaleServe(8000, run=fake(calls, serve_status='{"TCP":{"443":{}}}'))
+    t.start()
+    t.stop()
+    assert ["serve", "reset"] not in calls

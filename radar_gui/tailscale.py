@@ -82,11 +82,15 @@ class TailscaleServe:
         if not self.active:
             return
         self.active = False
+        manual = "run `tailscale serve --https=443 off` (or `tailscale serve reset`)"
         try:
             r = self._run(["serve", f"--https={HTTPS_PORT}", "off"])
+            if r.returncode == 0:
+                return
+            # `off` may be unsupported; start() only sets active when the serve config
+            # was empty beforehand, so the config is ours alone and reset is safe.
+            r = self._run(["serve", "reset"])
             if r.returncode != 0:
-                print(f"radar_gui: could not remove tailscale serve mapping ({_err(r)[0]}); "
-                      "run `tailscale serve --https=443 off`.", flush=True)
+                print(f"radar_gui: could not remove tailscale serve mapping ({_err(r)[0]}); {manual}.", flush=True)
         except (subprocess.TimeoutExpired, OSError) as e:
-            print(f"radar_gui: could not remove tailscale serve mapping ({e}); "
-                  "run `tailscale serve --https=443 off`.", flush=True)
+            print(f"radar_gui: could not remove tailscale serve mapping ({e}); {manual}.", flush=True)
