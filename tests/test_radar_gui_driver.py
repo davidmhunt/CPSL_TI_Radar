@@ -26,6 +26,17 @@ def wait_for(c, states, timeout=10):
     raise AssertionError(f"state never reached {states}: {c.get('/api/driver/status').json()['state']}")
 
 
+def wait_ready(c, timeout=20):
+    """Block until the fake driver printed "Using config" (printed after its SIGINT/SIGTERM handlers are installed).
+    D13: stopping earlier, on a loaded machine, hit Python's default SIGINT handling (exit 1/130) -> state "failed"."""
+    end = time.time() + timeout
+    while time.time() < end:
+        if any("Using config" in ln for ln in c.get("/api/driver/status").json()["log"]):
+            return
+        time.sleep(0.05)
+    raise AssertionError("fake driver never became ready")
+
+
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     ports.radar_lock.release()
@@ -116,7 +127,7 @@ def test_sigkill_fallback(env, monkeypatch):
     monkeypatch.setenv("FAKE_DRIVER_MODE", "ignore-sigint")
     with make() as c:
         c.post("/api/driver/start", json={"config": str(cfg)})
-        time.sleep(0.4)
+        wait_ready(c)
         t0 = time.time()
         c.post("/api/driver/stop")
         st = wait_for(c, {"exited", "failed"})
@@ -145,6 +156,7 @@ def test_double_start_refused(env):
         assert c.post("/api/driver/start", json={"config": str(cfg)}).status_code == 200
         r = c.post("/api/driver/start", json={"config": str(cfg)})
         assert r.status_code == 409 and "already running" in r.json()["detail"]
+        wait_ready(c)
         c.post("/api/driver/stop")
         wait_for(c, {"exited"})
         assert c.post("/api/driver/stop").status_code == 409  # nothing to stop

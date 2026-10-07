@@ -32,4 +32,6 @@ pythonpath = ["."]
 # ROS 2 (sourced in the shell) puts its pytest plugins on PYTHONPATH; launch_testing
 # needs deps this venv lacks, so keep those plugins out of the project test run.
 addopts = ["-p", "no:launch_testing", "-p", "no:launch_ros"]
+# D13: a stuck test dumps every thread stack after 60 s (pytest-timeout is not a dependency), so a hang names its culprit.
+faulthandler_timeout = 60
 norecursedirs = ["firmware_dev", "Firmware", ".friday", "build", ".venv"]
