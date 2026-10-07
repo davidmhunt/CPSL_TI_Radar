@@ -100,6 +100,8 @@ def test_source_card_read_only_while_following(env):
     with make() as c:
         c.post("/api/driver/start", json={"config": cfgp(user)})
         wait(lambda: src(c)["kind"] == "driver")
+        # the fake installs its SIGINT handler before its first tap frame; an earlier SIGINT kills it (died, not ended)
+        wait(lambda: src(c).get("frames_in", 0) > 0, what="driver is streaming (handler installed)")
         r = c.post("/api/source", json={"kind": "mock"})
         assert r.status_code == 409 and "Run tab" in r.json()["detail"]
         assert c.post("/api/source/stop").status_code == 409
