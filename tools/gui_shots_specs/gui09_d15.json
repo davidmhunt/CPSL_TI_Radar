@@ -1,0 +1,20 @@
+{
+ "helpers": [{"cmd": ["python", "tests/fakes/fake_board_pty.py", "@CLI@"]}],
+ "server": ["tests/fakes/gui_fake_serial.py"],
+ "user_cfgs": {"rig1843.cfg": "sensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nsensorStart\n"},
+ "scenarios": [
+  {"name": "d15_button_label", "tab": "live", "window": [1400, 1000],
+   "actions": [
+    {"wait": 1}, {"click": "#srcKind button[data-k=serial]"}, {"set": "#srcBoard", "value": "IWR1843"}, {"wait": 0.5},
+    {"set": "#srcCfg", "value": "rig1843"}, {"set": "#srcCli", "value": "@CLI@"}, {"set": "#srcData", "value": "@PORT@"},
+    {"click": "#srcStart"}, {"wait": 2}
+   ],
+   "dumps": [{"file": "a_running_same.txt", "selector": "#srcStart", "what": "text"}, {"file": "a_now.txt", "selector": "#srcNow", "what": "text"}]},
+  {"name": "d15_button_label_switched", "tab": "live", "window": [1400, 1000], "fresh": false,
+   "actions": [
+    {"set": "#srcBoard", "value": "AWR2243"}, {"wait": 0.7}
+   ],
+   "shots": [{"file": "switched.png", "selector": "#srcCard"}],
+   "dumps": [{"file": "b_switched_board.txt", "selector": "#srcStart", "what": "text"}]}
+ ]
+}

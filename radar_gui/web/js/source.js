@@ -38,7 +38,10 @@ function layout() {
   const live = C.cur && !['driver', 'none'].includes(C.cur.kind) && C.cur.kind;
   $('srcStop').disabled = C.busy || !live;
   $('srcStart').disabled = C.busy || (C.kind === 'serial' && !$('srcCfg').value) || (C.kind === 'replay' && !$('srcFile').value);
-  $('srcStart').textContent = C.kind === 'serial' ? (live === 'serial' ? 'Restart' : 'Start serial') : `Use ${KIND_LABEL[C.kind].toLowerCase()}`;
+  // gui-09 D15: "Restart" only when the selected board + cfg is the serial source that is running now
+  const sp = (C.cur && C.cur.spec) || {};
+  const same = live === 'serial' && b && sp.board === b.board && (sp.cfg_id === undefined || sp.cfg_id === $('srcCfg').value);
+  $('srcStart').textContent = C.kind === 'serial' ? (same ? 'Restart' : 'Start serial') : `Use ${KIND_LABEL[C.kind].toLowerCase()}`;
 }
 // gui-09 D16: the dialect follows the file name (AWR2243_CASCADE_* -> mcuplus_cascade, IWR1443* -> sdk2, else sdk3); editable.
 function autoDialect() {
