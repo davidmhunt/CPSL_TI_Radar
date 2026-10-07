@@ -162,13 +162,21 @@ export function renderProfile(m, width) {
   const per = m.frame_period_ms, act = Math.min(m.active_ms, per), fr = per > 0 ? act / per : 1;
   const bw = W - 4, fx0 = 2, barH = 16, M = Math.max(1, m.chirps_per_loop || (m.chirp_sequence || []).length || 1), NL = Math.max(1, m.n_loops || 1);
   const aw = Math.max(4, Math.min(bw, fr * bw)), idleMs = Math.max(0, per - m.active_ms);
-  const items = [{ x: fx0 + aw / 2, text: `active ${num(m.active_ms, 3)} ms (${num(fr * 100, 1)}%)`, title: `Active time ${num(m.active_ms, 5)} ms = ${m.n_chirps} chirps x Tc ${num(m.chirp_us, 4)} µs = ${num(fr * 100, 3)}% of the frame period` }];
+  const actTitle = `Active time ${num(m.active_ms, 5)} ms = ${NL} loop${NL > 1 ? 's' : ''} x ${M} chirp${M > 1 ? 's' : ''} = ${m.n_chirps} chirps x Tc ${num(m.chirp_us, 4)} µs = ${num(fr * 100, 3)}% of the frame period` + (m.duty_cycle > 1 ? ' - EXCEEDS the frame period' : '');
+  const actVars = [`active ${num(m.active_ms, 3)} ms (${num(fr * 100, 1)}%) · ${NL} loop${NL > 1 ? 's' : ''} × ${M} chirp${M > 1 ? 's' : ''} = ${m.n_chirps} chirps`,
+    `active ${num(m.active_ms, 3)} ms (${num(fr * 100, 1)}%) · ${NL} × ${M} chirps`, `active ${num(m.active_ms, 3)} ms (${num(fr * 100, 1)}%)`, `active ${num(m.active_ms, 3)} ms`];
+  const actText = actVars.find(v => textW(v) <= bw) || actVars[actVars.length - 1];
+  const items = [{ x: fx0 + aw / 2, text: actText, bad: m.duty_cycle > 1, title: actTitle }];
   if (bw - aw > 8) items.push({ x: fx0 + aw + (bw - aw) / 2, text: `idle ${num(idleMs, 2)} ms`, title: `Idle time per frame ${num(idleMs, 5)} ms (frame period minus active time)` });
+  // frame axis above the bar: the whole bar = one frame period
+  const fpText = `frame period ${num(per, 2)} ms · ${num(m.frame_rate_hz, 2)} Hz`;
+  g += `<g>${ttl(`Frame period ${num(per, 5)} ms; frame rate ${num(m.frame_rate_hz, 4)} Hz (the bar below spans one frame)`)}<path class="bk" d="M${fx0} ${y + 16} v-4 H${fx0 + bw} v4"/>${t(W / 2, y + 9, fpText, { a: 'middle', c: 'bkl' })}</g>`;
+  y += 22;
   const nF = placeTiers(items, W);
   const fyTop = y + nF * TIER + 2;
   for (const it of items) {
     const ly = fyTop - 6 - it.tier * TIER;
-    g += `<g>${ttl(it.title)}<line class="lead" x1="${it.x.toFixed(1)}" y1="${ly + 2}" x2="${it.x.toFixed(1)}" y2="${fyTop}"/>${t(it.x0, ly, it.text, { c: 'frl' })}</g>`;
+    g += `<g>${ttl(it.title)}<line class="lead" x1="${it.x.toFixed(1)}" y1="${ly + 2}" x2="${it.x.toFixed(1)}" y2="${fyTop}"/>${t(it.x0, ly, it.text, { c: 'frl' + (it.bad ? ' bad' : '') })}</g>`;
   }
   g += `<g>${ttl(`Frame period ${num(per, 5)} ms (${num(m.frame_rate_hz, 4)} Hz)`)}<rect class="fidle" x="${fx0}" y="${fyTop}" width="${bw}" height="${barH}"/></g>`;
   g += `<g>${ttl(`Active ${num(m.active_ms, 5)} ms`)}<rect class="fact" x="${fx0}" y="${fyTop}" width="${aw.toFixed(1)}" height="${barH}"/></g>`;
@@ -197,8 +205,6 @@ export function renderProfile(m, width) {
   };
   if (M > 1 && cwid >= 40) g += frow(fx0, fx0 + cwid, `Tc ${num(m.chirp_us, 2)} µs`, `One chirp slot: Tc = idle ${num(idle, 4)} + ramp ${num(ramp, 4)} = ${num(m.chirp_us, 4)} µs`, 'tc');
   g += frow(fx0, fx0 + bw, `1 loop = ${M} chirp${M > 1 ? 's' : ''} · ${num(tLoop, 2)} µs`, `One loop: ${M} chirp${M > 1 ? 's' : ''} x Tc ${num(m.chirp_us, 4)} µs = ${num(tLoop, 4)} µs` + (m.scheme === 'ddma' ? '' : ` (each TX revisited every ${num(tRev, 4)} µs)`), 'tc');
-  g += frow(fx0, fx0 + aw, `× ${NL} loop${NL > 1 ? 's' : ''} = ${m.n_chirps} chirps`, `${NL} loops x ${M} chirps = ${m.n_chirps} chirps per frame (the highlighted slice of the active bar is one loop)`, '');
-  g += frow(fx0, fx0 + bw, `active ${num(m.active_ms, 3)} ms of frame period ${num(per, 2)} ms (${num(m.frame_rate_hz, 2)} Hz)`, `Active ${num(m.active_ms, 5)} ms of frame period ${num(per, 5)} ms; frame rate ${num(m.frame_rate_hz, 4)} Hz`, '');
   // legend: TX colours
   y += 2;
   let lx = 2, ly = y;
