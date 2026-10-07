@@ -64,3 +64,23 @@ chirp of the loop with TX1/TX2/TX3 checkboxes, add / remove / move-up / move-dow
 codes outline the table. Below the rows, a **phase table** (gui-23) lists every chirp of the loop with one degree column per TX (headers coloured like the timing diagram; `metrics.chirp_phases`/`phase_tx`/`phase_source`/`phase_note`; `—` = not BPM-coded; scrolls with a sticky header past 12 rows): BPM 0/180, plain TDM 0. On the cascade (DDMA) the table is read-only: every chirp is listed with the firmware-derived per-TX phases, labelled unverified (chirp order may be reversed), since the phases are set by firmware, not cfg
 (`chirp_tx_masks` edits there are ignored with `cascade_chirp_mask_ignored`). `tests/test_radar_gui_cfgapi.py::test_chirp_table_payloads`
 pins the payload shapes (no browser harness).
+
+## Remote access over Tailscale
+
+**Recommended: `tailscale serve`.** Start the GUI as usual (it stays bound to `127.0.0.1:8000`), then proxy it onto your tailnet:
+
+```
+uv run python -m radar_gui          # terminal 1
+tailscale serve --bg 8000           # terminal 2 (runs in the background)
+```
+
+Open `https://<machine>.<tailnet>.ts.net/` from any device on the tailnet (HTTPS, tailnet-only; `tailscale serve status` shows the URL).
+The live WebSocket picks `wss:` automatically on `https:` pages (`web/js/main.js`). Stop sharing with `tailscale serve reset`.
+If `tailscale serve` says access is denied, run once: `sudo tailscale set --operator=$USER`.
+
+**Alternative: bind to the Tailscale interface.** `uv run python -m radar_gui --host <tailscale-ip> [--port 8000]` listens only on that
+interface (plain HTTP/`ws:`, no TLS); browse to `http://<tailscale-ip>:8000/`.
+
+> [!WARNING]
+> The GUI has **no authentication**. Anyone who can reach it on the tailnet can save cfgs and (once run control exists) start radar runs.
+> Restrict access with Tailscale ACLs, and never expose it with `tailscale funnel` (public internet).
