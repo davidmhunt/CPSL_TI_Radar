@@ -55,6 +55,11 @@ def load_board(board: str) -> dict:
         raise SerialSourceError(f"{board} has no data UART (LVDS-only firmware): the serial source cannot read it")
     if du.get("tlv_dialect") not in tlv.DIALECTS:
         raise SerialSourceError(f"{board}: unknown tlv_dialect {du.get('tlv_dialect')!r}")
+    # the command rules and prompt depend on the firmware the source needs (gui-33 Step 4), not on the board
+    rules = fwmod.cfg_rules(board, expected_firmware(board))
+    d["cfg_dialect"] = {**(d.get("cfg_dialect") or {}), "skip_commands": rules["skip_commands"]}
+    if rules["prompt"]:
+        d["cli"] = {**d["cli"], "prompt": rules["prompt"]}
     return d
 
 

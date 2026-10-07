@@ -128,7 +128,7 @@ TEST_CASE(board_overrides_merge_over_descriptor) {
     json j = base_config();
     j["board_overrides"] = {{"cli", {{"cmd_timeout_ms", 250}}},
                             {"data_uart", {{"baud", 460800}, {"timeout_ms", 2500}}},
-                            {"cfg_dialect", {{"skip_commands", json::array()}}}};
+                            {"cfg_dialect", {{"frame_period_field", 5}}}};
     SystemConfigReader r(write_json("v2_overrides.json", j));
     CHECK(r.initialized);
     CHECK_EQ(r.getRadarCliTimeoutMs(), 250);
@@ -136,6 +136,14 @@ TEST_CASE(board_overrides_merge_over_descriptor) {
     CHECK_EQ(r.getRadarDataBaudRate(), 460800u);
     CHECK_EQ(r.getRadarDataTimeoutMs(), 2500);
     CHECK(r.getBoard().cfg_dialect.skip_commands.empty());
+    // the cfg command rules come from the firmware (gui-33 Step 4): no firmware key -> the board's default (demo)
+    CHECK(r.getBoard().cfg_dialect.required_commands == std::vector<std::string>({"calibData"}));
+    // ... and are no longer valid board_overrides: the error names the new place
+    json moved = base_config();
+    moved["board_overrides"] = {{"cfg_dialect", {{"skip_commands", json::array({"calibData"})}}}};
+    const std::string e_moved = reject("v2_override_moved.json", moved);
+    CHECK(has(e_moved, "/cfg_dialect/skip_commands: moved to the firmware descriptor"));
+    CHECK(has(e_moved, "cfg_rules.<board>.skip_commands"));
 
     // an override is validated like the descriptor itself
     json bad = base_config();

@@ -26,6 +26,10 @@
 // iwr1843_sar_lvds runs with board IWR1843_SAR, not IWR1843), and the enabled
 // streams must be outputs of that firmware on the board. It is optional in
 // this version of the driver and becomes required in a later commit.
+//
+// The firmware also supplies the cfg command rules (cfg_rules: skip / required / forbidden commands) and the
+// CLI prompt (cli_overrides) of the board it runs on (gui-33). Without a "firmware" key the board's default
+// firmware (first of its "firmwares" list) is used; getBoard() already carries the result.
 
 #include <cstdint>
 #include <string>

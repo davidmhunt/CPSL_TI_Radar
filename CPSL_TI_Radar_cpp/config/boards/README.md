@@ -39,9 +39,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `lifecycle.config_once_per_boot` | cascade only | `Runner.cpp:94-99,217-218` |
 | `cfg_dialect.rx_mask_fields` | `[1]`; cascade `[1, 4]` | `RadarConfigReader.cpp:285-289` (slave mask when `channelCfg` has 6 or more fields) |
 | `cfg_dialect.frame_period_field` | 5; cascade 6 | `RadarConfigReader.cpp:261-276` (field-count guess) |
-| `cfg_dialect.skip_commands` | none on all shipped boards (key omitted = `[]`) | Optional key (core-10). IWR1843 skipped `calibData` until gui-09: an older flashed image answered `'calibData' is not recognized`, but the stock SDK 3.6.2 demo (restored by firmware-19) needs it, else `sensorStart` fails with "Full configuration must be provided" / `Error -1`. A board still on the older image can set `board_overrides` `{"cfg_dialect": {"skip_commands": ["calibData"]}}`. |
-| `cfg_dialect.required_commands` | none on all shipped boards (key omitted = `[]`) | Optional key (core-22). Commands the cfg must contain (non-comment line, first word). A missing one is a cross-check error naming the command and board. For firmware that needs a command the stock demo does not (the SAR image needs `calibData`). Same one-word / no-duplicate rules as `skip_commands`; a command cannot be both required and forbidden, or required and skipped. |
-| `cfg_dialect.forbidden_commands` | none on all shipped boards (key omitted = `[]`) | Optional key (core-22). Commands the firmware does not implement; any use in the cfg is a cross-check error naming the line, command and board. Checked for every stream selection. |
+| `cfg_dialect.skip_commands` / `required_commands` / `forbidden_commands` | moved out (gui-33 Step 4): the board loader rejects them | Now `cfg_rules.<board>` in `config/firmware/<fw>.json` (the rules depend on the flashed image). The system config's `firmware` (default: the board's first `firmwares` entry) selects them; `demo` on IWR1843 requires `calibData` (SDK 3.6 xwr18xx `mmw_cli.c` sensorStart -> `MmwDemo_isAllCfgInPendingState`, `mss_main.c:1038` `isCalibCfgPending`; the xwr68xx demo, `mss_main.c:1222-1238`, has no such term, so IWR6843/ODS require nothing). `cli.prompt` stays the board's default; `cli_overrides.<board>.prompt` in a firmware descriptor overrides it. |
 | `data_uart.supported` | `true` on all shipped boards (key omitted = `true`) | Optional key (core-22). `false` = firmware has no data UART / TLV output. Then `{"supported": false}` is the whole `data_uart` block (`baud`, `header_bytes`, `tlv_dialect`, `timeout_ms` are not required and are rejected as unknown keys), and `serial_stream.enabled: true` with that board is a cross-check error. |
 | `data_uart.baud` | 921600; cascade 3,125,000 | `SystemConfigReader.cpp:17` default; cascade JSON `:15` |
 | `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. Design §1's board table lists the same values (5000 on the cascade, from the tracked cascade JSON). |
@@ -83,7 +81,7 @@ for `mcuplus_cascade`, and frames with targets in view should show a non-zero po
 
 ## Skipped cfg commands
 
-`cfg_dialect.skip_commands` (optional, default `[]`) lists cfg commands the board's firmware
+(Moved to the firmware descriptors in gui-33 Step 4; the text below describes the semantics, the keys now live in `config/firmware/<fw>.json` `cfg_rules.<board>` and `board_overrides` no longer accepts them.) `skip_commands` lists cfg commands the board's firmware
 rejects. The driver leaves them in the `.cfg` file and does not send them:
 `filter_cfg_commands` compares each line's first word with the list (exact and case-sensitive,
 as the TI CLI is). Skipped lines are printed at `runtime.log_level: "debug"`, listed by

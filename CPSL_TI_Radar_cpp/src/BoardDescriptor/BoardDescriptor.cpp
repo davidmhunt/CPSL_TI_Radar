@@ -245,47 +245,21 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     {
         const json& c = j.at("cfg_dialect");
         const std::string p = "/cfg_dialect";
-        if (!r.object(c, p, {"rx_mask_fields", "frame_period_field"},
-                      {"skip_commands", "required_commands", "forbidden_commands"}) ||
+        // skip_commands / required_commands / forbidden_commands moved to the firmware descriptor (gui-33 Step 4):
+        // they depend on the image, not the silicon. Say where they went instead of "unknown key".
+        if (c.is_object()) {
+            for (const char* moved : {"skip_commands", "required_commands", "forbidden_commands"}) {
+                if (c.contains(moved)) {
+                    return r.fail(p + "/" + moved,
+                                  "moved to the firmware descriptor: set cfg_rules.<board>." + std::string(moved) +
+                                      " in config/firmware/<firmware>.json");
+                }
+            }
+        }
+        if (!r.object(c, p, {"rx_mask_fields", "frame_period_field"}) ||
             !r.uint_array(c, "rx_mask_fields", p, 1, 64, d.cfg_dialect.rx_mask_fields) ||
             !r.uint(c, "frame_period_field", p, 1, 64, d.cfg_dialect.frame_period_field)) {
             return false;
-        }
-        // skip_commands / required_commands / forbidden_commands: optional,
-        // may be empty; each entry one command word
-        auto word_list = [&](const char* key, bool guard_start_stop, std::vector<std::string>& out) -> bool {
-            if (!c.contains(key)) return true;
-            const json& v = c.at(key);
-            const std::string sp = p + "/" + key;
-            if (!v.is_array()) return r.fail(sp, "expected an array of command names");
-            std::set<std::string> seen;
-            for (size_t i = 0; i < v.size(); i++) {
-                const std::string ip = sp + "/" + std::to_string(i);
-                if (!v[i].is_string()) return r.fail(ip, "expected a string");
-                const std::string cmd = v[i].get<std::string>();
-                if (cmd.empty() || cmd.find_first_of(" \t\r\n") != std::string::npos) {
-                    return r.fail(ip, "\"" + cmd + "\" must be one command word (no spaces)");
-                }
-                if (guard_start_stop && (cmd == d.cli.start_cmd || cmd == d.cli.stop_cmd)) {
-                    return r.fail(ip, "\"" + cmd + "\" is the board's start/stop command and cannot be skipped");
-                }
-                if (!seen.insert(cmd).second) return r.fail(ip, "\"" + cmd + "\" is listed twice");
-                out.push_back(cmd);
-            }
-            return true;
-        };
-        if (!word_list("skip_commands", true, d.cfg_dialect.skip_commands) ||
-            !word_list("required_commands", false, d.cfg_dialect.required_commands) ||
-            !word_list("forbidden_commands", false, d.cfg_dialect.forbidden_commands)) {
-            return false;
-        }
-        for (const std::string& cmd : d.cfg_dialect.required_commands) {
-            for (const std::string& o : d.cfg_dialect.forbidden_commands) {
-                if (cmd == o) return r.fail(p + "/required_commands", "\"" + cmd + "\" is also in forbidden_commands");
-            }
-            for (const std::string& o : d.cfg_dialect.skip_commands) {
-                if (cmd == o) return r.fail(p + "/required_commands", "\"" + cmd + "\" is also in skip_commands (never sent)");
-            }
         }
     }
 

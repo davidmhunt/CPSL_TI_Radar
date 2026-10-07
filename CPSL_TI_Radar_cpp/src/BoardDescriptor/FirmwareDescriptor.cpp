@@ -4,7 +4,7 @@
 #include <fstream>
 #include <regex>
 
-#include "BoardDescriptor.hpp"  // parse_json_strict
+#include "BoardDescriptor.hpp"  // parse_json_strict, BoardDescriptor
 
 using nlohmann::json;
 
@@ -89,7 +89,9 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
 
     std::set<std::string> optional = gui_only_keys();
     optional.insert("driver_board");
-    optional.insert("identify");  // parsed strictly since gui-33 (no longer GUI-only)
+    optional.insert("identify");    // parsed strictly since gui-33 (no longer GUI-only)
+    optional.insert("cfg_rules");   // gui-33 Step 4
+    optional.insert("cli_overrides");
     if (!check_object(fail, j, "", {"schema", "id", "description", "outputs", "templates", "system_enables", "limits"},
                       optional)) {
         return false;
@@ -288,7 +290,98 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
+    // cfg_rules (gui-33 Step 4): board -> {skip_commands, required_commands, forbidden_commands}, each optional
+    if (j.contains("cfg_rules")) {
+        const json& cr = j.at("cfg_rules");
+        if (!cr.is_object()) return fail("/cfg_rules", "expected an object (board -> rules)");
+        for (auto bt = cr.begin(); bt != cr.end(); ++bt) {
+            const std::string bp = "/cfg_rules/" + bt.key();
+            if (!d.templates.count(bt.key())) return fail(bp, "board is not in templates");
+            if (!check_object(fail, bt.value(), bp, {}, {"skip_commands", "required_commands", "forbidden_commands"})) {
+                return false;
+            }
+            CfgRules rules;
+            for (const char* key : {"skip_commands", "required_commands", "forbidden_commands"}) {
+                if (!bt.value().contains(key)) continue;
+                const json& v = bt.value().at(key);
+                const std::string kp = bp + "/" + key;
+                if (!v.is_array()) return fail(kp, "expected an array of command names");
+                std::vector<std::string>& dst = std::string(key) == "skip_commands"       ? rules.skip_commands
+                                                : std::string(key) == "required_commands" ? rules.required_commands
+                                                                                          : rules.forbidden_commands;
+                std::set<std::string> seen;
+                for (size_t i = 0; i < v.size(); i++) {
+                    const std::string ip = kp + "/" + std::to_string(i);
+                    if (!v[i].is_string()) return fail(ip, "expected a string");
+                    const std::string cmd = v[i].get<std::string>();
+                    if (cmd.empty() || cmd.find_first_of(" \t\r\n") != std::string::npos) {
+                        return fail(ip, "\"" + cmd + "\" must be one command word (no spaces)");
+                    }
+                    if (!seen.insert(cmd).second) return fail(ip, "\"" + cmd + "\" is listed twice");
+                    dst.push_back(cmd);
+                }
+            }
+            for (const std::string& cmd : rules.required_commands) {
+                for (const std::string& o : rules.forbidden_commands) {
+                    if (cmd == o) return fail(bp + "/required_commands", "\"" + cmd + "\" is also in forbidden_commands");
+                }
+                for (const std::string& o : rules.skip_commands) {
+                    if (cmd == o) {
+                        return fail(bp + "/required_commands", "\"" + cmd + "\" is also in skip_commands (never sent)");
+                    }
+                }
+            }
+            d.cfg_rules[bt.key()] = rules;
+        }
+    }
+
+    // cli_overrides (gui-33 Step 4): board -> {prompt}
+    if (j.contains("cli_overrides")) {
+        const json& co = j.at("cli_overrides");
+        if (!co.is_object()) return fail("/cli_overrides", "expected an object (board -> overrides)");
+        for (auto bt = co.begin(); bt != co.end(); ++bt) {
+            const std::string bp = "/cli_overrides/" + bt.key();
+            if (!d.templates.count(bt.key())) return fail(bp, "board is not in templates");
+            if (!check_object(fail, bt.value(), bp, {"prompt"})) return false;
+            std::string prompt;
+            if (!read_string(fail, bt.value().at("prompt"), bp + "/prompt", prompt)) return false;
+            d.cli_prompt[bt.key()] = prompt;
+        }
+    }
+
     out = d;
+    return true;
+}
+
+FirmwareDescriptor::CfgRules FirmwareDescriptor::cfg_rules_for(const std::string& driver_board_name) const {
+    auto it = cfg_rules.find(gui_board_for(driver_board_name));
+    return it == cfg_rules.end() ? CfgRules() : it->second;
+}
+
+std::string FirmwareDescriptor::cli_prompt_for(const std::string& driver_board_name) const {
+    auto it = cli_prompt.find(gui_board_for(driver_board_name));
+    return it == cli_prompt.end() ? std::string() : it->second;
+}
+
+std::string default_firmware_id(const BoardDescriptor& board) {
+    return board.firmwares.empty() ? std::string() : board.firmwares.front();
+}
+
+bool apply_firmware_to_board(const FirmwareDescriptor& fw, const std::string& fw_path, bool keep_prompt,
+                             BoardDescriptor& board, std::string& error) {
+    const FirmwareDescriptor::CfgRules rules = fw.cfg_rules_for(board.name);
+    for (const std::string& cmd : rules.skip_commands) {
+        if (cmd == board.cli.start_cmd || cmd == board.cli.stop_cmd) {
+            error = fw_path + ": /cfg_rules/" + fw.gui_board_for(board.name) + "/skip_commands: \"" + cmd +
+                    "\" is board " + board.name + "'s start/stop command and cannot be skipped";
+            return false;
+        }
+    }
+    board.cfg_dialect.skip_commands = rules.skip_commands;
+    board.cfg_dialect.required_commands = rules.required_commands;
+    board.cfg_dialect.forbidden_commands = rules.forbidden_commands;
+    const std::string prompt = fw.cli_prompt_for(board.name);
+    if (!prompt.empty() && !keep_prompt) board.cli.prompt = prompt;
     return true;
 }
 

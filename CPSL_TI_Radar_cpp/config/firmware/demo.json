@@ -744,6 +744,13 @@
       }
     }
   },
+  "cfg_rules": {
+    "IWR1843": {
+      "required_commands": [
+        "calibData"
+      ]
+    }
+  },
   "identify": {
     "IWR1843": {
       "level": "bench",

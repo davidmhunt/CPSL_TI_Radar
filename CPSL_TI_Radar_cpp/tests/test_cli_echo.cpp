@@ -11,6 +11,8 @@
 #include <iterator>
 #include <mutex>
 
+#include <sys/stat.h>
+
 namespace {
 
 // Captures every message (any level) while alive; sets the level to info.
@@ -55,7 +57,17 @@ SystemConfigReader config_with_cfg(const std::string& name, const std::string& c
         std::ofstream(cfg) << text << "\n" << cfg_text;
     }
     j["radar_cfg"] = cfg;
-    j["board_overrides"] = {{"cfg_dialect", {{"skip_commands", {"calibData"}}}}};
+    // calibData is skipped by the firmware's cfg_rules (gui-33 Step 4), not by a board override: point the
+    // driver at a copy of the demo descriptor whose IWR1843 rule is skip_commands instead of required_commands
+    {
+        const std::string fw_dir = dca_test::tmp_dir() + "/echo_firmware";
+        mkdir(fw_dir.c_str(), 0755);
+        std::ifstream f(std::string(CONFIG_DIR) + "/firmware/demo.json");
+        nlohmann::json d = nlohmann::json::parse(f);
+        d["cfg_rules"] = {{"IWR1843", {{"skip_commands", {"calibData"}}}}};
+        std::ofstream(fw_dir + "/demo.json") << d.dump(2);
+        setenv(SystemConfigReader::kFirmwareDirEnv, fw_dir.c_str(), 1);
+    }
     const std::string path = dca_test::tmp_dir() + "/" + name + "_sys.json";
     std::ofstream(path) << j.dump();
     return SystemConfigReader(path);

@@ -117,7 +117,7 @@ static int validate(const std::string& config_file){
               << "log level:  " << to_string(cfg.get_log_level()) << "\n"
               << "commands:   " << plan.send.size() << " sent, " << plan.skipped.size() << " skipped\n";
     for (const std::string& c : plan.skipped) {
-        std::cout << "skipped:    " << c << " (board skip_commands)\n";
+        std::cout << "skipped:    " << c << " (firmware cfg_rules skip_commands)\n";
     }
     if (board.lifecycle.config_once_per_boot) {
         std::cout << "note:       " << board.name << " accepts a cfg once per power-up\n";

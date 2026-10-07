@@ -196,6 +196,29 @@
     "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: same SDK 3.6 parser, frame mode only, no BPM evidence (conservative false)",
     "confidence": "medium"
   },
+  "cfg_rules": {
+    "IWR1843": {
+      "required_commands": [
+        "adcbufCfg",
+        "lvdsStreamCfg",
+        "analogMonitor",
+        "calibData"
+      ],
+      "forbidden_commands": [
+        "guiMonitor",
+        "cfarCfg",
+        "multiObjBeamForming",
+        "calibDcRangeSig",
+        "clutterRemoval",
+        "compRangeBiasAndRxChanPhase",
+        "measureRangeBiasAndRxChanPhase",
+        "aoaFovCfg",
+        "cfarFovCfg",
+        "extendedMaxVelocity",
+        "configDataPort"
+      ]
+    }
+  },
   "identify": {
     "IWR1843": {
       "level": "source",

@@ -2,6 +2,7 @@
 // Every shipped descriptor must load; the rejection cases pin the strictness
 // (duplicate keys, unknown keys, bad types, inconsistent board sets).
 #include "test_harness.hpp"
+#include "BoardDescriptor.hpp"
 #include "FirmwareDescriptor.hpp"
 
 #include <dirent.h>
@@ -11,6 +12,7 @@
 #include <string>
 #include <vector>
 
+using cpsl::radar::BoardDescriptor;
 using cpsl::radar::FirmwareDescriptor;
 using nlohmann::json;
 
@@ -170,6 +172,93 @@ TEST_CASE(file_level_rejections) {
     CHECK(!FirmwareDescriptor::load_by_id(kFirmware, "../boards/IWR1843", fw, err));
     CHECK(has(err, "plain id"));
     CHECK(!FirmwareDescriptor::load_by_id(kFirmware, "", fw, err));
+}
+
+// ---------------------------------------------------------------------------
+// cfg_rules / cli_overrides (gui-33 Step 4): the per-firmware command rules and prompt, one accessor
+// ---------------------------------------------------------------------------
+
+static std::vector<std::string> sv(std::initializer_list<const char*> l) {
+    std::vector<std::string> out;
+    for (const char* x : l) out.push_back(x);
+    return out;
+}
+
+static FirmwareDescriptor must_fw(const std::string& id) {
+    FirmwareDescriptor fw;
+    std::string err;
+    CHECK(FirmwareDescriptor::load_by_id(kFirmware, id, fw, err));
+    return fw;
+}
+
+TEST_CASE(cfg_rules_accessor_shipped_values) {
+    // IWR1843 stock demo: SDK 3.6 xwr18xx mmw_cli.c sensorStart -> MmwDemo_isAllCfgInPendingState, which includes
+    // isCalibCfgPending (mss_main.c:1038), so a cfg without calibData is rejected (bench: gui-09 Log). The xwr68xx demo
+    // (6843 / ODS) has no such term (mss_main.c:1222-1238): no required command there.
+    CHECK(must_fw("demo").cfg_rules_for("IWR1843").required_commands == sv({"calibData"}));
+    CHECK(must_fw("demo").cfg_rules_for("IWR6843").required_commands.empty());
+    CHECK(must_fw("demo").cfg_rules_for("IWR6843ODS").required_commands.empty());
+    CHECK(must_fw("demo").cfg_rules_for("IWR1443").required_commands.empty());
+    // SAR firmware: looked up by the driver board name (IWR1843_SAR -> GUI board IWR1843)
+    FirmwareDescriptor sar = must_fw("iwr1843_sar_lvds");
+    CHECK(sar.cfg_rules_for("IWR1843_SAR").required_commands == sv({"adcbufCfg", "lvdsStreamCfg", "analogMonitor", "calibData"}));
+    CHECK_EQ(sar.cfg_rules_for("IWR1843_SAR").forbidden_commands.size(), size_t(11));
+    CHECK(sar.cfg_rules_for("IWR1843_SAR").skip_commands.empty());
+    // prompt: only dca1000_raw on IWR1443 differs from the board's
+    CHECK_EQ(must_fw("dca1000_raw").cli_prompt_for("IWR1443"), std::string("LVDS Stream:/>"));
+    CHECK_EQ(must_fw("demo").cli_prompt_for("IWR1443"), std::string(""));
+    // default firmware of a board = first of its firmwares list
+    BoardDescriptor b;
+    std::string err;
+    CHECK(BoardDescriptor::load_by_name(std::string(CONFIG_DIR) + "/boards", "IWR1843", b, err));
+    CHECK_EQ(cpsl::radar::default_firmware_id(b), std::string("demo"));
+    CHECK(BoardDescriptor::load_by_name(std::string(CONFIG_DIR) + "/boards", "IWR1843_SAR", b, err));
+    CHECK_EQ(cpsl::radar::default_firmware_id(b), std::string("iwr1843_sar_lvds"));
+}
+
+TEST_CASE(apply_firmware_to_board_sets_rules_and_prompt) {
+    BoardDescriptor b;
+    std::string err;
+    CHECK(BoardDescriptor::load_by_name(std::string(CONFIG_DIR) + "/boards", "IWR1443", b, err));
+    CHECK_EQ(b.cli.prompt, std::string("mmwDemo:/>"));
+    CHECK(cpsl::radar::apply_firmware_to_board(must_fw("dca1000_raw"), "dca1000_raw.json", false, b, err));
+    CHECK_EQ(b.cli.prompt, std::string("LVDS Stream:/>"));
+    // a board_overrides cli.prompt wins
+    CHECK(BoardDescriptor::load_by_name(std::string(CONFIG_DIR) + "/boards", "IWR1443", b, err));
+    CHECK(cpsl::radar::apply_firmware_to_board(must_fw("dca1000_raw"), "dca1000_raw.json", true, b, err));
+    CHECK_EQ(b.cli.prompt, std::string("mmwDemo:/>"));
+    // a skip of the board's start/stop command is refused, naming the descriptor
+    FirmwareDescriptor fw = must_fw("demo");
+    fw.cfg_rules["IWR1443"].skip_commands = sv({"sensorStart"});
+    CHECK(!cpsl::radar::apply_firmware_to_board(fw, "demo.json", false, b, err));
+    CHECK(has(err, "demo.json: /cfg_rules/IWR1443/skip_commands: \"sensorStart\" is board IWR1443's start/stop command"));
+}
+
+TEST_CASE(cfg_rules_validation) {
+    auto rules = [](const char* key, json v) {
+        return [=](json& j) { j["cfg_rules"]["IWR1843"][key] = v; };
+    };
+    CHECK(has(load_mutated("demo", rules("skip_commands", "calibData")), "/cfg_rules/IWR1843/skip_commands: expected an array"));
+    CHECK(has(load_mutated("demo", rules("skip_commands", json::array({"calib Data"}))),
+              "/cfg_rules/IWR1843/skip_commands/0: \"calib Data\" must be one command word"));
+    CHECK(has(load_mutated("demo", rules("skip_commands", json::array({""}))), "must be one command word"));
+    CHECK(has(load_mutated("demo", rules("forbidden_commands", json::array({1}))), "/forbidden_commands/0: expected a string"));
+    CHECK(has(load_mutated("demo", rules("forbidden_commands", json::array({"x", "x"}))), "listed twice"));
+    CHECK(has(load_mutated("demo", [](json& j) { j["cfg_rules"]["IWR1843"]["forbidden_commands"] = json::array({"calibData"}); }),
+              "\"calibData\" is also in forbidden_commands"));
+    CHECK(has(load_mutated("demo", [](json& j) { j["cfg_rules"]["IWR1843"]["skip_commands"] = json::array({"calibData"}); }),
+              "\"calibData\" is also in skip_commands"));
+    CHECK(has(load_mutated("demo", [](json& j) { j["cfg_rules"]["IWR1843"]["typo"] = json::array(); }),
+              "/cfg_rules/IWR1843/typo: unknown key"));
+    CHECK(has(load_mutated("demo", [](json& j) { j["cfg_rules"]["AWR2243_CASCADE"] = json::object(); }),
+              "/cfg_rules/AWR2243_CASCADE: board is not in templates"));
+    CHECK(has(load_mutated("demo", [](json& j) { j["cfg_rules"] = json::array(); }), "/cfg_rules: expected an object"));
+    CHECK_EQ(load_mutated("demo", rules("skip_commands", json::array())), std::string(""));
+    // cli_overrides
+    CHECK(has(load_mutated("dca1000_raw", [](json& j) { j["cli_overrides"]["IWR1443"]["prompt"] = ""; }), "must not be empty"));
+    CHECK(has(load_mutated("dca1000_raw", [](json& j) { j["cli_overrides"]["IWR1443"]["baud"] = 1; }), "/cli_overrides/IWR1443/baud: unknown key"));
+    CHECK(has(load_mutated("dca1000_raw", [](json& j) { j["cli_overrides"]["IWR1843"] = {{"prompt", "x"}}; }),
+              "board is not in templates"));
 }
 
 TEST_MAIN()

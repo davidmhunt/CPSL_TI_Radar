@@ -6,6 +6,7 @@
 // mismatches). Further cases after those pin the rest of the contract.
 #include "test_harness.hpp"
 #include "BoardDescriptor.hpp"
+#include "FirmwareDescriptor.hpp"
 
 #include <fstream>
 #include <iterator>
@@ -22,6 +23,7 @@ using cpsl::radar::TlvDialect;
 using nlohmann::json;
 
 static const std::string kBoards = std::string(CONFIG_DIR) + "/boards";
+static const std::string kFirmware = std::string(CONFIG_DIR) + "/firmware";
 
 static json read_json(const std::string& path) {
     std::ifstream f(path);
@@ -33,6 +35,17 @@ static BoardDescriptor must_load(const std::string& name) {
     std::string err;
     bool ok = BoardDescriptor::load_by_name(kBoards, name, d, err);
     if (!ok) std::cerr << "load failed: " << err << std::endl;
+    CHECK(ok);
+    return d;
+}
+
+// `d` with the cfg rules / prompt of shipped firmware `fw_id` applied (what SystemConfigReader does)
+static BoardDescriptor with_firmware(BoardDescriptor d, const std::string& fw_id) {
+    cpsl::radar::FirmwareDescriptor fw;
+    std::string err;
+    bool ok = cpsl::radar::FirmwareDescriptor::load_by_id(kFirmware, fw_id, fw, err) &&
+              cpsl::radar::apply_firmware_to_board(fw, fw_id, false, d, err);
+    if (!ok) std::cerr << "firmware failed: " << err << std::endl;
     CHECK(ok);
     return d;
 }
@@ -411,36 +424,31 @@ static std::vector<std::string> v(std::initializer_list<const char*> l) {
     return out;
 }
 
-TEST_CASE(skip_commands_per_board) {
-    // No shipped board skips anything. The stock SDK 3.6 IWR1843 demo needs
-    // calibData for sensorStart (gui-09 bench); only an older image rejected it.
-    CHECK(must_load("IWR1843").cfg_dialect.skip_commands.empty());
-    CHECK(must_load("IWR6843").cfg_dialect.skip_commands.empty());
-    CHECK(must_load("IWR1443").cfg_dialect.skip_commands.empty());
-    CHECK(must_load("AWR2243_CASCADE").cfg_dialect.skip_commands.empty());
+TEST_CASE(skip_commands_per_firmware) {
+    // No shipped firmware skips anything. The stock SDK 3.6 IWR1843 demo needs calibData for sensorStart
+    // (gui-09 bench); only an older image rejected it. The rules live in config/firmware (gui-33 Step 4).
+    CHECK(with_firmware(must_load("IWR1843"), "demo").cfg_dialect.skip_commands.empty());
+    CHECK(with_firmware(must_load("IWR6843"), "demo").cfg_dialect.skip_commands.empty());
+    CHECK(with_firmware(must_load("IWR1443"), "demo").cfg_dialect.skip_commands.empty());
+    CHECK(with_firmware(must_load("AWR2243_CASCADE"), "cascade_ddm").cfg_dialect.skip_commands.empty());
+    // a board loaded on its own carries no rules at all
+    CHECK(must_load("IWR1843").cfg_dialect.required_commands.empty());
 }
 
-TEST_CASE(skip_commands_validation) {
-    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = "calibData"; }),
-              "/cfg_dialect/skip_commands: expected an array"));
-    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({"calib Data"}); }),
-              "/cfg_dialect/skip_commands/0: \"calib Data\" must be one command word"));
-    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({""}); }),
-              "must be one command word"));
-    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({1}); }),
-              "/cfg_dialect/skip_commands/0: expected a string"));
-    CHECK(has(reject("IWR1843",
-                     [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({"calibData", "calibData"}); }),
-              "listed twice"));
-    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array({"sensorStart"}); }),
-              "cannot be skipped"));
-    // an empty list is valid, and board_overrides can clear the shipped list
-    CHECK_EQ(reject("IWR1843", [](json& j) { j["cfg_dialect"]["skip_commands"] = json::array(); }), std::string(""));
+TEST_CASE(board_loader_rejects_the_moved_cfg_rules_keys) {
+    // skip/required/forbidden_commands moved to config/firmware/<fw>.json cfg_rules.<board> (gui-33 Step 4)
+    for (const char* key : {"skip_commands", "required_commands", "forbidden_commands"}) {
+        const std::string e = reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array(); });
+        CHECK(has(e, std::string("/cfg_dialect/") + key + ": moved to the firmware descriptor"));
+        CHECK(has(e, std::string("cfg_rules.<board>.") + key));
+        CHECK(has(e, "config/firmware/<firmware>.json"));
+    }
+    // ... also through board_overrides (merged before validation)
     BoardDescriptor d;
     std::string err;
-    json clear = {{"cfg_dialect", {{"skip_commands", json::array()}}}};
-    CHECK(BoardDescriptor::load_by_name(kBoards, "IWR1843", d, err, &clear));
-    CHECK(d.cfg_dialect.skip_commands.empty());
+    json ov = {{"cfg_dialect", {{"skip_commands", json::array({"calibData"})}}}};
+    CHECK(!BoardDescriptor::load_by_name(kBoards, "IWR1843", d, err, &ov));
+    CHECK(has(err, "moved to the firmware descriptor"));
 }
 
 TEST_CASE(filter_skips_listed_command) {
@@ -502,46 +510,15 @@ TEST_CASE(shipped_boards_are_unchanged_by_the_new_keys) {
     CHECK_EQ(b.lvds.lanes, 2u);
 }
 
-TEST_CASE(required_forbidden_validation) {
-    for (const char* key : {"required_commands", "forbidden_commands"}) {
-        const std::string base = std::string("/cfg_dialect/") + key;
-        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = "x"; }), base + ": expected an array"));
-        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array({"a b"}); }),
-                  base + "/0: \"a b\" must be one command word"));
-        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array({"x", "x"}); }),
-                  "listed twice"));
-        CHECK(has(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array({2}); }),
-                  base + "/0: expected a string"));
-        CHECK_EQ(reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array(); }), std::string(""));
-    }
-    CHECK(has(reject("IWR1843",
-                     [](json& j) {
-                         j["cfg_dialect"]["required_commands"] = json::array({"foo"});
-                         j["cfg_dialect"]["forbidden_commands"] = json::array({"foo"});
-                     }),
-              "also in forbidden_commands"));
-    CHECK(has(reject("IWR1843", [](json& j) {
-                  j["cfg_dialect"]["skip_commands"] = json::array({"calibData"});
-                  j["cfg_dialect"]["required_commands"] = json::array({"calibData"});
-              }),
-              "also in skip_commands"));
-}
-
-static BoardDescriptor with_dialect(const json& overrides) {
-    json j = read_json(kBoards + "/IWR1843.json");
-    j.merge_patch(overrides);
-    BoardDescriptor d;
-    std::string err;
-    bool ok = BoardDescriptor::from_json(j, "IWR1843", "test:dialect", d, err);
-    if (!ok) std::cerr << "load failed: " << err << std::endl;
-    CHECK(ok);
+static BoardDescriptor with_dialect(const std::vector<std::string>& required, const std::vector<std::string>& forbidden) {
+    BoardDescriptor d = must_load("IWR1843");
+    d.cfg_dialect.required_commands = required;  // what the firmware's cfg_rules would set
+    d.cfg_dialect.forbidden_commands = forbidden;
     return d;
 }
 
 TEST_CASE(cross_check_enforces_required_and_forbidden_commands) {
-    BoardDescriptor d = with_dialect(json{{"cfg_dialect", {{"skip_commands", json::array()},
-                                                           {"required_commands", json::array({"calibData"})},
-                                                           {"forbidden_commands", json::array({"guiMonitor"})}}}});
+    BoardDescriptor d = with_dialect(v({"calibData"}), v({"guiMonitor"}));
     const std::string good = sdk3_cfg("adcCfg 2 1", "adcbufCfg -1 0 1 1 1", "lvdsStreamCfg -1 0 1 0");
     CHECK_EQ(check(d, write_cfg("rf_missing.cfg", good), true, false).errors.size(), size_t(1));
     CfgCheckResult m = check(d, write_cfg("rf_missing2.cfg", good), true, false);
@@ -599,13 +576,10 @@ TEST_CASE(sar_descriptor_differs_from_iwr1843_only_as_intended) {
     base["name"] = "IWR1843_SAR";
     base["firmwares"] = sar["firmwares"];   // host-GUI metadata (gui-10), differs per board
     base["cli"]["stop_timeout_ms"] = 4000;
-    base["cfg_dialect"]["skip_commands"] = json::array();
-    base["cfg_dialect"]["required_commands"] = sar["cfg_dialect"]["required_commands"];
-    base["cfg_dialect"]["forbidden_commands"] = sar["cfg_dialect"]["forbidden_commands"];
     base["data_uart"] = json{{"supported", false}};
     CHECK(base == sar);
 
-    BoardDescriptor d = must_load("IWR1843_SAR");
+    BoardDescriptor d = with_firmware(must_load("IWR1843_SAR"), "iwr1843_sar_lvds");
     CHECK(d.cfg_dialect.skip_commands.empty());  // calibData is sent
     CHECK(d.cfg_dialect.required_commands == v({"adcbufCfg", "lvdsStreamCfg", "analogMonitor", "calibData"}));
     CHECK_EQ(d.cfg_dialect.forbidden_commands.size(), size_t(11));
@@ -626,7 +600,7 @@ TEST_CASE(sar_descriptor_differs_from_iwr1843_only_as_intended) {
 }
 
 TEST_CASE(sar_cross_check_accepts_sar_cfg_and_rejects_others) {
-    BoardDescriptor d = must_load("IWR1843_SAR");
+    BoardDescriptor d = with_firmware(must_load("IWR1843_SAR"), "iwr1843_sar_lvds");
     CfgCheckResult ok = check(d, kSarCfg, true, false);
     CHECK(ok.ok());
     const std::string text = read_text(kSarCfg);

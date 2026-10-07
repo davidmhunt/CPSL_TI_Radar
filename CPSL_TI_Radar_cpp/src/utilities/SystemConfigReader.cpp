@@ -456,9 +456,40 @@ bool SystemConfigReader::load() {
         return false;
     }
 
+    // The firmware decides the cfg command rules (skip/required/forbidden) and the CLI prompt (gui-33 Step 4).
+    // A board_overrides "cli.prompt" still wins over the firmware's.
+    const bool keep_prompt = overrides != nullptr && overrides->contains("cli") && overrides->at("cli").is_object() &&
+                             overrides->at("cli").contains("prompt");
     if (data.contains("firmware")) {
         if (!r.str(data, "firmware", "", firmware_id)) return failed();
         if (!check_firmware(src, dir_of(board_path))) return false;
+        std::string apply_err;
+        if (!cpsl::radar::apply_firmware_to_board(firmware, firmware_path, keep_prompt, board, apply_err)) {
+            return load_issue("firmware_descriptor", src + ": firmware: " + apply_err, firmware_path);
+        }
+    } else {
+        // No "firmware" key (optional until gui-04 Step 3a): the board's default firmware (first of its
+        // "firmwares" list) supplies the rules. A missing descriptor file means no rules (custom board dirs);
+        // a descriptor that exists must load.
+        const std::string def_id = cpsl::radar::default_firmware_id(board);
+        if (!def_id.empty()) {
+            const char* env = std::getenv(kFirmwareDirEnv);
+            const std::string fw_dir =
+                (env != nullptr && *env != '\0') ? std::string(env) : dir_of(board_path) + "/../firmware";
+            const std::string def_path = fw_dir + "/" + def_id + ".json";
+            if (file_exists(def_path)) {
+                cpsl::radar::FirmwareDescriptor def_fw;
+                std::string fw_err;
+                if (!cpsl::radar::FirmwareDescriptor::load(def_path, def_fw, fw_err)) {
+                    return load_issue("firmware_descriptor", src + ": default firmware " + def_id + ": " + fw_err,
+                                      def_path);
+                }
+                if (!cpsl::radar::apply_firmware_to_board(def_fw, def_path, keep_prompt, board, fw_err)) {
+                    return load_issue("firmware_descriptor", src + ": default firmware " + def_id + ": " + fw_err,
+                                      def_path);
+                }
+            }
+        }
     }
 
     // radar cfg vs board, for the enabled streams

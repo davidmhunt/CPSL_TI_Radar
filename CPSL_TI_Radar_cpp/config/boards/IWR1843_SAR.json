@@ -28,27 +28,7 @@
     "rx_mask_fields": [
       1
     ],
-    "frame_period_field": 5,
-    "skip_commands": [],
-    "required_commands": [
-      "adcbufCfg",
-      "lvdsStreamCfg",
-      "analogMonitor",
-      "calibData"
-    ],
-    "forbidden_commands": [
-      "guiMonitor",
-      "cfarCfg",
-      "multiObjBeamForming",
-      "calibDcRangeSig",
-      "clutterRemoval",
-      "compRangeBiasAndRxChanPhase",
-      "measureRangeBiasAndRxChanPhase",
-      "aoaFovCfg",
-      "cfarFovCfg",
-      "extendedMaxVelocity",
-      "configDataPort"
-    ]
+    "frame_period_field": 5
   },
   "data_uart": {
     "supported": false

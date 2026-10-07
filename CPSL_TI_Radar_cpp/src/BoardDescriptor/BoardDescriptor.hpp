@@ -58,11 +58,12 @@ struct BoardDescriptor {
     struct CfgDialect {
         std::vector<uint32_t> rx_mask_fields;  // channelCfg field indices (command = 0)
         uint32_t frame_period_field = 0;       // frameCfg field index of the period
-        // Optional. cfg commands this board's firmware rejects; they are left in
-        // the .cfg file but never sent (see filter_cfg_commands). Default empty.
+        // NOT read from the board JSON (gui-33 Step 4: the loader rejects these keys). They are filled from
+        // the firmware descriptor's cfg_rules.<board> by apply_firmware_to_board (SystemConfigReader), so
+        // filter_cfg_commands / cross_check_radar_cfg keep reading them from here. Default empty.
+        // skip_commands: cfg commands the firmware rejects; left in the .cfg file but never sent.
         std::vector<std::string> skip_commands;
-        // Optional, default empty. Commands the cfg must contain / must not
-        // contain for this board's firmware; enforced by cross_check_radar_cfg.
+        // Commands the cfg must contain / must not contain; enforced by cross_check_radar_cfg.
         std::vector<std::string> required_commands;
         std::vector<std::string> forbidden_commands;
     };

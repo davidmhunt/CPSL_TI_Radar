@@ -232,7 +232,8 @@ def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
     seen = set()
     for p in SHIPPED:
         r = validate(parse_cfg_file(p), board_for(p))
-        assert r.ok, (str(p), [i.message for i in r.errors])
+        errs = [i.message for i in r.errors if i.code != "missing_calibData"]   # legacy 1843 cfgs: see test_radar_gui_cfg
+        assert not errs, (str(p), errs)
         seen |= {(i.level, i.code) for i in r.issues} & {(l, c) for l in ("warning", "info", "error") for c in MIX}
     # raw-ADC cfgs enable TX channels no chirp uses; 6843 ODS cfgs use the 1,2,4 order: both reported, neither an error
     assert seen == {("info", "tx_missing_from_loop"), ("warning", "tx_order_convention")}, seen

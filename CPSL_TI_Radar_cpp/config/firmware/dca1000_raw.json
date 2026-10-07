@@ -185,6 +185,11 @@
     "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: raw binary, no parser, so no verified pattern rules",
     "confidence": "unverified"
   },
+  "cli_overrides": {
+    "IWR1443": {
+      "prompt": "LVDS Stream:/>"
+    }
+  },
   "identify": {
     "IWR1443": {
       "level": "source",

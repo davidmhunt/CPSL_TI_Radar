@@ -23,6 +23,11 @@ files via include/json; gui-04) holds, schema 2:
   identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note}}  (gui-33) what the board answers
                    to `version` / `sarStats` when this firmware runs; matched by radar_gui/fwident.py (schema checked there).
                    level: "bench" (reply recorded on hardware) | "source" (derived from firmware source) | "unverified".
+  cfg_rules        optional {board: {"skip_commands": [str], "required_commands": [str], "forbidden_commands": [str]}}  (gui-33 Step 4)
+                   cfg commands this firmware on that board rejects (left in the cfg, never sent) / needs / does not implement.
+                   Read through `cfg_rules(board, firmware)`; the C++ driver reads the same block. Absent board = no rules.
+  cli_overrides    optional {board: {"prompt": str}}  the CLI prompt this firmware prints on that board; overrides the board
+                   descriptor's `cli.prompt` (the prompt of the board's default firmware). Read through `cfg_rules(...)["prompt"]`.
   pending          optional string; present = stub (no cfg generation/validation yet)
   driver_board     optional {gui board: driver board}  (gui-30) the C++ driver board (config/boards/<name>.json) a system JSON
                    writes for this firmware on that GUI board, and whose cfg_dialect (required/forbidden commands) the cfg is
@@ -72,6 +77,41 @@ def _check_mimo_entry(m, where: str, full: bool) -> list[str]:
     return bad
 
 
+RULE_KEYS = ("skip_commands", "required_commands", "forbidden_commands")
+
+
+def _check_rules(rules, overrides, boards: list[str]) -> list[str]:
+    """Shape problems of `cfg_rules` / `cli_overrides` (same rules as the C++ FirmwareDescriptor loader)."""
+    bad: list[str] = []
+    if rules is not None:
+        if not isinstance(rules, dict):
+            return ["cfg_rules must be {board: {skip_commands|required_commands|forbidden_commands: [command word]}}"]
+        for b, r in rules.items():
+            if b not in boards:
+                bad.append(f"cfg_rules[{b}]: board is not in templates")
+            elif not isinstance(r, dict) or not set(r) <= set(RULE_KEYS):
+                bad.append(f"cfg_rules[{b}]: must be an object with keys from {RULE_KEYS}")
+            else:
+                for k, v in r.items():
+                    if not (isinstance(v, list) and all(isinstance(x, str) and x and not any(c.isspace() for c in x) for x in v)
+                            and len(set(v)) == len(v)):
+                        bad.append(f"cfg_rules[{b}].{k}: must be a list of distinct one-word command names")
+                req = set(r.get("required_commands") or [])
+                for other in ("forbidden_commands", "skip_commands"):
+                    both = req & set(r.get(other) or [])
+                    if both:
+                        bad.append(f"cfg_rules[{b}]: {sorted(both)} in both required_commands and {other}")
+    if overrides is not None:
+        if not isinstance(overrides, dict):
+            return bad + ["cli_overrides must be {board: {prompt: str}}"]
+        for b, o in overrides.items():
+            if b not in boards:
+                bad.append(f"cli_overrides[{b}]: board is not in templates")
+            elif not (isinstance(o, dict) and set(o) == {"prompt"} and isinstance(o["prompt"], str) and o["prompt"]):
+                bad.append(f"cli_overrides[{b}]: must be {{\"prompt\": non-empty string}}")
+    return bad
+
+
 def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
     """Schema problems of one descriptor dict ([] = valid)."""
     bad: list[str] = []
@@ -115,6 +155,7 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
     from .. import fwident
 
     bad += fwident.check_identify(d.get("identify"), boards)
+    bad += _check_rules(d.get("cfg_rules"), d.get("cli_overrides"), boards)
     fm = d.get("lvds_data_fmts")
     if fm is None:
         if isinstance(out, dict) and any(isinstance(o, dict) and o.get("lvds") for o in out.values()):
@@ -161,10 +202,39 @@ def board_firmwares(board: str) -> list[str] | None:
 
 
 def cfg_dialect(board: str) -> dict:
-    """The `cfg_dialect` block of config/boards/<board>.json ({} if the board has no file/key)."""
+    """The `cfg_dialect` block of config/boards/<board>.json ({} if the board has no file/key). Silicon facts only
+    (rx_mask_fields, frame_period_field): the command rules moved to the firmware descriptors (`cfg_rules`)."""
     p = BOARDS_DIR / f"{board}.json"
     v = json.loads(p.read_text()).get("cfg_dialect") if p.is_file() else None
     return v if isinstance(v, dict) else {}
+
+
+def default_firmware_id(board: str) -> str | None:
+    """The firmware a config without a `firmware` key means on `board`: the first of the board's `firmwares` list (the one
+    the GUI preselects; the C++ driver's default_firmware_id agrees). None if the board lists none."""
+    fws = board_firmwares(board)
+    return fws[0] if fws else None
+
+
+def cfg_rules(board: str, firmware: str | None = None) -> dict:
+    """THE accessor for what a firmware changes about the cfg and the CLI on a board (gui-33 Step 4; used by the cfg
+    validator, the serial source and the GUI error checks). `board` is the GUI board or the driver board
+    (IWR1843_SAR is looked up as IWR1843 under iwr1843_sar_lvds); `firmware` None = `default_firmware_id(board)`.
+    Returns {"firmware": id|None, "skip_commands": [...], "required_commands": [...], "forbidden_commands": [...],
+    "prompt": str|None (None = the board's own cli.prompt), "source": "config/firmware/<id>.json cfg_rules.<board>"}."""
+    fid = firmware or default_firmware_id(board)
+    d = get(fid) if fid else None
+    out = {"firmware": fid, "skip_commands": [], "required_commands": [], "forbidden_commands": [], "prompt": None,
+           "source": f"config/firmware/{fid}.json" if fid else ""}
+    if d is None:
+        return out
+    gui = next((g for g, drv in (d.get("driver_board") or {}).items() if drv == board), board)
+    r = (d.get("cfg_rules") or {}).get(gui) or {}
+    for k in RULE_KEYS:
+        out[k] = list(r.get(k) or [])
+    out["prompt"] = ((d.get("cli_overrides") or {}).get(gui) or {}).get("prompt")
+    out["source"] = f"config/firmware/{fid}.json cfg_rules.{gui}"
+    return out
 
 
 def elevation_tx_bit(board: str) -> int:
