@@ -168,6 +168,8 @@ class SerialSource(Source):
                     msg = f"line {i}/{n} '{line}' was not accepted ({reply[:80] or 'no reply'})."
                     if self.once:
                         msg += f" This board takes a cfg once per power-up: {ONCE_HINT}, or tick 'already configured' to just attach."
+                    else:
+                        msg += " Ports released: fix the cfg or the board, then press Start to retry."
                     self._status("cfg_failed", msg)
                     return False
                 self._status("configuring", f"configuring {i}/{n} {line.split()[0]}")
@@ -232,6 +234,12 @@ class SerialSource(Source):
                         skip = False   # a fresh power-up needs the cfg
                     if not skip:
                         if not await self._configure():
+                            if not self.once:
+                                # A board that takes repeated cfgs: free the ports and the radar lock so the user can
+                                # fix the cfg and press Start again; keep the cfg_failed status until then.
+                                self.release()
+                                while True:
+                                    await asyncio.sleep(3600)
                             while self._both_exist():   # stay put until the board is power-cycled
                                 await asyncio.sleep(self.poll_s)
                             skip = False

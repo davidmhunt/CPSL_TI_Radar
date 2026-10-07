@@ -20,6 +20,14 @@ DEFAULT_PORTS = {"AWR2243_CASCADE": (_XDS.format("29", "00000000") + "-if00", _X
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures"
 DUMP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
+# Serial ports the source may open: USB-serial only (no /dev/tty, /dev/ttyS*, ...). Checked on the literal string.
+PORT_NAME = re.compile(r"^(/dev/serial/by-id/[A-Za-z0-9_.:+-]+|/dev/tty(ACM|USB)[0-9]+)$")
+
+
+def check_port(path: str, what: str) -> str:
+    if not PORT_NAME.match(path):
+        raise HTTPException(422, f"{what} {path!r} is not allowed: use /dev/serial/by-id/<name>, /dev/ttyACM<N> or /dev/ttyUSB<N>")
+    return path
 
 
 def dump_dir() -> Path:
@@ -133,6 +141,8 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
                 raise HTTPException(422, f"serial source needs {missing}")
             dcli, ddata = DEFAULT_PORTS.get(req.board, ("/dev/ttyACM0", "/dev/ttyACM1"))
             cli, data = req.cli_port or dcli, req.data_port or ddata
+            check_port(cli, "cli_port")
+            check_port(data, "data_port")
             path = cfg_path(req.cfg_id)
             if (cfgapi.guess_board(req.cfg_id.partition(":")[2]) == "AWR2243_CASCADE") != (req.board == "AWR2243_CASCADE"):
                 raise HTTPException(422, f"cfg {req.cfg_id!r} is not for board {req.board}")

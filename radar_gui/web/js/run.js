@@ -126,11 +126,25 @@ function render() {
   $('drvDot').className = 'dot ' + (DOT[s] || ''); $('drvText').textContent = 'driver ' + s;
   buttons(); renderStreams();
   if (st.config && s !== 'idle') { const c = R.configs.find(c => c.path === st.config || (REPO_TAIL(st.config) === c.path)); if (c && (s === 'running' || s === 'stopping')) $('rCfg').value = c.path; }
-  if (s === 'failed' || (s === 'exited' && st.exit_code)) msg(st.error || `driver exited with code ${st.exit_code}`);
+  if (s === 'failed' || (s === 'exited' && st.exit_code)) msg((st.error || `driver exited with code ${st.exit_code}`) + (noFrames() ? ' ' + ZERO_HINT : ''));
+  else if (s === 'exited' && noFrames()) msg(ZERO_HINT, 'warn');
   else if (s === 'running' || s === 'stopping' || s === 'idle') { if ($('rMsg').classList.contains('bad') && s !== 'idle') msg(''); }
   const out = $('rOutCard'), done = s === 'exited' || s === 'failed';
   out.hidden = !done;
   if (done) renderOutput(st);
+}
+// D2: a run that ended without a single frame says so plainly (the default log level hides the cause).
+const ZERO_HINT = '0 frames received. Check the log for a command the board did not answer Done to (or re-run with log_level debug in the system JSON), and power-cycle the board.';
+function noFrames() {
+  const v = Object.values(R.stats || {}).map(s => +s.frames || 0);
+  return !v.length || v.every(n => n === 0);
+}
+// D1: while a driver run is live the page header shows that run's frame count and rate, not the Live source's.
+// Returns null when no run is live; tolerant of old backends (missing fields -> null).
+export function driverHeader() {
+  if (R.state !== 'running' && R.state !== 'stopping') return null;
+  const s = (R.stats || {}).serial || (R.stats || {}).dca || Object.values(R.stats || {})[0] || {};
+  return { frame: s.frames == null ? null : s.frames, rate: s.rate_hz == null ? null : s.rate_hz };
 }
 const REPO_TAIL = p => { const i = p.indexOf('CPSL_TI_Radar_cpp/'); return i >= 0 ? p.slice(i) : p; };
 

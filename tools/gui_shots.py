@@ -35,7 +35,7 @@ and Python writes them, so snap Firefox never touches the path). Never commit PN
 Console errors (window error / unhandledrejection / console.error captured after
 page load) are written to <out>/console_errors.txt.
 """
-import argparse, base64, json, os, shutil, signal, socket, subprocess, sys, time
+import argparse, base64, json, os, shutil, signal, socket, subprocess, sys, tempfile, time
 import urllib.request, urllib.error
 
 GECKO = shutil.which("geckodriver") or "/snap/bin/geckodriver"
@@ -248,12 +248,16 @@ def main(argv=None):
         a.out = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "gui_shots", name)
     out = os.path.abspath(os.path.expanduser(a.out)); os.makedirs(out, exist_ok=True)
 
-    procs, d = [], None
+    procs, d, scratch = [], None, None
     try:
         url = a.url
         if not url:
             port = free_port()
             env = dict(os.environ)
+            # Fake-driver runs and serial dumps go to a scratch root, never the repo's runs/gui/ (real bench runs live there).
+            scratch = tempfile.mkdtemp(prefix="gui_shots_runs_")
+            env["RADAR_GUI_RUN_DIR"] = os.path.join(scratch, "runs")
+            env["RADAR_GUI_DUMP_DIR"] = os.path.join(scratch, "dumps")
             if a.scenarios != "builtin":   # optional top-level "env": {NAME: value} for the server (e.g. FAKE_DRIVER_MODE)
                 with open(a.scenarios) as f:
                     sp = json.load(f)
@@ -300,6 +304,8 @@ def main(argv=None):
         print("console errors: %d" % len(errs))
         return 0
     finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
         if d:
             d.stop()
         for p in reversed(procs):

@@ -119,7 +119,7 @@ class FakeBoard:
 
     def opener(self, path, baud):
         board = self
-        if path == "cli":
+        if path in ("cli", "/dev/ttyACM0"):
             board.cli_opens += 1
             return FakeCli(board)
         board.data_opens += 1
@@ -267,6 +267,28 @@ def test_rejected_line_other_board_has_no_power_cycle_hint(tmp_path):
     assert failed and "power-cycle" not in failed[0]
 
 
+def test_cfg_failed_on_repeatable_board_frees_ports_for_retry(tmp_path):
+    """D5: no waiting for port loss; the lock is released so a new Start can claim it."""
+    brd = FakeBoard(reject=1)
+    lock = ports.RadarLock()
+    src = make_src("IWR1843", cfg_file(tmp_path), brd, lock=lock)
+    states = []
+    src.on_status = lambda s, m: states.append((s, m))
+
+    async def go():
+        t = asyncio.create_task(take(src, 1))
+        await asyncio.sleep(0.3)
+        assert lock.owner is None and not src.claimed          # released while the failure is shown
+        assert states[-1][0] == "cfg_failed" and "press Start" in states[-1][1]
+        assert lock.acquire("serial")                          # a retry can claim it
+        lock.release("serial")
+        t.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await t
+
+    run(go())
+
+
 def test_skip_configure_sends_nothing_and_cascade_stop_just_closes(tmp_path):
     brd = FakeBoard(prompt="mmwDemo:/>")
     brd.feed(make_frame(1, [points_tlv(2, 0.0), side_info_tlv(2)]))
@@ -395,7 +417,7 @@ def test_api_serial_end_to_end_through_stream(api):
     with c:
         with c.websocket_connect("/stream") as ws:
             r = c.post("/api/source", json={"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg",
-                                            "cli_port": "cli", "data_port": "data"})
+                                            "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1"})
             assert r.status_code == 200 and r.json()["kind"] == "serial"
             fr = None
             for _ in range(200):   # mock frames may still arrive before the swap; the serial ones carry x == 1.0
@@ -411,7 +433,7 @@ def test_api_serial_end_to_end_through_stream(api):
         # see test_lock_exclusion_with_driver_run)
         # a new serial source replaces the old one (it releases the lock first)
         r2 = c.post("/api/source", json={"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg",
-                                         "cli_port": "cli", "data_port": "data"})
+                                         "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1"})
         assert r2.status_code == 200
         assert c.post("/api/source/stop").status_code == 200
         assert ports.radar_lock.owner is None
@@ -423,7 +445,7 @@ def test_api_serial_refused_while_driver_holds_lock_and_old_source_keeps_running
     with c:
         assert ports.radar_lock.acquire("driver")
         r = c.post("/api/source", json={"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg",
-                                        "cli_port": "cli", "data_port": "data"})
+                                        "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1"})
         assert r.status_code == 409 and "driver" in r.json()["detail"]
         assert c.get("/api/source").json()["kind"] == "mock"          # untouched
         with c.websocket_connect("/stream") as ws:
@@ -434,7 +456,7 @@ def test_api_validation_errors(api):
     c, _, _ = api
     with c:
         def post(**kw):
-            return c.post("/api/source", json={"kind": "serial", "cli_port": "cli", "data_port": "data", **kw})
+            return c.post("/api/source", json={"kind": "serial", "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1", **kw})
         assert post(board="IWR1843").status_code == 422                                   # no cfg
         assert post(board="IWR1843_SAR", cfg_id="user:rig1843.cfg").status_code == 422   # no data UART
         assert post(board="IWR1843", cfg_id="user:nope.cfg").status_code == 422
@@ -495,11 +517,27 @@ def test_replay_file_allowlist(api, tmp_path, monkeypatch):
         assert c.post("/api/source", json={"kind": "replay", "file": str(dumps / "cap.bin")}).status_code == 200
 
 
+def test_api_serial_ports_restricted_to_usb_serial(api):
+    """D4: only /dev/serial/by-id/*, /dev/ttyACM<N>, /dev/ttyUSB<N>."""
+    c, _, _ = api
+    base = {"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg"}
+    with c:
+        for bad in ("/dev/tty", "/dev/ttyS0", "/dev/null", "/dev/serial/by-id/../../tty", "/dev/ttyACM", "cli", "/etc/passwd"):
+            for key in ("cli_port", "data_port"):
+                body = {**base, "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1", key: bad}
+                r = c.post("/api/source", json=body)
+                assert r.status_code == 422 and "not allowed" in r.json()["detail"], (key, bad)
+        assert c.get("/api/source").json()["kind"] == "mock"
+        for ok in ("/dev/ttyUSB3", "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.05__Embed_with_CMSIS-DAP_R2101050-if00"):
+            r = c.post("/api/source", json={**base, "cli_port": "/dev/ttyACM0", "data_port": ok})
+            assert r.status_code == 200, ok
+
+
 def test_dump_target_confined_to_dump_dir(api, tmp_path, monkeypatch):
     c, _, _ = api
     dumps = tmp_path / "dumps"
     monkeypatch.setenv("RADAR_GUI_DUMP_DIR", str(dumps))
-    body = {"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg", "cli_port": "cli", "data_port": "data"}
+    body = {"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg", "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1"}
     with c:
         for bad in ("/tmp/evil.bin", "../evil.bin", "a/b.bin", "..", ".hidden"):
             assert c.post("/api/source", json={**body, "dump": bad}).status_code == 422, bad

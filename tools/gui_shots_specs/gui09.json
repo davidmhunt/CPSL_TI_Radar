@@ -1,0 +1,128 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "run",
+  "FAKE_DRIVER_RATE": "10",
+  "FAKE_DRIVER_PERIOD_MS": "100"
+ },
+ "user_cfgs": {
+  "bench_1843_tlv.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"bench_1843_tlv.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "bench_1843_tlv.cfg": "% fake\n",
+  "rig1843.cfg": "flushCfg\nsensorStart\n"
+ },
+ "scenarios": [
+  {
+   "name": "a_running_header",
+   "tab": "run",
+   "window": [
+    1400,
+    700
+   ],
+   "actions": [
+    {
+     "set": "#rCfg",
+     "value": "bench_1843_tlv"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "running_header_1400.png",
+     "selector": "header"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "b_stopped_header",
+   "tab": "run",
+   "fresh": false,
+   "window": [
+    1400,
+    700
+   ],
+   "actions": [
+    {
+     "click": "#rStop"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "stopped_header_1400.png",
+     "selector": "header"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c_port_error",
+   "tab": "live",
+   "window": [
+    1400,
+    900
+   ],
+   "actions": [
+    {
+     "click": "#srcKind button[data-k=serial]"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "set": "#srcCfg",
+     "value": "rig1843"
+    },
+    {
+     "set": "#srcCli",
+     "value": "/dev/tty"
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 1.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "port_error_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "msg.txt",
+     "selector": "#srcMsg",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}

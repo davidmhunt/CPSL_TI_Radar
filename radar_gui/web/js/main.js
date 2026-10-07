@@ -4,7 +4,7 @@ import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
 import { showConfigure } from './cfg.js';
 import { initSource, srcStatus, resetStats } from './source.js';
-import { showRun, onDriverMessage, openInRun } from './run.js';
+import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
 
 // ---------- stream ----------
 const STATE_DOT = { streaming: 'ok', starting: 'warn', configuring: 'warn', waiting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad',
@@ -15,9 +15,23 @@ function setStatus(state, msg) {
   $('statusMsg').textContent = msg || '';
   srcStatus(state, msg);
 }
+// D1: during a driver run the header Frame/Points/Rate show that run (Points has no meaning there), not the Live source.
+let lastFrame = null;
+function header(m) {
+  const d = driverHeader();
+  if (d) {
+    $('sFrame').textContent = d.frame == null ? '–' : d.frame; $('sPts').textContent = '–';
+    $('sRate').textContent = d.rate == null ? '–' : d.rate.toFixed(1) + ' Hz';
+  } else if (m || lastFrame) {
+    m = m || lastFrame; lastFrame = m;
+    $('sFrame').textContent = m.frame; $('sPts').textContent = m.pts.length; $('sRate').textContent = m.rate.toFixed(1) + ' Hz';
+  }
+  $('sFrame').previousElementSibling.textContent = d ? 'Driver run' : 'Frame';
+  $('sFrame').parentElement.title = d ? 'Driver run in progress: frames and rate are from the Run tab, not the Live source' : '';
+}
 function onMessage(m) {
   if (m.type === 'status') setStatus(m.state, m.msg);
-  else if (m.type && m.type.startsWith('driver_')) onDriverMessage(m);
+  else if (m.type && m.type.startsWith('driver_')) { onDriverMessage(m); header(); }
   else if (m.type === 'cfg') {
     S.cfg = m; S.frames.length = 0; S.last = null; resetStats();
     $('cfgName').textContent = m.name || ''; $('cfgName').style.display = m.name ? '' : 'none';
@@ -26,8 +40,7 @@ function onMessage(m) {
   } else if (m.type === 'frame') {
     S.last = m;
     S.counts.push(m.pts.length); if (S.counts.length > 200) S.counts.shift();
-    $('sFrame').textContent = m.frame; $('sPts').textContent = m.pts.length;
-    $('sRate').textContent = m.rate.toFixed(1) + ' Hz';
+    lastFrame = m; header(m);
     $('sGaps').textContent = m.gaps; $('sErr').textContent = m.errors;
     $('gapStat').classList.toggle('bad', m.gaps > 0); $('errStat').classList.toggle('bad', m.errors > 0);
     if (!S.paused) { S.frames.push(m); while (S.frames.length > S.trail) S.frames.shift(); }
