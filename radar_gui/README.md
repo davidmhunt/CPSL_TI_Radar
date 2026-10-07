@@ -67,16 +67,23 @@ pins the payload shapes (no browser harness).
 
 ## Remote access over Tailscale
 
-**Recommended: `tailscale serve`.** Start the GUI as usual (it stays bound to `127.0.0.1:8000`), then proxy it onto your tailnet:
+**Recommended: one command.** `--tailscale` keeps the server on `127.0.0.1` and proxies it onto your tailnet with `tailscale serve` (HTTPS, tailnet-only; never `funnel`):
+
+```
+uv run python -m radar_gui --source mock --tailscale      # composes with --source/--port
+```
+
+It prints `GUI on tailnet: https://<machine>.<tailnet>.ts.net/`; open that from any device on the tailnet (the live WebSocket picks `wss:` automatically). Ctrl-C/SIGTERM removes only this mapping (`tailscale serve --https=443 off`).
+If tailscale is missing, logged out, denied (run once `sudo tailscale set --operator=$USER`), or a serve config already exists (left untouched), it says why and keeps serving locally.
+
+**Manual alternative.** Same result in two terminals:
 
 ```
 uv run python -m radar_gui          # terminal 1
 tailscale serve --bg 8000           # terminal 2 (runs in the background)
 ```
 
-Open `https://<machine>.<tailnet>.ts.net/` from any device on the tailnet (HTTPS, tailnet-only; `tailscale serve status` shows the URL).
-The live WebSocket picks `wss:` automatically on `https:` pages (`web/js/main.js`). Stop sharing with `tailscale serve reset`.
-If `tailscale serve` says access is denied, run once: `sudo tailscale set --operator=$USER`.
+`tailscale serve status` shows the URL; stop sharing with `tailscale serve --https=443 off` (or `tailscale serve reset` to clear all serve config).
 
 **Alternative: bind to the Tailscale interface.** `uv run python -m radar_gui --host <tailscale-ip> [--port 8000]` listens only on that
 interface (plain HTTP/`ws:`, no TLS); browse to `http://<tailscale-ip>:8000/`.
