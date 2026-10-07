@@ -178,7 +178,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     app.state.hub, app.state.driver = hub, driver
     app.include_router(make_router(user_cfg_dir))
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
-    app.include_router(make_source_router(hub, user_cfg_dir, serial_factory))
+    app.include_router(make_source_router(hub, user_cfg_dir, serial_factory, run_root))
     app.include_router(make_settings_router())
 
     @app.get("/api/health")

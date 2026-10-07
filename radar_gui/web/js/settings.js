@@ -1,13 +1,14 @@
 // Settings tab (gui-32): read-only serial-port list grouped by board + DCA1000 host checks (/api/settings/*).
-// "Use" buttons only fill the existing port fields (Configure -> Save, Live Source card); nothing is written to a radar or the host.
+// "Use" buttons only fill the existing port fields (Configure -> Save, Radar-tab Quick setup); nothing is written to a radar or the host.
 import { $ } from './state.js';
+import { spec, specChanged, hasSetup } from './session.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 async function get(path) { try { const r = await fetch(path); return { ok: r.ok, j: await r.json().catch(() => null) }; } catch (e) { return { ok: false, j: null }; } }
 
 function setPorts(id, cli, data, where) {
   if (where === 'save') { $('sCli').value = cli; $('sData').value = data; }
-  else { $('srcCli').value = cli; $('srcData').value = data; $('srcKind').querySelector('button[data-k=serial]').click(); dispatchEvent(new CustomEvent('goto-tab', { detail: 'live' })); }
+  else { spec.mode = 'quick'; spec.cli_port = cli; spec.data_port = data; specChanged(); dispatchEvent(new CustomEvent('goto-tab', { detail: 'run' })); }
 }
 function renderPorts(j) {
   const box = $('setPorts'); box.innerHTML = '';
@@ -25,7 +26,7 @@ function renderPorts(j) {
     const cli = b.ports.find(p => p.role === 'cli'), data = b.ports.find(p => p.role === 'data');
     if (cli && data) {
       const row = el('div', 'btnrow');
-      for (const [where, label] of [['save', 'Use for Configure → Save'], ['live', 'Use for Live serial source']]) {
+      for (const [where, label] of [['save', 'Use for Configure → Save'], ...(hasSetup() ? [['live', 'Use for Quick setup (Radar tab)']] : [])]) {
         const bt = el('button', 'btn', label); bt.onclick = () => setPorts(b.serial, cli.by_id, data.by_id, where); row.append(bt);
       }
       d.append(row);

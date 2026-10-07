@@ -1,158 +1,130 @@
-// Live tab Source card (gui-06): switch the running source (mock / replay / serial) via /api/source*.
-// Serial: board + cfg pickers, CLI/data ports defaulting to the board's usual by-id paths, skip-cfg for
-// once-per-boot boards. Status text arrives through main.js (setStatus) -> srcStatus().
+// Point cloud tab "Now showing" card (gui-06, gui-37). Board = the C++ driver session: a compact picker bound to the same
+// setup as the Radar tab (session.js `spec`) plus Start/Stop. Replay = a recorded TLV file shown through /api/source.
+// Status text arrives through main.js (setStatus) -> srcStatus().
 import { $ } from './state.js';
 import { mountCliPanel } from './cli_panel.js';
+import { api, detailText, D, SS, spec, specChanged, specReady, specLabel, specBoard, onceBoard, skipEffective, skipSupported, cfgSentHere,
+  cfgsFor, boardInfo, FLAGS, flagEff, hasSetup, caps, fill, splitBy, view, onSession, startSession, stopSession, refreshSrc, boardLive, blockedReason } from './session.js';
 
-const C = { kind: 'serial', boards: [], cfgs: [], files: [], cur: null, ready: false, busy: false };
-let cmdPanel = null;
-const KIND_LABEL = { mock: 'Mock', replay: 'Replay', serial: 'Serial' };
+const C = { kind: 'board', files: [], ready: false, busy: false, userKind: false };
+let cmdPanel = null, cliSig = '';
 
-async function api(path, body) {
-  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  let j = null; try { j = await r.json(); } catch (e) { /* non-JSON */ }
-  return { ok: r.ok, status: r.status, j };
-}
-function detail(res) {
-  const d = res.j && res.j.detail;
-  if (typeof d === 'string') return d;
-  if (Array.isArray(d)) return d.map(x => (x.loc ? x.loc.join('.') + ': ' : '') + x.msg).join('; ');
-  return `request failed (HTTP ${res.status})`;
-}
 function msg(text, cls) { const m = $('srcMsg'); m.hidden = !text; m.textContent = text || ''; m.className = 'runmsg ' + (cls || 'bad'); }
-const board = () => C.boards.find(b => b.board === $('srcBoard').value);
 
-function layout() {
-  [...$('srcKind').children].forEach(b => b.classList.toggle('on', b.dataset.k === C.kind));
-  // gui-36: while Live follows a driver run the card is read-only ("driver run · cfg · pid"); the run is managed in the Run tab
-  const fol = !!(C.cur && C.cur.kind === 'driver' && C.cur.source_state === 'running');
-  $('srcKind').hidden = fol; $('srcNow').hidden = fol; $('srcBtns').hidden = fol; $('srcDrv').hidden = !fol;
-  if (fol) $('srcDrvInfo').textContent = driverLine(C.cur);
-  $('srcFileRow').hidden = fol || C.kind !== 'replay';
-  $('srcSerial').hidden = fol || C.kind !== 'serial';
-  const b = board();
-  $('srcSkipFw').parentElement.hidden = C.kind !== 'serial';
-  $('srcSkipRow').hidden = fol || !(C.kind === 'serial' && b && b.once_per_boot);
-  $('srcBoardNote').textContent = b ? `${b.tlv_dialect} TLV, CLI ${b.cli_baud} baud, data ${b.data_baud} baud` +
-    (b.once_per_boot ? '. Accepts a cfg once per power-up.' : '') : '';
-  const live = C.cur && !['driver', 'none'].includes(C.cur.kind) && C.cur.kind;
-  $('srcStop').disabled = C.busy || !live;
-  $('srcStart').disabled = C.busy || (C.kind === 'serial' && !$('srcCfg').value) || (C.kind === 'replay' && !$('srcFile').value);
-  // gui-09 D15: "Restart" only when the selected board + cfg is the serial source that is running now
-  const sp = (C.cur && C.cur.spec) || {};
-  const same = live === 'serial' && b && sp.board === b.board && (sp.cfg_id === undefined || sp.cfg_id === $('srcCfg').value);
-  $('srcStart').textContent = C.kind === 'serial' ? (same ? 'Restart' : 'Start serial') : `Use ${KIND_LABEL[C.kind].toLowerCase()}`;
-}
-// gui-09 D16: the dialect follows the file name (AWR2243_CASCADE_* -> mcuplus_cascade, IWR1443* -> sdk2, else sdk3); editable.
+// gui-09 D16: the dialect follows the capture (backend `dialect`) or its file name; editable.
 function autoDialect() {
   const f = C.files.find(x => x.path === $('srcFile').value);
   if (f) $('srcDialect').value = f.dialect || (/^awr2243_cascade/i.test(f.name) ? 'mcuplus_cascade' : /^iwr1443/i.test(f.name) ? 'sdk2' : 'sdk3');
 }
-function fillCfgs() {
-  const b = board(), sel = $('srcCfg'), keep = sel.value; sel.innerHTML = '';
-  const items = C.cfgs.filter(c => b && c.board === b.board);
-  for (const [g, label] of [['user', 'Saved from Configure'], ['shipped', 'Shipped']]) {
-    const xs = items.filter(c => c.group === g); if (!xs.length) continue;
-    const og = document.createElement('optgroup'); og.label = label;
-    for (const c of xs) og.append(new Option(c.name, c.id));
-    sel.append(og);
-  }
-  if (!items.length) sel.append(new Option('(no cfgs for this board)', ''));
-  if (items.some(c => c.id === keep)) sel.value = keep;
-}
-function boardChanged() {
-  const b = board();
-  if (b) { $('srcCli').value = b.cli_port; $('srcData').value = b.data_port; }
-  fillCfgs(); layout();
-}
-// gui-33: `Firmware: demo · SDK 03.06.02.00 · xWR18xx ✓`, red on a mismatch; hidden on a backend without the check.
-function showFirmware(f) {
-  const el = $('srcFw'); el.hidden = !f;
-  if (!f) return;
-  const fl = f.fields || {}, found = [fl.sdk && 'SDK ' + fl.sdk, fl.platform].filter(Boolean).join(' · ') || f.found;
-  const mark = { match: '\u2713', mismatch: '\u2717 wrong firmware', unknown: '? not verified', skipped: '(not checked)' }[f.verdict] || f.verdict;
-  el.textContent = `Firmware: ${f.expected}${found && f.verdict !== 'skipped' ? ' \u00b7 ' + found : ''} ${mark}` + (f.verdict === 'mismatch' ? `. Flash it: ${f.flash_hint}` : '');
-  el.className = 'runmsg ' + (f.verdict === 'match' ? 'ok' : f.verdict === 'mismatch' ? 'bad' : 'warn');
-}
-const driverLine = c => { const sp = c.spec || {}; return `driver run \u00b7 ${sp.name || (sp.config || '').split('/').pop()}` + (c.source_state === 'running' && sp.pid ? ` \u00b7 pid ${sp.pid}` : ` (${c.source_state || 'ended'})`); };
-function describeNow() {
-  showFirmware(C.cur && C.cur.kind === 'serial' ? C.cur.firmware : null);
-  const c = C.cur; if (!c) return;
-  const sp = c.spec || {};
-  if (c.kind === 'none') { $('srcNow').textContent = 'No source'; return; }
-  let t = c.kind === 'driver' ? 'Live: ' + driverLine(c) : `Live: ${c.kind}`;
-  if (c.kind === 'serial') t += ` · ${sp.board || ''}${sp.skip_configure ? ' (cfg skipped)' : ''}`;
-  if (c.kind === 'replay' && sp.file) t += ` · ${sp.file.split('/').pop()}`;
-  $('srcNow').textContent = t;
-}
-export async function refreshSource() {
-  const { j } = await api('/api/source');
-  if (j) { C.cur = j; describeNow(); if (cmdPanel && j.kind === 'serial') cmdPanel.update(j.cli); else if (cmdPanel) cmdPanel.clear(); if (!C.ready && ['serial', 'replay'].includes(j.kind)) { C.kind = j.kind; } layout(); }
-}
-export async function initSource() {
-  const [b, c, f] = await Promise.all([api('/api/source/boards'), api('/api/cfgs'), api('/api/source/files')]);
-  C.boards = (b.j && b.j.boards) || []; C.cfgs = (c.j && c.j.cfgs) || []; C.files = (f.j && f.j.files) || [];
-  const sb = $('srcBoard'); sb.innerHTML = '';
-  for (const x of C.boards) sb.append(new Option(x.board, x.board));
-  const fs = $('srcFile'); fs.innerHTML = '';
-  for (const g of ['fixtures', 'dumps', 'startup']) {
-    const xs = C.files.filter(x => x.group === g); if (!xs.length) continue;
-    const og = document.createElement('optgroup'); og.label = { fixtures: 'tests/fixtures', dumps: 'GUI captures (runs/gui/dumps)', startup: 'Started with' }[g];
-    for (const x of xs) og.append(new Option(x.name, x.path));
-    fs.append(og);
-  }
-  if (!C.files.length) fs.append(new Option('(no replay files found)', ''));
+function fillFiles() {
+  C.files = D.files;
+  const groups = splitBy(C.files, 'group', [['runs', 'Run captures (runs/gui/*/serial_data.bin)'], ['fixtures', 'tests/fixtures'], ['dumps', 'GUI captures (runs/gui/dumps)'], ['startup', 'Started with']])
+    .map(([l, xs]) => [l, xs.map(x => [x.path, x.name])]);
+  fill($('srcFile'), groups.length ? groups : [[null, [['', '(no replay files found)']]]], $('srcFile').value);
   autoDialect();
-  cmdPanel = mountCliPanel($('srcCmds'), { compact: true });
-  await refreshSource();
-  C.ready = true; boardChanged();
+}
+function renderPicker() {
+  const quick = spec.mode === 'quick' && hasSetup();
+  $('srcMode').hidden = !hasSetup();
+  [...$('srcMode').children].forEach(b => b.classList.toggle('on', b.dataset.m === (quick ? 'quick' : 'saved')));
+  $('srcSavedRow').hidden = quick; $('srcQuickRow').hidden = !quick;
+  fill($('srcCfgSel'), D.configs.length ? splitBy(D.configs, 'group', [['user', 'Saved from Configure'], ['system', 'Shipped']])
+    .map(([l, xs]) => [l, xs.map(c => [c.path, c.name + (c.board ? `  [${c.board}]` : '')])]) : [[null, [['', '(no system JSONs found)']]]], spec.config);
+  if (D.boards.length) {
+    fill($('srcBoard'), [[null, D.boards.map(x => [x.board, x.board])]], spec.board);
+    const cf = cfgsFor(spec.board), grp = splitBy(cf, 'group', [['user', 'Saved from Configure'], ['shipped', 'Shipped']]);
+    fill($('srcCfg'), cf.length ? grp.map(([l, xs]) => [l, xs.map(c => [c.id, c.name])]) : [[null, [['', '(no cfgs for this board)']]]], spec.cfg_id);
+    const b = boardInfo(spec.board);
+    $('srcBoardNote').textContent = b ? `${b.tlv_dialect} TLV, CLI ${b.cli_baud} baud, data ${b.data_baud} baud` + (b.once_per_boot ? '. Accepts a cfg once per power-up.' : '') +
+      '. Ports, firmware and DCA1000 are in the Radar tab.' : '';
+  }
+  renderState();
+}
+const recSummary = () => {
+  if (!hasSetup()) return '';
+  const on = FLAGS.filter(([k, ovk]) => flagEff(k, ovk)).map(f => f[2]);
+  return on.length ? `Recording: ${on.join(', ')} (change in Radar)` : 'Recording: off (change in Radar)';
+};
+// gui-33: the driver's firmware check; its verdict is in the log until the driver reports it as a field.
+function showFirmware() {
+  const el = $('srcFw'), d = SS.drv, show = boardLive() || ['exited', 'failed'].includes(d.state);
+  const fw = d.firmware; el.hidden = !(show && fw);
+  if (el.hidden) return;
+  el.textContent = `Firmware: ${fw} · ` + (caps().firmware_check ? 'checked by the driver at start (verdict in the Radar log)' : 'not checked (this driver build has no firmware check)');
+  el.className = 'runmsg ' + (caps().firmware_check ? 'ok' : 'warn');
+}
+function renderState() {
+  const v = view(), live = boardLive(), repl = v.kind === 'replay';
+  if (!C.userKind) C.kind = repl ? 'replay' : 'board';
+  [...$('srcKind').children].forEach(b => { b.classList.toggle('on', b.dataset.k === C.kind); b.disabled = live; });
+  $('srcBoardBox').hidden = C.kind !== 'board'; $('srcFileRow').hidden = C.kind !== 'replay';
+  $('srcNow').textContent = v.kind === 'none' ? 'Nothing is running.' : `Now showing: ${v.pill}` + (v.desc && v.kind === 'board' ? ` — ${v.desc}` : '');
+  const once = C.kind === 'board' && onceBoard();
+  $('srcSkipRow').hidden = !once; $('srcSkip').checked = skipEffective() && skipSupported(); $('srcSkip').disabled = live || !skipSupported();
+  $('srcSkipRow').lastElementChild.textContent = !skipSupported() ? 'Skip cfg unavailable: rebuild the driver' : cfgSentHere(specBoard()) ? 'Restart without the cfg (this GUI configured the board; untick after a power-cycle)' : 'Already configured this power-up (skip cfg)';
+  $('srcRec').textContent = recSummary();
+  for (const id of ['srcMode', 'srcCfgSel', 'srcBoard', 'srcCfg']) { const e = $(id); if (id === 'srcMode') [...e.children].forEach(b => { b.disabled = live; }); else e.disabled = live; }
+  const why = blockedReason();
+  if (C.kind === 'board') {
+    $('srcStart').disabled = C.busy || SS.busy || live || !specReady();
+    $('srcStart').textContent = live ? why : (once && skipEffective() && skipSupported() ? 'Restart (skip cfg)' : `Start ${specLabel()}`.trim());
+    $('srcStop').disabled = C.busy || !(v.kind === 'board' && live && v.canStop);
+  } else {
+    $('srcStart').disabled = C.busy || live || !$('srcFile').value;
+    $('srcStart').textContent = live ? why : 'Start replay';
+    $('srcStop').disabled = C.busy || v.kind !== 'replay';
+  }
+  $('srcStop').textContent = C.kind === 'replay' ? 'Stop replay' : 'Stop';
+  const sig = JSON.stringify(SS.cli.map(e => [e.seq, e.verdict, e.ms]));
+  if (cmdPanel && sig !== cliSig) { cliSig = sig; cmdPanel.update(SS.cli); }
+  showFirmware();
 }
 
 async function start() {
-  msg(''); C.busy = true; layout();
-  const body = { kind: C.kind };
-  if (C.kind === 'replay') { body.file = $('srcFile').value; body.dialect = $('srcDialect').value; }
-  if (C.kind === 'serial') {
-    Object.assign(body, { board: $('srcBoard').value, cfg_id: $('srcCfg').value, cli_port: $('srcCli').value.trim() || null,
-      data_port: $('srcData').value.trim() || null, skip_configure: !$('srcSkipRow').hidden && $('srcSkip').checked,
-      skip_firmware_check: $('srcSkipFw').checked });
-    if ($('srcDump').checked) body.dump = `${body.board}_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.bin`;
+  msg(''); C.busy = true; renderState();
+  let ok = true;
+  if (C.kind === 'board') {
+    const r = await startSession(); if (!r.ok) { ok = false; msg(r.text); }
+  } else {
+    const res = await api('/api/source', { kind: 'replay', file: $('srcFile').value, dialect: $('srcDialect').value });
+    if (!res.ok) { ok = false; const t = detailText(res); msg(res.status === 409 ? 'Refused: ' + t : res.status === 422 ? 'Not started: ' + t : t); }
+    else { SS.src = res.j; SS.stream = { state: 'streaming', msg: '' }; }
   }
-  const res = await api('/api/source', body);
-  C.busy = false;
-  if (!res.ok) {
-    const t = detail(res);
-    msg(res.status === 409 ? (/busy|in use|held|already/i.test(t) ? 'Ports busy: ' : 'Refused: ') + t : res.status === 422 ? 'Not started: ' + t : t);
-  } else { C.cur = res.j; describeNow(); }
-  layout();
+  C.busy = false; C.userKind = false; if (ok) msg('');
+  await refreshSrc(); renderState();
 }
 async function stop() {
-  msg(''); C.busy = true; layout();
-  const res = await api('/api/source/stop', {});
-  C.busy = false;
-  if (!res.ok) msg(detail(res)); else { C.cur = res.j; describeNow(); }
-  C.cur = (await api('/api/source')).j || C.cur; layout();
+  msg(''); C.busy = true; renderState();
+  const r = await stopSession(); if (!r.ok) msg(r.text);
+  C.busy = false; renderState();
 }
 
-// Called by main.js on every status message: the source's progress / hints (configuring i/N, cfg_failed + power-cycle
-// hint, stalled, no_board, compact-points) are shown in the card as well as the header.
+// Called by main.js on every status message: the source's progress / hints (starting, ended, error, ...) are shown in the
+// card as well as in the header bar.
 const BAD = ['error', 'cfg_failed', 'wrong_firmware', 'no_board', 'stalled', 'disconnected'];
-let lastState = null;
 export function srcStatus(state, text) {
-  // the transcript is fetched when the configure attempt resolves (not on every "configuring i/N" tick)
-  if (state !== lastState && ['cfg_failed', 'wrong_firmware', 'waiting', 'streaming', 'stalled', 'ended', 'error', 'no_tap'].includes(state) && C.ready) refreshSource();
-  lastState = state;
   const el = $('srcStat'); const show = !!text || BAD.includes(state);
   el.hidden = !show; el.textContent = show ? `${state.replace('_', ' ')}${text ? ': ' + text : ''}` : '';
   el.className = 'runmsg ' + (BAD.includes(state) ? 'bad' : state === 'streaming' ? 'ok' : 'warn');
 }
 // A new source resets the header counters until its first frame.
-export function resetStats() { for (const id of ['sFrame', 'sPts', 'sRate', 'sGaps', 'sErr']) $(id).textContent = '–'; refreshSource(); }
+export function resetStats() { for (const id of ['sFrame', 'sPts', 'sRate', 'sGaps', 'sErr']) $(id).textContent = '–'; refreshSrc(); }
 
-$('srcKind').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; C.kind = b.dataset.k; msg(''); layout(); });
-$('srcBoard').addEventListener('change', boardChanged);
-$('srcCfg').addEventListener('change', layout);
-$('srcFile').addEventListener('change', () => { autoDialect(); layout(); });
-$('srcStart').onclick = start;
-$('srcStop').onclick = stop;
-$('srcManage').onclick = () => dispatchEvent(new CustomEvent('goto-tab', { detail: 'run' }));
+export function initSource() {
+  cmdPanel = mountCliPanel($('srcCmds'), { compact: true });
+  $('srcKind').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; C.kind = b.dataset.k; C.userKind = true; msg(''); renderState(); });
+  $('srcMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; spec.mode = b.dataset.m; spec.skipSet = false; specChanged(); });
+  $('srcCfgSel').addEventListener('change', () => { spec.config = $('srcCfgSel').value; spec.skipSet = false; specChanged(); });
+  $('srcBoard').addEventListener('change', () => {
+    spec.board = $('srcBoard').value; const b = boardInfo(spec.board) || {};
+    spec.firmware = b.default_firmware || ''; spec.cfg_id = (cfgsFor(spec.board)[0] || {}).id || ''; spec.cli_port = spec.data_port = ''; spec.dca1000 = null; spec.skipSet = false; specChanged();
+  });
+  $('srcCfg').addEventListener('change', () => { spec.cfg_id = $('srcCfg').value; specChanged(); });
+  $('srcSkip').addEventListener('change', () => { spec.skip = $('srcSkip').checked; spec.skipSet = true; specChanged(); });
+  $('srcFile').addEventListener('change', () => { autoDialect(); renderState(); });
+  $('srcStart').onclick = start; $('srcStop').onclick = stop;
+  $('srcMore').onclick = () => dispatchEvent(new CustomEvent('goto-tab', { detail: 'run' }));
+  addEventListener('spec-changed', () => { fillFiles(); renderPicker(); });
+  onSession(renderState);
+  C.ready = true; fillFiles(); renderPicker();
+}

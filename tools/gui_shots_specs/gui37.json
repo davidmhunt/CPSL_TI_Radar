@@ -1,0 +1,1125 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "tap",
+  "FAKE_DRIVER_RATE": "10",
+  "FAKE_DRIVER_CLI": "ok",
+  "FAKE_DRIVER_SKIP": "1"
+ },
+ "server": [
+  "tests/fakes/gui_fake_session.py"
+ ],
+ "user_cfgs": {
+  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "casc_run.json": "{\"schema_version\": 2, \"board\": \"AWR2243_CASCADE\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "dca_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}, \"dca1000\": {\"enabled\": true}, \"output\": {\"save_raw_lvds\": true}}",
+  "tap.cfg": "% fake\n",
+  "quick_1843.cfg": "% fake 1843\n",
+  "quick_1843_b.cfg": "% fake 1843 b\n"
+ },
+ "scenarios": [
+  {
+   "name": "a_live_quick_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#srcMode button[data-m=quick]"
+    },
+    {
+     "set": "#srcBoard",
+     "value": "IWR1843"
+    },
+    {
+     "set": "#srcCfg",
+     "value": "quick_1843"
+    },
+    {
+     "wait": 0.2
+    },
+    {
+     "click": "#srcStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "a_live_quick_1400_live_page.png"
+    },
+    {
+     "file": "a_live_quick_1400_live_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_live_quick_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "a_live_quick_800_live_page.png"
+    },
+    {
+     "file": "a_live_quick_800_live_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "a_radar_sees_it_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=run]"
+    },
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "a_radar_running_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "a_radar_sees_it_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "a_radar_running_800.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "a_stop_from_radar",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#rStop"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "a_stopped_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "b_radar_start_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_run"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1.5
+    },
+    {
+     "click": "#tabs button[data-tab=run]"
+    },
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "b_radar_start_1400_radar_page.png"
+    },
+    {
+     "file": "b_radar_start_1400_radar_setup.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "b_radar_start_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "b_radar_start_800_radar_page.png"
+    },
+    {
+     "file": "b_radar_start_800_radar_setup.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "b_stop_from_live",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "click": "#srcStop"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "b_stopped_live_1400.png"
+    },
+    {
+     "file": "b_stopped_card_1400.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "c_header_start_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_run"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1.5
+    },
+    {
+     "click": "#sessBtn"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 0.5
+    },
+    {
+     "click": "#sessBtn"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "c_header_start_1400_header_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c_header_start_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "c_header_start_800_header_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "c_header_stop",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#sessBtn"
+    },
+    {
+     "wait": 3
+    }
+   ],
+   "shots": [
+    {
+     "file": "c_header_stopped_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "d_ended_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_run"
+    },
+    {
+     "set": "#rDur",
+     "value": "3"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 5
+    }
+   ],
+   "shots": [
+    {
+     "file": "d_ended_1400_ended_page.png"
+    },
+    {
+     "file": "d_ended_1400_ended_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "d_ended_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "d_ended_800_ended_page.png"
+    },
+    {
+     "file": "d_ended_800_ended_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "e_died_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_die"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1.5
+    },
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 8
+    }
+   ],
+   "shots": [
+    {
+     "file": "e_died_1400_died_page.png"
+    },
+    {
+     "file": "e_died_1400_died_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "e_died_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "e_died_800_died_page.png"
+    },
+    {
+     "file": "e_died_800_died_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "f_cascade_first_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "casc_run"
+    },
+    {
+     "set": "#rDur",
+     "value": "3"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 5
+    }
+   ],
+   "shots": [
+    {
+     "file": "f_after_first_run_1400.png"
+    },
+    {
+     "file": "f_setup_1400.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    },
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "f_cascade_first_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "f_after_first_run_800.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "f_cascade_restart_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 0.2
+    },
+    {
+     "click": "#sessBtn"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "f_restart_running_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "log.txt",
+     "selector": "#rLog",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "g_old_backend_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "wait": 1
+    },
+    {
+     "js": "const s=window.__session; s.D.caps={tap:true,skip_configure:true,adc_tap:true}; s.D.boards=[]; s.spec.mode='saved'; s.changed(); dispatchEvent(new CustomEvent('spec-changed')); return 'ok'"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "g_old_backend_1400_radar_page.png"
+    },
+    {
+     "file": "g_old_backend_1400_radar_setup.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "g_old_backend_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "g_old_backend_800_radar_page.png"
+    },
+    {
+     "file": "g_old_backend_800_radar_setup.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "g_old_backend_live_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "g_old_live_1400.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "i_recording_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "dca_run"
+    },
+    {
+     "wait": 0.5
+    },
+    {
+     "js": "window.confirm=()=>true; window.prompt=(m,d)=>d; return 'ok'"
+    },
+    {
+     "click": "#rSaveAdc"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "i_boxes_1400.png",
+     "selector": "#rSetup"
+    },
+    {
+     "file": "i_boxes_page_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "i_recording_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.3
+    }
+   ],
+   "shots": [
+    {
+     "file": "i_boxes_800.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "i_save_to_config",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#rSaveCfg"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "i_saved_1400.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "msg.txt",
+     "selector": "#rSaveMsg",
+     "what": "text"
+    },
+    {
+     "file": "values.txt",
+     "selector": "#rSetup",
+     "what": "values"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "i_shipped_copy",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "set": "#rCfg",
+     "value": "IWR1843"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "i_shipped_1400.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "h_keyboard_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "wait": 0.5
+    },
+    {
+     "js": "const out=[]; const tabs=document.getElementById('tabs'); const bs=[...tabs.querySelectorAll('[role=tab]')];bs[0].focus(); tabs.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); out.push('right->'+bs.filter(b=>b.getAttribute('aria-selected')==='true').map(b=>b.textContent));tabs.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true})); out.push('end->'+bs.filter(b=>b.getAttribute('aria-selected')==='true').map(b=>b.textContent));document.body.focus(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'3',bubbles:true})); out.push('digit3->'+bs.filter(b=>b.getAttribute('aria-selected')==='true').map(b=>b.textContent));document.getElementById('rCfg').focus(); document.getElementById('rCfg').dispatchEvent(new KeyboardEvent('keydown',{key:'1',bubbles:true})); out.push('digit1 in a select->'+bs.filter(b=>b.getAttribute('aria-selected')==='true').map(b=>b.textContent));out.push('roles '+[...document.querySelectorAll('[role=tablist],[role=tab],[role=tabpanel]')].length+' pill '+document.getElementById('sessPill').getAttribute('role')+'/'+document.getElementById('sessPill').getAttribute('aria-live'));document.title=out.join(' | '); return 'ok'"
+    }
+   ],
+   "shots": [
+    {
+     "file": "h_tabs_1400.png",
+     "selector": "header"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "keys.txt",
+     "selector": "title",
+     "what": "html"
+    }
+   ]
+  }
+ ]
+}

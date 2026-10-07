@@ -1,0 +1,233 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "no-tap",
+  "FAKE_DRIVER_RATE": "10",
+  "FAKE_DRIVER_CLI": "ok",
+  "FAKE_DRIVER_SKIP": "1"
+ },
+ "server": [
+  "tests/fakes/gui_fake_session.py"
+ ],
+ "user_cfgs": {
+  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "casc_run.json": "{\"schema_version\": 2, \"board\": \"AWR2243_CASCADE\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "dca_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}, \"dca1000\": {\"enabled\": true}, \"output\": {\"save_raw_lvds\": true}}",
+  "tap.cfg": "% fake\n",
+  "quick_1843.cfg": "% fake 1843\n",
+  "quick_1843_b.cfg": "% fake 1843 b\n"
+ },
+ "scenarios": [
+  {
+   "name": "b_radar_start_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_run"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1.5
+    },
+    {
+     "click": "#tabs button[data-tab=run]"
+    },
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "b_radar_start_1400_radar_page.png"
+    },
+    {
+     "file": "b_radar_start_1400_radar_setup.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "b_radar_start_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "b_radar_start_800_radar_page.png"
+    },
+    {
+     "file": "b_radar_start_800_radar_setup.png",
+     "selector": "#rSetup"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "setup.txt",
+     "selector": "#rSetup",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "d_ended_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_run"
+    },
+    {
+     "set": "#rDur",
+     "value": "3"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1
+    },
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 5
+    }
+   ],
+   "shots": [
+    {
+     "file": "d_ended_1400_ended_page.png"
+    },
+    {
+     "file": "d_ended_1400_ended_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "d_ended_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "d_ended_800_ended_page.png"
+    },
+    {
+     "file": "d_ended_800_ended_card.png",
+     "selector": "#srcCard"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  }
+ ]
+}

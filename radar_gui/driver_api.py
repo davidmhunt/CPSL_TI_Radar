@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import cfgapi, session_cfg
+from . import cfgapi, session_cfg, sysjson
 from .cfgapi import DEFAULT_USER_DIR
 from .driver import REPO, DriverError, DriverManager
 
@@ -46,6 +46,13 @@ class Setup(Overrides):
     data_udp_port: int | None = Field(None, ge=1, le=65535)
 
 
+class SaveConfigReq(BaseModel):
+    config: str                                  # a path listed by GET /api/driver/configs
+    overrides: Overrides
+    mode: Literal["inplace", "copy"] = "inplace"
+    name: str | None = None                      # copy: the new file's name in config/user/
+
+
 class StartReq(BaseModel):
     config: str | None = None                    # a saved system JSON listed by GET /api/driver/configs ...
     overrides: Overrides | None = None
@@ -78,8 +85,13 @@ def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
                     rel = str(p.resolve().relative_to(REPO))
                 except ValueError:
                     rel = str(p.resolve())
+                o = j.get("output") if isinstance(j.get("output"), dict) else {}
                 out.append({"name": p.stem, "group": group, "path": rel, "board": j.get("board"),
-                            "once_per_boot": once_per_boot(j.get("board"))})
+                            "once_per_boot": once_per_boot(j.get("board")),
+                            # what the file records on its own (gui-37: the Radar tab's recording boxes start from these)
+                            "saves": {k: bool(o.get(k)) for k in session_cfg.SAVE_KEYS},
+                            "dca": bool((j.get("dca1000") or {}).get("enabled")),
+                            "serial": bool((j.get("serial_stream") or {}).get("enabled"))})
     return out
 
 
@@ -139,6 +151,32 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
             return call(mgr.start, None, req.frames, req.duration, req.skip_configure, req.adc_every, setup=setup)
         ov = req.overrides.model_dump(exclude_none=True) if req.overrides else None
         return call(mgr.start, resolve(req.config), req.frames, req.duration, req.skip_configure, req.adc_every, overrides=ov)
+
+    @r.post("/config/save")
+    def save_config(req: SaveConfigReq):
+        """Write the recording flags (and other overrides) back into a system JSON: in place for a config/user file (the old
+        bytes stay as <name>.json.bak), as a new config/user file for a shipped one or on request. Re-validates the result."""
+        src = resolve(req.config)
+        ov, kc = req.overrides.model_dump(exclude_none=True), mgr.caps()
+        ov.pop("skip_configure", None)    # a per-start choice, not a stored setting
+        try:
+            if req.mode == "inplace":
+                if user_dir.resolve() not in src.parents:
+                    raise HTTPException(422, "shipped configs are never overwritten: use mode=copy (Save as copy in config/user/)")
+                dst = sysjson.update_user_json(src, user_dir, ov, kc)
+            else:
+                dst = sysjson.copy_to_user(src, user_dir, req.name or "", ov, kc)
+        except sysjson.SysJsonError as e:
+            raise HTTPException(e.status, str(e))
+        try:
+            rel = str(dst.relative_to(REPO))
+        except ValueError:
+            rel = str(dst)
+        try:
+            val = mgr.validate(dst)
+        except DriverError as e:
+            val = {"ok": False, "text": str(e)}
+        return {"path": rel, "mode": req.mode, "backup": rel + ".bak" if req.mode == "inplace" else None, "validate": val}
 
     @r.post("/stop")
     def stop():

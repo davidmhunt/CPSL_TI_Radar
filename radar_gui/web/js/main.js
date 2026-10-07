@@ -4,17 +4,15 @@ import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
 import { showConfigure } from './cfg.js';
 import { initSource, srcStatus, resetStats } from './source.js';
+import { initSession, feedMessage, boardLive, view as sessView } from './session.js';
 import { showSettings } from './settings.js';
 import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
 import { showAdc, hideAdc, initAdc } from './adc.js';
 
 // ---------- stream ----------
-const STATE_DOT = { streaming: 'ok', starting: 'warn', configuring: 'warn', waiting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad',
-  idle: '', cfg_failed: 'bad', no_tap: 'warn', wrong_firmware: 'bad', no_board: 'bad', stalled: 'bad' };
+// The stream state (starting / streaming / ended / ...) feeds the session store, which renders the header session bar.
 function setStatus(state, msg) {
-  $('state').textContent = state.replace('_', ' ');
-  $('dot').className = 'dot ' + (STATE_DOT[state] || '');
-  $('statusMsg').textContent = msg || '';
+  feedMessage({ type: 'status', state, msg });
   srcStatus(state, msg);
 }
 // D1: during a driver run the header Frame/Points/Rate show that run (Points has no meaning there), not the Live source.
@@ -33,10 +31,9 @@ function header(m) {
 }
 function onMessage(m) {
   if (m.type === 'status') setStatus(m.state, m.msg);
-  else if (m.type && m.type.startsWith('driver_')) { onDriverMessage(m); header(); }
+  else if (m.type && m.type.startsWith('driver_')) { onDriverMessage(m); feedMessage(m); header(); }
   else if (m.type === 'cfg') {
     S.cfg = m; S.frames.length = 0; S.last = null; resetStats();
-    $('cfgName').textContent = m.name || ''; $('cfgName').style.display = m.name ? '' : 'none';
     if (m.max_range_m && !S.rangeTouched) { $('range').value = Math.round(m.max_range_m); $('range').dispatchEvent(new Event('input')); }
     redraw();
   } else if (m.type === 'frame') {
@@ -123,22 +120,53 @@ cv.addEventListener('wheel', e => {
 addEventListener('resize', redraw);
 
 // ---------- tabs ----------
-const HASH = { cfg: '#configure', run: '#run', adc: '#adc', settings: '#settings' };
-function tab(name) {
-  [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.tab === name));
-  $('liveMain').hidden = name !== 'live'; $('cfgMain').hidden = name !== 'cfg'; $('runMain').hidden = name !== 'run'; $('setMain').hidden = name !== 'settings';
-  $('adcMain').hidden = name !== 'adc'; if (name === 'adc') showAdc(); else hideAdc();
+// Internal ids (data-tab values) are unchanged by the gui-37 renames; the labels are Configure, Radar (run), Point cloud (live),
+// Raw ADC (adc), Devices (settings) and Logs. Old hashes (#run, #settings, ...) keep working next to the new names.
+const HASH = { cfg: '#configure', run: '#run', adc: '#adc', settings: '#settings', logs: '#logs' };
+const ALIAS = { '#configure': 'cfg', '#cfg': 'cfg', '#run': 'run', '#radar': 'run', '#live': 'live', '#pointcloud': 'live', '#adc': 'adc',
+  '#settings': 'settings', '#devices': 'settings', '#logs': 'logs', '#3d': 'live' };
+const PANEL = { cfg: 'cfgMain', run: 'runMain', live: 'liveMain', adc: 'adcMain', settings: 'setMain', logs: 'logsMain' };
+let navigated = false;
+const tabButtons = () => [...$('tabs').querySelectorAll('[role=tab]')];
+function tab(name, auto) {
+  if (!PANEL[name] || !$(PANEL[name])) return;
+  if (!auto) navigated = true;
+  for (const b of tabButtons()) {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+  }
+  for (const [k, id] of Object.entries(PANEL)) if ($(id)) $(id).hidden = k !== name;
+  if (name === 'adc') showAdc(); else hideAdc();
   if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else redraw();
-  history.replaceState(null, '', HASH[name] || location.pathname);
+  if (!auto) history.replaceState(null, '', HASH[name] || location.pathname);
 }
 // Configure -> Save result "Open in Run" link
 addEventListener('open-in-run', e => { tab('run'); openInRun(e.detail); });
-addEventListener('goto-tab', e => tab(e.detail));   // gui-36: Live card "Manage in Run tab" / Run "Watching in Live"
-$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
-if (location.hash === '#configure') tab('cfg'); else if (location.hash === '#run') tab('run'); else if (location.hash === '#adc') tab('adc'); else if (location.hash === '#settings') tab('settings');
+addEventListener('goto-tab', e => tab(e.detail));   // Point cloud "More options in Radar" / Radar "Watch in Point cloud" / header "Set up..."
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[role=tab]'); if (b) tab(b.dataset.tab); });
+// WAI-ARIA tabs: arrow keys move between tabs (and select them), Home/End jump to the ends; digits 1-N select a tab when
+// focus is not in a field. There is deliberately no global Start/Stop hotkey: a stray Start spends the cascade's once-per-boot cfg.
+$('tabs').addEventListener('keydown', e => {
+  const bs = tabButtons(), i = bs.indexOf(document.activeElement);
+  const to = e.key === 'ArrowRight' ? (i + 1) % bs.length : e.key === 'ArrowLeft' ? (i - 1 + bs.length) % bs.length : e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : -1;
+  if (to < 0 || i < 0) return;
+  e.preventDefault(); bs[to].focus(); tab(bs[to].dataset.tab);
+});
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !/^[1-9]$/.test(e.key)) return;
+  const t = e.target, tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  const b = tabButtons()[+e.key - 1]; if (b) { e.preventDefault(); tab(b.dataset.tab); }
+});
+const explicit = ALIAS[location.hash];
+if (explicit) tab(explicit);
+else tab('run', true);   // landing: Radar, unless a session turns out to be live (below)
 
 if (location.hash === '#3d') $('viewSeg').children[1].click();  // link straight to the 3D view
 initSource();
 initAdc();
+initSession().then(() => {   // landing rule: Point cloud when a session is live, else Radar (never overrides a tab the user chose)
+  if (!explicit && !navigated) { const k = sessView().kind; if (k === 'board' && boardLive() || k === 'replay') tab('live', true); }
+});
 connect();
 redraw();

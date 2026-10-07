@@ -9,11 +9,17 @@
 <body>
 <header>
   <h1>CPSL Radar</h1>
-  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button><button data-tab="run">Run</button><button data-tab="adc">ADC</button><button data-tab="settings">Settings</button></span>
-  <span class="pill"><span class="dot" id="dot"></span><span id="state">connecting</span></span>
-  <span class="pill" id="drvPill" style="display:none"><span class="dot" id="drvDot"></span><span id="drvText"></span></span>
-  <span class="pill" id="cfgName" style="display:none" title="live source"></span>
-  <span id="statusMsg"></span>
+  <span class="seg" id="tabs" role="tablist" aria-label="Pages">
+    <button role="tab" id="tab-cfg" data-tab="cfg" aria-controls="cfgMain" aria-selected="false" tabindex="-1">Configure</button><button role="tab" id="tab-run" data-tab="run" aria-controls="runMain" aria-selected="false" tabindex="-1">Radar</button><button role="tab" id="tab-live" data-tab="live" class="on" aria-controls="liveMain" aria-selected="true">Point cloud</button><button role="tab" id="tab-adc" data-tab="adc" aria-controls="adcMain" aria-selected="false" tabindex="-1">Raw ADC</button><button role="tab" id="tab-settings" data-tab="settings" aria-controls="setMain" aria-selected="false" tabindex="-1">Devices</button>
+  </span>
+  <span class="sessbar" id="sessBar">
+    <span class="pill" id="sessPill" role="status" aria-live="polite"><span class="dot" id="sessDot"></span><span id="sessText">No session</span></span>
+    <span class="badge" id="sessSave" hidden></span>
+    <button class="btn primary" id="sessBtn" data-act="setup">Set up&hellip;</button>
+    <button class="btn" id="sessAlt" hidden>Send cfg (after a power-cycle)</button>
+  </span>
+  <span id="sessDesc" class="muted" aria-live="polite"></span>
+  <span id="statusMsg" hidden></span>
   <div class="stats">
     <div class="stat"><span>Frame</span><b id="sFrame">–</b></div>
     <div class="stat"><span>Points</span><b id="sPts">–</b></div>
@@ -23,7 +29,7 @@
   </div>
 </header>
 
-<main id="liveMain">
+<main id="liveMain" role="tabpanel" aria-labelledby="tab-live">
   <section class="card" id="mainCard">
     <h2>
       <span class="seg" id="viewSeg"><button data-v="top" class="on">Top view</button><button data-v="3d">3D</button></span>
@@ -35,31 +41,29 @@
 
   <aside class="side">
     <section class="card" id="srcCard">
-      <h2>Source <span class="seg" id="srcKind"><button data-k="replay">Replay</button><button data-k="serial" class="on">Serial</button></span></h2>
+      <h2>Now showing <span class="seg" id="srcKind"><button data-k="board" class="on">Board</button><button data-k="replay">Replay</button></span></h2>
       <div class="controls">
         <div class="muted" id="srcNow"></div>
+        <div id="srcBoardBox" class="stack">
+          <span class="seg" id="srcMode"><button data-m="saved" class="on">Saved config</button><button data-m="quick">Quick setup</button></span>
+          <label id="srcSavedRow">System config <select id="srcCfgSel"></select></label>
+          <div id="srcQuickRow" class="stack" hidden>
+            <label>Board <select id="srcBoard"></select></label>
+            <label>Radar cfg <select id="srcCfg"></select></label>
+            <div class="muted" id="srcBoardNote"></div>
+          </div>
+          <label class="chk" id="srcSkipRow" hidden><input type="checkbox" id="srcSkip"> <span>Already configured this power-up (skip cfg)</span></label>
+          <div class="muted" id="srcRec"></div>
+        </div>
         <div id="srcFileRow" class="stack" hidden>
           <label>Replay file <select id="srcFile"></select></label>
           <label>TLV dialect <select id="srcDialect"><option value="sdk3">sdk3 (IWR1843/6843)</option><option value="sdk2">sdk2 (IWR1443)</option><option value="mcuplus_cascade">mcuplus_cascade (AWR2243 cascade)</option></select></label>
-        </div>
-        <div id="srcSerial" class="stack" hidden>
-          <label>Board <select id="srcBoard"></select></label>
-          <label>Radar cfg <select id="srcCfg"></select></label>
-          <label>CLI port <input type="text" id="srcCli" spellcheck="false"></label>
-          <label>Data port <input type="text" id="srcData" spellcheck="false"></label>
-          <label class="chk" id="srcSkipRow" hidden><input type="checkbox" id="srcSkip"> Already configured this power-up (skip cfg)</label>
-          <label class="chk"><input type="checkbox" id="srcSkipFw"> Skip firmware check (send the cfg without asking the board what it runs)</label>
-          <label class="chk"><input type="checkbox" id="srcDump"> Also capture raw bytes (runs/gui/dumps)</label>
-          <div class="muted" id="srcBoardNote"></div>
-        </div>
-        <div id="srcDrv" class="stack" hidden>
-          <div class="runmsg ok" id="srcDrvInfo"></div>
-          <div class="btnrow"><button class="btn" id="srcManage">Manage in Run tab</button></div>
         </div>
         <div class="btnrow" id="srcBtns">
           <button class="btn primary" id="srcStart">Start</button>
           <button class="btn" id="srcStop">Stop</button>
         </div>
+        <button class="btn linkbtn" id="srcMore">More options in Radar &rarr;</button>
         <div id="srcMsg" class="runmsg" hidden></div>
         <div id="srcStat" class="runmsg" hidden></div>
         <div id="srcFw" class="runmsg" hidden></div>
@@ -102,7 +106,7 @@
   </aside>
 </main>
 
-<main id="cfgMain" hidden>
+<main id="cfgMain" role="tabpanel" aria-labelledby="tab-cfg" hidden>
   <div class="cfgcol">
     <section class="card">
       <h2>Radar <span class="seg" id="cInMode"><button data-m="targets" class="on">Targets</button><button data-m="direct">Chirp parameters</button></span></h2>
@@ -232,20 +236,44 @@
     </section>
   </div>
 </main>
-<main id="runMain" hidden>
+<main id="runMain" role="tabpanel" aria-labelledby="tab-run" hidden>
   <div class="runcol">
-    <section class="card">
-      <h2>Driver run <span class="pill" id="rPill"><span class="dot" id="rDot"></span><span id="rState">idle</span></span></h2>
+    <section class="card" id="rSetup">
+      <h2>Radar session <span class="pill" id="rPill"><span class="dot" id="rDot"></span><span id="rState">idle</span></span></h2>
       <div class="controls">
-        <label>System config
-          <select id="rCfg"></select></label>
-        <div class="muted" id="rCfgInfo"></div>
+        <span class="seg" id="rMode"><button data-m="saved" class="on">Saved config</button><button data-m="quick">Quick setup</button></span>
+        <div id="rSavedBox" class="stack">
+          <label>System config
+            <select id="rCfg"></select></label>
+          <div class="muted" id="rCfgInfo"></div>
+        </div>
+        <div id="rQuickBox" class="stack" hidden>
+          <label>Board <select id="rBoard"></select></label>
+          <label>Firmware <select id="rFw"></select></label>
+          <div class="muted" id="rFwInfo"></div>
+          <label>Radar cfg <select id="rQCfg"></select></label>
+          <div class="grid2">
+            <label>CLI port <input type="text" id="rQCli" spellcheck="false"></label>
+            <label>Data port <input type="text" id="rQData" spellcheck="false"></label>
+          </div>
+          <label class="chk" id="rQDcaRow"><input type="checkbox" id="rQDca"> <span>DCA1000 raw ADC stream</span></label>
+        </div>
+        <div id="rRecBox" class="stack">
+          <div class="pgroup">Recording</div>
+          <label class="chk"><input type="checkbox" id="rSaveAdc"> <span>Save ADC frames</span></label>
+          <label class="chk"><input type="checkbox" id="rSaveLvds"> <span>Save raw LVDS</span></label>
+          <label class="chk"><input type="checkbox" id="rSaveSer"> <span>Save serial bytes</span></label>
+          <div class="muted" id="rRecNote"></div>
+          <div class="btnrow"><button class="btn" id="rSaveCfg" title="Write these settings back into the selected system JSON">Save to config</button></div>
+          <div id="rSaveMsg" class="runmsg" hidden></div>
+        </div>
         <label class="chk" id="rSkipRow" hidden><input type="checkbox" id="rSkip"> <span>Already configured this power-up (skip cfg)</span></label>
+        <label id="rFwChkRow" hidden>Firmware check <select id="rFwChk"><option value="auto">auto (ask the board, stop on a mismatch)</option><option value="warn">warn only</option><option value="off">off</option></select></label>
         <div class="grid2" id="rAdcRow">
           <label>ADC views <select id="rAdc"><option value="1">every frame</option><option value="k">every K frames</option><option value="0">off</option></select></label>
           <label id="rAdcKRow" hidden>K <input type="number" id="rAdcK" min="2" step="1" value="2"></label>
         </div>
-        <div class="muted" id="rAdcNote">ADC tab: live views of the DCA1000 data (needs a DCA1000 config and a driver with the ADC tap).</div>
+        <div class="muted" id="rAdcNote">Raw ADC tab: live views of the DCA1000 data (needs a DCA1000 config and a driver with the ADC tap).</div>
         <div class="grid2">
           <label>Frames (optional) <input type="number" id="rFrames" min="1" step="1" placeholder="until stopped"></label>
           <label>Duration s (optional) <input type="number" id="rDur" min="0.1" step="any" placeholder="until stopped"></label>
@@ -256,7 +284,8 @@
           <button class="btn" id="rStop" disabled>Stop</button>
         </div>
         <div id="rMsg" class="runmsg" hidden></div>
-        <div class="runmsg ok" id="rWatchRow" hidden>Live is showing this run. <button class="btn" id="rWatch">Watching in Live &rarr;</button></div>
+        <div class="runmsg ok" id="rWatchRow" hidden>The Point cloud tab is showing this run. <button class="btn" id="rWatch">Watch in Point cloud &rarr;</button></div>
+        <div class="muted" id="rFwLine"></div>
       </div>
     </section>
     <section class="card" id="rValCard" hidden>
@@ -288,7 +317,7 @@
     </section>
   </div>
 </main>
-<main id="adcMain" hidden>
+<main id="adcMain" role="tabpanel" aria-labelledby="tab-adc" hidden>
   <div class="adctop">
     <span class="badge" id="adcState">connecting</span>
     <span class="muted" id="adcStatMsg"></span>
@@ -300,6 +329,7 @@
     </span>
   </div>
   <div class="muted" id="adcErr" hidden></div>
+  <div class="muted adcneed">Raw ADC needs a DCA1000 session: set one up in the Radar tab (Quick setup &rarr; DCA1000 raw ADC stream, or a saved config that streams it).</div>
   <div class="adcgrid">
     <section class="card"><h2>Range profile</h2><canvas id="adcProf"></canvas><div class="adcmsg" id="adcMsgProf" hidden></div></section>
     <section class="card"><h2>Range-Doppler</h2><canvas id="adcRd"></canvas><div class="adcmsg" id="adcMsgRd" hidden></div></section>
@@ -312,7 +342,7 @@
       <div class="adcmsg" id="adcMsgDiag" hidden></div></section>
   </div>
 </main>
-<main id="setMain" hidden>
+<main id="setMain" role="tabpanel" aria-labelledby="tab-settings" hidden>
   <div class="setcol">
     <section class="card">
       <h2>Serial ports <button class="btn" id="setRefresh">Refresh</button></h2>

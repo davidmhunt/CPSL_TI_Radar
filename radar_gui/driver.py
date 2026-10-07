@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -118,6 +119,7 @@ class DriverManager:
         self._reset()
         self.state = "idle"
         self.run_id = 0     # counts runs; the page clears its transcript when it changes (gui-34)
+        self.boot = uuid.uuid4().hex[:12]   # this GUI process: the page keys "this GUI configured the board" evidence on it (gui-37)
 
     def _reset(self):
         self.proc = None
@@ -543,4 +545,4 @@ class DriverManager:
                     "radar_owner": self.lock.owner, "tap": self.tap,
                     "adc_every": self.adc_every, "adc_reason": self.adc_reason,
                     "label": self.label, "session_json": self.session_json, "saving": dict(self.saving),
-                    "firmware": self.fw_id, "notes": list(self.notes)}
+                    "firmware": self.fw_id, "notes": list(self.notes), "boot": self.boot}

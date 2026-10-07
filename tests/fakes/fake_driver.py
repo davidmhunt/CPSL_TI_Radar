@@ -8,7 +8,7 @@ FAKE_DRIVER_PERIOD_MS (default 100). FAKE_DRIVER_CLI=debug|info|ok (or by-config
 tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using config", ending in a rejected sensorStart.
 Mode "tap" writes the gui-36 live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
 inherited `--tap-fd N`, and its usage text lists --tap-fd; every other mode's usage text does not (an old binary). A config whose
-name contains "_die" SIGKILLs itself after FAKE_DRIVER_DIE_S (default 4) seconds (a crashed driver for the page).
+name (or run folder name) contains "_die" SIGKILLs itself after FAKE_DRIVER_DIE_S (default 4) seconds (a crashed driver for the page).
 Tap ADC messages (--tap-adc-every K): FAKE_DRIVER_ADC=tiny (default, a 2x4x2 ramp) or bench (a synthetic 4x128x256 cube
 matching tests/fixtures/adc/bench_1843_dca.*: a mover at range bin 34, Doppler +10, ~20 deg, and a static reflector at bin 60,
 0 deg; FAKE_DRIVER_ADC_AMP scales both, e.g. 30000 for clipping). FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
@@ -152,7 +152,7 @@ while not stop["flag"]:
                 tap_send(3, json.dumps(head).encode() + b"\n" + body)
         if binf:
             binf.write(b"\0" * bpf)
-    if mode == "tap" and "_die" in os.path.basename(cfg) and t > float(os.environ.get("FAKE_DRIVER_DIE_S", "4")):
+    if mode == "tap" and ("_die" in os.path.basename(cfg) or "_die" in os.path.basename(os.getcwd())) and t > float(os.environ.get("FAKE_DRIVER_DIE_S", "4")):
         os.kill(os.getpid(), signal.SIGKILL)
     if mode == "crash" and t > 0.3:
         print("error: lost the DCA1000 stream", file=sys.stderr, flush=True)
