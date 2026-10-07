@@ -9,7 +9,7 @@ Short, copy-pasteable lessons for a new lab member. Do the first four in order t
 3. [Read `adc_data.bin`, run several radars](03_adc_data_and_multiple_radars.md)
 4. [Troubleshooting: messages, `stats v1`, drops](04_troubleshooting.md)
 
-Also: [`rebuild_driver.md`](rebuild_driver.md) (repeatable rebuild runbook) and [`bench_validation.md`](bench_validation.md) (check a board against the reference numbers).
+Also: [`gui.md`](gui.md) (the web GUI: configure, run, watch live), [`rebuild_driver.md`](rebuild_driver.md) (repeatable rebuild runbook) and [`bench_validation.md`](bench_validation.md) (check a board against the reference numbers).
 
 ## Extending the driver
 
