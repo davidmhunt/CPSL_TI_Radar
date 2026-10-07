@@ -236,3 +236,21 @@ def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
         seen |= {(i.level, i.code) for i in r.issues} & {(l, c) for l in ("warning", "info", "error") for c in MIX}
     # raw-ADC cfgs enable TX channels no chirp uses; 6843 ODS cfgs use the 1,2,4 order: both reported, neither an error
     assert seen == {("info", "tx_missing_from_loop"), ("warning", "tx_order_convention")}, seen
+
+
+def test_tx_order_convention_is_per_board_ods_elevation_is_tx3():
+    # gui-25: ODS azimuth = TX1+TX2, elevation = TX3 (bit 4): 1,2,4 is clean, 1,4,2 warns; the ISK is the reverse
+    for fw in ("demo", "dca1000_raw"):
+        assert not lv(rep(tdm([1, 2, 4], tx=7), "IWR6843ODS", fw), "tx_order_convention")
+        assert lv(rep(tdm([1, 4, 2], tx=7), "IWR6843ODS", fw), "tx_order_convention") == ["warning"]
+        assert lv(rep(tdm([1, 2, 4], tx=7), "IWR6843", fw), "tx_order_convention") == ["warning"]
+        assert not lv(rep(tdm([1, 4, 2], tx=7), "IWR6843", fw), "tx_order_convention")
+
+
+def test_ods_board_helpers():
+    from radar_gui.cfgapi import guess_board
+    assert guess_board("nav_configs/6843_IcaRAus_ods_10Hz.cfg") == "IWR6843ODS"
+    assert guess_board("IWR_Demos/6843.cfg") == "IWR6843"
+    assert fwmod.elevation_tx_bit("IWR6843ODS") == 4 and fwmod.elevation_tx_bit("IWR6843") == 2
+    assert fwmod.elevation_tx_bit("IWR1843") == 2
+    assert fwmod.check_boards() == []

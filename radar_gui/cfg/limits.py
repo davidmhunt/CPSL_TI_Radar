@@ -51,7 +51,7 @@ def firmware_limits(board: str, firmware: str | None = None) -> dict | None:
 
 
 # Default per-board limits (the board's default firmware); validate() takes a firmware to override.
-BOARD_LIMITS = {b: firmware_limits(b) for b in ("IWR1443", "IWR1843", "IWR6843", CAS)}
+BOARD_LIMITS = {b: firmware_limits(b) for b in ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", CAS)}
 
 
 @lru_cache(maxsize=None)

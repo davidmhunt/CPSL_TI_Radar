@@ -208,11 +208,14 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
                 f"{label}: 3-TX pattern with odd numLoops {loops}; the range DPU de-interleaves with a stride of 6 chirps "
                 f"(two loops), so an odd count leaves a partial stride (inferred)", f"{_M1} s1 (rangeprochwa.c:1027)", "medium")
         first = masks[:n_tx]
-        if 0b010 in first and first[-1] != 0b010:
+        ebit = fwmod.elevation_tx_bit(board)
+        if ebit in first and first[-1] != ebit:
+            tx = ebit.bit_length()
+            order = sorted(first, key=lambda x: x == ebit)   # elevation last, azimuth in loop order
             add("warning", "tx_order_convention",
-                f"{label}: TX2 (elevation) chirp is not last in the loop {first}; TI's order is azimuth first, elevation "
-                f"last (1,4,2); whether another order mislabels virtual antennas is unverified",
-                f"{_M1} s4 (experiment 2)", "low")
+                f"{label}: TX{tx} (elevation on {board}) chirp is not last in the loop {first}; the convention is azimuth "
+                f"first, elevation last ({','.join(map(str, order))}); whether another order mislabels virtual antennas "
+                f"is unverified", f"{_M1} s4 (experiment 2)", "low")
     return out
 
 

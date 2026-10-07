@@ -14,6 +14,10 @@
     "IWR6843": {
       "tlv": true,
       "lvds": true
+    },
+    "IWR6843ODS": {
+      "tlv": true,
+      "lvds": true
     }
   },
   "lvds_data_fmts": {
@@ -28,7 +32,8 @@
   "templates": {
     "IWR1443": "radar/IWR_Demos/1443config.cfg",
     "IWR1843": "radar/nav_configs/1843_RadVel_10Hz.cfg",
-    "IWR6843": "radar/IWR_Demos/6843.cfg"
+    "IWR6843": "radar/IWR_Demos/6843.cfg",
+    "IWR6843ODS": "radar/IWR_Demos/6843.cfg"
   },
   "system_enables": {
     "serial": true,
@@ -370,6 +375,182 @@
       }
     },
     "IWR6843": {
+      "n_tx": {
+        "value": 3,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 1: DS Table; max 2 simultaneous per chirp (SYS_68xx, RL:925)",
+        "confidence": "high"
+      },
+      "n_rx": {
+        "value": 4,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 2: SYS_COMMON_NUM_RX_CHANNEL=4 (sys_common.h:70)",
+        "confidence": "high"
+      },
+      "band_ghz": {
+        "value": [
+          60.0,
+          64.0
+        ],
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 3: datasheet RF band; RL:667-668",
+        "confidence": "high"
+      },
+      "band_subranges_ghz": {
+        "value": [
+          [
+            57.0,
+            60.75
+          ],
+          [
+            60.0,
+            64.0
+          ]
+        ],
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 3: a sweep must lie wholly inside one sub-band (RL:667-668)",
+        "confidence": "high"
+      },
+      "max_slope_mhz_us": {
+        "value": 250.0,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 4: datasheet ramp rate (DS14 5.7 / DS18 7.7 / DS68 7.9); RL:710,713",
+        "confidence": "high"
+      },
+      "max_sample_rate_ksps": {
+        "value": 12500,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 5: complex-1x, regular ADC mode (RL:742-757; IWR1843 12500 per datasheet IF 10 MHz, user ruling 2026-10-06)",
+        "confidence": "high"
+      },
+      "lowpower_max_ksps": {
+        "value": 12500,
+        "level": "warning",
+        "source": "docs/research/gui_board_limits_single_chip.md (correction section; rl_sensor.h L742-767): applies only when the cfg selects low-power ADC mode (lowPower <x> 1); API doc, not datasheet",
+        "confidence": "medium"
+      },
+      "min_sample_rate_ksps": {
+        "value": 2000,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 6: RL:742-743",
+        "confidence": "high"
+      },
+      "min_chirp_cycle_us": {
+        "value": 13.0,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 7: chirp cycle (idle + rampEnd) minimum, RL:651-654, RL:4570-4573; +10 us if the watchdog is on (xWR1xxx), not modelled",
+        "confidence": "high"
+      },
+      "max_loops": {
+        "value": 255,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 8: frameCfg numLoops 1..255 (RL:958, RL:1066)",
+        "confidence": "high"
+      },
+      "min_frame_period_us": {
+        "value": 300.0,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 16: frame period 300 us..1.342 s (RL:978-987)",
+        "confidence": "medium"
+      },
+      "max_frame_period_ms": {
+        "value": 1342.0,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 16: frame period 300 us..1.342 s (RL:978-987)",
+        "confidence": "medium"
+      },
+      "min_frame_blank_us": {
+        "value": 300.0,
+        "level": "warning",
+        "source": "docs/research/gui_board_limits_single_chip.md row 16: inter-frame blank typically >= 300 us (+150 us if the profile changes); RL:978-987",
+        "confidence": "medium"
+      },
+      "adc_buffer_bytes": {
+        "value": 32768,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 9: ADC buffer 32 KB, profile max (SYS68:306, RL:728)",
+        "confidence": "high"
+      },
+      "adc_buffer_streaming_bytes": {
+        "value": 16384,
+        "level": "warning",
+        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR sar_feasibility.md)",
+        "confidence": "medium"
+      },
+      "l3_radar_cube_bytes": {
+        "value": 786432,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 10: 768 KB (6 x 128 KB, DS68 7.10, MAK68:15,19); demo only (DPC:1817 ENOMEM)",
+        "confidence": "high"
+      },
+      "lvds_supported": {
+        "value": true,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR6843.json lvds.supported",
+        "confidence": "repo"
+      },
+      "lvds_lanes": {
+        "value": 2,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 11: DS14 5.9.5 / DS18, DS68 7.10.4",
+        "confidence": "high"
+      },
+      "lvds_lane_mbps": {
+        "value": 600,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 12: DCA1000 max and demo/SAR program 0x9 = 600 (silicon allows 900)",
+        "confidence": "high"
+      },
+      "lvds_chirp_overhead_bytes": {
+        "value": 52,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 13: bytes/chirp = roundup256(Ns*Nrx*4+52) (MSS18:372-381)",
+        "confidence": "high"
+      },
+      "lvds_chirp_align_bytes": {
+        "value": 256,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md row 13: MSS18:372-381",
+        "confidence": "high"
+      },
+      "lvds_min_samples": {
+        "value": 64,
+        "level": "warning",
+        "source": "docs/research/gui_board_limits_single_chip.md firmware table: TI mss_main.c:401-403 says the demo is 'supported for numAdcSamples >= 64' (MSS18:360-410); not enforced, and shipped 63-sample cfgs (nav_configs/*1843*, *6843*) run on hardware",
+        "confidence": "medium"
+      },
+      "lvds_min_transfer_bytes": {
+        "value": 64,
+        "level": "error",
+        "source": "docs/research/gui_board_limits_single_chip.md firmware table: CBUFF minimum transfer 64 B (CBUFF_MIN_TRANSFER_SIZE_CBUFF_UNITS); the HSI header (lvdsStreamCfg field 2 = 1) raises every transfer to >= 256 B; mss_main.c:395-403",
+        "confidence": "high"
+      },
+      "sdk": {
+        "value": "mmwave_sdk_3",
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR6843.json sdk",
+        "confidence": "repo"
+      },
+      "frame_cfg_args": {
+        "value": 7,
+        "level": "error",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR6843.json cfg_dialect.frame_period_field = 5",
+        "confidence": "repo"
+      },
+      "channel_cfg_args": {
+        "value": 3,
+        "level": "error",
+        "source": "shipped single-chip cfgs: channelCfg rx tx cascading",
+        "confidence": "repo"
+      },
+      "config_once_per_boot": {
+        "value": false,
+        "level": "warning",
+        "source": "CPSL_TI_Radar_cpp/config/boards/IWR6843.json lifecycle",
+        "confidence": "repo"
+      }
+    },
+    "IWR6843ODS": {
       "n_tx": {
         "value": 3,
         "level": "error",

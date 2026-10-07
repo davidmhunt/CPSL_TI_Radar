@@ -142,6 +142,14 @@ def board_firmwares(board: str) -> list[str] | None:
     return list(v) if isinstance(v, list) else None
 
 
+def elevation_tx_bit(board: str) -> int:
+    """Chirp-mask bit of the board's elevation TX (`elevation_tx_bit` in config/boards/<board>.json; default 2 = TX2,
+    the single-chip EVM layout)."""
+    p = BOARDS_DIR / f"{board}.json"
+    v = json.loads(p.read_text()).get("elevation_tx_bit") if p.is_file() else None
+    return v if isinstance(v, int) and not isinstance(v, bool) and v > 0 else 0b010
+
+
 def check_boards(descs: dict[str, dict] | None = None) -> list[str]:
     """Consistency of the board lists with the descriptors ([] = consistent): every board lists >= 1 firmware,
     every listed id has a descriptor with a template (+ limits unless pending) for that board, and every

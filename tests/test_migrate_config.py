@@ -32,6 +32,11 @@ V1_FILES = sorted(FIXTURES.glob("*.json"))
 #   baseline runs did, so later runs do the same disk I/O (core-10 step 7)
 HAND_EDITS = {
     "front_radar_IWR1843_stress_test_baseline.json": {"output": {"save_raw_lvds": True}},
+    # gui-25: the ODS configs were re-pointed from IWR6843 to IWR6843ODS after migration
+    **{n: {"board": "IWR6843ODS"} for n in (
+        "down_radar_6843_IcaRAus_ods_10Hz.json", "down_radar_6843_RadVel_ods_10Hz.json",
+        "down_radar_IWR6843_ods_dca_RadVel.json", "radar_0_IWR6843_ods_dca_RadVel.json",
+        "radar_0_IWR6843_ods_human_movement.json")},
 }
 
 

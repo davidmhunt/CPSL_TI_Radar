@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "name": "IWR6843",
+  "name": "IWR6843ODS",
   "firmwares": ["demo", "dca1000_raw"],
-  "elevation_tx_bit": 2,
+  "elevation_tx_bit": 4,
   "sdk": "mmwave_sdk_3",
   "cli": {
     "baud": 115200,

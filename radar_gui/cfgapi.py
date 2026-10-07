@@ -34,7 +34,9 @@ def guess_board(rel: str) -> str:
         return "AWR2243_CASCADE"
     if "1443" in p or "14xx" in p:
         return "IWR1443"
-    if "6843" in p or "_ods" in p:
+    if "_ods" in p:
+        return "IWR6843ODS"
+    if "6843" in p:
         return "IWR6843"
     return "IWR1843"
 

@@ -26,7 +26,7 @@ def client(tmp_path):
 
 def test_boards_and_page(client):
     j = client.get("/api/cfg/boards").json()
-    assert set(j["boards"]) == {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}
+    assert set(j["boards"]) == {"IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", "AWR2243_CASCADE"}
     assert j["limits"]["IWR1843"]["max_slope_mhz_us"]["confidence"] in ("repo", "high", "medium", "low", "unverified")
     html = client.get("/").text
     assert 'id="cfgMain"' in html and client.get("/js/cfg.js").status_code == 200

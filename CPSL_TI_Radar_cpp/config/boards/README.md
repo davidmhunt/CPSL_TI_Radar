@@ -16,6 +16,7 @@ layout and I/Q order, and the once-per-boot rule.
 | `IWR1443.json` | `mmwave_sdk_2` | 4 lanes, `lane_per_rx`, `i_first` | `sdk2`: format confirmed from TI source (D7, [memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); not yet run on the bench |
 | `IWR1843.json` | `mmwave_sdk_3` | 2 lanes, `two_lane_iq_pairs`, `q_first` | `sdk3` |
 | `IWR6843.json` | `mmwave_sdk_3` | same as IWR1843 | `sdk3` |
+| `IWR6843ODS.json` | `mmwave_sdk_3` | same as IWR1843 (copy of `IWR6843.json`; differs only in `elevation_tx_bit`) | `sdk3` |
 | `AWR2243_CASCADE.json` | `mmwave_mcuplus` | `supported: false` (D4) | `mcuplus_cascade`, 3,125,000 baud |
 
 ## Where each value comes from
@@ -26,6 +27,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | Field | Value(s) | Evidence |
 |-------|----------|----------|
 | `firmwares` | per board, default first: `demo`, `dca1000_raw` (1443/1843/6843); `cascade_ddm`; `iwr1843_sar_lvds` | Optional key (gui-10). Ids of the firmware descriptors (`config/firmware/<id>.json`) this board supports, default first. Host-GUI metadata read by `radar_gui/cfg/firmware.py`; the C++ driver accepts and ignores it. |
+| `elevation_tx_bit` | IWR6843: 2 (TX2); IWR6843ODS: 4 (TX3); others omit it (GUI default 2) | Optional key (gui-25). The chirp-mask bit of the elevation TX. Host-GUI metadata read by `radar_gui/cfg/validate.py` (`tx_order_convention`: warn when this TX is in the loop and not last). The C++ driver accepts and ignores it. ISK: azimuth TX1+TX3, elevation TX2; ODS: azimuth TX1+TX2, elevation TX3 (SWRU546E sec 3.7 Fig 3-17; `docs/research/iwr6843_ods_antenna_2026-10-07.md`). Antenna positions in lambda/2 units are not recorded here. |
 | `cli.baud` | 115200 | `SystemConfigReader.cpp:15` default |
 | `cli.ack` | `Done` | `CLIController.cpp:223,246` |
 | `cli.prompt`, `prompt_wait_ms` | `mmwDemo:/>`, 500 (IWR1843: `:/>`, a substring match so the SAR image's `mm_sar_lvds:/>` also ends the wait) | `CLIController.cpp:225-230`. The same prompt string is set in the SDK 3.6 demo (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:1325`) and in the cascade demo (`firmware_dev/projects/awr2243_cascade_ddm/.../mss/mmw_cli.c:2220`). **IWR1443 (SDK 2): not checked against source.** |

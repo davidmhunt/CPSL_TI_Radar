@@ -25,7 +25,7 @@ from .parse import Cfg, CfgError
 C = 299_792_458.0
 USABLE_IF = 0.9           # cfggen.py USABLE_IF: ~90 % of the IF band is usable
 CASCADE = "AWR2243_CASCADE"
-BOARDS = ("IWR1443", "IWR1843", "IWR6843", CASCADE)
+BOARDS = ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", CASCADE)
 # TX1 and TX3 are the azimuth pair on the single-chip EVMs (TX2 is the elevation-offset one).
 # Assumption from the EVM antenna layout; ODS/AOP 6843 modules differ (see Metrics.notes).
 SINGLE_CHIP_AZ_TX_MASK = 0b101
