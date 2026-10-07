@@ -21,6 +21,10 @@ files via include/json; gui-04) holds, schema 2:
                    the MIMO scheme is a property of the firmware, not inferred from the board (gui-10 ruling);
                    confidence: "high" | "medium" | "low" | "unverified"
   pending          optional string; present = stub (no cfg generation/validation yet)
+  driver_board     optional {gui board: driver board}  (gui-30) the C++ driver board (config/boards/<name>.json) a system JSON
+                   writes for this firmware on that GUI board, and whose cfg_dialect (required/forbidden commands) the cfg is
+                   validated against. Host-GUI metadata; absent = the GUI board is the driver board. E.g. iwr1843_sar_lvds
+                   {"IWR1843": "IWR1843_SAR"}: the SAR image is a separate driver board with its own dialect.
 
 The boards a firmware supports are the keys of `templates` (= `outputs`); `check_boards()` verifies the board
 lists and the descriptors agree.
@@ -97,6 +101,14 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
                 bad.append(f'outputs[{b}] must be {{"tlv": bool, "lvds": bool}}')
             elif not (o["tlv"] or o["lvds"]):
                 bad.append(f"outputs[{b}]: firmware provides no output")
+    db = d.get("driver_board")
+    if db is not None:
+        if not (isinstance(db, dict) and db and set(db) <= set(boards) and all(isinstance(v, str) for v in db.values())):
+            bad.append("driver_board must be {gui board (a key of templates): driver board name}")
+        else:
+            for b, v in db.items():
+                if not (BOARDS_DIR / f"{v}.json").is_file():
+                    bad.append(f"driver_board[{b}]: {v!r} has no config/boards/{v}.json")
     fm = d.get("lvds_data_fmts")
     if fm is None:
         if isinstance(out, dict) and any(isinstance(o, dict) and o.get("lvds") for o in out.values()):
@@ -142,6 +154,13 @@ def board_firmwares(board: str) -> list[str] | None:
     return list(v) if isinstance(v, list) else None
 
 
+def cfg_dialect(board: str) -> dict:
+    """The `cfg_dialect` block of config/boards/<board>.json ({} if the board has no file/key)."""
+    p = BOARDS_DIR / f"{board}.json"
+    v = json.loads(p.read_text()).get("cfg_dialect") if p.is_file() else None
+    return v if isinstance(v, dict) else {}
+
+
 def elevation_tx_bit(board: str) -> int:
     """Chirp-mask bit of the board's elevation TX (`elevation_tx_bit` in config/boards/<board>.json; default 2 = TX2,
     the single-chip EVM layout)."""
@@ -153,11 +172,17 @@ def elevation_tx_bit(board: str) -> int:
 def check_boards(descs: dict[str, dict] | None = None) -> list[str]:
     """Consistency of the board lists with the descriptors ([] = consistent): every board lists >= 1 firmware,
     every listed id has a descriptor with a template (+ limits unless pending) for that board, and every
-    descriptor board lists the descriptor back."""
+    descriptor board lists the descriptor back. A driver-only board (the `driver_board` target of a descriptor, e.g.
+    IWR1843_SAR) is not a GUI board: it needs no template/limits, but must list that firmware itself."""
     descs = load_all() if descs is None else descs
     bad: list[str] = []
+    driver_only = {v: f for f, d in descs.items() for v in (d.get("driver_board") or {}).values()}
     for p in sorted(BOARDS_DIR.glob("*.json")):
         b = p.stem
+        if b in driver_only and b not in {x for d in descs.values() for x in d["templates"]}:
+            if driver_only[b] not in (board_firmwares(b) or []):
+                bad.append(f"{b}: driver board of {driver_only[b]!r} but does not list it")
+            continue
         fws = board_firmwares(b)
         if not fws:
             bad.append(f"{b}: no firmwares list")
@@ -217,6 +242,12 @@ def default_for(board: str) -> dict | None:
     return fws[0] if fws else None
 
 
+def driver_board(fw: dict, board: str) -> str:
+    """The C++ driver board a system JSON writes for firmware `fw` on GUI board `board` (descriptor `driver_board`;
+    default: `board` itself)."""
+    return (fw.get("driver_board") or {}).get(board, board)
+
+
 def template_path(fw: dict, board: str) -> Path:
     return CONFIG_DIR / fw["templates"][board]
 
@@ -232,11 +263,12 @@ def lvds_data_fmts(fw: dict) -> list[int] | None:
 
 
 def flavour(fw: dict, board: str, lvds: bool = False) -> str:
-    """The generator's internal cfg flavour: 'tlv' (demo), 'lvds' (demo + lvdsStreamCfg on), 'raw' (no demo).
+    """The generator's internal cfg flavour: 'tlv' (demo), 'lvds' (demo + lvdsStreamCfg on), 'raw' (no demo), 'sar'
+    (no demo; the firmware is its own driver board with its own cfg dialect, i.e. `driver_board` maps the GUI board).
     `lvds` asks a TLV firmware to also stream ADC data; ignored where the firmware has no LVDS output."""
     o = outputs(fw, board)
     if not o["tlv"]:
-        return "raw"
+        return "sar" if driver_board(fw, board) != board else "raw"
     return "lvds" if (lvds and o["lvds"]) else "tlv"
 
 
@@ -275,5 +307,6 @@ def summary(board: str | None = None) -> list[dict]:
              "lvds_data_fmts": lvds_data_fmts(d), "lvds_data_fmts_source": (d.get("lvds_data_fmts") or {}).get("source"),
              "lvds_data_fmts_confidence": (d.get("lvds_data_fmts") or {}).get("confidence"),
              "system_enables": d["system_enables"], "pending": d.get("pending"),
+             "driver_board": driver_board(d, board) if board else d.get("driver_board"),
              "default": bool(board and fws and d is fws[0]),
              "template": d["templates"].get(board) if board else None} for d in fws]

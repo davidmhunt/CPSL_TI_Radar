@@ -268,6 +268,18 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     if issues:   # metrics would misread the fields
         return Report(board, False, issues)
 
+    # driver board cfg_dialect: commands the firmware needs / rejects (gui-30; data-driven, only the SAR board sets them)
+    _fw0 = fwmod.get(firmware) if firmware else fwmod.default_for(board)
+    drv = fwmod.driver_board(_fw0, board) if _fw0 else board
+    dia = fwmod.cfg_dialect(drv)
+    dsrc = f"config/boards/{drv}.json cfg_dialect"
+    for name in dia.get("required_commands") or []:
+        if not cfg.has(name):
+            issues.append(Issue("error", "missing_" + name, f"cfg has no {name}, which the {drv} firmware requires", dsrc, "repo"))
+    for name in dia.get("forbidden_commands") or []:
+        if cfg.has(name):
+            issues.append(Issue("error", "forbidden_" + name, f"cfg has {name}, which the {drv} firmware rejects", dsrc, "repo"))
+
     try:
         _fw = fwmod.get(firmware) if firmware else fwmod.default_for(board)
         mm = fwmod.mimo(board, _fw) if _fw else None

@@ -114,14 +114,15 @@ def _analyze_text(board: str, text: str, firmware: str | None = None) -> dict:
 
 def system_json(req: SaveReq, cfg_name: str) -> dict:
     """The driver's schema v2 (docs/ARCHITECTURE.md "Configuration"); paths resolve against the JSON's dir.
-    serial/dca1000 enables come from the firmware descriptor unless the request sets them explicitly."""
+    serial/dca1000 enables come from the firmware descriptor unless the request sets them explicitly. `board` is the
+    firmware's driver board (descriptor `driver_board`; e.g. IWR1843 + iwr1843_sar_lvds writes IWR1843_SAR)."""
     fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
     en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
     serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
     dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled   # never inferred from the cfg (gui-22)
     return {
         "schema_version": 2,
-        "board": req.board,
+        "board": fwmod.driver_board(fw, req.board) if fw else req.board,   # gui-30: IWR1843 + SAR -> IWR1843_SAR
         "radar_cfg": cfg_name,
         "cli": {"port": req.cli_port},
         "serial_stream": {"enabled": serial, "port": req.data_port},

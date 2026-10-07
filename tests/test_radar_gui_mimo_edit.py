@@ -80,7 +80,7 @@ def test_bpm_inserts_line_when_missing():
 
 
 @pytest.mark.parametrize("board,fw", [("IWR1443", "demo"), ("IWR1843", "iwr1843_sar_lvds"),
-                                      ("IWR6843", "dca1000_raw")])
+                                      ("IWR1443", "dca1000_raw")])
 def test_bpm_rejected_where_descriptor_false(board, fw):
     assert not fwmod.mimo(board, fw)["bpm"]
     with pytest.raises(ParamsError, match="BPM"):
@@ -119,7 +119,7 @@ def test_generate_bpm_on_supported_firmware():
     assert r.metrics.n_tx == 2 and r.metrics.max_velocity_ms == pytest.approx(5, rel=0.05)
 
 
-@pytest.mark.parametrize("board,fw", [("IWR1443", None), ("IWR6843", "dca1000_raw"), ("AWR2243_CASCADE", None)])
+@pytest.mark.parametrize("board,fw", [("IWR1443", None), ("IWR1443", "dca1000_raw"), ("AWR2243_CASCADE", None)])
 def test_generate_bpm_rejected_where_unsupported(board, fw):
     r = generate(board, dict(TARGETS, bpm=True), firmware=fw)
     assert not r.ok and r.report.issues[0].code == "bpm_unsupported"

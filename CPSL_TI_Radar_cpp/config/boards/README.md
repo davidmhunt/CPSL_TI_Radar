@@ -26,7 +26,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 
 | Field | Value(s) | Evidence |
 |-------|----------|----------|
-| `firmwares` | per board, default first: `demo`, `dca1000_raw` (1443/1843/6843); `cascade_ddm`; `iwr1843_sar_lvds` | Optional key (gui-10). Ids of the firmware descriptors (`config/firmware/<id>.json`) this board supports, default first. Host-GUI metadata read by `radar_gui/cfg/firmware.py`; the C++ driver accepts and ignores it. |
+| `firmwares` | per board, default first: `demo`, `dca1000_raw` (1443 only); `demo`, `iwr1843_sar_lvds` (1843); `demo` (6843, 6843ODS); `cascade_ddm`; `iwr1843_sar_lvds` (driver board IWR1843_SAR) | Optional key (gui-10). Ids of the firmware descriptors (`config/firmware/<id>.json`) this board supports, default first. Host-GUI metadata read by `radar_gui/cfg/firmware.py`; the C++ driver accepts and ignores it. |
 | `elevation_tx_bit` | IWR6843: 2 (TX2); IWR6843ODS: 4 (TX3); others omit it (GUI default 2) | Optional key (gui-25). The chirp-mask bit of the elevation TX. Host-GUI metadata read by `radar_gui/cfg/validate.py` (`tx_order_convention`: warn when this TX is in the loop and not last). The C++ driver accepts and ignores it. ISK: azimuth TX1+TX3, elevation TX2; ODS: azimuth TX1+TX2, elevation TX3 (SWRU546E sec 3.7 Fig 3-17; `docs/research/iwr6843_ods_antenna_2026-10-07.md`). Antenna positions in lambda/2 units are not recorded here. |
 | `cli.baud` | 115200 | `SystemConfigReader.cpp:15` default |
 | `cli.ack` | `Done` | `CLIController.cpp:223,246` |

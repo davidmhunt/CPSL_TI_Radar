@@ -126,7 +126,7 @@ def test_bpm_on_a_bpm_false_firmware_is_error():
 def test_bpm_on_unverified_firmware_is_only_a_warning():
     r = rep(BPM, "IWR1443", "demo")                              # 1443 demo override: bpm false, unverified
     assert lv(r, "bpm_unsupported") == ["warning"]
-    assert lv(rep(BPM, "IWR6843", "dca1000_raw"), "bpm_unsupported") == ["warning"]
+    assert lv(rep(BPM, "IWR1443", "dca1000_raw"), "bpm_unsupported") == ["warning"]
 
 
 def test_bpm_needs_mask_5_on_every_chirp():
@@ -153,7 +153,7 @@ def test_advanced_frame_cfg_rejected_where_subframes_is_zero():
 
 
 def test_advanced_frame_unknown_support_is_a_warning():
-    assert lv(rep(ADV, "IWR6843", "dca1000_raw"), "subframes_unsupported") == ["warning"]
+    assert lv(rep(ADV, "IWR1443", "dca1000_raw"), "subframes_unsupported") == ["warning"]
 
 
 def test_advanced_frame_over_max_subframes_is_error(monkeypatch):
@@ -240,7 +240,7 @@ def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
 
 def test_tx_order_convention_is_per_board_ods_elevation_is_tx3():
     # gui-25: ODS azimuth = TX1+TX2, elevation = TX3 (bit 4): 1,2,4 is clean, 1,4,2 warns; the ISK is the reverse
-    for fw in ("demo", "dca1000_raw"):
+    for fw in ("demo",):   # gui-30: dca1000_raw is IWR1443-only
         assert not lv(rep(tdm([1, 2, 4], tx=7), "IWR6843ODS", fw), "tx_order_convention")
         assert lv(rep(tdm([1, 4, 2], tx=7), "IWR6843ODS", fw), "tx_order_convention") == ["warning"]
         assert lv(rep(tdm([1, 2, 4], tx=7), "IWR6843", fw), "tx_order_convention") == ["warning"]

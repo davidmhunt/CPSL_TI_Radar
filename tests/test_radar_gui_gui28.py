@@ -8,7 +8,7 @@ WEB = Path(__file__).resolve().parents[1] / "radar_gui" / "web"
 
 
 def test_raw_template_has_no_lvds_stream_so_group_hidden_with_note():
-    for board in ("IWR1843", "IWR6843"):
+    for board in ("IWR1443",):   # gui-30: dca1000_raw is IWR1443-only
         import json; rel = json.loads((fwmod.FIRMWARE_DIR / "dca1000_raw.json").read_text())["templates"][board]
         text = (fwmod.CONFIG_DIR / rel).read_text()
         assert "lvdsStreamCfg" not in text and "testFmkCfg" in text

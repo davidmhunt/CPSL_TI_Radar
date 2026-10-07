@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "IWR1843",
-  "firmwares": ["demo", "dca1000_raw"],
+  "firmwares": ["demo", "iwr1843_sar_lvds"],
   "sdk": "mmwave_sdk_3",
   "cli": {
     "baud": 115200,

@@ -241,7 +241,7 @@ import time
 from radar_gui.cfg import generate
 
 GEN_CASES = [("IWR1443", "demo"), ("IWR1443", "dca1000_raw"), ("IWR1843", "demo"),
-             ("IWR1843", "dca1000_raw"), ("IWR6843", "demo"), ("IWR6843", "dca1000_raw"),
+             ("IWR1843", "iwr1843_sar_lvds"), ("IWR6843", "demo"), ("IWR6843ODS", "demo"),
              ("AWR2243_CASCADE", "cascade_ddm")]
 TYPICAL = [dict(max_range_m=10, max_velocity_ms=5, range_res_m=0.1, frame_rate_hz=10),
            dict(max_range_m=20, max_velocity_ms=8, range_res_m=0.15, frame_rate_hz=20),
@@ -297,7 +297,7 @@ def test_generate_firmware_selects_cfg_flavour():
     assert lv.targets["firmware"] == "demo" and lv.targets["template"].startswith("radar/")
     no = generate("IWR1443", max_range_m=10, max_velocity_ms=5, firmware="demo", lvds=True)   # 1443 demo: no LVDS
     assert not no.ok and no.report.errors[0].code == "lvds_unsupported_by_firmware"
-    raw = generate("IWR1843", max_range_m=10, max_velocity_ms=5, firmware="dca1000_raw")
+    raw = generate("IWR1443", max_range_m=10, max_velocity_ms=5, firmware="dca1000_raw")
     assert "guiMonitor" not in raw.text and "testFmkCfg" in raw.text
     assert generate("AWR2243_CASCADE", max_range_m=10, max_velocity_ms=5).targets["firmware"] == "cascade_ddm"
 
@@ -381,14 +381,21 @@ def test_boards_list_their_firmwares_and_agree_with_the_descriptors():
     assert fwmod.check_boards() == []
     for p in sorted(fwmod.BOARDS_DIR.glob("*.json")):   # every board (incl. IWR1843_SAR) lists >= 1 firmware
         assert fwmod.board_firmwares(p.stem), p.name
-    assert fwmod.board_firmwares("IWR1843") == ["demo", "dca1000_raw"]
+    assert fwmod.board_firmwares("IWR1843") == ["demo", "iwr1843_sar_lvds"]   # gui-30: dca1000_raw is IWR1443-only
+    assert fwmod.board_firmwares("IWR1443") == ["demo", "dca1000_raw"]
+    assert fwmod.board_firmwares("IWR6843") == fwmod.board_firmwares("IWR6843ODS") == ["demo"]
+    assert set(fwmod.get("dca1000_raw")["templates"]) == {"IWR1443"}
     assert fwmod.board_firmwares("AWR2243_CASCADE") == ["cascade_ddm"]
-    assert "IWR6843" in fwmod.get("dca1000_raw")["templates"]              # memo 60bb302
+    assert fwmod.driver_board(fwmod.get("iwr1843_sar_lvds"), "IWR1843") == "IWR1843_SAR"
+    assert fwmod.driver_board(fwmod.get("demo"), "IWR1843") == "IWR1843"
     # inconsistency is caught in both directions
     descs = dict(fwmod.load_all())
     assert fwmod.check_boards({k: v for k, v in descs.items() if k != "dca1000_raw"})
-    cut = {**descs, "dca1000_raw": {**descs["dca1000_raw"], "templates": {"IWR1843": descs["dca1000_raw"]["templates"]["IWR1843"]}}}
-    assert fwmod.check_boards(cut)
+    extra = {**descs["dca1000_raw"]["templates"], "IWR1843": "radar/DCA1000/custom_configs/short_range.cfg"}
+    assert fwmod.check_boards({**descs, "dca1000_raw": {**descs["dca1000_raw"], "templates": extra}})
+    # a driver board must exist and (when it is driver-only) must list the firmware
+    assert fwmod.check_descriptor({**descs["iwr1843_sar_lvds"], "driver_board": {"IWR1843": "NOPE"}})
+    assert fwmod.check_descriptor({**descs["iwr1843_sar_lvds"], "driver_board": {"IWR9999": "IWR1843_SAR"}})
 
 
 def test_demo_outputs_per_board_1443_has_no_lvds():
@@ -397,7 +404,7 @@ def test_demo_outputs_per_board_1443_has_no_lvds():
     assert d["outputs"]["IWR1443"] == {"tlv": True, "lvds": False}
     assert d["outputs"]["IWR1843"] == d["outputs"]["IWR6843"] == {"tlv": True, "lvds": True}
     assert not [f for f in fwmod.for_board("IWR1443") if f["outputs"]["IWR1443"]["tlv"] and f["outputs"]["IWR1443"]["lvds"]]
-    assert fwmod.get("dca1000_raw")["outputs"]["IWR6843"] == {"tlv": False, "lvds": True}
+    assert fwmod.get("dca1000_raw")["outputs"]["IWR1443"] == {"tlv": False, "lvds": True}
     # a 1443 cfg that turns LVDS on is rejected under the demo, accepted under the raw firmware
     cfg = parse_cfg(generate("IWR1443", max_range_m=10, max_velocity_ms=5).text + "\nlvdsStreamCfg -1 0 1 0\n")
     assert "lvds_not_in_firmware" in {i.code for i in validate(cfg, "IWR1443", "demo").errors}
@@ -416,9 +423,9 @@ def test_mimo_block_on_every_descriptor():
     assert fwmod.mimo("IWR1443", "demo")["bpm"] is False                    # memo: unestablished -> false
     d = fwmod.mimo("IWR1843", "demo")
     assert (d["max_chirps_per_loop"], d["subframes"]) == (32, 4)
-    s = fwmod.mimo("IWR1843_SAR", "iwr1843_sar_lvds")
+    s = fwmod.mimo("IWR1843", "iwr1843_sar_lvds")
     assert (s["bpm"], s["max_chirps_per_loop"], s["subframes"]) == (False, 32, 0)
-    r = fwmod.mimo("IWR1843", "dca1000_raw")
+    r = fwmod.mimo("IWR1443", "dca1000_raw")
     assert r["max_chirps_per_loop"] is None and r["subframes"] is None and r["confidence"] == "unverified"
     c = fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")
     assert c["bpm"] is False and c["subframes"] == 0 and "8" in c["note"]
@@ -554,7 +561,7 @@ def test_mimo_editable_flag():
     assert fwmod.mimo("IWR1843", "demo")["editable"] and fwmod.mimo("IWR6843", "demo")["editable"]
     assert fwmod.mimo("IWR1443", "demo")["editable"] and fwmod.mimo("IWR1443", "demo")["editable_note"]
     assert not fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")["editable"]
-    assert fwmod.mimo("IWR1843", "dca1000_raw")["editable"] and fwmod.mimo("IWR1843", "dca1000_raw")["editable_note"]
+    assert fwmod.mimo("IWR1443", "dca1000_raw")["editable"] and fwmod.mimo("IWR1443", "dca1000_raw")["editable_note"]
     ids = {f["id"]: f for f in fwmod.summary()}
     assert ids["cascade_ddm"]["mimo"]["editable"] is False and ids["demo"]["mimo"]["editable"] is True
 
@@ -585,5 +592,55 @@ def test_fmt2_on_stock_demo_is_a_warning_not_error():
 
 
 def test_fmt4_on_dca1000_raw_warns_unverified():
-    hit = [i for i in validate(_fmt_cfg(4), "IWR1843", "dca1000_raw").issues if i.code == "lvds_fmt_unsupported"]
+    hit = [i for i in validate(_fmt_cfg(4), "IWR1443", "dca1000_raw").issues if i.code == "lvds_fmt_unsupported"]
     assert hit and hit[0].level == "warning" and "unverified" in hit[0].message
+
+
+# --- gui-30: IWR1843 + SAR firmware (driver_board alias, sar flavour, driver cfg_dialect) --------------------
+
+SAR_T = dict(max_range_m=100, max_velocity_ms=0.75, frame_rate_hz=2)
+
+
+def test_sar_firmware_is_a_non_pending_1843_firmware_with_driver_board_alias():
+    from radar_gui.cfg import firmware as fwmod
+    fw = fwmod.get("iwr1843_sar_lvds")
+    assert not fw.get("pending") and set(fw["templates"]) == {"IWR1843"} and fw["driver_board"] == {"IWR1843": "IWR1843_SAR"}
+    assert fwmod.flavour(fw, "IWR1843") == "sar" and fwmod.flavour(fwmod.get("dca1000_raw"), "IWR1443") == "raw"
+    assert [f["id"] for f in fwmod.for_board("IWR1843")] == ["demo", "iwr1843_sar_lvds"]
+    assert fwmod.cfg_dialect("IWR1843_SAR")["required_commands"] and not fwmod.cfg_dialect("IWR1443").get("required_commands")
+
+
+def test_sar_generate_validates_and_has_no_demo_commands():
+    for fmt in (0, 1, 2, 4):
+        r = generate("IWR1843", SAR_T, firmware="iwr1843_sar_lvds", lvds_data_fmt=fmt)
+        assert r.ok and not r.report.errors, (fmt, [i.message for i in r.report.errors])
+        cmds = {c.name for c in parse_cfg(r.text).commands}
+        assert {"adcbufCfg", "lvdsStreamCfg", "analogMonitor", "calibData"} <= cmds
+        assert not cmds & {"guiMonitor", "cfarCfg", "clutterRemoval", "aoaFovCfg", "cfarFovCfg", "configDataPort"}
+        assert r.metrics.lvds_data_fmt == fmt and r.targets["lvds_data_fmt"] == fmt
+        assert r.metrics.n_tx == 1 and r.metrics.n_rx == 1
+    assert generate("IWR1843", SAR_T, firmware="iwr1843_sar_lvds").metrics.lvds_data_fmt == 1     # default
+    bad = generate("IWR1843", SAR_T, firmware="iwr1843_sar_lvds", lvds_data_fmt=3)
+    assert not bad.ok and bad.report.errors[0].code == "bad_target"
+    assert generate("IWR1843", SAR_T, lvds_data_fmt=2).ok       # demo ignores the SAR-only target
+
+
+def test_sar_shipped_cfg_validates_without_errors_and_driver_dialect_is_enforced():
+    from radar_gui.cfg import firmware as fwmod
+    text = (fwmod.CONFIG_DIR / "radar/sar_configs/1843_SAR_2ms_fmt1.cfg").read_text()
+    rep = validate(parse_cfg(text), "IWR1843", "iwr1843_sar_lvds")
+    assert rep.ok and not rep.errors
+    with_gui = text.replace("sensorStart", "guiMonitor -1 1 0 0 0 0 0\nsensorStart")
+    assert "forbidden_guiMonitor" in {i.code for i in validate(parse_cfg(with_gui), "IWR1843", "iwr1843_sar_lvds").errors}
+    no_calib = "\n".join(l for l in text.splitlines() if not l.startswith("calibData"))
+    rep = validate(parse_cfg(no_calib), "IWR1843", "iwr1843_sar_lvds")
+    assert not rep.ok and "missing_calibData" in {i.code for i in rep.errors}
+    # the demo (driver board IWR1843, no required/forbidden commands) is unaffected
+    assert "missing_calibData" not in {i.code for i in validate(parse_cfg(no_calib), "IWR1843", "demo").issues}
+
+
+def test_studio_dca_cfg_validates_for_1843_demo():
+    from radar_gui.cfg import firmware as fwmod
+    p = fwmod.CONFIG_DIR / "radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg"
+    rep = validate(parse_cfg(p.read_text()), "IWR1843", "demo")
+    assert rep.ok and not rep.errors and not rep.warnings

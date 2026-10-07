@@ -37,13 +37,16 @@ def test_firmware_list_per_board_and_generate_with_firmware(client):
     assert {f["id"] for f in allfw} >= {"demo", "dca1000_raw", "cascade_ddm", "iwr1843_sar_lvds"}
     assert not {"demo_stock", "demo_lvds"} & {f["id"] for f in allfw}
     f1843 = client.get("/api/cfg/firmware", params={"board": "IWR1843"}).json()["firmware"]
-    assert [f["id"] for f in f1843] == ["demo", "dca1000_raw"]
+    assert [f["id"] for f in f1843] == ["demo", "iwr1843_sar_lvds"]   # gui-30
+    assert [f["driver_board"] for f in f1843] == ["IWR1843", "IWR1843_SAR"]
     assert all("outputs" in f and f["template"] and f["mimo"]["scheme"] == "tdm" for f in f1843)
     f1443 = client.get("/api/cfg/firmware", params={"board": "IWR1443"}).json()["firmware"]
+    assert [f["id"] for f in f1443] == ["demo", "dca1000_raw"]
+    assert [f["id"] for f in client.get("/api/cfg/firmware", params={"board": "IWR6843ODS"}).json()["firmware"]] == ["demo"]
     assert f1443[0]["outputs"] == {"tlv": True, "lvds": False} and f1443[0]["mimo"]["bpm"] is False
     assert not any(f["outputs"]["lvds"] and f["outputs"]["tlv"] for f in f1443)
     f6843 = client.get("/api/cfg/firmware", params={"board": "IWR6843"}).json()["firmware"]
-    assert [f["id"] for f in f6843] == ["demo", "dca1000_raw"] and f6843[0]["outputs"] == {"tlv": True, "lvds": True}
+    assert [f["id"] for f in f6843] == ["demo"] and f6843[0]["outputs"] == {"tlv": True, "lvds": True}
     assert client.get("/api/cfg/firmware", params={"board": "AWR2243_CASCADE"}).json()["firmware"][0]["mimo"]["scheme"] == "ddma"
     assert {f["id"] for f in client.get("/api/cfg/firmware", params={"board": "AWR2243_CASCADE"}).json()["firmware"]} \
         == {"cascade_ddm"}
@@ -159,11 +162,16 @@ def test_ui_has_firmware_selector_and_no_output_mode():
     assert "output_mode" not in js and "cMode" not in js and "/api/cfg/firmware?board=" in js
 
 
-def test_firmware_list_per_board_default_first_and_sar_not_offered(client):
-    for b in ("IWR1443", "IWR1843", "IWR6843"):
+def test_firmware_list_per_board_default_first_and_sar_on_1843(client):
+    for b in ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS"):
         fws = client.get("/api/cfg/firmware", params={"board": b}).json()["firmware"]
         assert fws[0]["id"] == "demo" and fws[0]["default"]
-        assert all(f["outputs"] and not f["pending"] for f in fws) and "iwr1843_sar_lvds" not in [f["id"] for f in fws]
+        assert all(f["outputs"] and not f["pending"] for f in fws)
+        assert ("iwr1843_sar_lvds" in [f["id"] for f in fws]) == (b == "IWR1843")
+        assert ("dca1000_raw" in [f["id"] for f in fws]) == (b == "IWR1443")
+    sar = [f for f in client.get("/api/cfg/firmware", params={"board": "IWR1843"}).json()["firmware"] if f["id"] == "iwr1843_sar_lvds"][0]
+    assert sar["outputs"] == {"tlv": False, "lvds": True} and sar["lvds_data_fmts"] == [0, 1, 2, 4]
+    assert sar["system_enables"] == {"serial": False, "dca1000": True} and sar["driver_board"] == "IWR1843_SAR"
     assert "IWR1843_SAR" not in client.get("/api/cfg/boards").json()["boards"]
 
 
@@ -189,8 +197,10 @@ def test_save_uses_firmware_system_enables(client):
     saved.n = []
     s = saved("demo")
     assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
-    s = saved("dca1000_raw")
-    assert not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
+    s = saved("dca1000_raw", board="IWR1443", cfg_text=generate("IWR1443", T).text)
+    assert not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"] and s["board"] == "IWR1443"
+    s = saved("iwr1843_sar_lvds", cfg_text=generate("IWR1843", T, firmware="iwr1843_sar_lvds").text)   # gui-30: driver board alias
+    assert s["board"] == "IWR1843_SAR" and not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
     lvds_text = generate("IWR1843", {**T, "lvds": True}).text     # cfg LVDS on; system settings stay separate (gui-22)
     s = saved("demo", cfg_text=lvds_text)
     assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
@@ -254,7 +264,7 @@ def test_save_warns_on_cfg_lvds_vs_dca1000_mismatch(client):
     assert len(w) == 1 and "LVDS streaming on" in w[0]
     assert len(warns(off, True, "w3")) == 1
     assert warns(on, True, "w4") == [] and warns(off, False, "w5") == []
-    assert warns(off, True, "w6", fw="dca1000_raw") == []     # raw firmware: LVDS is not a cfg choice
+    assert warns(generate("IWR1443", T).text, True, "w6", board="IWR1443", fw="dca1000_raw") == []   # raw firmware: LVDS is not a cfg choice
 
 
 def test_chirp_table_payloads(client):
@@ -286,3 +296,17 @@ def test_chirp_table_payloads(client):
     cas = client.post("/api/cfg/generate", json={"board": "AWR2243_CASCADE", "targets": T, "firmware": "cascade_ddm"}).json()
     r = post("AWR2243_CASCADE", "cascade_ddm", cas["text"], {"chirp_tx_masks": [1, 2, 4]})
     assert "cascade_chirp_mask_ignored" in [i["code"] for i in r["issues"]] and r["metrics"]["scheme"] == "ddma"
+
+
+def test_save_sar_writes_the_driver_board_and_matches_the_shipped_system_json(client):
+    """gui-30: IWR1843 + iwr1843_sar_lvds saves the driver board IWR1843_SAR (descriptor driver_board), same schema as radar_0_IWR1843_SAR.json."""
+    text = generate("IWR1843", T, firmware="iwr1843_sar_lvds").text
+    r = client.post("/api/cfg/save", json={"board": "IWR1843", "name": "sar1", "cfg_text": text, "firmware": "iwr1843_sar_lvds"})
+    assert r.status_code == 200, r.text
+    s = json.loads(Path(r.json()["json_path"]).read_text())
+    ref = json.loads((REPO / "CPSL_TI_Radar_cpp" / "config" / "system" / "radar_0_IWR1843_SAR.json").read_text())
+    assert s["board"] == ref["board"] == "IWR1843_SAR" and s["schema_version"] == ref["schema_version"] == 2
+    assert set(s) == set(ref) and set(s["dca1000"]) == set(ref["dca1000"]) and set(s["output"]) == set(ref["output"])
+    assert s["serial_stream"]["enabled"] is False and s["dca1000"]["enabled"] is True
+    d = client.post("/api/cfg/analyze", json={"board": "IWR1843", "cfg_text": text, "firmware": "iwr1843_sar_lvds"}).json()
+    assert d["ok"] and d["board"] == "IWR1843"                    # the GUI board stays IWR1843 everywhere but the saved JSON

@@ -33,7 +33,7 @@ from .validate import Issue, Report, validate
 # Deprecated `output_mode` target -> firmware id (kept so older callers keep working; use `firmware`).
 _LEGACY_MODE_FIRMWARE = {"tlv": None, "lvds": "demo", "raw": "dca1000_raw"}   # tlv = the board's default; lvds = demo + lvds target
 TARGET_KEYS = ("max_range_m", "max_velocity_ms", "range_res_m", "frame_rate_hz", "velocity_res_ms",
-               "num_samples", "num_loops", "tx_mask", "rx_mask", "bpm", "firmware", "output_mode", "lvds", "cfar_range_db",
+               "num_samples", "num_loops", "tx_mask", "rx_mask", "bpm", "firmware", "output_mode", "lvds", "lvds_data_fmt", "cfar_range_db",
                "cfar_doppler_db", "name")
 
 # Generator design constants (conservative; the validator holds the real per-board limits).
@@ -170,6 +170,10 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
                                      bpmCfg enabled; only where the firmware descriptor says mimo.bpm (else bpm_unsupported)
       lvds                           bool, default false: a TLV firmware (`demo` on 1843/6843) also streams raw ADC over
                                      LVDS (lvdsStreamCfg on). Not available where the firmware has no LVDS output (1443).
+      lvds_data_fmt                  int, SAR firmware only (iwr1843_sar_lvds): the lvdsStreamCfg dataFmt, one of the firmware's
+                                     lvds_data_fmts (0/1/2/4), default 1 (plain ADC). The SAR flavour has no guiMonitor/CFAR/clutter
+                                     commands, defaults to 1 TX (TX1) x 1 RX (RX1) like the shipped SAR cfg, and keeps its
+                                     adcbufCfg/calibData/analogMonitor/lvdsStreamCfg lines (validated against IWR1843_SAR's cfg_dialect).
       output_mode                    DEPRECATED alias for `firmware` (tlv=board default, lvds=demo + lvds=true, raw=dca1000_raw)
       cfar_range_db, cfar_doppler_db detection thresholds (demo cfgs; not 1443)
       name                           output file name (default derived from the targets)
@@ -235,8 +239,16 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
         n_given = _num(t_in, "num_samples")
         loops_given = _num(t_in, "num_loops")
         cfar_r, cfar_d = _num(t_in, "cfar_range_db"), _num(t_in, "cfar_doppler_db")
-        tx_mask = int(t_in["tx_mask"]) if t_in.get("tx_mask") not in (None, "") else az_tx_mask(fwmod.elevation_tx_bit(board))
-        rx_mask = int(t_in["rx_mask"]) if t_in.get("rx_mask") not in (None, "") else 0b1111
+        sar = mode == "sar"
+        tx_mask = int(t_in["tx_mask"]) if t_in.get("tx_mask") not in (None, "") else \
+            (0b001 if sar else az_tx_mask(fwmod.elevation_tx_bit(board)))
+        rx_mask = int(t_in["rx_mask"]) if t_in.get("rx_mask") not in (None, "") else (0b0001 if sar else 0b1111)
+        data_fmt = None
+        if sar:
+            data_fmt = int(_num(t_in, "lvds_data_fmt", 1, positive=False))
+            allowed = fwmod.lvds_data_fmts(fw) or []
+            if data_fmt not in allowed:
+                raise CfgError(f"lvds_data_fmt {data_fmt} is not one of {allowed} for firmware {fw['id']!r}")
         if rng is None or vmax is None:
             raise CfgError("max_range_m and max_velocity_ms are required")
         if rate > 1000:
@@ -329,7 +341,7 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
     best = None
     for cand in feasible[:12]:
         design = _assemble_candidate(board, fw["id"], mode, tpl_rel, template, cand, n, rng, vmax, rate, cpl, tx_mask, rx_mask,
-                                     loops_given, vres, cfar_r, cfar_d, cascade, lim, chirp_masks, factor, want_bpm)
+                                     loops_given, vres, cfar_r, cfar_d, cascade, lim, chirp_masks, factor, want_bpm, data_fmt)
         if best is None:
             best = design
         if design["clean"]:
@@ -360,7 +372,7 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
     report.ok = not any(i.level == "error" for i in report.issues)
     resolved = dict(board=board, bpm=want_bpm, max_range_m=rng, max_velocity_ms=vmax, frame_rate_hz=rate, range_res_m=res,
                     velocity_res_ms=vres, num_samples=n, num_loops=loops, tx_mask=tx_mask, rx_mask=rx_mask,
-                    firmware=fw["id"], template=tpl_rel, cfar_range_db=cfar_r, cfar_doppler_db=cfar_d)
+                    firmware=fw["id"], template=tpl_rel, lvds_data_fmt=data_fmt, cfar_range_db=cfar_r, cfar_doppler_db=cfar_d)
     name = _safe_name(str(t_in.get("name") or ""), f"{board.lower().replace('awr2243_', '')}_R{rng:g}m_V{vmax:g}ms_"
                                                    f"{rate:g}Hz".replace(".", "p"))
     return GenResult(board, report.ok, text, name, resolved, report, m, achieved)
@@ -377,7 +389,7 @@ def _loop_options(loops_given, vres, cand, cpl, cascade):
 
 
 def _assemble_candidate(board, fw_id, mode, tpl_rel, template, cand, n, rng, vmax, rate, cpl, tx_mask, rx_mask, loops_given,
-                        vres, cfar_r, cfar_d, cascade, lim, chirp_masks=(), factor=1, bpm=False) -> dict:
+                        vres, cfar_r, cfar_d, cascade, lim, chirp_masks=(), factor=1, bpm=False, data_fmt=None) -> dict:
     options, auto = _loop_options(loops_given, vres, cand, cpl, cascade)
     last = None
     for loops in options:
@@ -385,7 +397,7 @@ def _assemble_candidate(board, fw_id, mode, tpl_rel, template, cand, n, rng, vma
             text = _cascade_text(template, cand, n, rng, vmax, rate, loops, cfar_r, cfar_d, lim)
         else:
             text = _single_text(board, mode, tpl_rel, template, cand, n, rng, vmax, rate, loops, cpl, tx_mask, rx_mask,
-                                cfar_r, cfar_d, chirp_masks, factor, bpm)
+                                cfar_r, cfar_d, chirp_masks, factor, bpm, data_fmt)
         check = text
         if mode == "raw":     # the raw firmware always streams ADC data over LVDS; validate its data rate
             check = text + "\nlvdsStreamCfg -1 0 1 0\n"
@@ -422,7 +434,7 @@ def _set_threshold(line: str, db: float | None) -> str:
 
 
 def _single_text(board, mode, tpl_rel, template, cand, n, rng, vmax, rate, loops, cpl, tx_mask, rx_mask, cfar_r, cfar_d,
-                 chirp_masks, n_tx, bpm=False):
+                 chirp_masks, n_tx, bpm=False, data_fmt=None):
     period = _frame_period(rate, 2)
     tx_bits = list(chirp_masks)
     chirps = [f"chirpCfg {i} {i} 0 0 0 0 0 {b}" for i, b in enumerate(tx_bits)]
@@ -457,7 +469,7 @@ def _single_text(board, mode, tpl_rel, template, cand, n, rng, vmax, rate, loops
             out.append(" ".join(tok))
         elif cmd == "lvdsStreamCfg":
             tok = s.split()
-            tok[3] = "1" if mode == "lvds" else "0"
+            tok[3] = str(data_fmt) if mode == "sar" else ("1" if mode == "lvds" else "0")
             out.append(" ".join(tok))
         elif cmd == "cfarCfg" and board != "IWR1443":
             tok = s.split()
