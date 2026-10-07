@@ -16,7 +16,7 @@
     "skip_prefixes": ["%", "#"]
   },
   "lifecycle": { "config_once_per_boot": false },
-  "cfg_dialect": { "rx_mask_fields": [1], "frame_period_field": 5, "skip_commands": ["calibData"] },
+  "cfg_dialect": { "rx_mask_fields": [1], "frame_period_field": 5, "skip_commands": [] },
   "data_uart": { "baud": 921600, "header_bytes": 40, "tlv_dialect": "sdk3", "timeout_ms": 1000 },
   "lvds": { "supported": true, "lanes": 2, "layout": "two_lane_iq_pairs", "iq_order": "q_first" },
   "dca1000": { "packet_bytes": 1472, "packet_delay_us": 100, "fpga_timer_s": 30 }

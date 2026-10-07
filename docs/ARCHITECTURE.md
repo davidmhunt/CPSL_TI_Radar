@@ -448,7 +448,7 @@ fields through `SystemConfigReader::getBoard()`:
 | One cfg per power-up | `lifecycle.config_once_per_boot` | `Radar` |
 
 `cfg_dialect.skip_commands` drops commands the board's firmware rejects
-before they are sent (the IWR1843 skips `calibData`); the `.cfg` files keep
+before they are sent (no shipped board skips any; the SDK 3.6 IWR1843 demo needs `calibData`); the `.cfg` files keep
 the line, and a skipped command does not count as unacknowledged.
 `cfg_dialect.required_commands` / `forbidden_commands` are enforced by
 `cross_check_radar_cfg` (a missing or present command is an error naming the

@@ -9,7 +9,7 @@ The executable prints each failure as `error: <message>` and exits 1 (2 for a ba
 | `cannot open the CLI port ...` / `... serial data port ...` (`open_failed`) | Wrong port, board not powered, or you are not in `dialout`. Check `ls /dev/ttyACM*` and `utilities/determine_serial_ports.ipynb`. |
 | `cannot open the DCA1000 sockets ...` (`open_failed`) | The host NIC does not have `dca1000.host_ip`, or another process holds the ports. `host_setup.py` checks the address. |
 | `DCA1000 did not answer ...` (`device_error`) | The capture card is unpowered, unplugged, or on another subnet. |
-| `not every config command was acknowledged with 'Done'` (`config_rejected`) | A cfg command got no `Done`: harmless if it is only `calibData` (the driver skips it); otherwise the firmware does not know the command, or the board is in flashing mode or wrong firmware. |
+| `not every config command was acknowledged with 'Done'` (`config_rejected`) | A cfg command got no `Done`: an older IWR1843 image rejects `calibData` (skip it with `board_overrides`); otherwise the firmware does not know the command, or the board is in flashing mode or wrong firmware. |
 | `... can only be configured once per boot: power-cycle the EVM` (`config_rejected`) | Cascade board: power-cycle (12 V off and on) before **every** run. |
 | `no frame for 2 s, stopping` | Configured and started, but no data arrived. DCA1000: check the `.cfg` has `lvdsStreamCfg`, the LVDS cable, and that `--stats` shows `packets` rising. Serial: the data port, `data_uart` baud, and that the firmware matches the board's `tlv_dialect`. |
 | `sensorStop was not acknowledged` (warning) | The demo answers only after the current frame. Harmless if the exit status is 0. |

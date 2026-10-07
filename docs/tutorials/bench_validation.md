@@ -30,7 +30,7 @@ The commands below use the example config unchanged. To use your own, copy it, a
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json --validate
 ```
 
-It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the values the harness compares against. On the IWR1843 `calibData` is listed as skipped: the flashed firmware rejects it, which is harmless.
+It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the values the harness compares against. `calibData` is sent on the IWR1843 (the SDK 3.6 demo needs it).
 
 ## 5. Run the harness
 
@@ -107,7 +107,7 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 | `bench: refusing to run, host preflight failed` | Run `uv run tools/setup/host_setup.py --nic <dca-nic> --apply`, then retry (it checks `rmem_max` and the build type). |
 | `no frame received before start timeout` (`FAILED`, exit 2) | Check board mode (SOP jumpers), USB ports, DCA1000 power and cable, and the ping in section 2. For the cascade, power-cycle first. Read `driver_stdout.log`. |
 | `sensorStop was not acknowledged with 'Done'` in `driver_warnings_first` | Fixed in core-13: `sensorStop` now waits `max(cli.cmd_timeout_ms, frame period + 200 ms)` (`cli.stop_timeout_ms` overrides it). Seen now, the board did not answer within that window; harmless if `status` is `ok` and the `.bin` is `exact`. |
-| `not every config command was acknowledged` | Harmless if only `calibData` is rejected. Otherwise the cfg has a command the firmware does not know. |
+| `not every config command was acknowledged` | An older IWR1843 image rejects `calibData` (skip it via `board_overrides`); the SDK 3.6 demo needs it. Otherwise the cfg has a command the firmware does not know. |
 | `dropped` > 0 with `kernel_drops` > 0 | The socket buffer overflowed: the consumer or the worker stalled longer than `SO_RCVBUF` holds (`ring_full` > 0 says the RX ring filled first). Check `rcvbuf=` (134217728 expected; `rmem_max` below 128 MB lowers it), a slow consumer, or CPU load; pin the threads (`runtime.rx_cpu` / `worker_cpu`, see `CPSL_TI_Radar_cpp/Readme.md` "Choosing CPUs"). |
 | `dropped` > 0 with `kernel_drops` = 0 | Lost before the host socket: the NIC, its ring or the cable/DCA1000 (no retransmission). Check `ethtool -S <dca-nic>` for rx drops and the link speed. |
 | `overrun` > 0 | Not possible since core-15 (the RX thread never discards); an old driver binary. Rebuild. |

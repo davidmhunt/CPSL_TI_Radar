@@ -332,7 +332,7 @@ with a known wire format is a data change, not a rebuild.
 At load time the driver cross-checks the radar `.cfg` against the board (16-bit complex ADC,
 `adcbufCfg` interleave vs the LVDS layout, `lvdsStreamCfg` ADC streaming) and refuses a mismatch
 with a message. `cfg_dialect.skip_commands` lists cfg commands the board's firmware rejects. They
-stay in the `.cfg` file but are never sent: the IWR1843 skips `calibData`. `required_commands` and
+stay in the `.cfg` file but are never sent: no shipped board skips anything (the SDK 3.6 IWR1843 demo needs `calibData`). `required_commands` and
 `forbidden_commands` make the cross-check fail when a cfg lacks or contains a command.
 
 ##### IWR1843 SAR firmware example

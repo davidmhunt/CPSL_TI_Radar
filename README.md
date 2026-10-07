@@ -116,11 +116,12 @@ converting that file.
 
 Behaviour changes that come with v2 configs:
 
-- **`calibData` is skipped on the IWR1843.** Its flashed firmware answers
-  `'calibData' is not recognized`, so the descriptor lists it in `cfg_dialect.skip_commands`. The
-  line stays in the `.cfg` files but is not sent, and no longer triggers the "not every config
-  command was acknowledged" warning. Other boards send it as before. A config can restore it
-  with `"board_overrides": {"cfg_dialect": {"skip_commands": []}}`.
+- **`calibData` is sent on every board, including the IWR1843.** The stock SDK 3.6 demo needs it
+  as part of the "full configuration": without it `sensorStart` fails with `Error -1` and no
+  frames stream. An older flashed IWR1843 image answered `'calibData' is not recognized`; on such
+  a board a config can drop the command with
+  `"board_overrides": {"cfg_dialect": {"skip_commands": ["calibData"]}}`
+  (`cfg_dialect.skip_commands`).
 - The radar `.cfg` is cross-checked against the board when the config loads (16-bit complex ADC,
   `adcbufCfg` interleave vs the LVDS layout, `lvdsStreamCfg` ADC streaming), and a mismatch stops
   the driver with a message.

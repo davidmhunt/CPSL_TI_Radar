@@ -412,9 +412,9 @@ static std::vector<std::string> v(std::initializer_list<const char*> l) {
 }
 
 TEST_CASE(skip_commands_per_board) {
-    // IWR1843 only: its flashed firmware answers "'calibData' is not recognized"
-    // (every core-04 baseline run). The others have no evidence, so no entry.
-    CHECK(must_load("IWR1843").cfg_dialect.skip_commands == v({"calibData"}));
+    // No shipped board skips anything. The stock SDK 3.6 IWR1843 demo needs
+    // calibData for sensorStart (gui-09 bench); only an older image rejected it.
+    CHECK(must_load("IWR1843").cfg_dialect.skip_commands.empty());
     CHECK(must_load("IWR6843").cfg_dialect.skip_commands.empty());
     CHECK(must_load("IWR1443").cfg_dialect.skip_commands.empty());
     CHECK(must_load("AWR2243_CASCADE").cfg_dialect.skip_commands.empty());
@@ -445,6 +445,7 @@ TEST_CASE(skip_commands_validation) {
 
 TEST_CASE(filter_skips_listed_command) {
     BoardDescriptor d = must_load("IWR1843");
+    d.cfg_dialect.skip_commands = v({"calibData"});  // a board_overrides-style skip
     CfgCommandPlan p = filter_cfg_commands(v({"sensorStop", "flushCfg", "calibData 0 0 0", "sensorStart"}), d);
     CHECK(p.send == v({"sensorStop", "flushCfg"}));
     CHECK(p.skipped == v({"calibData 0 0 0"}));
@@ -452,6 +453,7 @@ TEST_CASE(filter_skips_listed_command) {
 
 TEST_CASE(filter_matches_first_token_exactly_ignoring_whitespace) {
     BoardDescriptor d = must_load("IWR1843");
+    d.cfg_dialect.skip_commands = v({"calibData"});
     CfgCommandPlan p = filter_cfg_commands(
         v({"calibData 0 0 0\r", "  calibData\t0 0 0  ", "calibData", "calibdata 0 0 0", "CALIBDATA 0 0 0",
            "calibDataX 0", "xcalibData 0", "% calibData 0 0 0", "#calibData"}),
@@ -464,6 +466,7 @@ TEST_CASE(filter_matches_first_token_exactly_ignoring_whitespace) {
 
 TEST_CASE(filter_keeps_other_commands_in_order) {
     BoardDescriptor d = must_load("IWR1843");
+    d.cfg_dialect.skip_commands = v({"calibData"});
     std::vector<std::string> in = v({"% comment", "", "sensorStop", "flushCfg", "dfeDataOutputMode 1",
                                      "channelCfg 15 7 0", "calibData 0 0 0", "adcCfg 2 1",
                                      "  lvdsStreamCfg -1 0 1 0", "sensorStart", "\r"});
@@ -494,7 +497,7 @@ TEST_CASE(shipped_boards_are_unchanged_by_the_new_keys) {
     }
     // golden values that the new keys must not disturb
     BoardDescriptor b = must_load("IWR1843");
-    CHECK(b.cfg_dialect.skip_commands == v({"calibData"}));
+    CHECK(b.cfg_dialect.skip_commands.empty());
     CHECK_EQ(b.data_uart.header_bytes, 40u);
     CHECK_EQ(b.lvds.lanes, 2u);
 }
@@ -517,7 +520,10 @@ TEST_CASE(required_forbidden_validation) {
                          j["cfg_dialect"]["forbidden_commands"] = json::array({"foo"});
                      }),
               "also in forbidden_commands"));
-    CHECK(has(reject("IWR1843", [](json& j) { j["cfg_dialect"]["required_commands"] = json::array({"calibData"}); }),
+    CHECK(has(reject("IWR1843", [](json& j) {
+                  j["cfg_dialect"]["skip_commands"] = json::array({"calibData"});
+                  j["cfg_dialect"]["required_commands"] = json::array({"calibData"});
+              }),
               "also in skip_commands"));
 }
 

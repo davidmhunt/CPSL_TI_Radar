@@ -16,7 +16,7 @@ A **system config** (`config/system/*.json`) names three things: a **board descr
 ./CPSL_TI_Radar_CPP ../config/system/radar_0_IWR1843_demo.json --validate
 ```
 
-It opens no port or socket. It prints the board, ports, `frame:` shape, `bytes/frame:` and the cfg commands it will skip (`calibData` on the IWR1843, harmless), and exits 0 after `OK:`; a bad config prints why and exits 1.
+It opens no port or socket. It prints the board, ports, `frame:` shape, `bytes/frame:` and the cfg commands it will skip (none on the shipped boards), and exits 0 after `OK:`; a bad config prints why and exits 1.
 
 ## Serial point cloud or DCA1000 raw ADC
 

@@ -222,9 +222,9 @@ def test_configure_happy_path_streams_and_stops(tmp_path):
     src.on_status = lambda s, m: states.append((s, m))
     frames = run(take(src, 2))
     assert [f["frame"] for f in frames] == [1, 2] and len(frames[0]["pts"]) == 3
-    # comment lines and the board's skip_commands (calibData) are not sent; the stop goes out on stop
-    assert brd.cli_log == ["sensorStop", "flushCfg", "sensorStart", "sensorStop"]
-    assert ("configuring", "configuring 3/3 sensorStart") in states
+    # comment lines are not sent, calibData is (IWR1843 skips nothing); the stop goes out on stop
+    assert brd.cli_log == ["sensorStop", "flushCfg", "calibData 0 0 0", "sensorStart", "sensorStop"]
+    assert ("configuring", "configuring 4/4 sensorStart") in states
     assert [s for s, _ in states if s in ("waiting", "streaming")][:2] == ["waiting", "streaming"]
     assert not src.claimed
 
