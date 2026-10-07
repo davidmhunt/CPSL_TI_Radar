@@ -171,3 +171,41 @@ def test_golden_every_shipped_cfg_unchanged():
         for f, v in old.items():
             want = v if isinstance(v, str) else pytest.approx(v, rel=1e-12)
             assert got[k][f] == want, (k, f)
+
+
+# --- gui-23: per-TX phase readout --------------------------------------------------------------
+
+def test_ddma_phase_table_6tx_cpl8():
+    m = metrics(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "AWR2243_CASCADE", "ddma")
+    assert m.phase_tx == ["TX1", "TX2", "TX3", "TX4", "TX5", "TX6"]
+    assert len(m.chirp_phases) == 8 and m.phase_confidence == "unverified" and "HYPOTHESIS" in m.phase_note
+    assert "firmware-derived" in m.phase_source
+    ph = [r["phase_deg"] for r in m.chirp_phases]
+    by_rank = {r: [row[tx] for row in ph] for r, tx in enumerate((2, 0, 5, 4, 3, 1))}   # TX index per rank
+    assert by_rank[0] == [0] * 8
+    assert by_rank[1] == [0, 45, 90, 135, 180, 225, 270, 315]
+    assert by_rank[2] == [0, 90, 180, 270, 0, 90, 180, 270]
+    assert by_rank[3] == [0, 135, 270, 45, 180, 315, 90, 225]
+    assert by_rank[4] == [0, 180, 0, 180, 0, 180, 0, 180]
+    assert by_rank[5] == [0, 225, 90, 315, 180, 45, 270, 135]
+    assert ph[1] == [45, 225, 0, 180, 135, 90]    # chirp 1 per TX1..TX6 (rank of TX1 = 1, TX2 = 5, TX3 = 0, ...)
+
+
+def test_ddma_phase_quantised_to_5p625():
+    from radar_gui.cfg.metrics import ddma_chirp_phase_deg
+    assert all(ddma_chirp_phase_deg(k, r) % 5.625 == 0 for k in range(32) for r in range(6))
+    with pytest.raises(ValueError):
+        ddma_chirp_phase_deg(1, 1, n_tx=4)
+
+
+def test_bpm_phase_table_0_180_on_chirp1():
+    m = metrics(parse_cfg_file(FIX / "s2_bpm.cfg"), "IWR6843", "tdm")
+    assert m.phase_tx == ["TX1", "TX3"] and m.phase_source == "bpmCfg chirp0/chirp1"
+    assert [r["phase_deg"] for r in m.chirp_phases] == [[0, 0], [0, 180]]
+
+
+def test_tdm_phase_table_zeros():
+    m = metrics(parse_cfg_file(RADAR / "IWR_Demos" / "short_range_3D.cfg"), "IWR6843", "tdm")
+    assert m.phase_source == "none (TDM)" and m.phase_tx == ["TX1", "TX2", "TX3"]
+    assert [r["phase_deg"] for r in m.chirp_phases] == [[0, 0, 0]] * 3
+    assert [r["index"] for r in m.chirp_phases] == [0, 1, 2]

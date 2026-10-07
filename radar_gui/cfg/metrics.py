@@ -98,6 +98,12 @@ class Metrics:
     n_bands: int = 1                  # DDMA Doppler sub-bands (8); 1 for TDM
     derivations: dict = field(default_factory=dict)   # metric -> {"formula", "scheme", "confidence"}
     subframes: list[dict] = field(default_factory=list)   # advFrameCfg: one summary per subframe (empty otherwise)
+    # per-chirp TX phase readout (gui-23): [{"index", "phase_deg": [one value per `phase_tx` column; None = unknown]}]
+    chirp_phases: list[dict] = field(default_factory=list)
+    phase_tx: list[str] = field(default_factory=list)     # column labels of chirp_phases ("TX1".."TX6")
+    phase_source: str = ""
+    phase_confidence: str = ""        # "derived" | "unverified" (DDMA chirp-order hypothesis) | "none"
+    phase_note: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -154,6 +160,76 @@ def default_scheme(board: str | None, cascade: bool) -> str:
         if fw is not None:
             return fwmod.mimo(board, fw)["scheme"]
     return "ddma" if cascade else "tdm"
+
+
+# Cascade DDMA phase-shifter model (gui-23). Firmware: MmwDemo_configPhaseShifterChirps,
+# firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/mss/mss_main.c:3796-3880.
+# TX index (0-based, dev1 = 0..2, dev2 = 3..5) -> phase rank m: array {2,0,5,4,3,1} lists TX in rank order
+# (mmwdemo_rfparserDDMA.c:143), phaseShiftMultiplier[tx] = rank (mss_main.c:3830-3841, txAntMaskEnable = 63 at :3825).
+DDMA_PHASE_ORDER = (2, 0, 5, 4, 3, 1)
+# empty sub-bands by TX count, MmwDemo_getNumEmptySubBands (mss_main.c:4032-4053): 2->1, 3->1, 4->2, 6->2.
+# The phase table is only produced for 6 TX: the firmware forces the rank over all 6 TX (mask 63) but takes D
+# from the *enabled* count, so fewer-TX tables are not modelled here (omitted, see phase_note).
+DDMA_EMPTY_BANDS_6TX = 2
+DDMA_PHASE_NOTE = ("HYPOTHESIS: the firmware registers phase entries at chirp index (end+1-k) mod D "
+                   "(mss_main.c:3856-3857, 3873-3874); whether chirp k in time sees phase(k) or its reverse is not settled "
+                   "from source (bench check pending). Shown here with chirp k = k-th chirp of the loop.")
+
+
+def ddma_chirp_phase_deg(k: int, rank: int, n_tx: int = 6) -> float:
+    """Phase (deg) the firmware assigns the TX of phase rank `rank` on loop chirp `k` (0-based from chirpStartIdx):
+    360 * ((k*rank) mod D) / D, D = n_tx + empty sub-bands (8 for 6 TX), quantised like the firmware
+    (mss_main.c:3858-3860, 3875-3877: round(4*frac*64) >> 2 << 2 = steps of 5.625 deg). Only n_tx = 6 is modelled."""
+    if n_tx != 6:
+        raise ValueError("DDMA phase table is only modelled for 6 TX")
+    d = n_tx + DDMA_EMPTY_BANDS_6TX
+    units = int(round(4.0 * ((k * rank) % d) / d * 64)) >> 2 << 2      # 0..252, 360/256 deg per unit
+    return units * 360.0 / 256.0
+
+
+def _bpm_chirps(cfg: Cfg) -> tuple[int, int] | None:
+    """(chirp0Idx, chirp1Idx) of the first enabled `bpmCfg <subFrame> <isEnabled> <chirp0Idx> <chirp1Idx>`."""
+    for c in cfg.all("bpmCfg"):
+        a = c.floats()
+        if len(a) >= 4 and int(a[1]) != 0:
+            return int(a[2]), int(a[3])
+    return None
+
+
+def chirp_phase_table(cfg: Cfg, scheme: str, cascade: bool, n_tx_chan: int, start: int, end: int,
+                      seq: list[int], bpm: bool) -> dict:
+    """Per-TX phase on every chirp of the loop: {"tx", "rows", "source", "confidence", "note"}.
+    DDMA (6 TX): firmware formula, HYPOTHESIS chirp order. BPM: stock demo bpmCfg chirp0 = (TX1+, TX3+) -> 0/0,
+    chirp1 = (TX1+, TX3-) -> 0/180 (xwr68xx mss_main.c:1772-1800: constBpmVal 0 / 0x30). TDM: zeros."""
+    idxs = list(range(start, end + 1))
+    if scheme == "ddma":
+        if n_tx_chan != 6:
+            return dict(tx=[], rows=[], source="firmware-derived: DDMA formula (not modelled)", confidence="none",
+                        note=f"phase table omitted: modelled for 6 TX only, cfg enables {n_tx_chan} "
+                             "(firmware rank/divisor rule for fewer TX is not reproduced)")
+        rank = {tx: r for r, tx in enumerate(DDMA_PHASE_ORDER)}
+        rows = [dict(index=i, phase_deg=[ddma_chirp_phase_deg(i - start, rank[t]) for t in range(6)]) for i in idxs]
+        return dict(tx=[f"TX{t + 1}" for t in range(6)], rows=rows,
+                    source="firmware-derived: DDMA formula (mss_main.c:3796-3880)",
+                    confidence="unverified", note=DDMA_PHASE_NOTE)
+    if bpm:
+        bc = _bpm_chirps(cfg)
+        if bc is not None:
+            c0, c1 = bc
+            val = {c0: [0.0, 0.0], c1: [0.0, 180.0]}
+            rows = [dict(index=i, phase_deg=val.get(i, [None, None])) for i in idxs]
+            note = ("chirp0 TX1+/TX3+, chirp1 TX1+/TX3- (stock demo, xwr68xx mss_main.c:1772-1800); "
+                    "BPM covers TX1 and TX3 only")
+            if any(i not in val for i in idxs):
+                note += "; chirps other than chirp0Idx/chirp1Idx are not BPM-coded (shown as unknown)"
+            return dict(tx=["TX1", "TX3"], rows=rows, source="bpmCfg chirp0/chirp1", confidence="derived", note=note)
+    used = 0
+    for m in seq:
+        used |= m
+    cols = [b for b in range(12) if used >> b & 1]
+    rows = [dict(index=i, phase_deg=[0.0] * len(cols)) for i in idxs]
+    return dict(tx=[f"TX{b + 1}" for b in cols], rows=rows, source="none (TDM)", confidence="derived",
+                note="plain TDM: no per-TX phase coding, all TX at 0 deg")
 
 
 def _pow2(x: int) -> int:
@@ -341,6 +417,9 @@ def _one(cfg: Cfg, board: str | None, cascade: bool, scheme: str, fr: dict) -> M
     per_chirp = n * n_rx * bps + meta
     per_frame = per_chirp * n_chirps
 
+    n_tx_chan = popcount(int(ch[1])) + (popcount(int(ch[4])) if cascade else 0)
+    ph = chirp_phase_table(cfg, scheme, cascade, n_tx_chan, fr["start"], fr["end"], seq, bpm)
+
     return Metrics(
         mode=scheme, board=board or "",
         start_ghz=start_ghz, slope_mhz_us=slope, idle_us=idle, adc_start_us=adc_start, ramp_us=ramp,
@@ -361,4 +440,6 @@ def _one(cfg: Cfg, board: str | None, cascade: bool, scheme: str, fr: dict) -> M
         chirp_sequence=[{"index": i, "tx_mask": masks[i]} for i in range(fr["start"], fr["end"] + 1)],
         lambda_mm=lam * 1e3, loop_period_us=loop_us, pattern_period_us=chirps_per_loop * tc,
         doppler_bins=bins, doppler_step_ms=step, vmax_full_ms=max_v, vmax_per_tx_ms=per_tx_v, n_bands=n_bands,
-        derivations=_deriv(scheme, n_tx, n_bands))
+        derivations=_deriv(scheme, n_tx, n_bands),
+        chirp_phases=ph["rows"], phase_tx=ph["tx"], phase_source=ph["source"],
+        phase_confidence=ph["confidence"], phase_note=ph["note"])
