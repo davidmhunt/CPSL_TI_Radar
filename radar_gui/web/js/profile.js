@@ -1,6 +1,6 @@
 // Chirp-construction diagram (gui-27): a pure render of the analysed metrics -> SVG string.
 // Top: frequency-vs-time of one chirp (idle, TX start, ADC window, ramp end, sampled/full bandwidth, Tc).
-// Bottom: the frame strip (active vs idle, zoomed into loops of chirps), TX-coloured like the MIMO card.
+// Bottom: the frame strip (active vs idle, zoomed into ONE loop of chirps (gui-31)), TX-coloured like the MIMO card.
 // Profile 0 / subframe 0 only (the metrics' flat fields). Text is laid out in CSS pixels (viewBox width = container width).
 
 // Every Metrics field this file reads; tests/test_radar_gui_profile.py checks the backend supplies each one.
@@ -173,34 +173,32 @@ export function renderProfile(m, width) {
   g += `<g>${ttl(`Frame period ${num(per, 5)} ms (${num(m.frame_rate_hz, 4)} Hz)`)}<rect class="fidle" x="${fx0}" y="${fyTop}" width="${bw}" height="${barH}"/></g>`;
   g += `<g>${ttl(`Active ${num(m.active_ms, 5)} ms`)}<rect class="fact" x="${fx0}" y="${fyTop}" width="${aw.toFixed(1)}" height="${barH}"/></g>`;
   y = fyTop + barH + 2;
-  // zoom into the active region: loops of chirps (first loops, an ellipsis, the last loop when they do not all fit)
-  const zy = y + 14, zh = 20, cw = Math.min(P * 0.45, Math.max(14, M * 3));
-  const allFit = NL * cw <= bw;
-  const kFirst = allFit ? NL : Math.max(1, Math.floor((bw - 16 - cw) / cw));
-  const lw = allFit ? bw / NL : cw, shown = allFit ? NL : kFirst + 1;
-  g += `<path class="zoom" d="M${fx0} ${fyTop + barH} L${fx0 + aw} ${fyTop + barH} L${fx0 + bw} ${zy} L${fx0} ${zy} Z"/>`;
+  // zoom: ONE loop (gui-31). A loop-sized slice of the active segment (1/NL of it) is blown up to the full width below,
+  // showing its chirps in order (TX-coloured ramp, blank idle gap = the Tc slot), instead of every chirp of the frame.
+  const zy = y + 16, zh = 22, sw = Math.max(3, Math.min(aw, aw / NL)), tLoop = M * m.chirp_us, tRev = m.loop_period_us || tLoop;   // loop duration (every chirp), vs the per-TX revisit period
+  g += `<path class="zoom" d="M${fx0} ${fyTop + barH} L${fx0 + sw} ${fyTop + barH} L${fx0 + bw} ${zy} L${fx0} ${zy} Z"/>`;
+  g += `<g>${ttl(`One loop = 1/${NL} of the active time (${num(tLoop, 4)} µs of ${num(m.active_ms, 5)} ms), zoomed below`)}<rect class="slice" x="${fx0}" y="${fyTop}" width="${sw.toFixed(1)}" height="${barH}"/></g>`;
   const seq = m.chirp_sequence && m.chirp_sequence.length ? m.chirp_sequence : Array.from({ length: M }, (_, i) => ({ index: i, tx_mask: 1 }));
-  for (let k = 0; k < shown; k++) {
-    const last = !allFit && k === shown - 1, lx = last ? fx0 + bw - cw : fx0 + k * lw, w = last ? cw : lw, loopNo = last ? NL : k + 1;
-    g += `<g>${ttl(`Loop ${loopNo} of ${NL}: ${M} chirp${M > 1 ? 's' : ''}, ${m.scheme === 'ddma' ? 'all TX on every chirp' : 'TX pattern repeats each loop'}`)}`;
-    for (let c = 0; c < M; c++) {
-      const cs = seq[c % seq.length], txl = maskTx(m, cs.tx_mask), sx = lx + c * w / M, sw = w / M, h = zh / Math.max(1, txl.length);
-      g += `<g>${ttl(`Loop ${loopNo}, chirp ${c + 1}: ${txl.map(l => 'TX' + (l + 1)).join('+') || 'no TX'}`)}` +
-        txl.map((l, i) => `<rect x="${sx.toFixed(2)}" y="${(zy + i * h).toFixed(2)}" width="${Math.max(0.6, sw - (sw > 3 ? 0.6 : 0)).toFixed(2)}" height="${h.toFixed(2)}" style="fill:${txColor(l)}"/>`).join('') + `</g>`;
-    }
-    g += `<rect class="loopbox" x="${lx.toFixed(1)}" y="${zy}" width="${w.toFixed(1)}" height="${zh}"/></g>`;
+  const cwid = bw / M, rf = m.chirp_us > 0 ? Math.min(1, ramp / m.chirp_us) : 1, gapOk = cwid >= 7;
+  g += `<g>${ttl(`One loop: ${M} chirp${M > 1 ? 's' : ''} x Tc ${num(m.chirp_us, 4)} µs = ${num(tLoop, 4)} µs`)}`;
+  for (let c = 0; c < M; c++) {
+    const cs = seq[c % seq.length], txl = maskTx(m, cs.tx_mask), sx = fx0 + c * cwid, h = zh / Math.max(1, txl.length);
+    const rx = gapOk ? sx + cwid * (1 - rf) : sx, rw = gapOk ? cwid * rf : cwid;
+    g += `<g>${ttl(`Chirp ${c + 1} of ${M}: ${txl.map(l => 'TX' + (l + 1)).join('+') || 'no TX'}; Tc ${num(m.chirp_us, 4)} µs (idle ${num(idle, 4)} + ramp ${num(ramp, 4)})`)}` +
+      txl.map((l, i) => `<rect x="${rx.toFixed(2)}" y="${(zy + i * h).toFixed(2)}" width="${Math.max(0.6, rw - (cwid > 3 ? 0.6 : 0)).toFixed(2)}" height="${h.toFixed(2)}" style="fill:${txColor(l)}"/>`).join('') +
+      (cwid >= 4 ? `<line class="tick" x1="${sx.toFixed(2)}" y1="${zy}" x2="${sx.toFixed(2)}" y2="${zy + zh}"/>` : '') + `</g>`;
   }
-  if (!allFit) g += t(fx0 + kFirst * lw + (bw - cw - kFirst * lw) / 2, zy + zh / 2 + 4, '⋯', { a: 'middle', c: 'ell' });
+  g += `<rect class="loopbox" x="${fx0}" y="${zy}" width="${bw}" height="${zh}"/></g>`;
   y = zy + zh + 12;
   const frow = (xa, xb, text, title, cls) => {
     const xs = Math.min(xa, xb), xe = Math.max(xa, xb), w = textW(text), c = Math.max(w / 2 + 2, Math.min(W - w / 2 - 2, (xs + xe) / 2));
     const r = `<g>${ttl(title)}<path class="bk ${cls || ''}" d="M${xs.toFixed(1)} ${y} v4 H${xe.toFixed(1)} v-4"/>${t(c, y + 15, text, { a: 'middle', c: 'bkl ' + (cls || '') })}</g>`;
     y += 20; return r;
   };
-  g += frow(fx0, fx0 + lw, `1 loop = ${M} chirp${M > 1 ? 's' : ''}`, `One loop: ${M} chirp${M > 1 ? 's' : ''} x Tc ${num(m.chirp_us, 4)} µs` + (m.scheme === 'ddma' ? '' : ` (each TX revisited every ${num(m.loop_period_us || M * m.chirp_us, 4)} µs)`), 'tc');
-  g += frow(fx0, fx0 + bw, `${NL} loop${NL > 1 ? 's' : ''} × ${M} = ${m.n_chirps} chirps` + (allFit ? '' : ' (loops elided)'),
-    `${NL} loops x ${M} chirps = ${m.n_chirps} chirps per frame, ${num(m.active_ms, 5)} ms active`, 'tc');
-  g += frow(fx0, fx0 + bw, `frame period ${num(per, 2)} ms = ${num(m.frame_rate_hz, 2)} Hz`, `Frame period ${num(per, 5)} ms; frame rate ${num(m.frame_rate_hz, 4)} Hz`, '');
+  if (M > 1 && cwid >= 40) g += frow(fx0, fx0 + cwid, `Tc ${num(m.chirp_us, 2)} µs`, `One chirp slot: Tc = idle ${num(idle, 4)} + ramp ${num(ramp, 4)} = ${num(m.chirp_us, 4)} µs`, 'tc');
+  g += frow(fx0, fx0 + bw, `1 loop = ${M} chirp${M > 1 ? 's' : ''} · ${num(tLoop, 2)} µs`, `One loop: ${M} chirp${M > 1 ? 's' : ''} x Tc ${num(m.chirp_us, 4)} µs = ${num(tLoop, 4)} µs` + (m.scheme === 'ddma' ? '' : ` (each TX revisited every ${num(tRev, 4)} µs)`), 'tc');
+  g += frow(fx0, fx0 + aw, `× ${NL} loop${NL > 1 ? 's' : ''} = ${m.n_chirps} chirps`, `${NL} loops x ${M} chirps = ${m.n_chirps} chirps per frame (the highlighted slice of the active bar is one loop)`, '');
+  g += frow(fx0, fx0 + bw, `active ${num(m.active_ms, 3)} ms of frame period ${num(per, 2)} ms (${num(m.frame_rate_hz, 2)} Hz)`, `Active ${num(m.active_ms, 5)} ms of frame period ${num(per, 5)} ms; frame rate ${num(m.frame_rate_hz, 4)} Hz`, '');
   // legend: TX colours
   y += 2;
   let lx = 2, ly = y;

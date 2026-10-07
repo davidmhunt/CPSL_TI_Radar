@@ -178,7 +178,8 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 #profDiagram .slope { fill: var(--text); } #profDiagram .ax-t { font-style: italic; }
 #profDiagram .sep { stroke: var(--line); stroke-width: 1; }
 #profDiagram .fidle { fill: var(--grid); stroke: var(--line); } #profDiagram .fact { fill: var(--accent); }
-#profDiagram .zoom { fill: var(--accent); fill-opacity: .1; stroke: none; }
+#profDiagram .zoom { fill: var(--accent); fill-opacity: .22; stroke: var(--text); stroke-opacity: .55; stroke-width: 1; stroke-dasharray: 3 2; }
+#profDiagram .slice { fill: none; stroke: var(--text); stroke-width: 1.5; } #profDiagram .tick { stroke: var(--bg); stroke-width: .6; }
 #profDiagram .loopbox { fill: none; stroke: var(--bg); stroke-width: 1; } #profDiagram .ell { fill: var(--text); font-size: 14px; }
 #profDiagram g:hover > line.ev, #profDiagram g:hover > .ramp { stroke-width: 2; }
 .pnotes { padding: 0 12px 10px; display: grid; gap: 4px; }

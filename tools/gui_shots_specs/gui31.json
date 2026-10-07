@@ -1,0 +1,1232 @@
+{
+ "user_cfgs": {
+  "smoke_1843_bpm.cfg": "% ***************************************************************\n% Created for SDK ver:03.05\n% Created using Visualizer ver:3.6.0.0\n% Frequency:77\n% Platform:xWR18xx\n% ***************************************************************\nsensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nadcCfg 2 1\nadcbufCfg -1 0 1 1 1\nprofileCfg 0 77 293 7 44 0 0 80.0 1 63 2100 0 0 30\nchirpCfg 0 0 0 0 0 0 0 5\nchirpCfg 1 1 0 0 0 0 0 5\nframeCfg 0 1 64 0 100 1 0\nlowPower 0 0\nguiMonitor -1 1 0 0 0 0 1\ncfarCfg -1 0 2 8 4 3 0 20 1\ncfarCfg -1 1 0 4 2 3 1 20 1\nmultiObjBeamForming -1 1 0.5\nclutterRemoval -1 0\ncalibDcRangeSig -1 0 -5 8 256\nextendedMaxVelocity -1 0\nlvdsStreamCfg -1 0 1 0\ncompRangeBiasAndRxChanPhase 0.0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0\nmeasureRangeBiasAndRxChanPhase 0 1.5 0.2\nCQRxSatMonitor 0 3 5 121 0\nCQSigImgMonitor 0 127 4\nanalogMonitor 0 0\naoaFovCfg -1 -90 90 -90 90\ncfarFovCfg -1 0 0 7.22\ncfarFovCfg -1 1 -3.92 3.92\ncalibData 0 0 0\nsensorStart\nbpmCfg -1 1 0 1\n",
+  "smoke_1843_14chirps.cfg": "% ***************************************************************\n% Created for SDK ver:03.05\n% Created using Visualizer ver:3.6.0.0\n% Frequency:77\n% Platform:xWR18xx\n% ***************************************************************\nsensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nadcCfg 2 1\nadcbufCfg -1 0 1 1 1\nprofileCfg 0 77 293 7 44 0 0 80.0 1 63 2100 0 0 30\nchirpCfg 0 0 0 0 0 0 0 1\nchirpCfg 1 1 0 0 0 0 0 4\nchirpCfg 2 2 0 0 0 0 0 2\nchirpCfg 3 3 0 0 0 0 0 1\nchirpCfg 4 4 0 0 0 0 0 4\nchirpCfg 5 5 0 0 0 0 0 2\nchirpCfg 6 6 0 0 0 0 0 1\nchirpCfg 7 7 0 0 0 0 0 4\nchirpCfg 8 8 0 0 0 0 0 2\nchirpCfg 9 9 0 0 0 0 0 1\nchirpCfg 10 10 0 0 0 0 0 4\nchirpCfg 11 11 0 0 0 0 0 2\nchirpCfg 12 12 0 0 0 0 0 1\nchirpCfg 13 13 0 0 0 0 0 4\nframeCfg 0 13 8 0 100 1 0\nlowPower 0 0\nguiMonitor -1 1 0 0 0 0 1\ncfarCfg -1 0 2 8 4 3 0 20 1\ncfarCfg -1 1 0 4 2 3 1 20 1\nmultiObjBeamForming -1 1 0.5\nclutterRemoval -1 0\ncalibDcRangeSig -1 0 -5 8 256\nextendedMaxVelocity -1 0\nlvdsStreamCfg -1 0 1 0\ncompRangeBiasAndRxChanPhase 0.0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0\nmeasureRangeBiasAndRxChanPhase 0 1.5 0.2\nCQRxSatMonitor 0 3 5 121 0\nCQSigImgMonitor 0 127 4\nanalogMonitor 0 0\naoaFovCfg -1 -90 90 -90 90\ncfarFovCfg -1 0 0 7.22\ncfarFovCfg -1 1 -3.92 3.92\ncalibData 0 0 0\nsensorStart\n",
+  "smoke_1843_1chirp.cfg": "% ***************************************************************\n% Created for SDK ver:03.05\n% Created using Visualizer ver:3.6.0.0\n% Frequency:77\n% Platform:xWR18xx\n% ***************************************************************\nsensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nadcCfg 2 1\nadcbufCfg -1 0 1 1 1\nprofileCfg 0 77 293 7 44 0 0 80.0 1 63 2100 0 0 30\nchirpCfg 0 0 0 0 0 0 0 1\nframeCfg 0 0 64 0 100 1 0\nlowPower 0 0\nguiMonitor -1 1 0 0 0 0 1\ncfarCfg -1 0 2 8 4 3 0 20 1\ncfarCfg -1 1 0 4 2 3 1 20 1\nmultiObjBeamForming -1 1 0.5\nclutterRemoval -1 0\ncalibDcRangeSig -1 0 -5 8 256\nextendedMaxVelocity -1 0\nlvdsStreamCfg -1 0 1 0\ncompRangeBiasAndRxChanPhase 0.0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0\nmeasureRangeBiasAndRxChanPhase 0 1.5 0.2\nCQRxSatMonitor 0 3 5 121 0\nCQSigImgMonitor 0 127 4\nanalogMonitor 0 0\naoaFovCfg -1 -90 90 -90 90\ncfarFovCfg -1 0 0 7.22\ncfarFovCfg -1 1 -3.92 3.92\ncalibData 0 0 0\nsensorStart\n",
+  "cascade_36chirps.cfg": "% Max Range: 15 meters. \n% Range resolution : 0.09 m\n% Max Velocity : 19.41 m/s\n% Velocity Resolution : 0.1522 m/s\nsensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 7 1 15 7\nadcCfg 2 1\nadcbufCfg -1 0 1 0 1\nlowPower 0 0\ndataPathClkCfg 1 1\nprofileCfg 0 77 5 6 45 0 0 44.41 0 192 5000 0 0 30\ndataPathConfig 0 1 0 2 64 64 64 0\nhsiClockConfig 9 0\nhsiLaneConfig 15 1 0 2 0 4 0 5 0 3 0 0\ndataFormatConfig 0 1\nchirpCfg 0 0 0 0 0 0 0 7\nchirpCfg 1 1 0 0 0 0 0 7\nchirpCfg 2 2 0 0 0 0 0 7\nchirpCfg 3 3 0 0 0 0 0 7\nchirpCfg 4 4 0 0 0 0 0 7\nchirpCfg 5 5 0 0 0 0 0 7\nchirpCfg 6 6 0 0 0 0 0 7\nchirpCfg 7 7 0 0 0 0 0 7\nchirpCfg 8 8 0 0 0 0 0 7\nchirpCfg 9 9 0 0 0 0 0 7\nchirpCfg 10 10 0 0 0 0 0 7\nchirpCfg 11 11 0 0 0 0 0 7\nchirpCfg 12 12 0 0 0 0 0 7\nchirpCfg 13 13 0 0 0 0 0 7\nchirpCfg 14 14 0 0 0 0 0 7\nchirpCfg 15 15 0 0 0 0 0 7\nchirpCfg 16 16 0 0 0 0 0 7\nchirpCfg 17 17 0 0 0 0 0 7\nchirpCfg 18 18 0 0 0 0 0 7\nchirpCfg 19 19 0 0 0 0 0 7\nchirpCfg 20 20 0 0 0 0 0 7\nchirpCfg 21 21 0 0 0 0 0 7\nchirpCfg 22 22 0 0 0 0 0 7\nchirpCfg 23 23 0 0 0 0 0 7\nchirpCfg 24 24 0 0 0 0 0 7\nchirpCfg 25 25 0 0 0 0 0 7\nchirpCfg 26 26 0 0 0 0 0 7\nchirpCfg 27 27 0 0 0 0 0 7\nchirpCfg 28 28 0 0 0 0 0 7\nchirpCfg 29 29 0 0 0 0 0 7\nchirpCfg 30 30 0 0 0 0 0 7\nchirpCfg 31 31 0 0 0 0 0 7\nchirpCfg 32 32 0 0 0 0 0 7\nchirpCfg 33 33 0 0 0 0 0 7\nchirpCfg 34 34 0 0 0 0 0 7\nchirpCfg 35 35 0 0 0 0 0 7\nframeCfg 0 35 4 0 192 50 1 0 2\nguiMonitor -1 1 0 0 0 0 0 1 1\ncfarCfg -1 1 3 16 0 0 1 18.0 0 7 0 1\ncfarCfg -1 0 3 16 0 0 1 15.0 0 7 0 1\ncompressionCfg -1 1 0 0.5 8 \nintfMitigCfg -1 25 28\nlocalMaxCfg -1 10 35 \n%antennaCalibParams1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1\n%antennaCalibParams2 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1\n%antennaCalibParams3 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1\nantennaCalibParams1 -0.44086 -0.37671 -0.27167 -0.61047 -0.13922 -0.62286 0.02533 -0.60785 -0.38330 0.56158 -0.59875 0.36621 -0.73328 0.08215 -0.64923 0.01227 -0.01538 -0.58875 0.27704 -0.62524 0.38312 -0.52728 0.47943 -0.37726 -0.66345 0.09552 -0.67474 -0.19995 -0.54498 -0.49585 -0.42108 -0.48193 \nantennaCalibParams2 0.52539 -0.28143 0.69080 -0.06561 0.65625 0.08118 0.57855 0.26385 -0.37817 -0.53223 -0.14532 -0.67084 0.16516 -0.73163 0.23608 -0.61774 0.58875 0.13110 0.56549 0.39886 0.45013 0.48950 0.27313 0.57507 0.06879 -0.65051 0.32404 -0.59290 0.58905 -0.44318 0.57373 -0.32166 \nantennaCalibParams3 -0.02155 0.61859 -0.30334 0.63727 -0.40479 0.53766 -0.51367 0.38599 0.66302 -0.05438 0.63898 0.22076 0.54443 0.48260 1.00000 0.00140 -0.38184 -0.48633 -0.18005 -0.69617 -0.04089 -0.68475 0.15771 -0.64050 -0.48895 0.48785 -0.66699 0.26941 -0.77966 -0.04065 -0.69421 -0.13177 \nanalogMonitor 0 0 \ncalibData 0 0 0\naoaFovCfg -1 -85 85 -30 30\nappSceneryParams 0.0 0.0 1.0 0.0 0.0 -14.0 14.0 0.1 15.0 -5.0 5.0\nappGatingParams 3 2 2 2 4\nappStateParams 3 3 6 500 5 6000\nappAllocParams  40 100 0.1 13 0.5 20\ngtrack 1 800 30 0.0 19.41 0.1522 0.5 0.5 0.0 0.050\nransac 1 200 1.0\nmeasureRangeBiasAndRxChanPhase 0 3. 0.5\nsensorStart\n"
+ },
+ "scenarios": [
+  {
+   "name": "c1_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_1chirp.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c1_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_1chirp.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c1_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_1chirp.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c2_bpm_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_bpm.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c2_bpm_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_bpm.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c2_bpm_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_bpm.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c3_tdm_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "short_range_3D.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c3_tdm_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "short_range_3D.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c3_tdm_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "short_range_3D.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c8_ddma_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c8_ddma_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c8_ddma_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c14_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c14_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c14_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c36_ddma_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_36chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c36_ddma_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_36chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c36_ddma_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_36chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c14_loops128_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c14_loops128_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c14_loops128_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c1_loops128_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_1chirp.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c1_loops128_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_1chirp.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c1_loops128_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_1chirp.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c8_ddma_loops1_w800",
+   "window": [
+    800,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "1"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c8_ddma_loops1_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "1"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "c8_ddma_loops1_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "1"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_short_ramp_adc_beyond_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_ramp_us",
+     "value": "20"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_active_gt_frame_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}
