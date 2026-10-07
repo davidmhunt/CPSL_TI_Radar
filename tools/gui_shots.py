@@ -5,7 +5,7 @@ only urllib/json/subprocess (no new dependency), starts
 ``python -m radar_gui --source mock`` (or attaches to ``--url``), opens the
 Configure tab, runs scenarios and saves PNGs.
 
-    uv run python tools/gui_shots.py --scenarios builtin --out ~/gui_shots/smoke
+    uv run python tools/gui_shots.py --scenarios builtin --out /some/dir
     uv run python tools/gui_shots.py --scenarios my.json --url http://127.0.0.1:8000
 
 Spec: a JSON list of scenarios, or {"user_cfgs": {"name.cfg": "<text>"}, "scenarios": [...]}
@@ -26,8 +26,9 @@ Actions (each followed by a short settle delay for the debounced re-analysis):
     {"click_text": "BPM (2 TX)", "within": "#mChirpTable", "times": 1}   click a button by its text   {"js": "return document.title"}
 The app is a fixed-height layout whose columns scroll internally, so use a tall
 window (default 1400x2400) when shooting an element or the whole page.
-Outputs go under --out/<scenario name>/ ; files outside $HOME may be unwritable
-for snap Firefox, so the default --out is $HOME/gui_shots. Never commit PNGs.
+Outputs go under --out/<scenario name>/ ; the default --out is
+<repo root>/gui_shots/<spec name> (gitignored; PNG bytes come back over WebDriver
+and Python writes them, so snap Firefox never touches the path). Never commit PNGs.
 Console errors (window error / unhandledrejection / console.error captured after
 page load) are written to <out>/console_errors.txt.
 """
@@ -229,13 +230,16 @@ def run_scenario(d, sc, out, url):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--scenarios", default="builtin", help="JSON spec file or 'builtin'")
-    ap.add_argument("--out", default=os.path.join(os.path.expanduser("~"), "gui_shots"))
+    ap.add_argument("--out", help="output dir (default: <repo root>/gui_shots/<spec name>)")
     ap.add_argument("--url", help="attach to a running GUI instead of starting one")
     ap.add_argument("--only", help="run only scenarios whose name contains this")
     a = ap.parse_args(argv)
     spec, user_cfgs = load_spec(a.scenarios)
     if a.only:
         spec = [s for s in spec if a.only in s["name"]]
+    if a.out is None:
+        name = "builtin" if a.scenarios == "builtin" else os.path.splitext(os.path.basename(a.scenarios))[0]
+        a.out = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "gui_shots", name)
     out = os.path.abspath(os.path.expanduser(a.out)); os.makedirs(out, exist_ok=True)
 
     procs, d = [], None
