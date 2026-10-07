@@ -228,11 +228,11 @@ def test_issues_carry_source_and_confidence():
 def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
     import sys
     sys.path.insert(0, str(ROOT / "tests"))
-    from test_radar_gui_cfg import SHIPPED, board_for
+    from test_radar_gui_cfg import SHIPPED, board_for, is_legacy_no_calib
     seen = set()
     for p in SHIPPED:
         r = validate(parse_cfg_file(p), board_for(p))
-        errs = [i.message for i in r.errors if i.code != "missing_calibData"]   # legacy 1843 cfgs: see test_radar_gui_cfg
+        errs = [i.message for i in r.errors if not (i.code == "missing_calibData" and is_legacy_no_calib(p))]
         assert not errs, (str(p), errs)
         seen |= {(i.level, i.code) for i in r.issues} & {(l, c) for l in ("warning", "info", "error") for c in MIX}
     # raw-ADC cfgs enable TX channels no chirp uses; 6843 ODS cfgs use the 1,2,4 order: both reported, neither an error

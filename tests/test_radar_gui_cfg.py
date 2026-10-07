@@ -13,6 +13,15 @@ VIEWER = ROOT / "tools" / "radar_viewer" / "configs"
 SHIPPED = sorted(RADAR.rglob("*.cfg")) + sorted(VIEWER.glob("*.cfg"))
 
 
+# Shipped cfg dirs that predate the SDK 3.6 demo and still lack calibData (gui-33 follow-up: the 4 IWR1843 DCA cfgs
+# were fixed; these were not in scope). Only these dirs may skip missing_calibData; every other shipped cfg must have it.
+LEGACY_NO_CALIB_DIRS = (RADAR / "DCA1000" / "custom_configs", RADAR / "IWR_Demos")
+
+
+def is_legacy_no_calib(p: Path) -> bool:
+    return any(d in Path(p).parents for d in LEGACY_NO_CALIB_DIRS)
+
+
 def board_for(p: Path) -> str:
     s = str(p)
     if "cascade" in s or "calibration_run" in s:
@@ -229,11 +238,9 @@ def test_shipped_cfg_parses_and_validates(path):
     rep = validate(parse_cfg_file(path), board)
     json.dumps(rep.to_dict())
     assert rep.metrics is not None, [i.message for i in rep.issues]
-    # shipped cfgs run on hardware: any error here is either a real cfg problem or a wrong rule. Exception (gui-33
-    # Step 4): many legacy IWR1843 cfgs predate the stock SDK 3.6 demo, which refuses sensorStart without calibData
-    # (firmware demo cfg_rules.IWR1843.required_commands); they were written for older images, so that one rule is not
-    # counted here. The generator's output and the rule itself are pinned elsewhere.
-    errs = [i for i in rep.errors if i.code != "missing_calibData"]
+    # shipped cfgs run on hardware: any error here is either a real cfg problem or a wrong rule (gui-33: every shipped
+    # IWR1843 cfg now carries calibData, which the stock SDK 3.6 demo requires).
+    errs = [i for i in rep.errors if not (i.code == "missing_calibData" and is_legacy_no_calib(path))]
     assert not errs, [i.message for i in errs]
 
 
