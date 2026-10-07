@@ -108,9 +108,21 @@
       },
       "max_chirps": {
         "value": 256,
+        "level": "error",
+        "source": "docs/research/gui_cascade_chirp_limit_2026-10-07.md: Doppler FFT size N = validFFT(chirps per frame) sizes the 82 KiB DSS L2 heap (~N(2V+16Rx+8) B); 256 chirps bench-confirmed, 1024 bench-failed; applies to the full 6TX/8RX config (reduced-TX configs only warn)",
+        "confidence": "medium"
+      },
+      "l2_heap_bytes": {
+        "value": 83968,
         "level": "warning",
-        "source": "cfggen.py: TI only tested 192 samples x 256 chirps",
-        "confidence": "repo"
+        "source": "docs/research/gui_cascade_chirp_limit_2026-10-07.md: .dpc_l2Heap = 0x14800 in the DSS build map (dss_main.c:107-119)",
+        "confidence": "medium"
+      },
+      "l3_cube_bytes": {
+        "value": 2654208,
+        "level": "error",
+        "source": "docs/research/gui_cascade_chirp_limit_2026-10-07.md: .l3ram = 0x288000 in the DSS build map (dss_main.c:99); DPC_OBJECTDETECTION_ENOMEM__L3_RAM_RADAR_CUBE",
+        "confidence": "medium"
       },
       "lvds_supported": {
         "value": false,

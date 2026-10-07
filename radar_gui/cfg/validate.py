@@ -227,6 +227,57 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
     return out
 
 
+def _valid_fft_size(n: int) -> int:
+    """Smallest FFT size >= n of the form 2^k or 3*2^k (the firmware's mathUtils_getValidFFTSize)."""
+    best = 1 << max(0, (n - 1).bit_length())
+    three = 3
+    while three < best:
+        if three >= n:
+            best = min(best, three)
+        three *= 2
+    return best
+
+
+def _cascade_chirp_limit(m, lim, add) -> None:
+    """Cascade DDM firmware: chirps per frame (= chirps per loop x loops) set the Doppler FFT size N, and the DSS L2 heap
+    (83,968 B) must hold ~N(2V + 16 Rx + 8) B of scratch. For the full 6TX/8RX config (V=48) that is 232 N, so
+    <= 256 chirps fits (bench-confirmed) and 384 / 1024 do not (docs/research/gui_cascade_chirp_limit_2026-10-07.md).
+    Full config: error above the limit. Reduced-TX configs (V < 48) are not bench-tested, so they only warn."""
+    cap = lim["max_chirps"].value
+    n_fft = _valid_fft_size(m.n_chirps)
+    l2 = n_fft * (2 * m.n_virtual + 16 * m.n_rx + 8)
+    pool = lim["l2_heap_bytes"].value if "l2_heap_bytes" in lim else None
+    fix = f"reduce loops to <= {cap // max(1, m.chirps_per_loop)} with {m.chirps_per_loop} chirp cfgs"
+    msg = (f"{m.n_chirps} chirps per frame ({m.chirps_per_loop} per loop x {m.n_loops} loops) exceeds the {cap}-chirp limit "
+           f"of the cascade firmware (Doppler FFT size {n_fft} needs ~{l2 // 1024} KiB of the 82 KiB DSS L2 heap); {fix}")
+    if m.n_virtual >= 48 and m.n_rx >= 8:
+        add(lim["max_chirps"], "chirps", msg)
+    else:
+        add(lim["max_chirps"], "chirps",
+            f"{m.n_chirps} chirps exceeds {cap}, which is only bench-tested with 6 TX / 8 RX; with {m.n_tx} TX / {m.n_rx} RX "
+            f"the L2 model estimates ~{l2 // 1024} KiB of {(pool or 0) // 1024} KiB for this Doppler size (untested); {fix}",
+            "warning")
+
+
+def _cascade_l3_check(cfg, m, lim, add) -> None:
+    """L3 radar cube (docs/research/gui_cascade_chirp_limit_2026-10-07.md item 4): compressed cube R*C*Rx*4*rho + decompression
+    scratch C*Rx*4*8 + detection matrix R*(N/8)*2 + ~64 KiB of object lists, against the 2,654,208 B `.l3ram`. Error only when exceeded."""
+    rho = 1.0
+    cc = cfg.first("compressionCfg")
+    if cc is not None and len(cc.args) > 3 and int(float(cc.args[1])) == 1:
+        rho = float(cc.args[3])
+    r = _valid_fft_size(m.num_samples)
+    c = m.n_chirps
+    n_fft = _valid_fft_size(c)
+    need = int(r * c * m.n_rx * 4 * rho) + c * m.n_rx * 32 + r * (n_fft // 8) * 2 + 64 * 1024
+    cap = lim["l3_cube_bytes"].value
+    if need > cap:
+        add(lim["l3_cube_bytes"], "radar_cube_l3",
+            f"radar cube + scratch ~{need} B ({r} range bins x {c} chirps x {m.n_rx} RX, compression {rho:g}) exceeds the "
+            f"{cap} B L3 RAM of the cascade DSS; reduce samples (range bins) or loops, or lower the compression ratio")
+
+
+
 def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     """Check `cfg` against `board`'s limits; `firmware` (id) selects that firmware's limits, default: the board's."""
     if board not in BOARDS:
@@ -385,7 +436,9 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     if "max_samples" in lim and m.num_samples > lim["max_samples"].value:
         add(lim["max_samples"], "samples", f"{m.num_samples} samples exceeds tested {lim['max_samples'].value}")
     if "max_chirps" in lim and m.n_chirps > lim["max_chirps"].value:
-        add(lim["max_chirps"], "chirps", f"{m.n_chirps} chirps exceeds tested {lim['max_chirps'].value}")
+        _cascade_chirp_limit(m, lim, add)
+    if "l3_cube_bytes" in lim and m.scheme == "ddma":
+        _cascade_l3_check(cfg, m, lim, add)
     if "adc_buffer_bytes" in lim:
         chirp_b = m.num_samples * m.n_rx * m.bytes_per_sample
         if chirp_b > lim["adc_buffer_bytes"].value:

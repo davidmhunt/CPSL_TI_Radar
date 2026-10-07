@@ -45,6 +45,7 @@ CASCADE_RAMP_MARGIN_US = 0.6    # cfggen RAMP_MARGIN_US
 SINGLE_MAX_B_MHZ = 3200.0       # default N keeps the sampled bandwidth under this (band is 4 GHz)
 DEFAULT_SAMPLES = 128
 DEFAULT_CASCADE_SAMPLES = 192
+CASCADE_MAX_CHIRPS = 256        # chirps per frame the cascade DDM firmware fits (validate.py _cascade_chirp_limit)
 DUTY_PREFERRED = 0.5            # default loop count keeps chirps under half the frame
 GUI_MONITOR = "guiMonitor -1 1 0 0 0 0 0 1 1"   # cascade: points + side info (cfggen.GUI_MONITOR)
 
@@ -384,7 +385,10 @@ def _loop_options(loops_given, vres, cand, cpl, cascade):
     if vres is not None:
         lam = C / cand["fc_hz"]
         chirps = lam / (2 * vres * cand["tc"] * 1e-6)
-        return [max(1, math.ceil(chirps / cpl))], False
+        loops = max(1, math.ceil(chirps / cpl))
+        if cascade:     # the cascade firmware fails above 256 chirps per frame (docs/research/gui_cascade_chirp_limit_2026-10-07.md)
+            loops = min(loops, CASCADE_MAX_CHIRPS // cpl)
+        return [loops], False
     return ([32, 16, 8] if cascade else [128, 64, 32, 16, 8]), True
 
 
