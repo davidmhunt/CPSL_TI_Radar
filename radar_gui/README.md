@@ -158,6 +158,8 @@ Needs a Run-tab driver run with a DCA1000 config and a driver whose usage text l
   `dca1000.enabled` and the binary lists the flag; `GET /api/driver/configs` carries `caps.adc_tap`. The processor thread keeps only the newest
   frame: if it falls behind it drops (counted as `dropped(gui)` in the tab) and never stalls the tap reader. Median `proc` time is shown too
   (about 30 ms for the bench 4x128x256 cube, `tests/test_radar_gui_adc.py`).
+  The default test only guards `proc` < 250 ms (host-load tolerant); the strict < 50 ms check is opt-in on an idle host:
+  `RADAR_GUI_PERF=1 uv run pytest tests/test_radar_gui_adc.py -k timing_bench -q -s`.
 - **Processing** (`radar_gui/adc.py`, hand-written numpy, no new dependency). Hann-windowed range FFT; the range profile shows all N bins (complex
   1x gives positive IF only, so an I/Q swap puts a reflector at N-k and the image ratio goes negative). Range-Doppler: FFT over loops per virtual
   channel, centre = 0 m/s, **+ = receding**. Range-azimuth: azimuth-TX slots x RX as a lambda/2 line, 64-point zero-padded FFT per loop,
