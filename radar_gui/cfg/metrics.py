@@ -82,6 +82,7 @@ class Metrics:
     chirp_avg_rate_mbps: float    # bytes_per_chirp / chirp time (ADC buffer drains between chirps)
     lvds_data_fmt: int | None     # lvdsStreamCfg dataFmt, None when no lvdsStreamCfg
     num_frames: int | None = None
+    tx_start_us: float = 0.0      # profileCfg txStartTime (chirp diagram, gui-27)
     adc_end_us: float = 0.0       # adc_start + sampling window: must stay inside the ramp (gui-11)
     notes: list[str] = field(default_factory=list)
     # MIMO / chirp loop (gui-14); `mode` is the scheme ("tdm" | "ddma")
@@ -435,7 +436,7 @@ def _one(cfg: Cfg, board: str | None, cascade: bool, scheme: str, fr: dict) -> M
         avg_data_rate_mbps=per_frame * 8 / (period * 1e3) if period > 0 else 0.0,
         burst_rate_mbps=fs * 1e3 * n_rx * bps * 8 / 1e6,
         chirp_avg_rate_mbps=per_chirp * 8 / tc, lvds_data_fmt=lv_fmt,
-        num_frames=fr["frames"], adc_end_us=adc_start + sampling_us, notes=notes,
+        num_frames=fr["frames"], tx_start_us=pa[8] if len(pa) > 8 else 0.0, adc_end_us=adc_start + sampling_us, notes=notes,
         scheme=scheme, bpm_enabled=bpm,
         chirp_sequence=[{"index": i, "tx_mask": masks[i]} for i in range(fr["start"], fr["end"] + 1)],
         lambda_mm=lam * 1e3, loop_period_us=loop_us, pattern_period_us=chirps_per_loop * tc,

@@ -1,5 +1,6 @@
 // Configure tab: targets (or a loaded cfg) -> live metrics + constraint check -> save cfg + system JSON.
 import { $ } from './state.js';
+import { renderProfile, TX_COLORS } from './profile.js';
 
 const C = { mode: 'targets', base: '', seed: null, fw: [], source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
 const TARGETS = ['max_range_m', 'max_velocity_ms', 'range_res_m', 'velocity_res_ms', 'frame_rate_hz',
@@ -221,10 +222,22 @@ function render(j) {
       `<span class="code">${esc(i.code)}</span>`;
     ul.append(li);
   }
-  renderMimo(m); flagTable(); lvdsWarn();
+  C.profM = m; drawProfile(); renderMimo(m); flagTable(); lvdsWarn();
   $('cText').textContent = j.text || '';
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
+
+// Chirp-construction diagram (gui-27): pure render of the analysed metrics, laid out for the column's current width.
+function drawProfile() {
+  const box = $('profDiagram'), w = Math.round(box.clientWidth) || 460;
+  C.profW = w;
+  const r = renderProfile(C.profM, w);
+  box.innerHTML = r.svg || '<div class="muted">No metrics to draw.</div>';
+  $('profNote').replaceChildren(...r.notes.map(n => el('div', 'pn ' + n.level, esc(n.text))));
+  $('profBadge').textContent = r.notes.some(n => n.level === 'warn') ? 'check' : '';
+}
+let _ro = 0;
+new ResizeObserver(() => { cancelAnimationFrame(_ro); _ro = requestAnimationFrame(() => { const box = $('profDiagram'); if (C.profM && Math.abs(Math.round(box.clientWidth) - (C.profW || 0)) > 2 && box.clientWidth > 0) drawProfile(); }); }).observe(document.getElementById('profDiagram'));
 
 // ---------- boards, firmware, loading ----------
 // Firmware offered for a board come from the descriptors (GET /api/cfg/firmware); the default is listed first.
@@ -374,7 +387,6 @@ async function tableEdit(masks, bpm) {
 }
 // Per-TX phase readout (gui-23): one row per chirp of the loop (backend `chirp_phases`), TX columns coloured like the MIMO diagram.
 const ROWS_SCROLL = 12;
-const TX_COLORS = ['#4aa3ff', '#ff8a3d', '#4ccf7a', '#e05cc8', '#e6c84a', '#35d0d0', '#b08cff', '#ff6b6b', '#9ccc65', '#ffb74d', '#7986cb', '#a1887f'];
 const txColor = l => TX_COLORS[l % TX_COLORS.length];
 function phaseTable(m) {
   const box = el('div', 'ptbl'), cp = m.chirp_phases || [], tx = m.phase_tx || [];
