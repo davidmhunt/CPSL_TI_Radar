@@ -94,7 +94,7 @@ TEST_CASE(sar_driver_board_alias) {
 
 TEST_CASE(gui_only_keys_are_accepted_and_listed_once) {
     const auto& keys = FirmwareDescriptor::gui_only_keys();
-    CHECK(keys.count("identify") == 1);
+    CHECK(keys.count("identify") == 0);  // parsed strictly since gui-33 (test_firmware_identity)
     CHECK(keys.count("mimo") == 1);
     CHECK(keys.count("lvds_data_fmts") == 1);
     // the cascade limit keys added in 3a032e0 are plain limit entries

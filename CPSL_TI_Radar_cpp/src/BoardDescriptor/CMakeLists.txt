@@ -1,6 +1,6 @@
 #board and firmware descriptor loaders, radar-cfg cross-checks and cfg command filter
 #(design §1); linked by Utilities (SystemConfigReader)
-add_library(BoardDescriptor BoardDescriptor.cpp FirmwareDescriptor.cpp)
+add_library(BoardDescriptor BoardDescriptor.cpp FirmwareDescriptor.cpp FirmwareIdentity.cpp)
 
 target_include_directories(BoardDescriptor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

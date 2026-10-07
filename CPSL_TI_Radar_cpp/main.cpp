@@ -51,6 +51,16 @@ static std::string join(const std::vector<uint32_t>& v){
     return s;
 }
 
+//the --validate note about the firmware identity check ("" when the config names no firmware); sends nothing
+static std::string firmware_check_note(const SystemConfigReader& cfg){
+    if (cfg.getFirmwareId().empty()) return std::string();
+    const cpsl::radar::FirmwareDescriptor& fw = cfg.getFirmware();
+    auto it = fw.identify.find(fw.gui_board_for(cfg.getBoard().name));
+    return cpsl::radar::describe_firmware_check(it == fw.identify.end() ? nullptr : &it->second,
+                                                cfg.getBoard().lifecycle.config_once_per_boot,
+                                                cfg.get_firmware_check());
+}
+
 /**
  * @brief --validate: everything a run would check before touching hardware.
  * RadarConfig::load reads the system config (resolving the board descriptor
@@ -115,6 +125,9 @@ static int validate(const std::string& config_file){
     for (const std::string& n : cfg.getCfgCheckNotes()) {
         std::cout << "note:       " << n << "\n";
     }
+    if (!firmware_check_note(cfg).empty()) {
+        std::cout << "note:       " << firmware_check_note(cfg) << "\n";
+    }
     if (out.state == cpsl::radar::OutputDirCheck::State::error) {
         std::cerr << out.message << std::endl;
         std::cout << "INVALID: " << config_file << std::endl;
@@ -158,6 +171,7 @@ static int validate_json(const std::string& config_file){
             if (rc.board().lifecycle.config_once_per_boot) {
                 out["notes"].push_back(rc.board().name + " accepts a cfg once per power-up");
             }
+            if (!firmware_check_note(sys).empty()) out["notes"].push_back(firmware_check_note(sys));
             const radar::OutputDirCheck od = rc.output_dir_check();
             if (od.state == radar::OutputDirCheck::State::error) add_error("output_dir", od.message, config_file);
         }

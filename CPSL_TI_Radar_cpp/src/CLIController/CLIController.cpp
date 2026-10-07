@@ -191,6 +191,88 @@ bool CLIController::sendStopCommand()
     return CLIController::sendCommand(system_config_reader.getBoard().cli.stop_cmd, stop_timeout_ms(), "stop");
 }
 
+std::string CLIController::query(const std::string& command, int timeout_ms)
+{
+    io_error_ = false;
+    if (!stream) {
+        cpsl::radar::log_error("CLIController: '", command, "' not sent: no CLI port");
+        return std::string();
+    }
+    const auto t_start = std::chrono::steady_clock::now();
+    const std::string tag = "id";
+    try {
+        const string line = command + "\n";
+        std::error_code wec = stream->write(reinterpret_cast<const uint8_t*>(line.data()), line.size(),
+                                            std::chrono::milliseconds(timeout_ms));
+        if (wec) {
+            io_error_ = true;
+            cpsl::radar::log_error("CLIController: write of '", command, "' failed: ", wec.message());
+            return std::string();
+        }
+        const cpsl::radar::BoardDescriptor::Cli& cli = system_config_reader.getBoard().cli;
+        string resp;
+        std::error_code ec;
+        bool acked = false;
+        std::chrono::steady_clock::time_point ack_at;
+        const auto deadline = t_start + std::chrono::milliseconds(timeout_ms);
+        uint8_t chunk[256];
+        for (;;) {
+            //done: the prompt follows the command echo (an unrecognised command gets no ack), or the
+            //ack and then the prompt (no echo), or the ack on a board without a prompt
+            const size_t echo = resp.find(command);
+            const size_t after = echo == string::npos ? string::npos : echo + command.size();
+            if (!cli.prompt.empty() && after != string::npos && resp.find(cli.prompt, after) != string::npos) break;
+            const size_t ack_pos = resp.find(cli.ack);
+            if (ack_pos != string::npos) {
+                if (!acked) { acked = true; ack_at = std::chrono::steady_clock::now(); }
+                if (cli.prompt.empty() || resp.find(cli.prompt, ack_pos) != string::npos) break;
+                if (std::chrono::steady_clock::now() - ack_at >= std::chrono::milliseconds(cli.prompt_wait_ms)) break;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) { ec = std::make_error_code(std::errc::timed_out); break; }
+            size_t n = 0;
+            ec = stream->read_some(chunk, sizeof chunk, n,
+                                   std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
+            if (ec == std::errc::timed_out) { ec.clear(); continue; }   //re-check the deadline above
+            if (ec) break;
+            resp.append(reinterpret_cast<const char*>(chunk), n);
+        }
+        const long long elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - t_start).count();
+        if (ec && ec != std::errc::timed_out) {
+            io_error_ = true;
+            cpsl::radar::log_error("CLIController: error while reading the response to '", command, "': ",
+                                   ec.message());
+            return std::string();
+        }
+        const bool got_ack = resp.find(cli.ack) != string::npos;
+        const string reply = echo_reply(resp, command, cli.ack, cli.prompt);
+        const string quoted = reply.empty() ? string() : " \"" + reply + "\"";
+        if (got_ack) {
+            cpsl::radar::log_info("cli [", tag, "] ", command, " -> DONE (", elapsed_ms, " ms)", quoted);
+        } else if (reply.find("Error") != string::npos || reply.find("not recognized") != string::npos) {
+            cpsl::radar::log_info("cli [", tag, "] ", command, " -> ERROR (", elapsed_ms, " ms)", quoted);
+        } else {
+            cpsl::radar::log_info("cli [", tag, "] ", command, " -> TIMEOUT no '", cli.ack, "' in ",
+                                  timeout_ms, " ms", quoted);
+        }
+        //only the echo / a lone prompt came back: the board said nothing
+        const size_t echo_at = resp.find(command);
+        const bool prompt_after_echo = !cli.prompt.empty() && echo_at != string::npos &&
+                                       resp.find(cli.prompt, echo_at + command.size()) != string::npos;
+        const bool answered = got_ack || !reply.empty() || prompt_after_echo;
+        return answered ? resp : std::string();
+    } catch (const std::exception& e) {
+        io_error_ = true;
+        cpsl::radar::log_error("CLIController: '", command, "' failed: ", e.what());
+        return std::string();
+    } catch (...) {
+        io_error_ = true;
+        cpsl::radar::log_error("CLIController: '", command, "' failed with an unknown exception");
+        return std::string();
+    }
+}
+
 int CLIController::stop_timeout_ms() const
 {
     const cpsl::radar::BoardDescriptor::Cli& cli = system_config_reader.getBoard().cli;

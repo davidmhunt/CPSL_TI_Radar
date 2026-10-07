@@ -142,6 +142,7 @@ void SystemConfigReader::reset() {
     frame_queue_depth = kDefaultFrameQueueDepth;
     stall_timeout_ms = 0;
     skip_configure = false;
+    firmware_check = cpsl::radar::FirmwareCheck::automatic;
     rx_cpu = -1;
     worker_cpu = -1;
     rx_priority = kDefaultRxPriority;
@@ -219,6 +220,17 @@ bool SystemConfigReader::check_firmware(const std::string& src, const std::strin
                           firmware_path);
     }
 
+    // gui-33: a board that takes a cfg once per power-up must say whether querying it is safe
+    {
+        auto idn = firmware.identify.find(gui_board);
+        if (idn != firmware.identify.end() && board.lifecycle.config_once_per_boot && !idn->second.has_once_safe) {
+            return load_issue("firmware_descriptor",
+                              src + ": firmware: " + firmware_path + ": /identify/" + gui_board +
+                                  "/once_safe: missing required key (board " + board.name +
+                                  " accepts a cfg once per power-up)",
+                              firmware_path);
+        }
+    }
     const FirmwareDescriptor::Output& out = firmware.outputs.at(gui_board);
     if (serial_enabled && !out.tlv) {
         return load_issue("firmware_output_tlv",
@@ -365,7 +377,7 @@ bool SystemConfigReader::load() {
         const std::string p = "/runtime";
         if (!r.object(rt, p,
                       {"log_level", "frame_queue_depth", "stall_timeout_ms", "rx_cpu", "worker_cpu", "rx_priority",
-                       "worker_priority", "skip_configure"})) {
+                       "worker_priority", "skip_configure", "firmware_check"})) {
             return failed();
         }
         if (rt.contains("log_level")) {
@@ -390,6 +402,17 @@ bool SystemConfigReader::load() {
             stall_timeout_ms = static_cast<uint32_t>(x);
         }
         if (rt.contains("skip_configure") && !r.boolean(rt, "skip_configure", p, skip_configure)) return failed();
+        if (rt.contains("firmware_check")) {
+            std::string fc;
+            if (!r.str(rt, "firmware_check", p, fc)) return failed();
+            if (fc == "auto") firmware_check = cpsl::radar::FirmwareCheck::automatic;
+            else if (fc == "warn") firmware_check = cpsl::radar::FirmwareCheck::warn;
+            else if (fc == "off") firmware_check = cpsl::radar::FirmwareCheck::off;
+            else {
+                r.fail(p + "/firmware_check", "\"" + fc + "\" is not one of: auto, warn, off");
+                return failed();
+            }
+        }
         if (rt.contains("rx_cpu") && !r.cpu(rt, "rx_cpu", p, rx_cpu)) return failed();
         if (rt.contains("worker_cpu") && !r.cpu(rt, "worker_cpu", p, worker_cpu)) return failed();
         if (rt.contains("rx_priority")) {

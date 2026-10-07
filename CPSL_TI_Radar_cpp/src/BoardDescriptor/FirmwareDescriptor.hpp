@@ -11,13 +11,16 @@
 // Nothing here throws, prints or exits.
 //
 // The driver reads: id, outputs, templates, driver_board, system_enables,
-// limits. Keys that only the GUI uses are listed in gui_only_keys() (the one
+// limits, identify (gui-33: what the board answers when asked, see
+// FirmwareIdentity.hpp). Keys that only the GUI uses are listed in gui_only_keys() (the one
 // place to extend: gui-35 adds "detection") and are accepted but not
 // interpreted; every other unknown key is an error.
 
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -42,6 +45,25 @@ struct FirmwareDescriptor {
     };
     using BoardLimits = std::map<std::string, Limit>;
 
+    // identify.<board> (gui-33): the probes that tell this firmware from the others. Regexes use the
+    // subset shared by Python `re` and C++ std::regex ECMAScript (checked at load).
+    struct IdentifyProbe {
+        std::string cmd;
+        std::vector<std::string> require;  // every one must match the reply
+        std::vector<std::string> reject;   // none may match
+        // field -> regex with one group, in display order (platform, sdk, device first, then the rest sorted)
+        std::vector<std::pair<std::string, std::string>> show;
+    };
+    struct Identify {
+        std::string level;        // "bench" | "source" | "unverified"
+        int timeout_ms = 1000;
+        bool once_safe = false;   // required true to query a config_once_per_boot board
+        bool has_once_safe = false;
+        std::vector<IdentifyProbe> probes;
+        std::string flash_hint;
+        std::string note;
+    };
+
     int schema = 0;
     std::string id;
     std::string description;
@@ -53,6 +75,8 @@ struct FirmwareDescriptor {
     bool enable_serial = false;   // system_enables.serial
     bool enable_dca1000 = false;  // system_enables.dca1000
     std::map<std::string, BoardLimits> limits;
+    // keyed by the GUI board name; absent = no identify data for that board
+    std::map<std::string, Identify> identify;
 
     // Load and validate a descriptor file. `id` must equal the file's stem.
     static bool load(const std::string& path, FirmwareDescriptor& out, std::string& error);

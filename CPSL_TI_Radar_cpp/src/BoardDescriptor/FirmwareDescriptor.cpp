@@ -1,6 +1,8 @@
 #include "FirmwareDescriptor.hpp"
 
+#include <algorithm>
 #include <fstream>
+#include <regex>
 
 #include "BoardDescriptor.hpp"  // parse_json_strict
 
@@ -10,7 +12,7 @@ namespace cpsl {
 namespace radar {
 
 const std::set<std::string>& FirmwareDescriptor::gui_only_keys() {
-    static const std::set<std::string> keys = {"lvds_data_fmts", "mimo", "identify", "pending"};
+    static const std::set<std::string> keys = {"lvds_data_fmts", "mimo", "pending"};
     return keys;
 }
 
@@ -87,6 +89,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
 
     std::set<std::string> optional = gui_only_keys();
     optional.insert("driver_board");
+    optional.insert("identify");  // parsed strictly since gui-33 (no longer GUI-only)
     if (!check_object(fail, j, "", {"schema", "id", "description", "outputs", "templates", "system_enables", "limits"},
                       optional)) {
         return false;
@@ -192,6 +195,96 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
                 }
                 bl[lt.key()] = lim;
             }
+        }
+    }
+
+    // identify (gui-33): board -> {level, timeout_ms, once_safe, probes, flash_hint, note}
+    if (j.contains("identify")) {
+        const json& id = j.at("identify");
+        if (!id.is_object()) return fail("/identify", "expected an object (board -> entry)");
+        static const std::set<std::string> levels = {"bench", "source", "unverified"};
+        auto check_regex = [&](const std::string& path, const std::string& rx) {
+            try {
+                std::regex re(rx, std::regex::ECMAScript);
+            } catch (const std::regex_error& e) {
+                return fail(path, "bad regex \"" + rx + "\": " + e.what());
+            }
+            return true;
+        };
+        for (auto bt = id.begin(); bt != id.end(); ++bt) {
+            const std::string bp = "/identify/" + bt.key();
+            if (!d.templates.count(bt.key())) return fail(bp, "board is not in templates");
+            if (!check_object(fail, bt.value(), bp, {"level", "probes", "flash_hint"},
+                              {"timeout_ms", "once_safe", "note"})) {
+                return false;
+            }
+            const json& e = bt.value();
+            Identify ent;
+            if (!read_string(fail, e.at("level"), bp + "/level", ent.level)) return false;
+            if (!levels.count(ent.level)) {
+                return fail(bp + "/level", "\"" + ent.level + "\" is not one of: " + join_set(levels));
+            }
+            if (e.contains("timeout_ms")) {
+                const json& v = e.at("timeout_ms");
+                if (!v.is_number_integer() || v.get<int64_t>() < 1 || v.get<int64_t>() > 600000) {
+                    return fail(bp + "/timeout_ms", "expected an integer in 1..600000");
+                }
+                ent.timeout_ms = static_cast<int>(v.get<int64_t>());
+            }
+            if (e.contains("once_safe")) {
+                if (!read_bool(fail, e.at("once_safe"), bp + "/once_safe", ent.once_safe)) return false;
+                ent.has_once_safe = true;
+            }
+            if (!read_string(fail, e.at("flash_hint"), bp + "/flash_hint", ent.flash_hint)) return false;
+            if (e.contains("note") && !read_string(fail, e.at("note"), bp + "/note", ent.note)) return false;
+            const json& pr = e.at("probes");
+            if (!pr.is_array() || pr.empty()) return fail(bp + "/probes", "expected a non-empty array");
+            bool can_fail = false;
+            for (size_t i = 0; i < pr.size(); ++i) {
+                const std::string pp = bp + "/probes/" + std::to_string(i);
+                if (!check_object(fail, pr[i], pp, {"cmd"}, {"require", "reject", "show"})) return false;
+                IdentifyProbe probe;
+                if (!read_string(fail, pr[i].at("cmd"), pp + "/cmd", probe.cmd)) return false;
+                for (const char* key : {"require", "reject"}) {
+                    if (!pr[i].contains(key)) continue;
+                    const json& arr = pr[i].at(key);
+                    if (!arr.is_array()) return fail(pp + "/" + key, "expected an array of regex strings");
+                    std::vector<std::string>& dst = std::string(key) == "require" ? probe.require : probe.reject;
+                    for (size_t k = 0; k < arr.size(); ++k) {
+                        std::string rx;
+                        const std::string rp = pp + "/" + key + "/" + std::to_string(k);
+                        if (!read_string(fail, arr[k], rp, rx) || !check_regex(rp, rx)) return false;
+                        dst.push_back(rx);
+                    }
+                }
+                if (pr[i].contains("show")) {
+                    const json& sh = pr[i].at("show");
+                    if (!sh.is_object()) return fail(pp + "/show", "expected an object (field -> regex)");
+                    std::vector<std::pair<std::string, std::string>> items;
+                    for (auto st = sh.begin(); st != sh.end(); ++st) {
+                        std::string rx;
+                        const std::string sp = pp + "/show/" + st.key();
+                        if (!read_string(fail, st.value(), sp, rx) || !check_regex(sp, rx)) return false;
+                        items.emplace_back(st.key(), rx);
+                    }
+                    // the loader sorts keys; display order is platform, sdk, device, then the rest (as written
+                    // in every shipped descriptor and as radar_gui/fwident.py shows them)
+                    static const std::vector<std::string> first = {"platform", "sdk", "device"};
+                    for (const std::string& f : first) {
+                        for (const auto& it : items) if (it.first == f) probe.show.push_back(it);
+                    }
+                    for (const auto& it : items) {
+                        if (std::find(first.begin(), first.end(), it.first) == first.end()) probe.show.push_back(it);
+                    }
+                }
+                if (probe.require.empty() && probe.reject.empty()) {
+                    return fail(pp, "needs a require or reject pattern");
+                }
+                can_fail = true;
+                ent.probes.push_back(probe);
+            }
+            if (!can_fail) return fail(bp, "no probe can fail");
+            d.identify[bt.key()] = ent;
         }
     }
 

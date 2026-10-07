@@ -34,6 +34,12 @@ public:
     bool sendStartCommand();
     bool sendStopCommand();
 
+    //Asks the board one question (gui-33 firmware identity): writes `cmd`, reads until the prompt follows the
+    //command echo (or ack + prompt), or timeout_ms passes. Returns the raw reply (echo, text, "Done", prompt),
+    //"" if the board said nothing (an I/O error also sets io_error()). One cli echo line, tag "id". Sends only
+    //what the caller passes: never part of the cfg.
+    std::string query(const std::string& cmd, int timeout_ms);
+
     //true if the last command hit a write or read error (not a mere missing
     //"Done"); cleared at the start of every command. A prompt-read error
     //after a "Done" sets it but does not fail that command. After

@@ -10,6 +10,7 @@
 #include <deque>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -50,6 +51,7 @@ public:
             return {};
         }
         writes_ok++;
+        if (silent_cmds.count(cmd)) return {};  // the board never answers this command
         auto d = reply_delay.find(cmd);
         const clock::time_point at = clock::now() + (d == reply_delay.end() ? std::chrono::milliseconds(0) : d->second);
         auto rt = reply_text.find(cmd);
@@ -117,6 +119,7 @@ public:
     size_t fail_after = 0;
     std::map<std::string, std::chrono::milliseconds> reply_delay;
     std::string prompt_error_on;
+    std::set<std::string> silent_cmds;  // commands the fake never answers (a board that does not reply)
     std::map<std::string, std::string> reply_text;  // full reply (replaces "Done\r\n") for a command
     std::string prompt = "mmwDemo:/>";  // what the fake prints after "Done"
 

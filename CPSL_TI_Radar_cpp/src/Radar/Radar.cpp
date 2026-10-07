@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstring>
 #include <exception>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -37,6 +38,66 @@ std::mutex& once_mutex() {
 std::set<std::string>& configured_once() {
     static std::set<std::string> s;
     return s;
+}
+
+// The firmware identity check (gui-33): ask the board what it runs before any cfg line is sent. Returns
+// firmware_mismatch when the board answers as another firmware (policy auto); every other outcome is ok
+// (unknown / skipped / match, or a mismatch under policy warn) and is logged as a "firmware:" line.
+Status check_firmware_identity(CLIController& cli, const RadarConfig& cfg) {
+    const SystemConfigReader& sys = cfg.system();
+    const FirmwareCheck policy = sys.get_firmware_check();
+    const std::string& fw = sys.getFirmwareId();
+    if (policy == FirmwareCheck::off) {
+        log_debug("Radar: runtime.firmware_check is off: the board is not asked what it runs");
+        return Status::ok();
+    }
+    if (fw.empty()) {
+        log_debug("Radar: the system config names no firmware: no firmware check");
+        return Status::ok();
+    }
+    const BoardDescriptor& board = cfg.board();
+    const std::string port = sys.getRadarCliPort();
+    const bool once = board.lifecycle.config_once_per_boot;
+    const FirmwareDescriptor& desc = sys.getFirmware();
+    auto it = desc.identify.find(desc.gui_board_for(board.name));
+    const FirmwareDescriptor::Identify* entry = it == desc.identify.end() ? nullptr : &it->second;
+
+    // an unverified entry is never enforced, so it is not worth a round trip
+    const bool probe = entry != nullptr && (!once || entry->once_safe) && entry->level != "unverified";
+    std::map<std::string, std::string> replies;
+    if (probe) {
+        for (const auto& p : entry->probes) {
+            replies[p.cmd] = cli.query(p.cmd, entry->timeout_ms);
+            if (cli.io_error()) {
+                return Status(Code::io_error, "the CLI port " + port + " failed while asking the board what it runs");
+            }
+        }
+    }
+    IdentityResult res = match_firmware_identity(entry, once, replies);
+    if (!probe) res.found = "not queried";
+    const std::string line = std::string("firmware: ") + to_string(res.verdict) + " expected=" + fw +
+                             " found=" + res.found;
+    switch (res.verdict) {
+        case IdentityVerdict::match:
+        case IdentityVerdict::skipped:
+            log_info(line);
+            if (res.verdict == IdentityVerdict::skipped) log_info("Radar: firmware check skipped: ", res.detail);
+            return Status::ok();
+        case IdentityVerdict::unknown:
+            log_warn(line);
+            log_warn("Radar: could not confirm the firmware on ", port, " (", res.detail, "); sending the cfg anyway");
+            return Status::ok();
+        case IdentityVerdict::mismatch:
+            break;
+    }
+    const std::string msg = firmware_mismatch_message(fw, board.name, res, port);
+    if (policy == FirmwareCheck::warn) {
+        log_warn(line);
+        log_warn("Radar: ", msg, " (runtime.firmware_check is warn: sending the cfg anyway) [", res.detail, "]");
+        return Status::ok();
+    }
+    log_info(line);
+    return Status(Code::firmware_mismatch, msg);
 }
 
 }  // namespace
@@ -223,6 +284,12 @@ Status Radar::configure() {
                                   " was already configured in this process and accepts a cfg once per "
                                   "power-up: nothing sent");
             }
+        }
+
+        // before any cfg line, the DCA1000 configure and the once-per-boot mark: a mismatch spends nothing
+        if (!m.cfg.system().get_skip_configure()) {
+            const Status fs = check_firmware_identity(m.cli, m.cfg);
+            if (!fs) return fs;
         }
 
         if (m.dca_on) {

@@ -34,6 +34,7 @@
 #include "nlohmann/json.hpp"
 #include "BoardDescriptor.hpp"
 #include "FirmwareDescriptor.hpp"
+#include "FirmwareIdentity.hpp"
 #include "Log.hpp"
 
 using json = nlohmann::json;
@@ -114,6 +115,9 @@ class SystemConfigReader {
         // no sensorStart and no sensorStop; for a board already configured and streaming this power-up
         bool get_skip_configure() const { return skip_configure; }
         void set_skip_configure(bool v) { skip_configure = v; }
+        // runtime.firmware_check (gui-33): auto (default) | warn | off; see Radar::configure
+        cpsl::radar::FirmwareCheck get_firmware_check() const { return firmware_check; }
+        void set_firmware_check(cpsl::radar::FirmwareCheck v) { firmware_check = v; }
         int get_rx_cpu() const { return rx_cpu; }          // -1 = null (not pinned)
         int get_worker_cpu() const { return worker_cpu; }  // -1 = null (not pinned)
         uint32_t get_rx_priority() const { return rx_priority; }
@@ -160,6 +164,7 @@ class SystemConfigReader {
         uint32_t frame_queue_depth;
         uint32_t stall_timeout_ms;
         bool skip_configure;
+        cpsl::radar::FirmwareCheck firmware_check;
         int rx_cpu;
         int worker_cpu;
         uint32_t rx_priority;
