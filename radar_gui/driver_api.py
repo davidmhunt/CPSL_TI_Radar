@@ -4,10 +4,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from . import cfgapi, session_cfg
 from .cfgapi import DEFAULT_USER_DIR
 from .driver import REPO, DriverError, DriverManager
 
@@ -18,7 +20,36 @@ class ConfigReq(BaseModel):
     config: str                                  # a path listed by GET /api/driver/configs
 
 
-class StartReq(ConfigReq):
+class Overrides(BaseModel):
+    """What a start may change in a saved config (gui-37). null = leave the saved value."""
+    model_config = ConfigDict(extra="forbid")
+    save_adc_frames: bool | None = None
+    save_raw_lvds: bool | None = None
+    save_serial_bytes: bool | None = None        # needs caps.save_serial_bytes
+    skip_configure: bool | None = None
+    firmware_check: Literal["auto", "warn", "off"] | None = None
+    log_level: Literal["debug", "info", "warn", "error"] | None = None
+
+
+class Setup(Overrides):
+    """A quick setup: no saved system JSON, the page picks board, firmware, cfg and ports."""
+    board: str
+    cfg_id: str                                  # an id from GET /api/cfgs (shipped or config/user/)
+    firmware: str | None = None                  # default: the board's first
+    cli_port: str | None = None
+    data_port: str | None = None
+    serial: bool | None = None                   # null = the firmware's default
+    dca1000: bool | None = None                  # null = the firmware's default; true only where it streams LVDS
+    fpga_ip: str | None = None
+    host_ip: str | None = None
+    cmd_port: int | None = Field(None, ge=1, le=65535)
+    data_udp_port: int | None = Field(None, ge=1, le=65535)
+
+
+class StartReq(BaseModel):
+    config: str | None = None                    # a saved system JSON listed by GET /api/driver/configs ...
+    overrides: Overrides | None = None
+    setup: Setup | None = None                   # ... or a quick setup (exactly one of the two)
     frames: int | None = Field(None, ge=1)
     duration: float | None = Field(None, gt=0)
     skip_configure: bool = False   # the board was already configured this power-up (once-per-boot boards): just stream
@@ -65,9 +96,20 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
             raise HTTPException(422, f"{config!r} is not a system config in config/user or config/system")
         return p
 
-    def call(fn, *a):
+    def cfg_path(cfg_id: str) -> Path:
+        """A cfg id of GET /api/cfgs ("driver:...", "viewer:...", "user:...") -> its .cfg file, inside that tree only."""
+        group, _, rel = cfg_id.partition(":")
+        root = {**cfgapi.SHIPPED, "user": Path(user_dir)}.get(group)
+        if root is None or not rel:
+            raise HTTPException(422, f"unknown cfg id {cfg_id!r}")
+        p = (root / rel).resolve()
+        if root.resolve() not in p.parents or p.suffix != ".cfg" or not p.is_file():
+            raise HTTPException(422, f"no such cfg {cfg_id!r}")
+        return p
+
+    def call(fn, *a, **kw):
         try:
-            return fn(*a)
+            return fn(*a, **kw)
         except DriverError as e:
             raise HTTPException(e.status, str(e))
 
@@ -75,13 +117,28 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
     def configs():
         return {"configs": list_configs(user_dir, system_dir), "caps": mgr.caps()}
 
+    @r.get("/boards")
+    def boards():
+        """Quick-setup data: per board its serial defaults and firmwares (what each outputs). The same board fields as
+        GET /api/source/boards, plus `default_firmware` and `firmwares`."""
+        return {"boards": session_cfg.boards_info()}
+
     @r.post("/validate")
     def validate(req: ConfigReq):
         return call(mgr.validate, resolve(req.config))
 
     @r.post("/start")
     def start(req: StartReq):
-        return call(mgr.start, resolve(req.config), req.frames, req.duration, req.skip_configure, req.adc_every)
+        if (req.config is None) == (req.setup is None):
+            raise HTTPException(422, "give exactly one of config (a saved system JSON) or setup (a quick setup)")
+        if req.setup is not None:
+            if req.overrides is not None:
+                raise HTTPException(422, "overrides apply to a saved config; a setup carries its own options")
+            setup = req.setup.model_dump(exclude_none=True)
+            setup["cfg_path"] = str(cfg_path(setup.pop("cfg_id")))
+            return call(mgr.start, None, req.frames, req.duration, req.skip_configure, req.adc_every, setup=setup)
+        ov = req.overrides.model_dump(exclude_none=True) if req.overrides else None
+        return call(mgr.start, resolve(req.config), req.frames, req.duration, req.skip_configure, req.adc_every, overrides=ov)
 
     @r.post("/stop")
     def stop():

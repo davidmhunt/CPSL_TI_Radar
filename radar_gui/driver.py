@@ -9,6 +9,7 @@ import collections
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import session_cfg
 from .ports import check_ports, radar_lock
 
 REPO = Path(__file__).resolve().parent.parent
@@ -110,6 +112,7 @@ class DriverManager:
         self.on_run = on_run                      # gui-36: called with the run info after the spawn; True = tap fd taken over
         self.owner_detail = owner_detail or (lambda: "")
         self._tap_cache = {}                      # (binary path, mtime) -> supports --tap-fd
+        self._caps_cache = {}                     # (binary path, mtime) -> session_cfg.probe_caps()
         self.emit, self.min_grace = emit or (lambda m: None), min_stop_grace
         self._mu = threading.RLock()
         self._reset()
@@ -128,6 +131,8 @@ class DriverManager:
         self.expect = {}
         self.sigint_sent = False
         self.t_start = 0.0
+        self.label = self.session_json = self._logf = None   # gui-37: display label, the run's session.json, driver.log handle
+        self.saving, self.fw_id, self.notes = {}, None, []
         self.tap = None   # "on" = run started with --tap-fd, "off" = the binary has no tap, None = no run yet
         self.adc_every = 0        # gui-07: K passed as --tap-adc-every (0 = not passed)
         self.adc_reason = None    # why not: "off" | "no_dca" | "no_adc_tap" | "no_tap"; None = ADC tap on
@@ -167,102 +172,134 @@ class DriverManager:
     def tap_supported(self, b: Path) -> bool:
         return "--tap-fd" in self._usage(b)
 
+    def _key_caps(self, b: Path) -> dict:
+        """Which optional system-JSON keys the binary accepts (a `--validate` probe, once per binary path + mtime)."""
+        try:
+            key = (str(b), b.stat().st_mtime_ns)
+        except OSError:
+            return {"firmware_key": False, "firmware_check": False, "save_serial_bytes": False}
+        if key not in self._caps_cache:
+            self._caps_cache[key] = session_cfg.probe_caps(b)
+        return self._caps_cache[key]
+
     def caps(self) -> dict:
-        """What the configured binary can do (False for a missing binary): the Run tab greys options out with it."""
+        """What the configured binary can do (False for a missing binary): the Run tab greys options out with it.
+        `setup` is this backend's own capability (start accepts a quick setup / overrides), not the binary's."""
         try:
             b = driver_bin(self.bin_override)
             ok = b.is_file() and os.access(b, os.X_OK)
         except OSError:
             ok = False
         u = self._usage(b) if ok else ""
-        return {"tap": "--tap-fd" in u, "skip_configure": "--skip-configure" in u, "adc_tap": "--tap-adc-every" in u}
+        return {"tap": "--tap-fd" in u, "skip_configure": "--skip-configure" in u, "adc_tap": "--tap-adc-every" in u,
+                "setup": True, **(self._key_caps(b) if ok else {"firmware_key": False, "firmware_check": False,
+                                                                 "save_serial_bytes": False})}
 
     # ---- start / stop ---------------------------------------------------------------------------
-    def start(self, config: str | os.PathLike, frames: int | None = None, duration: float | None = None,
-              skip_configure: bool = False, adc_every: int | None = None) -> dict:
-        config = Path(config).resolve()
+    def start(self, config: str | os.PathLike | None = None, frames: int | None = None, duration: float | None = None,
+              skip_configure: bool = False, adc_every: int | None = None, setup: dict | None = None,
+              overrides: dict | None = None) -> dict:
+        """Start a run from a saved system JSON (`config`, plus `overrides`) or a quick `setup` (gui-37). Either way the
+        driver runs `<run folder>/session.json`, written here with the cfg copy; a refused start leaves no folder."""
+        if (config is None) == (setup is None):
+            raise DriverError("give exactly one of config (a saved system JSON) or setup (a quick setup)", 422)
         with self._mu:
             if self.state in ("running", "stopping"):
                 raise DriverError(f"driver already {self.state}")
             b = self._bin()
-            sysjson = load_system_json(config)
-            if skip_configure and "--skip-configure" not in self._usage(b):
-                raise DriverError("this driver binary has no --skip-configure (rebuild the driver)", 422)
-            val = self.validate(config)
-            if not val["ok"]:
-                raise DriverError("config is INVALID:\n" + val["text"].strip(), 422)
-            ports = [sysjson.get("cli", {}).get("port")]
-            if sysjson.get("serial_stream", {}).get("enabled"):
-                ports.append(sysjson["serial_stream"].get("port"))
-            ports = [p for p in ports if p]
-            if not self.lock.acquire("driver"):
-                raise DriverError(f"Live serial source holds the radar{self.owner_detail()}; stop it in the Live tab"
-                                  if self.lock.owner == "serial source" else f"radar in use by {self.lock.owner}")
+            try:
+                caps = self._key_caps(b)
+                plan = (session_cfg.from_setup(setup, caps) if setup is not None
+                        else session_cfg.from_saved(Path(config).resolve(), overrides, caps))
+            except session_cfg.SessionError as e:
+                raise DriverError(str(e), 422)
+            eff = plan["eff"]
+            skip = bool(skip_configure or plan["skip_configure"])
+            if skip and "--skip-configure" not in self._usage(b):
+                if skip_configure:
+                    raise DriverError("this driver binary has no --skip-configure (rebuild the driver)", 422)
+                skip = False   # only the JSON key (runtime.skip_configure) asked for it, which any build reads
+            cwd = self._make_run_dir(plan["name"])
             spawned = False
             try:
-                if (why := check_ports(ports)):
-                    raise DriverError(why)
-                out_dir = (sysjson.get("output") or {}).get("dir")
-                if out_dir:
-                    files_dir = config.parent / out_dir
-                    cwd = run_root(self.root_override)
-                    cwd.mkdir(parents=True, exist_ok=True)
-                else:
-                    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-                    cwd = run_root(self.root_override) / f"{stamp}_{config.stem}"
-                    cwd.mkdir(parents=True, exist_ok=True)
-                    files_dir = cwd
-                cmd = [str(b), str(config), "--stats"]
-                if skip_configure:
-                    cmd += ["--skip-configure"]
-                if frames:
-                    cmd += ["--frames", str(int(frames))]
-                if duration:
-                    cmd += ["--duration", str(float(duration))]
-                self._reset()
-                self.run_id += 1
-                self.config, self.run_dir, self.files_dir = str(config), str(cwd), files_dir
-                self.expect = {"bytes_per_frame": val["bytes_per_frame"],
-                               "period_ms": (val["frame"] or {}).get("period_ms")}
-                self.t_start = time.time()
-                rfd = wfd = None
-                tap_ok = self.tap_supported(b)
-                # gui-07 ADC views: K = None -> every frame (1), 0 = off. Passed only when the run has a DCA1000 stream and
-                # the binary's usage text lists --tap-adc-every (an older build keeps working without it).
-                k = 1 if adc_every is None else max(0, int(adc_every))
-                reason = None
-                if k == 0:
-                    reason = "off"
-                elif not (sysjson.get("dca1000") or {}).get("enabled"):
-                    reason = "no_dca"
-                elif not tap_ok:
-                    reason = "no_tap"
-                elif "--tap-adc-every" not in self._usage(b):
-                    reason = "no_adc_tap"
-                self.adc_every, self.adc_reason = (0, reason) if reason else (k, None)
-                if tap_ok:
-                    rfd, wfd = os.pipe()
-                    cmd += ["--tap-fd", str(wfd)]
-                    if self.adc_every:
-                        cmd += ["--tap-adc-every", str(self.adc_every)]
+                session = session_cfg.write_session(cwd, plan)
+                val = self.validate(session)
+                if not val["ok"]:
+                    raise DriverError("config is INVALID:\n" + val["text"].strip(), 422)
+                ports = [eff.get("cli", {}).get("port")]
+                if eff.get("serial_stream", {}).get("enabled"):
+                    ports.append(eff["serial_stream"].get("port"))
+                ports = [p for p in ports if p]
+                if not self.lock.acquire("driver"):
+                    raise DriverError(f"Live serial source holds the radar{self.owner_detail()}; stop it in the Live tab"
+                                      if self.lock.owner == "serial source" else f"radar in use by {self.lock.owner}")
                 try:
-                    self.proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                                 stdin=subprocess.DEVNULL, text=True, bufsize=1,
-                                                 start_new_session=True, pass_fds=(wfd,) if wfd is not None else ())
-                except OSError as e:
-                    for fd in (rfd, wfd):
-                        if fd is not None:
-                            os.close(fd)
-                    self.error = f"cannot start driver: {e}"
-                    self._set_state("failed")
-                    raise DriverError(self.error, 503)
-                if wfd is not None:
-                    os.close(wfd)      # only the driver holds the write end: its exit is EOF for the reader
-                self.tap = "on" if rfd is not None else "off"
-                spawned = True
+                    if (why := check_ports(ports)):
+                        raise DriverError(why)
+                    out_dir = (eff.get("output") or {}).get("dir")
+                    files_dir = Path(out_dir) if out_dir else cwd
+                    cmd = [str(b), str(session), "--stats"]
+                    if skip:
+                        cmd += ["--skip-configure"]
+                    if frames:
+                        cmd += ["--frames", str(int(frames))]
+                    if duration:
+                        cmd += ["--duration", str(float(duration))]
+                    self._reset()
+                    self.run_id += 1
+                    shown = str(Path(config).resolve()) if config is not None else str(session)
+                    self.config, self.run_dir, self.files_dir = shown, str(cwd), files_dir
+                    self.label, self.session_json = plan["label"], str(session)
+                    self.saving, self.fw_id, self.notes = session_cfg.saving_of(eff), eff.get("firmware"), list(plan["notes"])
+                    self.expect = {"bytes_per_frame": val["bytes_per_frame"],
+                                   "period_ms": (val["frame"] or {}).get("period_ms")}
+                    self.t_start = time.time()
+                    rfd = wfd = None
+                    tap_ok = self.tap_supported(b)
+                    # gui-07 ADC views: K = None -> every frame (1), 0 = off. Passed only when the run has a DCA1000 stream and
+                    # the binary's usage text lists --tap-adc-every (an older build keeps working without it).
+                    k = 1 if adc_every is None else max(0, int(adc_every))
+                    reason = None
+                    if k == 0:
+                        reason = "off"
+                    elif not (eff.get("dca1000") or {}).get("enabled"):
+                        reason = "no_dca"
+                    elif not tap_ok:
+                        reason = "no_tap"
+                    elif "--tap-adc-every" not in self._usage(b):
+                        reason = "no_adc_tap"
+                    self.adc_every, self.adc_reason = (0, reason) if reason else (k, None)
+                    if tap_ok:
+                        rfd, wfd = os.pipe()
+                        cmd += ["--tap-fd", str(wfd)]
+                        if self.adc_every:
+                            cmd += ["--tap-adc-every", str(self.adc_every)]
+                    try:
+                        self._logf = open(cwd / session_cfg.DRIVER_LOG, "w", buffering=1, errors="replace")
+                    except OSError:
+                        self._logf = None
+                    try:
+                        self.proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                                     stdin=subprocess.DEVNULL, text=True, bufsize=1,
+                                                     start_new_session=True, pass_fds=(wfd,) if wfd is not None else ())
+                    except OSError as e:
+                        for fd in (rfd, wfd):
+                            if fd is not None:
+                                os.close(fd)
+                        self._close_log()
+                        self.error = f"cannot start driver: {e}"
+                        self._set_state("failed")
+                        raise DriverError(self.error, 503)
+                    if wfd is not None:
+                        os.close(wfd)      # only the driver holds the write end: its exit is EOF for the reader
+                    self.tap = "on" if rfd is not None else "off"
+                    spawned = True
+                finally:
+                    if not spawned:
+                        self.lock.release("driver")
             except BaseException:
-                if not spawned:
-                    self.lock.release("driver")
+                if not spawned and self.state != "failed":
+                    shutil.rmtree(cwd, ignore_errors=True)   # a refused start leaves nothing behind
                 raise
             self._set_state("running")
             taken = False
@@ -270,13 +307,38 @@ class DriverManager:
                 try:
                     taken = bool(self.on_run({"run": self.run_id, "config": self.config, "pid": self.proc.pid,
                                               "tap_fd": rfd, "tap": self.tap,
-                                              "adc_every": self.adc_every, "adc_reason": self.adc_reason}))
+                                              "adc_every": self.adc_every, "adc_reason": self.adc_reason,
+                    "label": self.label, "session_json": self.session_json, "saving": dict(self.saving),
+                    "firmware": self.fw_id, "notes": list(self.notes)}))
                 except Exception:
                     taken = False
             if rfd is not None and not taken:
                 os.close(rfd)
             threading.Thread(target=self._pump, args=(self.proc,), daemon=True, name="driver-pump").start()
             return self.status()
+
+    def _make_run_dir(self, name: str) -> Path:
+        """`<run root>/<UTC>_<name>`, unique (a second start in the same second gets `-2`, ...)."""
+        root = run_root(self.root_override)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        base = f"{stamp}_{session_cfg.safe_name(name)}"
+        root.mkdir(parents=True, exist_ok=True)
+        for i in range(1, 100):
+            d = root / (base if i == 1 else f"{base}-{i}")
+            try:
+                d.mkdir()
+                return d
+            except FileExistsError:
+                continue
+        raise DriverError(f"cannot create a run folder under {root}", 503)
+
+    def _close_log(self):
+        f, self._logf = self._logf, None
+        if f is not None:
+            try:
+                f.close()
+            except OSError:
+                pass
 
     def stop(self) -> dict:
         with self._mu:
@@ -328,6 +390,11 @@ class DriverManager:
         with self._mu:
             self.log.append(line)
             self._logbuf.append(line)
+            if self._logf is not None:
+                try:
+                    self._logf.write(line + "\n")
+                except (OSError, ValueError):   # disk full / closed: the page still has the log
+                    self._close_log()
             if self._flush_timer is None:
                 self._flush_timer = threading.Timer(LOG_FLUSH_S, self._flush_log)
                 self._flush_timer.daemon = True
@@ -444,6 +511,7 @@ class DriverManager:
         bpf = self.expect.get("bytes_per_frame")
         if adc and dca and bpf:
             self.bin_verdict = bench_lib.check_bin_size(adc["size"], bpf, dca["frames"], self.sigint_sent)
+        self._close_log()
         self.lock.release("driver")
         self._set_state("exited" if clean and not self.forced else "failed")
 
@@ -473,4 +541,6 @@ class DriverManager:
                     "run": self.run_id, "cli": [dict(e) for e in self.cli] if log else [], "cli_first_fail": first_fail(self.cli),
                     "files": list(self.files), "bin_verdict": self.bin_verdict,
                     "radar_owner": self.lock.owner, "tap": self.tap,
-                    "adc_every": self.adc_every, "adc_reason": self.adc_reason}
+                    "adc_every": self.adc_every, "adc_reason": self.adc_reason,
+                    "label": self.label, "session_json": self.session_json, "saving": dict(self.saving),
+                    "firmware": self.fw_id, "notes": list(self.notes)}

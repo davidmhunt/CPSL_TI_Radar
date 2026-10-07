@@ -11,17 +11,12 @@ from pydantic import BaseModel
 
 from . import cfgapi
 from .serial_source import PortBusy, SerialSource, SerialSourceError, load_board
+from .session_cfg import DEFAULT_PORTS, PORT_NAME, SERIAL_BOARDS  # noqa: F401  (moved: gui-37)
 from .sources import MockSource, ReplaySource, detect_dialect
 
-_XDS = "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.{}__Embed_with_CMSIS-DAP_{}"
-# Defaults only (the bench's XDS110 interfaces); the Source card lets the user edit both ports.
-DEFAULT_PORTS = {"AWR2243_CASCADE": (_XDS.format("29", "00000000") + "-if00", _XDS.format("29", "00000000") + "-if03"),
-                 "IWR1843": (_XDS.format("05", "R2101050") + "-if00", _XDS.format("05", "R2101050") + "-if03")}
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures"
 DUMP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
-# Serial ports the source may open: USB-serial only (no /dev/tty, /dev/ttyS*, ...). Checked on the literal string.
-PORT_NAME = re.compile(r"^(/dev/serial/by-id/[A-Za-z0-9_.:+-]+|/dev/tty(ACM|USB)[0-9]+)$")
 
 
 def check_port(path: str, what: str) -> str:
@@ -52,7 +47,6 @@ def replay_files(extra=None) -> list[dict]:
     if extra:
         add(extra, "startup")
     return out
-SERIAL_BOARDS = ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", "AWR2243_CASCADE")
 
 
 class SourceReq(BaseModel):

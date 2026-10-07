@@ -43,6 +43,21 @@ if "--help" in args or "-h" in args:
     sys.exit(0)
 
 if "--validate" in args:
+    # gui-37: FAKE_DRIVER_KEYS = comma list of the optional system-JSON keys this "build" accepts (default: all; "" = Rebuild 1).
+    # A key outside it is "unknown", like the real reader's `<path>: /firmware: unknown key (allowed: ...)`.
+    accepted = os.environ.get("FAKE_DRIVER_KEYS", "firmware,firmware_check,save_serial_bytes").split(",")
+    try:
+        _doc = json.load(open(cfg))
+    except (OSError, ValueError):
+        _doc = {}
+    _used = {"firmware": "firmware" in _doc, "firmware_check": "firmware_check" in (_doc.get("runtime") or {}),
+             "save_serial_bytes": "save_serial_bytes" in (_doc.get("output") or {})}
+    _path = {"firmware": "/firmware", "firmware_check": "/runtime/firmware_check", "save_serial_bytes": "/output/save_serial_bytes"}
+    for _k, _u in _used.items():
+        if _u and _k not in accepted:
+            print(f"{cfg}: {_path[_k]}: unknown key (allowed: board, cli, ...)", file=sys.stderr)
+            print(f"INVALID: {cfg}")
+            sys.exit(1)
     if mode == "validate-invalid":
         print(f"config {cfg}: radar_cfg missing", file=sys.stderr)
         print(f"INVALID: {cfg}")
