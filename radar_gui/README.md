@@ -67,27 +67,20 @@ pins the payload shapes (no browser harness).
 
 ## Remote access over Tailscale
 
-**Recommended: one command.** `--tailscale` keeps the server on `127.0.0.1` and proxies it onto your tailnet with `tailscale serve` (HTTPS, tailnet-only; never `funnel`):
+**Recommended: one command, no Tailscale privileges or admin changes.**
 
 ```
 uv run python -m radar_gui --source mock --tailscale      # composes with --source/--port
 ```
 
-It prints `GUI on tailnet: https://<machine>.<tailnet>.ts.net/`; open that from any device on the tailnet (the live WebSocket picks `wss:` automatically). Ctrl-C/SIGTERM removes only this mapping (`tailscale serve --https=443 off`).
-If tailscale is missing, logged out, denied (run once `sudo tailscale set --operator=$USER`), or a serve config already exists (left untouched), it says why and keeps serving locally.
+The server keeps listening on `127.0.0.1:<port>` and also on this machine's Tailscale IPv4 address (from `tailscale status --json`), same port, plain HTTP/`ws:`. It never binds `0.0.0.0`. It prints `GUI on tailnet: http://<tailscale-ip>:8000/` and `http://<machine-name>:8000/` (MagicDNS); open either from any device on the tailnet. Nothing to clean up on exit.
+If tailscale is missing, logged out, or the address cannot be bound, it prints the specific reason and keeps serving locally.
 
-**Manual alternative.** Same result in two terminals:
+**Optional: HTTPS via `tailscale serve`.** `--tailscale-serve` (or `--tailscale=serve`) keeps the server on `127.0.0.1` and proxies it with `tailscale serve` on :443 (tailnet-only; never `funnel`), printing `https://<machine>.<tailnet>.ts.net/`. Prerequisites: (1) HTTPS certificates enabled for the tailnet (admin console: DNS -> HTTPS Certificates), (2) operator rights (run once `sudo tailscale set --operator=$USER`). Without them it prints the reason (including `tailscale serve`'s own error) and serves locally. Ctrl-C/SIGTERM removes only this mapping; an existing serve config is left untouched.
 
-```
-uv run python -m radar_gui          # terminal 1
-tailscale serve --bg 8000           # terminal 2 (runs in the background)
-```
+**Manual alternative.** `uv run python -m radar_gui --host <tailscale-ip>` listens only on the Tailscale interface; or run `tailscale serve --bg 8000` in a second terminal (`tailscale serve status` shows the URL; stop with `tailscale serve --https=443 off`).
 
-`tailscale serve status` shows the URL; stop sharing with `tailscale serve --https=443 off` (or `tailscale serve reset` to clear all serve config).
-
-**Alternative: bind to the Tailscale interface.** `uv run python -m radar_gui --host <tailscale-ip> [--port 8000]` listens only on that
-interface (plain HTTP/`ws:`, no TLS); browse to `http://<tailscale-ip>:8000/`.
 
 > [!WARNING]
-> The GUI has **no authentication**. Anyone who can reach it on the tailnet can save cfgs and (once run control exists) start radar runs.
+> The GUI has **no authentication**. Anyone your Tailscale ACLs allow to reach this machine's tailnet IP (bind mode) or the serve URL can save cfgs and (once run control exists) start radar runs.
 > Restrict access with Tailscale ACLs, and never expose it with `tailscale funnel` (public internet).

@@ -5,7 +5,7 @@ import uvicorn
 
 from .app import create_app
 from .sources import make_source
-from .tailscale import TailscaleServe
+from .tailscale import TailscaleServe, bind_addresses, bind_sockets
 
 
 def parse_args(argv=None):
@@ -15,9 +15,13 @@ def parse_args(argv=None):
     ap.add_argument("--rate", type=float, default=10.0, help="frame rate in Hz (mock/replay)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--tailscale", action="store_true",
-                    help="also share on your tailnet via `tailscale serve` (HTTPS, tailnet-only, "
-                         "removed on exit); the GUI has no authentication")
+    ap.add_argument("--tailscale", nargs="?", const="bind", choices=["bind", "serve"],
+                    help="reach the GUI over your tailnet: also listen on this machine's Tailscale IP "
+                         "(plain HTTP, no privileges needed); `--tailscale=serve` = --tailscale-serve. "
+                         "The GUI has no authentication")
+    ap.add_argument("--tailscale-serve", dest="tailscale", action="store_const", const="serve",
+                    help="share via `tailscale serve` (HTTPS; needs tailnet HTTPS certificates and "
+                         "operator rights; removed on exit)")
     return ap.parse_args(argv)
 
 
@@ -25,14 +29,38 @@ def main(argv=None):
     a = parse_args(argv)
     app = create_app(make_source(a.source, rate_hz=a.rate, path=a.file))
     print(f"radar_gui: source={a.source}  open http://{a.host}:{a.port}/", flush=True)
-    ts = TailscaleServe(a.port) if a.tailscale else None
-    if ts:
+    ts, socks = None, None
+    if a.tailscale:
         # SIGTERM -> same clean shutdown path as Ctrl-C (finally below runs)
         signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+    if a.tailscale == "serve":
+        ts = TailscaleServe(a.port)
         ts.start()
+    elif a.tailscale == "bind":
+        ip, short, why = bind_addresses()
+        if ip is None:
+            print(f"radar_gui: --tailscale: {why}. Serving locally only.", flush=True)
+        else:
+            try:
+                socks = bind_sockets(a.host, a.port, ip)
+            except (OSError, ValueError) as e:
+                print(f"radar_gui: --tailscale: cannot listen on {ip}:{a.port} ({e}). "
+                      "Serving locally only.", flush=True)
+            else:
+                print(f"GUI on tailnet: http://{ip}:{a.port}/", flush=True)
+                if short:
+                    print(f"GUI on tailnet: http://{short}:{a.port}/", flush=True)
+                print("radar_gui: no authentication: any tailnet peer your ACLs allow can reach this.",
+                      flush=True)
     try:
-        uvicorn.run(app, host=a.host, port=a.port, log_level="warning")
+        if socks:
+            cfg = uvicorn.Config(app, host=a.host, port=a.port, log_level="warning")
+            uvicorn.Server(cfg).run(sockets=socks)
+        else:
+            uvicorn.run(app, host=a.host, port=a.port, log_level="warning")
     finally:
+        for s in socks or []:
+            s.close()
         if ts:
             ts.stop()
 
