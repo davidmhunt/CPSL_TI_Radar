@@ -89,6 +89,8 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
         for k in ("state", "msg"):
             if hasattr(s, k):
                 out["source_" + k] = getattr(s, k)
+        if s.name == "driver":   # gui-36: Live follows a driver run
+            out.update(config=s.config, pid=s.pid, tap=s.tapped, frames_in=s.frames_in, skipped=s.skipped, hello=s.hello)
         if hasattr(s, "cli"):   # serial source: board command transcript of the latest configure (gui-34)
             out["cli"], out["cli_first_fail"] = list(s.cli), s.cli_first_fail
             out["firmware"] = getattr(s, "firmware", None)   # gui-33: identity check result, None = not checked
@@ -117,8 +119,13 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
                         "tlv_dialect": d["data_uart"]["tlv_dialect"], "cli_port": cli, "data_port": data})
         return {"boards": out}
 
+    def refuse_while_following():
+        if hub.following_run:
+            raise HTTPException(409, "Live is following a driver run: stop it in the Run tab first")
+
     @r.post("/api/source")
     async def set_source(req: SourceReq):
+        refuse_while_following()
         spec = req.model_dump(exclude_none=True)
         if req.kind == "mock":
             new = MockSource(rate_hz=req.rate_hz)
@@ -173,6 +180,7 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
     @r.post("/api/source/stop")
     async def stop():
         """Stop the running source (a serial one releases the ports and the radar lock). The page then shows `ended`."""
+        refuse_while_following()
         await hub.stop_source()
         hub.set_status("ended", "Source stopped")
         return describe()

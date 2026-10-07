@@ -49,7 +49,11 @@
           <label class="chk"><input type="checkbox" id="srcDump"> Also capture raw bytes (runs/gui/dumps)</label>
           <div class="muted" id="srcBoardNote"></div>
         </div>
-        <div class="btnrow">
+        <div id="srcDrv" class="stack" hidden>
+          <div class="runmsg ok" id="srcDrvInfo"></div>
+          <div class="btnrow"><button class="btn" id="srcManage">Manage in Run tab</button></div>
+        </div>
+        <div class="btnrow" id="srcBtns">
           <button class="btn primary" id="srcStart">Start</button>
           <button class="btn" id="srcStop">Stop</button>
         </div>
@@ -243,6 +247,7 @@
           <button class="btn" id="rStop" disabled>Stop</button>
         </div>
         <div id="rMsg" class="runmsg" hidden></div>
+        <div class="runmsg ok" id="rWatchRow" hidden>Live is showing this run. <button class="btn" id="rWatch">Watching in Live &rarr;</button></div>
       </div>
     </section>
     <section class="card" id="rValCard" hidden>

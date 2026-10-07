@@ -3,14 +3,20 @@
 
 argv: <system.json> [--validate] [--stats] [--frames N] [--duration S]
 Mode comes from FAKE_DRIVER_MODE (default "run"): run | crash | ignore-sigint | validate-invalid |
-write-bin | stall.  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
+write-bin | stall | tap | no-tap.  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
 FAKE_DRIVER_PERIOD_MS (default 100). FAKE_DRIVER_CLI=debug|info|ok (or by-config: ok when the config name contains "_ok", else debug) replays the board command transcript of
 tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using config", ending in a rejected sensorStart.
+Mode "tap" writes the gui-36 live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
+inherited `--tap-fd N`, and its usage text lists --tap-fd; every other mode's usage text does not (an old binary). A config whose
+name contains "_die" SIGKILLs itself after FAKE_DRIVER_DIE_S (default 4) seconds (a crashed driver for the page).
 FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
 default 0) imitate a log_level debug run for the GUI lag measurement (gui-09 D8).
 """
+import json
+import math
 import os
 import signal
+import struct
 import sys
 import time
 
@@ -27,6 +33,11 @@ cfg = next((a for a in args if not a.startswith("-")), "")
 def opt(name, cast):
     return cast(args[args.index(name) + 1]) if name in args else None
 
+
+if "--help" in args or "-h" in args:
+    print(f"usage: {sys.argv[0]} <system.json> [--validate] [--stats] [--frames N] [--duration S]" +
+          (" [--tap-fd N] [--tap-adc-every K]" if mode == "tap" else ""))
+    sys.exit(0)
 
 if "--validate" in args:
     if mode == "validate-invalid":
@@ -57,6 +68,29 @@ if os.environ.get("FAKE_DRIVER_CLI"):
         for ln in f.read().split("\n"):
             if ln and not ln.startswith(("stats v1", "Using config")):
                 print(ln.replace("\r", "\r"), flush=True)
+tapf = os.fdopen(opt("--tap-fd", int), "wb", buffering=0) if mode == "tap" and "--tap-fd" in args else None
+adc_every = opt("--tap-adc-every", int) or 0
+tap_ok = {"on": tapf is not None}
+
+
+def tap_send(kind, payload):
+    if not tap_ok["on"]:
+        return
+    try:
+        tapf.write(struct.pack("<IB", len(payload) + 1, kind) + payload)
+    except OSError:   # EPIPE: the reader went away; the run continues untapped
+        tap_ok["on"] = False
+
+
+def tap_points(n):
+    pts = [[round(math.cos(0.3 * n + k) * (1 + k * .5), 3), round(3 + k * .8 + math.sin(0.3 * n), 3), 0.5, 0.1 * k,
+            20.0 + k, 5.0] for k in range(4)]
+    tap_send(2, json.dumps({"type": "frame", "frame": n, "n": len(pts), "t": time.time(), "pts": pts}).encode())
+
+
+if tapf is not None:
+    tap_send(1, json.dumps({"version": 1, "board": "IWR1843", "streams": ["points"] + (["adc"] if adc_every else []),
+                            "adc_every": adc_every}).encode())
 binf = open("adc_data.bin", "wb") if mode == "write-bin" else None
 frames, t0, last_print, limit_f, limit_s = 0, time.monotonic(), -1.0, opt("--frames", int), opt("--duration", float)
 
@@ -79,8 +113,16 @@ while not stop["flag"]:
         print(f"[debug] dca packet seq={frames * 10} bytes=1456 ring=3/64 t={t:.4f}", flush=True)
     if mode != "stall":
         frames += 1
+        if tapf is not None:
+            tap_points(frames - 1)
+            if adc_every and (frames - 1) % adc_every == 0:
+                head = {"index": frames - 1, "shape": [2, 4, 2], "missing_bytes": 0, "layout": "rx,sample,chirp",
+                        "iq_order": "IQ"}
+                tap_send(3, json.dumps(head).encode() + b"\n" + struct.pack("<32h", *range(32)))
         if binf:
             binf.write(b"\0" * bpf)
+    if mode == "tap" and "_die" in os.path.basename(cfg) and t > float(os.environ.get("FAKE_DRIVER_DIE_S", "4")):
+        os.kill(os.getpid(), signal.SIGKILL)
     if mode == "crash" and t > 0.3:
         print("error: lost the DCA1000 stream", file=sys.stderr, flush=True)
         sys.exit(3)

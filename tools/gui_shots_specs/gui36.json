@@ -1,0 +1,409 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "tap",
+  "FAKE_DRIVER_RATE": "10"
+ },
+ "user_cfgs": {
+  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap.cfg": "% fake\n"
+ },
+ "scenarios": [
+  {
+   "name": "a_running_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=run]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_run"
+    },
+    {
+     "set": "#rDur",
+     "value": "12"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1.5
+    },
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 2
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_running_1400_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_running_1400_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_running_1120",
+   "tab": "live",
+   "window": [
+    1120,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_running_1120_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_running_1120_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "a_running_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_running_800_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_running_800_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "b_ended_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 9
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_ended_1400_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_ended_1400_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "b_ended_1120",
+   "tab": "live",
+   "window": [
+    1120,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_ended_1120_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_ended_1120_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "b_ended_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_ended_800_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_ended_800_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "c_died_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=run]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "tap_die"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 1.5
+    },
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 5
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_died_1400_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_died_1400_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "c_died_1120",
+   "tab": "live",
+   "window": [
+    1120,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_died_1120_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_died_1120_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  },
+  {
+   "name": "c_died_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "live_died_800_card.png",
+     "selector": "#srcCard"
+    },
+    {
+     "file": "live_died_800_page.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "card.txt",
+     "selector": "#srcCard",
+     "what": "text"
+    },
+    {
+     "file": "header.txt",
+     "selector": "header",
+     "what": "text"
+    }
+   ],
+   "fresh": false
+  }
+ ]
+}

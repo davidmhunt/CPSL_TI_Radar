@@ -8,7 +8,7 @@ import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
 
 // ---------- stream ----------
 const STATE_DOT = { streaming: 'ok', starting: 'warn', configuring: 'warn', waiting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad',
-  cfg_failed: 'bad', wrong_firmware: 'bad', no_board: 'bad', stalled: 'bad' };
+  cfg_failed: 'bad', no_tap: 'warn', wrong_firmware: 'bad', no_board: 'bad', stalled: 'bad' };
 function setStatus(state, msg) {
   $('state').textContent = state.replace('_', ' ');
   $('dot').className = 'dot ' + (STATE_DOT[state] || '');
@@ -130,6 +130,7 @@ function tab(name) {
 }
 // Configure -> Save result "Open in Run" link
 addEventListener('open-in-run', e => { tab('run'); openInRun(e.detail); });
+addEventListener('goto-tab', e => tab(e.detail));   // gui-36: Live card "Manage in Run tab" / Run "Watching in Live"
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
 if (location.hash === '#configure') tab('cfg'); else if (location.hash === '#run') tab('run');
 

@@ -127,3 +127,15 @@ If tailscale is missing, logged out, or the address cannot be bound, it prints t
 > [!WARNING]
 > The GUI has **no authentication**. Anyone your Tailscale ACLs allow to reach this machine's tailnet IP (bind mode) or the serve URL can save cfgs and (once run control exists) start radar runs.
 > Restrict access with Tailscale ACLs, and never expose it with `tailscale funnel` (public internet).
+
+**Live follows the driver run (gui-36).** A run started from the Run tab hands the Live tab its point cloud: the GUI creates a pipe and
+spawns the driver with `--tap-fd <n>`, so there is no second connection to the board. The tap is used only when the driver's usage text
+(`<driver> --help`, checked once per binary path + mtime) lists `--tap-fd`; an older build runs untapped and Live says "driver run has no
+live tap (rebuild the driver)". On a successful start the Hub switches to a `DriverSource`; the Source card becomes read-only ("driver run
+\u00b7 cfg \u00b7 pid", **Manage in Run tab**), the Run tab shows **Watching in Live**, and the header numbers are Live's. When the run ends Live shows
+"driver run ended (exit 0, N frames)" (last frame stays) or the red "driver died (exit -9)"; the picker is usable again, and Live never falls
+back to a serial source by itself. While a run is followed `POST /api/source*` answers 409; a driver start while the Live serial source holds
+the board answers 409 "Live serial source holds the radar (<port>); stop it in the Live tab". `GET /api/driver/status` has `tap` (`on`/`off`).
+Wire format (`radar_gui/tap.py`): `u32 len (LE)`, `u8 type`, payload; 1 hello (JSON), 2 points (the Live frame JSON), 3 adc (JSON header line +
+int16 I/Q; counted and parsed, not displayed yet). Tests: `tests/test_radar_gui_tap.py` (fake driver modes `tap`/`no-tap`). Shots:
+`tools/gui_shots_specs/gui36.json` (running, ended, died) and `gui36_notap.json`.

@@ -11,7 +11,7 @@ from .cfgapi import make_router
 from .driver import DriverManager
 from .driver_api import make_router as make_driver_router
 from .source_api import make_router as make_source_router
-from .sources import Source
+from .sources import DriverSource, Source
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
@@ -79,6 +79,20 @@ class Hub:
         self.publish(self.cfg_msg())
         self.start()
 
+    @property
+    def following_run(self) -> bool:
+        """True while the Live source is a driver run that is still going (the source card is read-only then)."""
+        return isinstance(self.source, DriverSource) and self.source.running
+
+    async def follow_driver(self, mgr, info: dict):
+        """A GUI-started driver run begins: Live shows it (no radar lock to claim, the run holds it)."""
+        new = DriverSource(mgr, info["run"], info["config"], info["pid"], info.get("tap_fd"))
+        try:
+            await self.set_source(new, new.spec)
+        except Exception:
+            new.release()
+            raise
+
     async def run(self):
         if not getattr(self.source, "drives_status", False):
             self.set_status("streaming", "")
@@ -96,7 +110,8 @@ class Hub:
                 fr.setdefault("errors", self.errors)
                 fr["rate"] = self.rate
                 self.publish(fr)
-            self.set_status("ended", "Source finished")
+            if not getattr(self.source, "finished_status", False):
+                self.set_status("ended", "Source finished")
         except asyncio.CancelledError:
             raise
         except Exception as e:  # keep the page informed rather than dying silently
@@ -113,8 +128,19 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
         if loop is not None and not loop.is_closed():
             loop.call_soon_threadsafe(hub.publish, msg)
 
+    def on_run(info):   # a driver run was spawned (any thread): Live follows it
+        loop = loop_ref.get("loop")
+        if loop is None or loop.is_closed():
+            return False
+        asyncio.run_coroutine_threadsafe(hub.follow_driver(driver, info), loop)
+        return True
+
+    def owner_detail():   # who holds the board, for the refusal text
+        sp = hub.spec
+        return f" ({sp.get('cli_port')})" if hub.source.holds_lock and sp.get("cli_port") else ""
+
     driver = DriverManager(bin_override=driver_bin, run_root_override=run_root, emit=emit,
-                           min_stop_grace=min_stop_grace)
+                           min_stop_grace=min_stop_grace, on_run=on_run, owner_detail=owner_detail)
 
     @contextlib.asynccontextmanager
     async def lifespan(app):

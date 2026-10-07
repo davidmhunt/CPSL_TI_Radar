@@ -24,14 +24,18 @@ const board = () => C.boards.find(b => b.board === $('srcBoard').value);
 
 function layout() {
   [...$('srcKind').children].forEach(b => b.classList.toggle('on', b.dataset.k === C.kind));
-  $('srcFileRow').hidden = C.kind !== 'replay';
-  $('srcSerial').hidden = C.kind !== 'serial';
+  // gui-36: while Live follows a driver run the card is read-only ("driver run · cfg · pid"); the run is managed in the Run tab
+  const fol = !!(C.cur && C.cur.kind === 'driver' && C.cur.source_state === 'running');
+  $('srcKind').hidden = fol; $('srcNow').hidden = fol; $('srcBtns').hidden = fol; $('srcDrv').hidden = !fol;
+  if (fol) $('srcDrvInfo').textContent = driverLine(C.cur);
+  $('srcFileRow').hidden = fol || C.kind !== 'replay';
+  $('srcSerial').hidden = fol || C.kind !== 'serial';
   const b = board();
   $('srcSkipFw').parentElement.hidden = C.kind !== 'serial';
-  $('srcSkipRow').hidden = !(C.kind === 'serial' && b && b.once_per_boot);
+  $('srcSkipRow').hidden = fol || !(C.kind === 'serial' && b && b.once_per_boot);
   $('srcBoardNote').textContent = b ? `${b.tlv_dialect} TLV, CLI ${b.cli_baud} baud, data ${b.data_baud} baud` +
     (b.once_per_boot ? '. Accepts a cfg once per power-up.' : '') : '';
-  const live = C.cur && C.cur.kind;
+  const live = C.cur && C.cur.kind !== 'driver' && C.cur.kind;
   $('srcStop').disabled = C.busy || !live;
   $('srcStart').disabled = C.busy || (C.kind === 'serial' && !$('srcCfg').value) || (C.kind === 'replay' && !$('srcFile').value);
   $('srcStart').textContent = C.kind === 'serial' ? (live === 'serial' ? 'Restart' : 'Start serial') : `Use ${KIND_LABEL[C.kind].toLowerCase()}`;
@@ -62,18 +66,19 @@ function showFirmware(f) {
   el.textContent = `Firmware: ${f.expected}${found && f.verdict !== 'skipped' ? ' \u00b7 ' + found : ''} ${mark}` + (f.verdict === 'mismatch' ? `. Flash it: ${f.flash_hint}` : '');
   el.className = 'runmsg ' + (f.verdict === 'match' ? 'ok' : f.verdict === 'mismatch' ? 'bad' : 'warn');
 }
+const driverLine = c => { const sp = c.spec || {}; return `driver run \u00b7 ${sp.name || (sp.config || '').split('/').pop()}` + (c.source_state === 'running' && sp.pid ? ` \u00b7 pid ${sp.pid}` : ` (${c.source_state || 'ended'})`); };
 function describeNow() {
   showFirmware(C.cur && C.cur.kind === 'serial' ? C.cur.firmware : null);
   const c = C.cur; if (!c) return;
   const sp = c.spec || {};
-  let t = `Live: ${c.kind}`;
+  let t = c.kind === 'driver' ? 'Live: ' + driverLine(c) : `Live: ${c.kind}`;
   if (c.kind === 'serial') t += ` · ${sp.board || ''}${sp.skip_configure ? ' (cfg skipped)' : ''}`;
   if (c.kind === 'replay' && sp.file) t += ` · ${sp.file.split('/').pop()}`;
   $('srcNow').textContent = t;
 }
 export async function refreshSource() {
   const { j } = await api('/api/source');
-  if (j) { C.cur = j; describeNow(); if (cmdPanel && j.kind === 'serial') cmdPanel.update(j.cli); else if (cmdPanel) cmdPanel.clear(); if (!C.ready) { C.kind = j.kind; } layout(); }
+  if (j) { C.cur = j; describeNow(); if (cmdPanel && j.kind === 'serial') cmdPanel.update(j.cli); else if (cmdPanel) cmdPanel.clear(); if (!C.ready) { C.kind = j.kind === 'driver' ? 'mock' : j.kind; } layout(); }
 }
 export async function initSource() {
   const [b, c, f] = await Promise.all([api('/api/source/boards'), api('/api/cfgs'), api('/api/source/files')]);
@@ -125,7 +130,7 @@ const BAD = ['error', 'cfg_failed', 'wrong_firmware', 'no_board', 'stalled', 'di
 let lastState = null;
 export function srcStatus(state, text) {
   // the transcript is fetched when the configure attempt resolves (not on every "configuring i/N" tick)
-  if (state !== lastState && ['cfg_failed', 'wrong_firmware', 'waiting', 'streaming', 'stalled'].includes(state) && C.ready) refreshSource();
+  if (state !== lastState && ['cfg_failed', 'wrong_firmware', 'waiting', 'streaming', 'stalled', 'ended', 'error', 'no_tap'].includes(state) && C.ready) refreshSource();
   lastState = state;
   const el = $('srcStat'); const show = !!text || BAD.includes(state);
   el.hidden = !show; el.textContent = show ? `${state.replace('_', ' ')}${text ? ': ' + text : ''}` : '';
@@ -140,3 +145,4 @@ $('srcCfg').addEventListener('change', layout);
 $('srcFile').addEventListener('change', layout);
 $('srcStart').onclick = start;
 $('srcStop').onclick = stop;
+$('srcManage').onclick = () => dispatchEvent(new CustomEvent('goto-tab', { detail: 'run' }));

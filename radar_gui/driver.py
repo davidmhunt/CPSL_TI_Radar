@@ -105,8 +105,11 @@ class DriverManager:
     """At most one driver run at a time; thread-safe. `emit(msg_dict)` receives driver_* messages (any thread)."""
 
     def __init__(self, bin_override=None, run_root_override=None, lock=radar_lock, emit=None,
-                 min_stop_grace: float = 5.0):
+                 min_stop_grace: float = 5.0, on_run=None, owner_detail=None):
         self.bin_override, self.root_override, self.lock = bin_override, run_root_override, lock
+        self.on_run = on_run                      # gui-36: called with the run info after the spawn; True = tap fd taken over
+        self.owner_detail = owner_detail or (lambda: "")
+        self._tap_cache = {}                      # (binary path, mtime) -> supports --tap-fd
         self.emit, self.min_grace = emit or (lambda m: None), min_stop_grace
         self._mu = threading.RLock()
         self._reset()
@@ -125,6 +128,7 @@ class DriverManager:
         self.expect = {}
         self.sigint_sent = False
         self.t_start = 0.0
+        self.tap = None   # "on" = run started with --tap-fd, "off" = the binary has no tap, None = no run yet
 
     # ---- validate -------------------------------------------------------------------------------
     def _bin(self) -> Path:
@@ -143,6 +147,20 @@ class DriverManager:
             raise DriverError("--validate timed out after 30 s", 503)
         return parse_validate(p.stdout + p.stderr, p.returncode)
 
+    def tap_supported(self, b: Path) -> bool:
+        """Once per binary (path + mtime): does its usage text list `--tap-fd`? An older build keeps working, untapped."""
+        try:
+            key = (str(b), b.stat().st_mtime_ns)
+        except OSError:
+            return False
+        if key not in self._tap_cache:
+            try:
+                p = subprocess.run([str(b), "--help"], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+                self._tap_cache[key] = "--tap-fd" in (p.stdout + p.stderr)
+            except (OSError, subprocess.TimeoutExpired):
+                self._tap_cache[key] = False
+        return self._tap_cache[key]
+
     # ---- start / stop ---------------------------------------------------------------------------
     def start(self, config: str | os.PathLike, frames: int | None = None, duration: float | None = None) -> dict:
         config = Path(config).resolve()
@@ -159,7 +177,8 @@ class DriverManager:
                 ports.append(sysjson["serial_stream"].get("port"))
             ports = [p for p in ports if p]
             if not self.lock.acquire("driver"):
-                raise DriverError(f"radar in use by {self.lock.owner}")
+                raise DriverError(f"Live serial source holds the radar{self.owner_detail()}; stop it in the Live tab"
+                                  if self.lock.owner == "serial source" else f"radar in use by {self.lock.owner}")
             spawned = False
             try:
                 if (why := check_ports(ports)):
@@ -185,20 +204,39 @@ class DriverManager:
                 self.expect = {"bytes_per_frame": val["bytes_per_frame"],
                                "period_ms": (val["frame"] or {}).get("period_ms")}
                 self.t_start = time.time()
+                rfd = wfd = None
+                if self.tap_supported(b):
+                    rfd, wfd = os.pipe()
+                    cmd += ["--tap-fd", str(wfd)]
                 try:
                     self.proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                                  stdin=subprocess.DEVNULL, text=True, bufsize=1,
-                                                 start_new_session=True)
+                                                 start_new_session=True, pass_fds=(wfd,) if wfd is not None else ())
                 except OSError as e:
+                    for fd in (rfd, wfd):
+                        if fd is not None:
+                            os.close(fd)
                     self.error = f"cannot start driver: {e}"
                     self._set_state("failed")
                     raise DriverError(self.error, 503)
+                if wfd is not None:
+                    os.close(wfd)      # only the driver holds the write end: its exit is EOF for the reader
+                self.tap = "on" if rfd is not None else "off"
                 spawned = True
             except BaseException:
                 if not spawned:
                     self.lock.release("driver")
                 raise
             self._set_state("running")
+            taken = False
+            if self.on_run is not None:
+                try:
+                    taken = bool(self.on_run({"run": self.run_id, "config": self.config, "pid": self.proc.pid,
+                                              "tap_fd": rfd, "tap": self.tap}))
+                except Exception:
+                    taken = False
+            if rfd is not None and not taken:
+                os.close(rfd)
             threading.Thread(target=self._pump, args=(self.proc,), daemon=True, name="driver-pump").start()
             return self.status()
 
@@ -396,4 +434,4 @@ class DriverManager:
                     "error": self.error, "stats": dict(self.stats), "log": list(self.log)[-100:] if log else [],
                     "run": self.run_id, "cli": [dict(e) for e in self.cli] if log else [], "cli_first_fail": first_fail(self.cli),
                     "files": list(self.files), "bin_verdict": self.bin_verdict,
-                    "radar_owner": self.lock.owner}
+                    "radar_owner": self.lock.owner, "tap": self.tap}

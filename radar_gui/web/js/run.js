@@ -133,6 +133,7 @@ function render() {
   const dp = $('drvPill'); dp.style.display = s === 'idle' ? 'none' : '';
   $('drvDot').className = 'dot ' + (DOT[s] || ''); $('drvText').textContent = 'driver ' + s;
   buttons(); renderStreams();
+  $('rWatchRow').hidden = !(st.tap === 'on' && (s === 'running' || s === 'stopping'));
   if (st.config && s !== 'idle') { const c = R.configs.find(c => c.path === st.config || (REPO_TAIL(st.config) === c.path)); if (c && (s === 'running' || s === 'stopping')) $('rCfg').value = c.path; }
   if (s === 'failed' || (s === 'exited' && st.exit_code)) msg((st.error || `driver exited with code ${st.exit_code}`) + (noFrames() ? ' ' + ZERO_HINT : ''));
   else if (s === 'exited' && noFrames()) msg(ZERO_HINT, 'warn');
@@ -151,6 +152,7 @@ function noFrames() {
 // Returns null when no run is live; tolerant of old backends (missing fields -> null).
 export function driverHeader() {
   if (R.state !== 'running' && R.state !== 'stopping') return null;
+  if ((R.st || {}).tap === 'on') return null;   // gui-36: the run is tapped, so the header shows the Live numbers (the run's own cloud)
   const s = (R.stats || {}).serial || (R.stats || {}).dca || Object.values(R.stats || {})[0] || {};
   return { frame: s.frames == null ? null : s.frames, rate: s.rate_hz == null ? null : s.rate_hz };
 }
@@ -271,6 +273,7 @@ export function showRun() {
   if (R.ready) { refresh(); return; }
   R.ready = true; cliPanel = mountCliPanel($('rCli'));
   $('rCfg').addEventListener('change', cfgChanged);
+  $('rWatch').onclick = () => dispatchEvent(new CustomEvent('goto-tab', { detail: 'live' }));
   $('rValidate').onclick = validate; $('rStart').onclick = start; $('rStop').onclick = stop;
   $('rHideStats').addEventListener('change', () => { pend.rebuild = true; schedule(); });
   loadConfigs().then(refresh);
