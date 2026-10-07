@@ -95,6 +95,6 @@ High on the SDK 3.6 parser, the Doppler formulas and the cascade DDMA facts (rea
 ## Sources
 
 - `ti_mmwsdk36_rfparser` — Texas Instruments (2021), "mmWave SDK 3.6.02.00-LTS packages/ti/demo/utils/mmwdemo_rfparser.c, datapath/dpu/rangeproc, demo/xwr18xx/mmw profiles," *TI MMWAVE-SDK installer (firmware_dev/downloads)*. url:https://www.ti.com/tool/MMWAVE-SDK
-- `ti_cascade_ddm_src` — Texas Instruments (2026), "Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm (mmwdemo_rfparserDDMA.c, mss_main.c, mmwave_link_common.c, projectspec)," *TI Radar Toolbox*. url:https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST
+- `ti_cascade_ddm_src` — Texas Instruments (2026), "Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm (mmwdemo_rfparserDDMA.c, mss_main.c, mmwave_link_common.c, projectspec)," *TI Radar Toolbox* (download page; local copy cited). url:https://www.ti.com/tool/download/RADAR-TOOLBOX
 
 Note: descriptive keys as in the gui-13 memos; no PDFs archived (installer sources); `references.bib` not edited.

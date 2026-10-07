@@ -133,8 +133,8 @@ High on everything cited from source (cascade and SDK 3.6 parsers, CLI, `rl_sens
 ## Sources
 
 - `ti_mmwsdk36_rfparser` — Texas Instruments (2021), "mmWave SDK 3.6.02.00-LTS packages/ti/demo/utils/mmwdemo_rfparser.c, utils/cli/src/cli_mmwave.c, demo/xwr18xx/mmw/mss, control/mmwave/mmwave.h," *TI MMWAVE-SDK installer (firmware_dev/downloads)*. url:https://www.ti.com/tool/MMWAVE-SDK
-- `ti_cascade_ddm_src` — Texas Instruments (2026), "Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm (mmwdemo_rfparserDDMA.c, mss_main.c, dopplerprochwaDDMA.c, rl_sensor.h)," *TI Radar Toolbox*. url:https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST
-- `ti_cascade_user_guide` — Texas Instruments (2026), "Two Chip Cascade user guide (Two_Chip_Cascade_user_guide.html), config-once and tested-design statement," *TI Radar Toolbox docs*. url:https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST
+- `ti_cascade_ddm_src` — Texas Instruments (2026), "Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm (mmwdemo_rfparserDDMA.c, mss_main.c, dopplerprochwaDDMA.c, rl_sensor.h)," *TI Radar Toolbox* (download page; local copy cited). url:https://www.ti.com/tool/download/RADAR-TOOLBOX
+- `ti_cascade_user_guide` — Texas Instruments (2026), "Two Chip Cascade user guide (Two_Chip_Cascade_user_guide.html), config-once and tested-design statement," *TI Radar Toolbox docs* (bundled HTML; local copy at firmware_dev/projects/awr2243_cascade_ddm/docs/). url:https://www.ti.com/tool/download/RADAR-TOOLBOX
 - `ti_awr2243_datasheet` — Texas Instruments (2024), "AWR2243 datasheet SWRS223D (76-81 GHz, 266 MHz/us ramp, 45 Msps, 20 MHz IF)," *TI*. url:https://ti.com/document-viewer/AWR2243/datasheet/GUID-DFD2124E-689E-4659-8779-296EBD24389C
 - `ti_e2e_1443_lvds` — TI E2E forum (2019), "iwr1443 xwr14xx lvds streaming," *TI E2E*. url:https://e2e.ti.com/support/sensors-group/sensors/f/sensors-forum/732245/iwr1443-xwr14xx-lvds-streaming
 

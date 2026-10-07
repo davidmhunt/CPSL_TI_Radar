@@ -85,16 +85,18 @@
 
 @manual{ti_cascade_ddm_src,
   author = {{Texas Instruments}},
-  title = {Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm},
+  title = {Radar Toolbox 4.00.00.05, mmwave\_2\_chip\_cascade demo source (AM273x + AWR2243 DDM)},
   year = {2026},
-  url = {https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST}
+  url = {https://www.ti.com/tool/download/RADAR-TOOLBOX},
+  note = {Download page for TI Radar Toolbox (version 4.00.00.05, released 2026-03-01); built against mmWave MCU+ SDK AM273x 04.04.00.01 (docs/firmware.md). Memos cite the copy tracked at firmware_dev/projects/awr2243_cascade_ddm/src/ti (mmwdemo_rfparserDDMA.c, mss_main.c, dss_main.c, dopplerprochwaDDMA.c, objdethwaDDMA/objectdetection.c, mmwave_link_common.c, CAS/control/mmwave/include/rl_sensor.h); file:line refs are to that local copy.}
 }
 
 @manual{ti_cascade_user_guide,
   author = {{Texas Instruments}},
-  title = {Two Chip Cascade user guide (Two_Chip_Cascade_user_guide.html)},
+  title = {Two Chip Cascade User Guide (Two\_Chip\_Cascade\_user\_guide.html), bundled in Radar Toolbox 4.00.00.05},
   year = {2026},
-  url = {https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST}
+  url = {https://www.ti.com/tool/download/RADAR-TOOLBOX},
+  note = {No standalone public URL found (the TI Resource Explorer page is JS-rendered); the HTML ships inside the Radar Toolbox download above. Memos rely on the local copy firmware_dev/projects/awr2243_cascade_ddm/docs/Two_Chip_Cascade_user_guide.html, lines 308-309 (config once per power-up; chirp design tested only to 192 ADC samples, 256 chirps, 8 channels). Companion hardware document: AWR2243-2X-CAS-EVM user guide SWRU639, https://www.ti.com/lit/pdf/swru639 (not cited by the memos).}
 }
 
 @manual{ti_awr2243_datasheet,

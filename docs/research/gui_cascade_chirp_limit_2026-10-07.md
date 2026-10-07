@@ -68,7 +68,7 @@ High (source + build map) that chirps feed $N$ and that the L2 and L3 pools are 
 
 ## Sources
 
-- `ti_cascade_ddm_src` — Texas Instruments (2026), "Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm (dss_main.c, objdethwaDDMA/objectdetection.c, mmwdemo_rfparserDDMA.c, mss_main.c)," *TI Radar Toolbox*. url:https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST
-- `ti_cascade_user_guide` — Texas Instruments (2026), "Two Chip Cascade user guide (Two_Chip_Cascade_user_guide.html), tested-design statement," *TI Radar Toolbox docs*. url:https://dev.ti.com/tirex/explore/node?node=A__AGNPb0uiuxHxMUl5gDbVZw__RADAR-ACADEMY__GwxShWe__LATEST
+- `ti_cascade_ddm_src` — Texas Instruments (2026), "Radar Toolbox 4.00.00.05 mmwave_2_chip_cascade source as tracked in firmware_dev/projects/awr2243_cascade_ddm (dss_main.c, objdethwaDDMA/objectdetection.c, mmwdemo_rfparserDDMA.c, mss_main.c)," *TI Radar Toolbox* (download page; local copy cited). url:https://www.ti.com/tool/download/RADAR-TOOLBOX
+- `ti_cascade_user_guide` — Texas Instruments (2026), "Two Chip Cascade user guide (Two_Chip_Cascade_user_guide.html), tested-design statement," *TI Radar Toolbox docs* (bundled HTML; local copy at firmware_dev/projects/awr2243_cascade_ddm/docs/). url:https://www.ti.com/tool/download/RADAR-TOOLBOX
 
 Note: descriptive keys as in `gui_board_limits_cascade_multiprofile.md`; no PDFs archived (installer-derived sources); `references.bib` not edited.
