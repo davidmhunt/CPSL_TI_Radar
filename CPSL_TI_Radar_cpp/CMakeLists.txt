@@ -63,7 +63,7 @@ add_executable(CPSL_TI_Radar_CPP main.cpp)
 # The config is a required argument: CPSL_TI_Radar_CPP <system.json> [--validate] [--stats] [--frames N] [--duration S]
 
 # Perform linking
-target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Radar)
+target_link_libraries(CPSL_TI_Radar_CPP PRIVATE Radar LiveTap)
 
 # Install header files
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "LiveTap.hpp"
 #include "Radar.hpp"
 #include "StopSignal.hpp"
 
@@ -17,6 +18,7 @@ using steady = std::chrono::steady_clock;
 
 static void print_usage(const char* prog){
     std::cerr << "usage: " << prog << " <system.json> [--validate] [--stats] [--frames N] [--duration S]\n"
+              << "                 [--skip-configure] [--tap-fd N] [--tap-adc-every K]\n"
               << "  <system.json>  system config, schema v2 (v1 files: uv run "
               << SystemConfigReader::kMigrationScript << ")\n"
               << "  --validate     load and cross-check the config (board descriptor, radar cfg, output.dir)\n"
@@ -24,6 +26,14 @@ static void print_usage(const char* prog){
               << "  --stats        print one 'stats v1' line per stream every second, and a final one\n"
               << "  --frames N     stop after N frames (DCA1000 frames if enabled, else TLV frames)\n"
               << "  --duration S   stop after S seconds of streaming\n"
+              << "  --skip-configure  open the ports but send no cfg, no sensorStart and no sensorStop (same as\n"
+              << "                 runtime.skip_configure): for a board already configured and streaming this\n"
+              << "                 power-up, e.g. the cascade, which takes a cfg once per power-up; a board that\n"
+              << "                 takes a cfg on every run only gets a warning (it must already be streaming)\n"
+              << "  --tap-fd N     live tap: write each point cloud (and the hello) to file descriptor N, a pipe\n"
+              << "                 the parent process passed in; never slows the run; SIGPIPE is ignored and a\n"
+              << "                 closed pipe only disables the tap (docs/ARCHITECTURE.md, \"Live tap\")\n"
+              << "  --tap-adc-every K  with --tap-fd: also send every K-th ADC frame (DCA1000 runs; K >= 1)\n"
               << "Without --frames/--duration the run ends on Ctrl-C (SIGINT/SIGTERM), or when no\n"
               << "frame arrives for 2 s (runtime.stall_timeout_ms instead, when it is set)."
               << std::endl;
@@ -110,7 +120,7 @@ static int validate(const std::string& config_file){
 
 // "stats v1" lines (format in docs/ARCHITECTURE.md): cumulative counters
 // since start(), t in seconds since start()
-static void print_stats(const radar::Radar& r, double t){
+static void print_stats(const radar::Radar& r, double t, const radar::LiveTap* tap){
     const radar::Stats s = r.stats();
     std::ostringstream o;
     o << std::fixed << std::setprecision(3);
@@ -128,6 +138,7 @@ static void print_stats(const radar::Radar& r, double t){
         o << "stats v1 serial t=" << t << " frames=" << s.serial_frames << " missed=" << s.serial_missed
           << " overwritten=" << s.serial_overwritten << " stalls=" << s.stalls << "\n";
     }
+    if (tap) o << tap->stats_line(t);
     std::cout << o.str() << std::flush;
 }
 
@@ -152,6 +163,9 @@ int main(int argc, char* argv[]){
     std::string config_file;
     bool validate_only = false;
     bool stats = false;
+    bool skip_configure = false;
+    long tap_fd = -1;             // -1 = no live tap
+    uint64_t tap_adc_every = 0;   // 0 = no ADC messages
     uint64_t max_frames = 0;      // 0 = no limit
     double max_seconds = 0;       // 0 = no limit
     for (int i = 1; i < argc; i++) {
@@ -160,6 +174,20 @@ int main(int argc, char* argv[]){
             validate_only = true;
         } else if (a == "--stats") {
             stats = true;
+        } else if (a == "--skip-configure") {
+            skip_configure = true;
+        } else if (a == "--tap-fd" || a == "--tap-adc-every") {
+            uint64_t n = 0;
+            const bool ok = i + 1 < argc && parse_count(argv[i + 1], n) &&
+                            (a == "--tap-adc-every" || n <= 1000000);
+            if (!ok) {
+                std::cerr << a << " needs a positive integer" << std::endl;
+                print_usage(argv[0]);
+                return 2;
+            }
+            if (a == "--tap-fd") tap_fd = static_cast<long>(n);
+            else tap_adc_every = n;
+            i++;
         } else if (a == "--frames" || a == "--duration") {
             const bool ok = i + 1 < argc && (a == "--frames" ? parse_count(argv[i + 1], max_frames)
                                                              : parse_seconds(argv[i + 1], max_seconds));
@@ -188,6 +216,11 @@ int main(int argc, char* argv[]){
         print_usage(argv[0]);
         return 2;
     }
+    if (tap_adc_every > 0 && tap_fd < 0) {
+        std::cerr << "--tap-adc-every needs --tap-fd" << std::endl;
+        print_usage(argv[0]);
+        return 2;
+    }
     if (validate_only) {
         return validate(config_file);
     }
@@ -205,6 +238,7 @@ int main(int argc, char* argv[]){
         std::cerr << "error: " << cfg.status.message << std::endl;
         return 1;
     }
+    if (skip_configure) cfg->set_skip_configure(true);
     radar::Result<std::unique_ptr<radar::Radar>> opened = radar::Radar::open(*cfg);
     if (!opened) {
         std::cerr << "error: " << opened.status.message << std::endl;
@@ -237,6 +271,15 @@ int main(int argc, char* argv[]){
 
     const bool dca = r.dca1000_enabled();
     const bool serial = r.serial_enabled();
+    //live tap (gui-36): only built when --tap-fd is given; every use below is behind `if (tap)`
+    std::unique_ptr<radar::LiveTap> tap;
+    if (tap_fd >= 0) {
+        if (tap_adc_every > 0 && !dca) {
+            std::cerr << "warning: --tap-adc-every ignored: the DCA1000 stream is off in this config" << std::endl;
+        }
+        tap.reset(new radar::LiveTap(static_cast<int>(tap_fd), dca ? static_cast<uint32_t>(tap_adc_every) : 0));
+        tap->start(board.name, serial, dca && tap_adc_every > 0);
+    }
     const uint32_t stall_ms = cfg->system().get_stall_timeout_ms();
     //wait per stream per loop: short enough for 1 Hz stats and a quick Ctrl-C
     const std::chrono::milliseconds wait(dca && serial ? 20 : 100);
@@ -255,6 +298,7 @@ int main(int argc, char* argv[]){
         if (dca) {
             if (r.next_adc_frame(frame, wait, &why)) {
                 got_frame = true;
+                if (tap) tap->offer_adc(frame);
             } else if (why.code == radar::Code::stalled) {
                 stalled = true;
             }
@@ -263,6 +307,7 @@ int main(int argc, char* argv[]){
             if (r.next_point_cloud(cloud, wait, &why)) {
                 got_frame = true;
                 tlv_frames += 1;
+                if (tap) tap->push_points(cloud);
                 std::cout << "TLV frame " << cloud.frame_number << ": " << cloud.points.size() << " detected points";
                 if (!cloud.points.empty()) {
                     const radar::Point& p = cloud.points[0];
@@ -277,7 +322,7 @@ int main(int argc, char* argv[]){
         const steady::time_point now = steady::now();
         if (got_frame) last_frame = now;
         if (stats && now >= next_stats) {
-            print_stats(r, std::chrono::duration<double>(now - t_start).count());
+            print_stats(r, std::chrono::duration<double>(now - t_start).count(), tap.get());
             while (next_stats <= now) next_stats += std::chrono::seconds(1);
         }
         if (max_frames > 0) {
@@ -312,7 +357,7 @@ int main(int argc, char* argv[]){
     //or an output file failed to flush; the files are closed either way
     const radar::Status stopped = r.stop();
     if (stats) {
-        print_stats(r, std::chrono::duration<double>(steady::now() - t_start).count());
+        print_stats(r, std::chrono::duration<double>(steady::now() - t_start).count(), tap.get());
     }
     if (!stopped) {
         std::cerr << "stopped with errors: " << stopped.message << std::endl;

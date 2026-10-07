@@ -26,7 +26,9 @@ the cross-checks, checks `output.dir` (exists / will be created / error),
 prints a summary and exits 0/1 without opening any port or socket. A run
 ends on SIGINT/SIGTERM, after `--frames N` completed frames or `--duration S`
 seconds, or when no frame arrives for 2 s (with `runtime.stall_timeout_ms`
-set, on a stall instead). Built as C++17 (`-std=gnu++17`).
+set, on a stall instead). `--skip-configure`, `--tap-fd N` and
+`--tap-adc-every K` are described under "Skip-configure and once-per-boot
+stop" and "Live tap" below. Built as C++17 (`-std=gnu++17`).
 
 **Public API** (namespace `cpsl::radar`; `src/Radar/Radar.hpp`,
 `src/utilities/{RadarConfig,Status,Log}.hpp`). No call throws, exits or
@@ -37,8 +39,8 @@ sink.
 |------|------|
 | `RadarConfig::load(path)` | `Result<RadarConfig>`: system JSON + board descriptor (with `board_overrides`) + parsed radar cfg, cross-checked; `board()`, `frame_shape()`, `commands()` |
 | `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets, data}` swaps in a fake CLI `ByteStream`, a `ReplayPacketSource` or a fake serial data `ByteStream` |
-| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured` |
-| `start()` | `recordStart` and the RX thread, the DCA worker and serial reader threads (CPUs and priorities from `runtime.*`, see "DCA1000 RX path"), then `sensorStart` |
+| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured`. With `runtime.skip_configure` (`--skip-configure`): the DCA1000 setup only, no radar cfg |
+| `start()` | `recordStart` and the RX thread, the DCA worker and serial reader threads (CPUs and priorities from `runtime.*`, see "DCA1000 RX path"), then `sensorStart` (not with `skip_configure`) |
 | `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
 | `stop()` | see below; the destructor calls it |
@@ -57,7 +59,7 @@ if an earlier one failed. `CLIController` sends over a
 `cpsl::radar::ByteStream` (`src/utilities/ByteStream`; `SerialPortStream`
 in the driver, a fake in tests); every write and read is bounded by the
 command's timeout, and a write/read error makes the command fail with
-`io_error()` (cleared at the start of each command). `sensorStop` waits
+`io_error()` (cleared at the start of each command). `sensorStop` (not sent on a `config_once_per_boot` board, see below) waits
 `max(cli.cmd_timeout_ms, frame period + 200 ms)`, or the descriptor's
 `cli.stop_timeout_ms`, because the demo acknowledges it only after the
 current frame. `stop()` returns `io_error` when `sensorStop` could not be
@@ -82,6 +84,45 @@ frame for that long while running, the next `next_adc_frame` /
 returns false with `stalled`, once per stall (later calls in the same stall
 time out normally). `main` stops the run on it. 0 (the default) turns it
 off, and `main` keeps its 2 s no-frame exit.
+
+**Skip-configure and once-per-boot stop** (gui-36 D14, gui-09 D10). The
+cascade demo accepts a cfg once per power-up, never acknowledges
+`sensorStop` and keeps streaming after it. So on a `lifecycle.config_once_per_boot`
+board `stop()` sends no `sensorStop` (it would only wait out the CLI timeout;
+5000 ms on the cascade, past the GUI's SIGKILL grace) and logs one info line
+saying why; a SIGINT run now ends as soon as the threads are joined. The
+board is left running, so the next run on the same power-up is started with
+`runtime.skip_configure: true` or `--skip-configure`: `configure()` sends no
+radar cfg (the DCA1000 setup still runs when enabled), `start()` sends no
+`sensorStart`, `stop()` no `sensorStop`; the driver just opens the ports and
+streams. The flag is allowed on every board: on one that takes a cfg on every
+run it logs a warning, because nothing will arrive unless that board is
+already configured and streaming. Skipped on a fresh power-up, the cascade
+sends no frames: run once without it.
+
+**Live tap** (gui-36; `src/LiveTap/`, used by `main.cpp` only). `--tap-fd N`
+makes the driver write each completed point cloud to file descriptor `N`, a pipe
+whose write end the parent (the GUI, `radar_gui/driver.py`, via `pass_fds`)
+inherited into the driver. It taps in the consumer loop of `main.cpp`,
+beside the console line, not in the RX or serial threads, and without `--tap-fd`
+that code path is unchanged. `--tap-adc-every K` (needs `--tap-fd`; DCA1000
+runs) also sends every K-th ADC frame the consumer takes (the 0th, K-th, ...).
+Messages: `u32 len (LE, bytes after this field)`, `u8 type`, payload;
+`1 hello` JSON `{"version":1,"board","streams":[..],"adc_every"}` once at the
+start; `2 points` JSON `{"type":"frame","frame","n","t","pts":[[x,y,z,v,snr,noise],..]}`
+(`t` = unix seconds, NaN and inf as `null`); `3 adc` one JSON header line
+(`index`, `shape` `[rx,samples,chirps]`, `missing_bytes`, `layout`
+`"rx,sample,chirp"`, `iq_order` `"IQ"`) + `\n` + int16 I,Q pairs flattened
+`[rx][sample][chirp]`, little endian. The tap never blocks the run: the
+consumer encodes into a one-slot latest-wins mailbox per kind and a writer thread
+does the writes (non-blocking fd, polled), so a slow reader only costs frames,
+counted in `skipped`. SIGPIPE is ignored; an `EPIPE`/write error logs one
+warning, disables the tap, and the run and the recording continue. With
+`--stats` the tap adds a line (not read by `tools/bench`):
+`stats v1 tap t=<s> sent=<n> skipped=<n> adc_sent=<n>` (`sent` points messages,
+`skipped` points or adc messages replaced unsent). The golden bytes are pinned by
+`tests/test_live_tap.cpp` against `CPSL_TI_Radar_cpp/tests/data/live_tap_golden.bin`,
+which `tests/test_radar_gui_tap_wire.py` parses with `radar_gui/tap.py`.
 
 **Stats lines.** `--stats` prints, once a second and once more after
 `stop()`, one line per enabled stream, counters cumulative since `start()`
