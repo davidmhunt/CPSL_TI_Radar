@@ -290,3 +290,16 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 #rMode, #srcMode, #srcKind { align-self: start; justify-self: start; }
 .seg button:disabled { opacity: .5; cursor: default; }
 label.chk.dis { opacity: .55; }
+
+/* Logs tab (gui-37 Step 2b) */
+#logsMain { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; padding: 12px 16px; height: calc(100% - 64px); min-height: 520px; }
+#logsMain .card { min-width: 0; overflow: auto; }
+#lgRoot { text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+#lgTable tr.cur td { background: rgba(88,166,255,.10); }
+#lgTable td.lgact { white-space: nowrap; }
+#lgTable td:nth-child(6) { max-width: 22ch; font-size: 12px; }
+#lgView h2 { flex-wrap: wrap; }
+#lgTitle { overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; }
+#lgText { max-height: none; flex: 1; min-height: 240px; }
+@media (max-width: 1100px) { #logsMain { grid-template-columns: minmax(0, 1fr); height: auto; } }
+#lgView label.inl { display: inline-flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; }

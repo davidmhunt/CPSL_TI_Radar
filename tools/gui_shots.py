@@ -11,7 +11,7 @@ Configure tab, runs scenarios and saves PNGs.
 Spec: a JSON list of scenarios, or {"user_cfgs": {"name.cfg": "<text>"}, "env": {...}, "scenarios": [...]}
 (user_cfgs appear in the picker as saved cfgs, for cfgs not shipped; a name.json is a system JSON for the Run tab, and
 "@PORT@" in any user_cfgs text becomes a scratch file that exists, for "cli.port"; "env" is added to the server's
-environment, e.g. FAKE_DRIVER_MODE, RADAR_GUI_DRIVER=tests/fakes/fake_driver.py; or pass --driver-bin); each scenario (optional "tab":
+environment, e.g. FAKE_DRIVER_MODE, "run_files": {"<UTC>_<name>/driver.log": "text"} seeds the scratch run root, RADAR_GUI_DRIVER=tests/fakes/fake_driver.py; or pass --driver-bin); each scenario (optional "tab":
 "run" opens the Run tab instead of Configure):
     {"name": "x", "window": [1400, 2400],           # optional; "fresh": false keeps the previous page state;
                                                    # "expand": false disables un-clipping the scrolling columns
@@ -273,6 +273,11 @@ def main(argv=None):
                 env.update({k: str(v) for k, v in (sp.get("env", {}) if isinstance(sp, dict) else {}).items()})
                 if env.get("RADAR_GUI_DRIVER") and not os.path.isabs(env["RADAR_GUI_DRIVER"]):
                     env["RADAR_GUI_DRIVER"] = os.path.join(ROOT, env["RADAR_GUI_DRIVER"])
+            if a.scenarios != "builtin" and isinstance(sp, dict) and sp.get("run_files"):   # optional "run_files": {"<run folder>/<file>": text}
+                for rel, txt in sp["run_files"].items():                                      # seeded into the scratch run root (Logs tab)
+                    fp = os.path.join(env["RADAR_GUI_RUN_DIR"], rel); os.makedirs(os.path.dirname(fp), exist_ok=True)
+                    with open(fp, "w") as f:
+                        f.write(txt)
             if user_cfgs:   # scratch saved-cfg dir for this run only
                 udir = os.path.join(out, "_usercfg"); os.makedirs(udir, exist_ok=True)
                 fake_port = os.path.join(udir, "fake_port")   # a path that exists and nobody holds, for system JSON "cli.port"

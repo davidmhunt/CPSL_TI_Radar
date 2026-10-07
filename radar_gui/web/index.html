@@ -10,7 +10,7 @@
 <header>
   <h1>CPSL Radar</h1>
   <span class="seg" id="tabs" role="tablist" aria-label="Pages">
-    <button role="tab" id="tab-cfg" data-tab="cfg" aria-controls="cfgMain" aria-selected="false" tabindex="-1">Configure</button><button role="tab" id="tab-run" data-tab="run" aria-controls="runMain" aria-selected="false" tabindex="-1">Radar</button><button role="tab" id="tab-live" data-tab="live" class="on" aria-controls="liveMain" aria-selected="true">Point cloud</button><button role="tab" id="tab-adc" data-tab="adc" aria-controls="adcMain" aria-selected="false" tabindex="-1">Raw ADC</button><button role="tab" id="tab-settings" data-tab="settings" aria-controls="setMain" aria-selected="false" tabindex="-1">Devices</button>
+    <button role="tab" id="tab-cfg" data-tab="cfg" aria-controls="cfgMain" aria-selected="false" tabindex="-1">Configure</button><button role="tab" id="tab-run" data-tab="run" aria-controls="runMain" aria-selected="false" tabindex="-1">Radar</button><button role="tab" id="tab-live" data-tab="live" class="on" aria-controls="liveMain" aria-selected="true">Point cloud</button><button role="tab" id="tab-adc" data-tab="adc" aria-controls="adcMain" aria-selected="false" tabindex="-1">Raw ADC</button><button role="tab" id="tab-settings" data-tab="settings" aria-controls="setMain" aria-selected="false" tabindex="-1">Devices</button><button role="tab" id="tab-logs" data-tab="logs" aria-controls="logsMain" aria-selected="false" tabindex="-1">Logs</button>
   </span>
   <span class="sessbar" id="sessBar">
     <span class="pill" id="sessPill" role="status" aria-live="polite"><span class="dot" id="sessDot"></span><span id="sessText">No session</span></span>
@@ -360,6 +360,27 @@
       </div>
     </section>
   </div>
+</main>
+<main id="logsMain" role="tabpanel" aria-labelledby="tab-logs" hidden>
+  <section class="card" id="lgList">
+    <h2>Sessions <span class="muted sub" id="lgRoot"></span></h2>
+    <div class="controls">
+      <div class="btnrow">
+        <button class="btn" id="lgRefresh">Refresh</button>
+        <button class="btn" id="lgAll">Select all</button>
+        <button class="btn" id="lgDelete" disabled>Delete selected</button>
+        <span class="muted" id="lgTotal"></span>
+      </div>
+      <div id="lgMsg" class="runmsg" hidden></div>
+      <div class="lgscroll"><table class="ftbl" id="lgTable"></table></div>
+    </div>
+  </section>
+  <section class="card grow" id="lgView">
+    <h2><span id="lgTitle">Log</span>
+      <span class="seg" id="lgFile"><button data-f="driver.log" class="on">driver.log</button><button data-f="session.json">session.json</button><button data-f="radar.cfg">radar.cfg</button></span>
+      <label class="inl">last <select id="lgTail"><option value="200">200</option><option value="500" selected>500</option><option value="5000">5000</option></select> lines</label></h2>
+    <pre class="runpre logpane" id="lgText">Choose a session and press View.</pre>
+  </section>
 </main>
 <script type="module" src="/js/main.js"></script>
 </body>

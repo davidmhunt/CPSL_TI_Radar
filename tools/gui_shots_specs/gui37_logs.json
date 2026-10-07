@@ -1,0 +1,130 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py"
+ },
+ "run_files": {
+  "20261007T120000Z_bench_1843_dca/driver.log": "Using config: /x/session.json\ncli [1/7] flushCfg -> DONE (9 ms)\ncli [7/7] sensorStart -> DONE (15 ms)\n<b>not html</b> <script>alert(1)</script>\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\n",
+  "20261007T120000Z_bench_1843_dca/session.json": "{\"schema_version\": 2, \"board\": \"/x/boards/IWR1843.json\", \"firmware\": \"demo\", \"output\": {\"save_adc_frames\": true}}",
+  "20261007T120000Z_bench_1843_dca/radar.cfg": "% cfg\n",
+  "20261007T130000Z_quick_IWR1843_demo/driver.log": "Using config: /x/session.json\ncli [1/7] flushCfg -> DONE (9 ms)\ncli [7/7] sensorStart -> DONE (15 ms)\n<b>not html</b> <script>alert(1)</script>\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\n",
+  "20261007T130000Z_quick_IWR1843_demo/session.json": "{\"schema_version\": 2, \"board\": \"/x/boards/IWR1843.json\", \"firmware\": \"demo\", \"output\": {\"save_adc_frames\": false}}",
+  "20261007T130000Z_quick_IWR1843_demo/radar.cfg": "% cfg\n",
+  "20261006T090000Z_cascade_rig/driver.log": "Using config: /x/session.json\ncli [1/7] flushCfg -> DONE (9 ms)\ncli [7/7] sensorStart -> DONE (15 ms)\n<b>not html</b> <script>alert(1)</script>\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\nstats v1 serial t=1.0 frames=10 missed=0\n",
+  "20261006T090000Z_cascade_rig/session.json": "{\"schema_version\": 2, \"board\": \"/x/boards/AWR2243_CASCADE.json\", \"firmware\": \"cascade_ddm\", \"output\": {\"save_adc_frames\": false}}",
+  "20261006T090000Z_cascade_rig/radar.cfg": "% cfg\n",
+  "20261007T130000Z_quick_IWR1843_demo/serial_data.bin": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ },
+ "scenarios": [
+  {
+   "name": "a_list_1400",
+   "tab": "logs",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "click": "#lgTable button.btn.mini"
+    },
+    {
+     "wait": 1
+    }
+   ],
+   "shots": [
+    {
+     "file": "logs_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "table.txt",
+     "selector": "#lgTable",
+     "what": "text"
+    },
+    {
+     "file": "view.txt",
+     "selector": "#lgText",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "a_list_800",
+   "tab": "logs",
+   "window": [
+    800,
+    1100
+   ],
+   "fresh": false,
+   "actions": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "logs_800.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    }
+   ]
+  },
+  {
+   "name": "b_delete_1400",
+   "tab": "logs",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "wait": 1
+    },
+    {
+     "js": "window.confirm=m=>{document.title=m;return true}; const c=document.querySelectorAll('#lgTable input[type=checkbox]'); c[2].click(); return 'ok'"
+    },
+    {
+     "click": "#lgDelete"
+    },
+    {
+     "wait": 1.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "deleted_1400.png"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "confirm.txt",
+     "selector": "title",
+     "what": "html"
+    },
+    {
+     "file": "table.txt",
+     "selector": "#lgTable",
+     "what": "text"
+    },
+    {
+     "file": "msg.txt",
+     "selector": "#lgMsg",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}

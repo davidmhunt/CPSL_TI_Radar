@@ -7,6 +7,7 @@ import { initSource, srcStatus, resetStats } from './source.js';
 import { initSession, feedMessage, boardLive, view as sessView } from './session.js';
 import { showSettings } from './settings.js';
 import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
+import { showLogs } from './logs.js';
 import { showAdc, hideAdc, initAdc } from './adc.js';
 
 // ---------- stream ----------
@@ -137,7 +138,7 @@ function tab(name, auto) {
   }
   for (const [k, id] of Object.entries(PANEL)) if ($(id)) $(id).hidden = k !== name;
   if (name === 'adc') showAdc(); else hideAdc();
-  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else redraw();
+  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else if (name === 'logs') showLogs(); else redraw();
   if (!auto) history.replaceState(null, '', HASH[name] || location.pathname);
 }
 // Configure -> Save result "Open in Run" link
