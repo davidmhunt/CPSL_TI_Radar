@@ -103,6 +103,19 @@ if(NOT ok STREQUAL "ON" AND NOT ok STREQUAL "true" OR NOT board STREQUAL "IWR184
    OR NOT rx GREATER 0 OR NOT bpf GREATER 0 OR NOT cfgname MATCHES "front_radar_IWR1843_stress_test.json$")
   message(FATAL_ERROR "--validate --json good-config shape is wrong:\n${out}")
 endif()
+# gui-04 Step 3b: metrics carry the cfg limit numbers; warning-level limits land in warnings[], not errors[]
+string(JSON m_rx GET "${out}" metrics n_rx)
+string(JSON m_bpf GET "${out}" metrics bytes_per_frame)
+if(NOT m_rx EQUAL rx OR NOT m_bpf EQUAL bpf)
+  message(FATAL_ERROR "--validate --json metrics disagree with frame (n_rx ${m_rx} vs ${rx}, bytes ${m_bpf} vs ${bpf}):\n${out}")
+endif()
+execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/radar_0_IWR1843_vel_sr.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE wout ERROR_VARIABLE werr)
+string(JSON wcode GET "${wout}" warnings 0 code)
+string(JSON werrs LENGTH "${wout}" errors)
+if(NOT rc EQUAL 0 OR NOT wcode STREQUAL "band_edge" OR NOT werrs EQUAL 0)
+  message(FATAL_ERROR "a warning-level limit must be a warning, not an error (exit ${rc}):\n${wout}")
+endif()
 # the text summary must not leak into the JSON output
 if(out MATCHES "OK:" OR out MATCHES "bytes/frame:")
   message(FATAL_ERROR "--validate --json printed text output:\n${out}")

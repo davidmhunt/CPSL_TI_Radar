@@ -140,8 +140,9 @@ static int validate(const std::string& config_file){
 /**
  * @brief --validate --json: the same checks as validate(), reported as one JSON object on stdout (nothing
  * else is printed). errors[] carry a stable `code` and the `source` file that holds the violated rule or the
- * bad value; warnings stay empty here (warning-level rules live in the GUI). metrics is reserved for the
- * limit metrics. Exit 0 when ok, 1 otherwise.
+ * bad value; error-level limit violations of the firmware descriptor are errors (gui-04 Step 3b), warning-level
+ * ones go to warnings[] (the GUI validator's remaining warning rules are not ported). metrics is a cheap subset
+ * of the GUI metrics (empty when the limits were not checked). Exit 0 when ok, 1 otherwise.
  */
 static int validate_json(const std::string& config_file){
     using json = nlohmann::ordered_json;
@@ -167,6 +168,10 @@ static int validate_json(const std::string& config_file){
             out["frame"] = {{"rx", shape.rx}, {"samples", shape.samples}, {"chirps", shape.chirps},
                             {"period_ms", std::round(static_cast<double>(shape.period_ms) * 1000.0) / 1000.0}};
             out["bytes_per_frame"] = shape.bytes;
+            for (const SystemConfigReader::Issue& w : sys.getCfgWarnings()) {
+                out["warnings"].push_back({{"code", w.code}, {"message", w.message}, {"source", w.source}});
+            }
+            out["metrics"] = sys.getCfgMetrics();
             for (const std::string& n : sys.getCfgCheckNotes()) out["notes"].push_back(n);
             if (rc.board().lifecycle.config_once_per_boot) {
                 out["notes"].push_back(rc.board().name + " accepts a cfg once per power-up");

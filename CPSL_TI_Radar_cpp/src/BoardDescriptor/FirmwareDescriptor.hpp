@@ -95,6 +95,9 @@ struct FirmwareDescriptor {
     // cli_overrides.<board>.prompt: the CLI prompt this firmware prints on that board (overrides the board
     // descriptor's cli.prompt, which is the prompt of the stock firmware)
     std::map<std::string, std::string> cli_prompt;
+    // mimo.scheme ("tdm" | "ddma"; "" = no mimo block): the only part of the GUI-owned `mimo` block the driver reads,
+    // because the TX count of the cfg limit checks depends on it. The rest of `mimo` stays GUI-only.
+    std::string mimo_scheme;
 
     // Load and validate a descriptor file. `id` must equal the file's stem.
     static bool load(const std::string& path, FirmwareDescriptor& out, std::string& error);

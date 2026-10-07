@@ -103,6 +103,8 @@ struct BoardDescriptor {
     // Optional. Ids of the firmware descriptors (config/firmware/<id>.json) this board supports, default
     // first. Empty = key absent. The system config's "firmware" must be one of them (gui-04).
     std::vector<std::string> firmwares;
+    // Optional chirp-mask bit of the elevation TX (default 0b010 = TX2; IWR6843ODS 0b100).
+    uint32_t elevation_tx_bit = 2;
 
     // Load and validate a descriptor file. `name` must equal the file's stem.
     // If `overrides` is given (the system config's board_overrides object) it
@@ -154,6 +156,9 @@ struct StreamSelection {
 
 struct CfgCheckResult {
     std::vector<std::string> errors;  // the run would produce garbage or fail: refuse it
+    // Parallel to `errors`: the stable rule code of each ("radar_cfg" for the stream cross-checks,
+    // "missing_<cmd>" / "forbidden_<cmd>" for required/forbidden commands; the same codes the GUI validator uses).
+    std::vector<std::string> error_codes;
     std::vector<std::string> notes;   // a check could not be made (line absent); not fatal
     bool ok() const { return errors.empty(); }
 };

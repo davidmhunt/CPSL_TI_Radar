@@ -56,3 +56,12 @@ add_test(NAME test_validate_all_configs
                  -DV1_FIXTURE=${REPO_ROOT}/tests/fixtures/v1_configs/front_radar_IWR1843_stress_test_baseline.json
                  -DTMP_DIR=${CMAKE_CURRENT_BINARY_DIR}/validate_tmp
                  -P ${CMAKE_CURRENT_LIST_DIR}/validate_all_configs.cmake)
+
+# gui-04 Step 3b: the error-level cfg limit checks against the seeded-bad corpus (one cfg per rule code).
+add_test(NAME test_validate_parity_corpus
+         COMMAND ${CMAKE_COMMAND}
+                 -DDRIVER=$<TARGET_FILE:CPSL_TI_Radar_CPP>
+                 -DCONFIG_DIR=${CPP_ROOT}/config
+                 -DCORPUS_DIR=${REPO_ROOT}/tests/fixtures/parity
+                 -DTMP_DIR=${CMAKE_CURRENT_BINARY_DIR}/parity_tmp
+                 -P ${CMAKE_CURRENT_LIST_DIR}/validate_parity_corpus.cmake)

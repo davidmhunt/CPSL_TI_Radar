@@ -1,0 +1,367 @@
+[
+  {
+    "name": "missing_profileCfg",
+    "cfg": "missing_profileCfg.cfg",
+    "codes": [
+      "missing_profileCfg"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "missing_chirpCfg",
+    "cfg": "missing_chirpCfg.cfg",
+    "codes": [
+      "missing_chirpCfg"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "missing_channelCfg",
+    "cfg": "missing_channelCfg.cfg",
+    "codes": [
+      "missing_channelCfg"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "missing_frameCfg",
+    "cfg": "missing_frameCfg.cfg",
+    "codes": [
+      "missing_frameCfg"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "frame_cfg_layout",
+    "cfg": "frame_cfg_layout.cfg",
+    "codes": [
+      "frame_cfg_layout"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "channel_cfg_layout",
+    "cfg": "channel_cfg_layout.cfg",
+    "codes": [
+      "channel_cfg_layout"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "missing_calibData",
+    "cfg": "missing_calibData.cfg",
+    "codes": [
+      "missing_calibData"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "forbidden_clutterRemoval",
+    "cfg": "forbidden_clutterRemoval.cfg",
+    "codes": [
+      "forbidden_clutterRemoval"
+    ],
+    "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
+    "serial": false,
+    "dca": true
+  },
+  {
+    "name": "bad_cfg",
+    "cfg": "bad_cfg.cfg",
+    "codes": [
+      "bad_cfg"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "too_many_rx",
+    "cfg": "too_many_rx.cfg",
+    "codes": [
+      "too_many_rx"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "tx_count_invalid",
+    "cfg": "tx_count_invalid.cfg",
+    "codes": [
+      "tx_count_invalid"
+    ],
+    "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "too_many_tx",
+    "cfg": "too_many_tx.cfg",
+    "codes": [
+      "too_many_tx",
+      "tx_count_invalid"
+    ],
+    "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "band",
+    "cfg": "band.cfg",
+    "codes": [
+      "band"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "band_subrange",
+    "cfg": "band_subrange.cfg",
+    "codes": [
+      "band_subrange"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "slope",
+    "cfg": "slope.cfg",
+    "codes": [
+      "slope"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "sample_rate",
+    "cfg": "sample_rate.cfg",
+    "codes": [
+      "sample_rate"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "sample_rate_low",
+    "cfg": "sample_rate_low.cfg",
+    "codes": [
+      "sample_rate_low"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "chirp_cycle",
+    "cfg": "chirp_cycle.cfg",
+    "codes": [
+      "chirp_cycle"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "loops",
+    "cfg": "loops.cfg",
+    "codes": [
+      "loops"
+    ],
+    "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
+    "serial": false,
+    "dca": true
+  },
+  {
+    "name": "frame_period_short",
+    "cfg": "frame_period_short.cfg",
+    "codes": [
+      "frame_period_short"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "frame_period_long",
+    "cfg": "frame_period_long.cfg",
+    "codes": [
+      "frame_period_long"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "frame_period",
+    "cfg": "frame_period.cfg",
+    "codes": [
+      "frame_period"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "frame_too_short",
+    "cfg": "frame_too_short.cfg",
+    "codes": [
+      "frame_too_short"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "sampling_outside_ramp",
+    "cfg": "sampling_outside_ramp.cfg",
+    "codes": [
+      "sampling_outside_ramp"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "adc_buffer",
+    "cfg": "adc_buffer.cfg",
+    "codes": [
+      "adc_buffer"
+    ],
+    "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
+    "serial": false,
+    "dca": true
+  },
+  {
+    "name": "radar_cube",
+    "cfg": "radar_cube.cfg",
+    "codes": [
+      "radar_cube"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "lvds_min_transfer",
+    "cfg": "lvds_min_transfer.cfg",
+    "codes": [
+      "lvds_min_transfer"
+    ],
+    "board": "IWR1843",
+    "firmware": "demo",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "lvds_rate",
+    "cfg": "lvds_rate.cfg",
+    "codes": [
+      "lvds_rate"
+    ],
+    "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
+    "serial": false,
+    "dca": true
+  },
+  {
+    "name": "dca_rate",
+    "cfg": "dca_rate.cfg",
+    "codes": [
+      "dca_rate"
+    ],
+    "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
+    "serial": false,
+    "dca": true
+  },
+  {
+    "name": "lvds_not_in_firmware",
+    "cfg": "lvds_not_in_firmware.cfg",
+    "codes": [
+      "lvds_not_in_firmware"
+    ],
+    "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "samples_silicon",
+    "cfg": "samples_silicon.cfg",
+    "codes": [
+      "radar_cube_l3",
+      "samples_silicon"
+    ],
+    "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "chirps",
+    "cfg": "chirps.cfg",
+    "codes": [
+      "chirps"
+    ],
+    "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
+    "serial": true,
+    "dca": false
+  },
+  {
+    "name": "radar_cube_l3",
+    "cfg": "radar_cube_l3.cfg",
+    "codes": [
+      "radar_cube_l3"
+    ],
+    "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
+    "serial": true,
+    "dca": false
+  }
+]

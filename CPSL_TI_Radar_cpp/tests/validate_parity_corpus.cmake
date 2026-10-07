@@ -1,0 +1,77 @@
+# test_validate_parity_corpus (directive gui-04 Step 3b): the driver's error-level cfg limit checks against the
+# seeded-bad corpus tests/fixtures/parity/ (one cfg per Python rule code, expected codes in manifest.json).
+# For every entry a system JSON is written to TMP_DIR, `driver --validate --json` is run, and the set of error
+# codes must equal the manifest's (exit 1, ok false). gui-04 Step 4 compares the same corpus against the Python
+# validator; tests/test_validate_parity_corpus.py pins the manifest to the Python codes today.
+# Invoked by ctest with -DDRIVER=<binary> -DCONFIG_DIR=<config> -DCORPUS_DIR=<tests/fixtures/parity> -DTMP_DIR=<scratch dir>.
+
+file(REMOVE_RECURSE "${TMP_DIR}")
+file(MAKE_DIRECTORY "${TMP_DIR}")
+file(READ "${CORPUS_DIR}/manifest.json" manifest)
+string(JSON n LENGTH "${manifest}")
+if(n LESS 30)
+  message(FATAL_ERROR "expected at least 30 corpus cases, found ${n}")
+endif()
+math(EXPR last "${n} - 1")
+
+set(failed 0)
+set(all_codes "")
+foreach(i RANGE ${last})
+  string(JSON name GET "${manifest}" ${i} name)
+  string(JSON cfg GET "${manifest}" ${i} cfg)
+  string(JSON board GET "${manifest}" ${i} board)
+  string(JSON firmware GET "${manifest}" ${i} firmware)
+  string(JSON serial GET "${manifest}" ${i} serial)
+  string(JSON dca GET "${manifest}" ${i} dca)
+  string(JSON ncodes LENGTH "${manifest}" ${i} codes)
+  set(expected "")
+  math(EXPR clast "${ncodes} - 1")
+  foreach(k RANGE ${clast})
+    string(JSON c GET "${manifest}" ${i} codes ${k})
+    list(APPEND expected "${c}")
+  endforeach()
+  list(SORT expected)
+  list(APPEND all_codes ${expected})
+
+  if(serial)
+    set(serial_json "{\"enabled\": true, \"port\": \"/dev/ttyACM1\"}")
+  else()
+    set(serial_json "{\"enabled\": false}")
+  endif()
+  if(dca)
+    set(dca_json "{\"enabled\": true, \"fpga_ip\": \"192.168.33.180\", \"host_ip\": \"192.168.33.30\", \"cmd_port\": 4096, \"data_port\": 4098}")
+  else()
+    set(dca_json "{\"enabled\": false}")
+  endif()
+  file(WRITE "${TMP_DIR}/${name}.json"
+"{\"schema_version\": 2, \"board\": \"${CONFIG_DIR}/boards/${board}.json\", \"firmware\": \"${firmware}\",
+ \"radar_cfg\": \"${CORPUS_DIR}/${cfg}\", \"cli\": {\"port\": \"/dev/ttyACM0\"},
+ \"serial_stream\": ${serial_json}, \"dca1000\": ${dca_json}}\n")
+
+  execute_process(COMMAND "${DRIVER}" --validate --json "${TMP_DIR}/${name}.json"
+                  RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+  string(JSON ok GET "${out}" ok)
+  string(JSON nerr LENGTH "${out}" errors)
+  set(got "")
+  if(nerr GREATER 0)
+    math(EXPR elast "${nerr} - 1")
+    foreach(k RANGE ${elast})
+      string(JSON c GET "${out}" errors ${k} code)
+      list(APPEND got "${c}")
+    endforeach()
+    list(REMOVE_DUPLICATES got)
+    list(SORT got)
+  endif()
+  if(NOT rc EQUAL 1 OR NOT (ok STREQUAL "OFF" OR ok STREQUAL "false") OR NOT "${got}" STREQUAL "${expected}")
+    message(STATUS "FAIL  ${name}: exit ${rc}, error codes [${got}], expected [${expected}]\n${out}")
+    math(EXPR failed "${failed} + 1")
+  else()
+    message(STATUS "ok    ${name}: ${got}")
+  endif()
+endforeach()
+if(failed GREATER 0)
+  message(FATAL_ERROR "${failed} of ${n} corpus cases gave unexpected error codes")
+endif()
+list(REMOVE_DUPLICATES all_codes)
+list(LENGTH all_codes n_codes)
+message(STATUS "${n} corpus cases, ${n_codes} distinct rule codes matched")

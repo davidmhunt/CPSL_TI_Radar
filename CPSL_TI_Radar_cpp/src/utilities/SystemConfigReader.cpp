@@ -125,6 +125,9 @@ void SystemConfigReader::reset() {
     firmware_path.clear();
     issues.clear();
     cfg_notes.clear();
+    cfg_warnings.clear();
+    cfg_metrics = nlohmann::ordered_json::object();
+    default_fw = cpsl::radar::FirmwareDescriptor();
     radar_cfg_path.clear();
     cli_port.clear();
     serial_enabled = false;
@@ -460,9 +463,14 @@ bool SystemConfigReader::load() {
     // A board_overrides "cli.prompt" still wins over the firmware's.
     const bool keep_prompt = overrides != nullptr && overrides->contains("cli") && overrides->at("cli").is_object() &&
                              overrides->at("cli").contains("prompt");
+    // The descriptor whose `limits` the cfg limit checks use: the named firmware, else the board's default one.
+    const cpsl::radar::FirmwareDescriptor* limit_fw = nullptr;
+    std::string limit_fw_path;
     if (data.contains("firmware")) {
         if (!r.str(data, "firmware", "", firmware_id)) return failed();
         if (!check_firmware(src, dir_of(board_path))) return false;
+        limit_fw = &firmware;
+        limit_fw_path = firmware_path;
         std::string apply_err;
         if (!cpsl::radar::apply_firmware_to_board(firmware, firmware_path, keep_prompt, board, apply_err)) {
             return load_issue("firmware_descriptor", src + ": firmware: " + apply_err, firmware_path);
@@ -478,7 +486,7 @@ bool SystemConfigReader::load() {
                 (env != nullptr && *env != '\0') ? std::string(env) : dir_of(board_path) + "/../firmware";
             const std::string def_path = fw_dir + "/" + def_id + ".json";
             if (file_exists(def_path)) {
-                cpsl::radar::FirmwareDescriptor def_fw;
+                cpsl::radar::FirmwareDescriptor& def_fw = default_fw;
                 std::string fw_err;
                 if (!cpsl::radar::FirmwareDescriptor::load(def_path, def_fw, fw_err)) {
                     return load_issue("firmware_descriptor", src + ": default firmware " + def_id + ": " + fw_err,
@@ -488,6 +496,8 @@ bool SystemConfigReader::load() {
                     return load_issue("firmware_descriptor", src + ": default firmware " + def_id + ": " + fw_err,
                                       def_path);
                 }
+                limit_fw = &default_fw;
+                limit_fw_path = def_path;
             }
         }
     }
@@ -498,11 +508,38 @@ bool SystemConfigReader::load() {
     streams.serial = serial_enabled;
     cpsl::radar::CfgCheckResult chk = cpsl::radar::cross_check_radar_cfg(board, radar_cfg_path, streams);
     cfg_notes = chk.notes;
-    if (!chk.ok()) {
+
+    // radar cfg vs the firmware's limits (gui-04 Step 3b): error-level rules fail the load, warnings and the
+    // metrics are kept for --validate --json. The host limits sit next to the firmware descriptors.
+    std::vector<Issue> limit_errors;
+    if (limit_fw != nullptr && chk.ok()) {
+        cpsl::radar::HostLimits host;
+        const cpsl::radar::HostLimits* host_ptr = nullptr;
+        const std::string host_path = dir_of(limit_fw_path) + "/../limits/host.json";
+        if (file_exists(host_path)) {
+            std::string host_err;
+            if (!cpsl::radar::HostLimits::load(host_path, host, host_err)) {
+                return load_issue("firmware_descriptor", src + ": host limits: " + host_err, host_path);
+            }
+            host_ptr = &host;
+        }
+        const cpsl::radar::CfgLimitsResult lim = cpsl::radar::check_cfg_limits(
+            radar_cfg_path, limit_fw->gui_board_for(board.name), *limit_fw, board, host_ptr);
+        cfg_metrics = lim.metrics;
+        for (const cpsl::radar::CfgIssue& i : lim.issues) {
+            if (i.level == "error") limit_errors.push_back({i.code, i.message, i.confidence.empty() ? radar_cfg_path : limit_fw_path});
+            else cfg_warnings.push_back({i.code, i.message, i.source});
+        }
+    }
+    if (!chk.ok() || !limit_errors.empty()) {
         error = src + ": radar cfg does not fit board " + board.name + ":";
-        for (const std::string& e : chk.errors) {
-            error += "\n  " + e;
-            issues.push_back({"radar_cfg", e, radar_cfg_path});
+        for (size_t k = 0; k < chk.errors.size(); k++) {
+            error += "\n  " + chk.errors[k];
+            issues.push_back({k < chk.error_codes.size() ? chk.error_codes[k] : "radar_cfg", chk.errors[k], radar_cfg_path});
+        }
+        for (const Issue& e : limit_errors) {
+            error += "\n  " + radar_cfg_path + ": [" + e.code + "] " + e.message;
+            issues.push_back(e);
         }
         return false;
     }

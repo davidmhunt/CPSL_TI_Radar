@@ -38,6 +38,7 @@
 #include "nlohmann/json.hpp"
 #include "BoardDescriptor.hpp"
 #include "FirmwareDescriptor.hpp"
+#include "CfgLimits.hpp"
 #include "FirmwareIdentity.hpp"
 #include "Log.hpp"
 
@@ -81,6 +82,10 @@ class SystemConfigReader {
         const std::vector<Issue>& getIssues() const { return issues; }
         // cross_check_radar_cfg notes (a check that could not be made; not fatal)
         const std::vector<std::string>& getCfgCheckNotes() const { return cfg_notes; }
+        // warning-level cfg limit findings of a successful load (gui-04 Step 3b; `source` = the violated limit's source)
+        const std::vector<Issue>& getCfgWarnings() const { return cfg_warnings; }
+        // cheap subset of the GUI metrics for --validate --json (empty object when the limits were not checked)
+        const nlohmann::ordered_json& getCfgMetrics() const { return cfg_metrics; }
 
         std::string getRadarConfigPath() const { return radar_cfg_path; }
         std::string getRadarCliPort() const { return cli_port; }
@@ -146,6 +151,9 @@ class SystemConfigReader {
         std::string firmware_path;
         std::vector<Issue> issues;
         std::vector<std::string> cfg_notes;
+        std::vector<Issue> cfg_warnings;
+        nlohmann::ordered_json cfg_metrics;
+        cpsl::radar::FirmwareDescriptor default_fw;   // the board's default firmware, when the config names none
 
         std::string radar_cfg_path;
         std::string cli_port;

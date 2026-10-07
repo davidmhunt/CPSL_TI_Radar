@@ -255,10 +255,11 @@ TEST_CASE(duplicate_keys_rejected) {
 TEST_CASE(board_lookup_by_name_path_and_json_dir) {
     // a path (relative to the JSON file) instead of a name
     json j = base_config();
-    j["board"] = std::string(CONFIG_DIR) + "/boards/IWR6843.json";
+    // (IWR1843 again: the 77 GHz fixture cfg is outside the IWR6843 band, which the limit checks now reject)
+    j["board"] = std::string(CONFIG_DIR) + "/boards/IWR1843.json";
     SystemConfigReader byPath(write_json("v2_board_path.json", j));
     CHECK(byPath.initialized);
-    CHECK_EQ(byPath.getBoard().name, std::string("IWR6843"));
+    CHECK_EQ(byPath.getBoard().name, std::string("IWR1843"));
 
     j["board"] = "IWR9999";
     std::string e = reject("v2_board_unknown.json", j);

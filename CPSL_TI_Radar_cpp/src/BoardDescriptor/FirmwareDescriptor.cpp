@@ -200,6 +200,13 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
+    if (j.contains("mimo") && j.at("mimo").is_object() && j.at("mimo").contains("scheme")) {
+        if (!read_string(fail, j.at("mimo").at("scheme"), "/mimo/scheme", d.mimo_scheme)) return false;
+        if (d.mimo_scheme != "tdm" && d.mimo_scheme != "ddma") {
+            return fail("/mimo/scheme", "\"" + d.mimo_scheme + "\" is not one of: tdm, ddma");
+        }
+    }
+
     // identify (gui-33): board -> {level, timeout_ms, once_safe, probes, flash_hint, note}
     if (j.contains("identify")) {
         const json& id = j.at("identify");

@@ -181,7 +181,7 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     BoardDescriptor d;
 
     if (!r.object(j, "", {"schema", "name", "sdk", "cli", "lifecycle", "cfg_dialect", "data_uart", "lvds"},
-                  {"dca1000", "firmwares", "elevation_tx_bit"})) {   // "elevation_tx_bit": host-GUI metadata (radar_gui/cfg/), not read by the driver
+                  {"dca1000", "firmwares", "elevation_tx_bit"})) {
         return false;
     }
 
@@ -328,6 +328,10 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
             return false;
         }
     }
+
+    // elevation_tx_bit: optional chirp-mask bit of the elevation TX (default 2 = TX2; IWR6843ODS 4); used by the
+    // cfg limit checks (CfgLimits) to count TDM TX time slots
+    if (j.contains("elevation_tx_bit") && !r.uint(j, "elevation_tx_bit", "", 1, 7, d.elevation_tx_bit)) return false;
 
     // firmwares: optional list of firmware descriptor ids
     if (j.contains("firmwares")) {
@@ -508,7 +512,10 @@ bool parse_long(const std::string& s, long& out) {
 CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string& cfg_path,
                                      const StreamSelection& streams) {
     CfgCheckResult res;
-    auto err = [&](const std::string& m) { res.errors.push_back(cfg_path + ": " + m); };
+    auto err = [&](const std::string& m, const std::string& code = "radar_cfg") {
+        res.errors.push_back(cfg_path + ": " + m);
+        res.error_codes.push_back(code);
+    };
     auto note = [&](const std::string& m) { res.notes.push_back(cfg_path + ": " + m); };
 
     if (streams.dca1000 && !b.lvds.supported) {
@@ -545,7 +552,8 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
         if (std::find(b.cfg_dialect.forbidden_commands.begin(), b.cfg_dialect.forbidden_commands.end(), l.tok[0]) !=
             b.cfg_dialect.forbidden_commands.end()) {
             err("line " + std::to_string(l.line_no) + ": command " + l.tok[0] + " is forbidden for board " + b.name +
-                " (its firmware does not implement it)");
+                " (its firmware does not implement it)",
+                "forbidden_" + l.tok[0]);
         }
         if (l.tok[0] == "adcCfg") adc_cfg.push_back(l);
         else if (l.tok[0] == "adcbufCfg") adcbuf_cfg.push_back(l);
@@ -554,7 +562,7 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
 
     for (const std::string& cmd : b.cfg_dialect.required_commands) {
         if (!seen_cmds.count(cmd)) {
-            err("required command " + cmd + " is missing (board " + b.name + " needs it)");
+            err("required command " + cmd + " is missing (board " + b.name + " needs it)", "missing_" + cmd);
         }
     }
 
