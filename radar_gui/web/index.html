@@ -115,10 +115,14 @@
         <div class="pgroup">LVDS stream (cfg) <span class="muted">lvdsStreamCfg</span></div>
         <div class="grid2">
           <label>Subframe (-1 = all) <input type="number" id="l_subframe" step="1"></label>
-          <label>HW stream (ADC data) <select id="l_data_fmt"><option value="0">off</option><option value="1">ADC data</option><option value="2">ADC + metadata (SAR fw)</option></select></label>
+          <label>HW stream (ADC data) <select id="l_data_fmt"></select></label>
           <label class="chk"><input type="checkbox" id="l_header"> HSI header</label>
           <label class="chk"><input type="checkbox" id="l_sw"> SW stream</label>
         </div>
+        <div class="muted lvdshint">Subframe: default -1 = all subframes (0 in cfgs without advFrameCfg).</div>
+        <div class="muted lvdshint">HSI header: default off; when on, a header is prepended to each chirp's LVDS data.</div>
+        <div class="muted lvdshint">HW stream: shipped LVDS cfgs use 1 (ADC data); 0 = off, 4 = CP ADC + chirp quality, 2 = ADC + metadata (SAR firmware only). Only values the selected firmware accepts are offered.</div>
+        <div class="muted lvdshint">SW stream: default off; the software session always sends the HSI header, so the header must be on whenever both streams are on.</div>
         <div class="muted lvdshint">DCA1000 capture is enabled separately, in the Save step's system settings.</div>
       </div>
     </section>

@@ -88,7 +88,7 @@ function fillParams(p) {   // p: a params dict from the endpoint -> inputs + der
   }
   C.seed = JSON.parse(JSON.stringify(p)); C.tbl = null; C.tblDirty = false;
   const lv = p.lvds_stream;
-  if (lv) { $('l_subframe').value = lv.subframe; $('l_data_fmt').value = lv.data_fmt; $('l_header').checked = !!lv.header; $('l_sw').checked = !!lv.sw; }
+  if (lv) { $('l_subframe').value = lv.subframe; fillDataFmt(lv.data_fmt); $('l_data_fmt').value = lv.data_fmt; $('l_header').checked = !!lv.header; $('l_sw').checked = !!lv.sw; }
   lvdsVis();
   showDerived(p.derived);
 }
@@ -237,8 +237,20 @@ function showFirmware() {
 }
 // ---------- LVDS stream (cfg) group (gui-22): shown only where the firmware has an LVDS output on this board ----------
 const curFw = () => C.fw.find(x => x.id === $('cFw').value);
+const DATA_FMT_NAMES = { 0: 'off', 1: 'ADC data', 2: 'ADC + metadata (SAR fw)', 4: 'CP ADC + chirp quality' };
+function fillDataFmt(cur) {   // HW-stream options = the dataFmt values the selected firmware accepts (gui-24); a cfg's other value stays visible
+  const f = curFw(), sel = $('l_data_fmt');
+  const set = (f && f.lvds_data_fmts) || [0, 1];
+  const keep = cur == null ? +sel.value : +cur;
+  const opt = (v, txt) => { const o = document.createElement('option'); o.value = v; o.textContent = txt; return o; };
+  sel.replaceChildren(...set.map(v => opt(v, DATA_FMT_NAMES[v] || String(v))));
+  if (!set.includes(keep) && !Number.isNaN(keep)) sel.append(opt(keep, keep + ' (not supported by this firmware)'));
+  if (f && f.lvds_data_fmts_confidence === 'unverified') sel.title = 'Accepted values for this firmware are unverified (no source in the repo).'; else sel.removeAttribute('title');
+  sel.value = String(keep);
+}
 function lvdsVis() {
   const f = curFw(), o = f && f.outputs;
+  if (o && o.lvds && $('l_data_fmt').options.length) fillDataFmt();
   $('lvdsTargets').hidden = !(o && o.tlv && o.lvds);          // raw-ADC firmwares always stream; nothing to toggle in the targets view
   $('lvdsParams').hidden = !(o && o.lvds && C.seed && C.seed.lvds_stream);
   lvdsWarn();

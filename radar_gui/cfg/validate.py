@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from . import firmware as fwmod
-from .limits import BOARD_LIMITS, SAR_FIRMWARE_FMT2, Limit, dca1000_ceiling_mbps, dca1000_params, firmware_limits, host_limits
+from .limits import BOARD_LIMITS, Limit, dca1000_ceiling_mbps, dca1000_params, firmware_limits, host_limits
 from .metrics import BOARDS, CASCADE, Metrics, frame_layout, metrics, popcount, tdm_slots
 from .parse import Cfg, CfgError
 
@@ -422,9 +422,14 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
                 add(host["dca1000_max_mbps"], "dca_rate_high",
                     f"average {m.avg_data_rate_mbps:.0f} Mbps is above the ~{ceil:.0f} Mbps the DCA1000 sustains at the "
                     f"driver's {delay:g} us packet delay (config/boards/{board}.json dca1000; lower the delay to raise it)")
-        if m.lvds_data_fmt == 2:
-            add(SAR_FIRMWARE_FMT2, "lvds_fmt2", "dataFmt 2 needs the iwr1843_sar_lvds firmware",
-                "info" if board == "IWR1843" else "warning")
+        _fw = fwmod.get(firmware) if firmware else fwmod.default_for(board)
+        _fm = _fw.get("lvds_data_fmts") if _fw else None
+        if _fm and m.lvds_data_fmt not in _fm["value"]:
+            issues.append(Issue("warning", "lvds_fmt_unsupported",
+                                f"lvdsStreamCfg dataFmt {m.lvds_data_fmt} is not one of the values firmware {_fw['id']!r} "
+                                f"accepts ({', '.join(map(str, _fm['value']))}); it will not stream as configured"
+                                + (" [unverified set]" if _fm["confidence"] in ("unverified", "low") else ""),
+                                _fm["source"], _fm["confidence"]))
 
     if lim["config_once_per_boot"].value:
         add(lim["config_once_per_boot"], "once_per_boot",

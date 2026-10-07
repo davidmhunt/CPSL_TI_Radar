@@ -557,3 +557,33 @@ def test_mimo_editable_flag():
     assert fwmod.mimo("IWR1843", "dca1000_raw")["editable"] and fwmod.mimo("IWR1843", "dca1000_raw")["editable_note"]
     ids = {f["id"]: f for f in fwmod.summary()}
     assert ids["cascade_ddm"]["mimo"]["editable"] is False and ids["demo"]["mimo"]["editable"] is True
+
+
+# --- gui-24: dataFmt set per firmware ------------------------------------------------------------
+
+def _fmt_cfg(fmt):
+    return parse_cfg((RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text().replace("lvdsStreamCfg -1 0 1 0", f"lvdsStreamCfg -1 0 {fmt} 0"))
+
+
+def test_firmware_exposes_lvds_data_fmts():
+    from radar_gui.cfg import firmware as fwmod
+    ids = {f["id"]: f for f in fwmod.summary()}
+    assert ids["demo"]["lvds_data_fmts"] == [0, 1, 4]
+    assert ids["iwr1843_sar_lvds"]["lvds_data_fmts"] == [0, 1, 2, 4]
+    assert ids["dca1000_raw"]["lvds_data_fmts"] == [0, 1] and ids["dca1000_raw"]["lvds_data_fmts_confidence"] == "unverified"
+    assert ids["cascade_ddm"]["lvds_data_fmts"] is None
+    assert all(f["lvds_data_fmts_source"] for f in ids.values() if f["lvds_data_fmts"])
+
+
+def test_fmt2_on_stock_demo_is_a_warning_not_error():
+    rep = validate(_fmt_cfg(2), "IWR1843", "demo")
+    hit = [i for i in rep.issues if i.code == "lvds_fmt_unsupported"]
+    assert len(hit) == 1 and hit[0].level == "warning" and "0, 1, 4" in hit[0].message
+    assert not any(i.code == "lvds_fmt_unsupported" for i in validate(_fmt_cfg(4), "IWR1843", "demo").issues)
+    assert not any(i.code == "lvds_fmt_unsupported" for i in validate(_fmt_cfg(1), "IWR1843", "demo").issues)
+    assert not any(i.code == "lvds_fmt_unsupported" for i in validate(_fmt_cfg(2), "IWR1843", "iwr1843_sar_lvds").issues)
+
+
+def test_fmt4_on_dca1000_raw_warns_unverified():
+    hit = [i for i in validate(_fmt_cfg(4), "IWR1843", "dca1000_raw").issues if i.code == "lvds_fmt_unsupported"]
+    assert hit and hit[0].level == "warning" and "unverified" in hit[0].message

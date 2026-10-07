@@ -22,7 +22,6 @@ from . import firmware as fwmod
 
 CAS = "AWR2243_CASCADE"
 HOST_LIMITS_FILE = fwmod.CONFIG_DIR / "limits" / "host.json"
-SAR_FIRMWARE_FMT2 = "docs/firmware.md: lvdsStreamCfg dataFmt 2 exists only in the iwr1843_sar_lvds firmware"
 
 
 @dataclass(frozen=True)

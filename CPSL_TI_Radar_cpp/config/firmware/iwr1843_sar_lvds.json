@@ -8,6 +8,16 @@
       "lvds": true
     }
   },
+  "lvds_data_fmts": {
+    "value": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "source": "firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:626-631 (0 off, 1 ADC, 2 ADC + SAR metadata, 4 CP_ADC_CQ)",
+    "confidence": "high"
+  },
   "templates": {
     "IWR1843_SAR": "radar/sar_configs/1843_SAR_2ms_fmt1.cfg"
   },

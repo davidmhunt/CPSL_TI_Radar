@@ -16,6 +16,14 @@
       "lvds": true
     }
   },
+  "lvds_data_fmts": {
+    "value": [
+      0,
+      1
+    ],
+    "source": "Firmware/DCA1000_Streaming is a prebuilt image with no source or doc in this repo; only dataFmt 0/1 are known (the shipped cfgs use 1); 4 not verified",
+    "confidence": "unverified"
+  },
   "templates": {
     "IWR1443": "radar/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg",
     "IWR1843": "radar/DCA1000/custom_configs/short_range.cfg",

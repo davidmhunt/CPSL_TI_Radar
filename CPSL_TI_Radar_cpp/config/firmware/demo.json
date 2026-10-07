@@ -16,6 +16,15 @@
       "lvds": true
     }
   },
+  "lvds_data_fmts": {
+    "value": [
+      0,
+      1,
+      4
+    ],
+    "source": "firmware_dev/projects/ti_stock_demos SDK 3.6 xwr68xx mmw include/mmw_config.h + mss/mmw_lvds_stream.c:649-652 (valid dataFmt 0 disabled, 1 ADC, 4 CP_ADC_CQ; the CLI does not range-check, the stream code handles only 1 and 4)",
+    "confidence": "high"
+  },
   "templates": {
     "IWR1443": "radar/IWR_Demos/1443config.cfg",
     "IWR1843": "radar/nav_configs/1843_RadVel_10Hz.cfg",

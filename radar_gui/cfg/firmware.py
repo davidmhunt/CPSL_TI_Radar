@@ -10,6 +10,8 @@ files via include/json; gui-04) holds, schema 2:
   outputs          {board: {"tlv": bool, "lvds": bool}}   what the firmware provides on that board (TLV over
                    serial / ADC over LVDS). One `demo` serves 1443/1843/6843; its LVDS output is switched on by
                    the cfg (lvdsStreamCfg) on 1843/6843 and does not exist on the 1443.
+  lvds_data_fmts   {"value": [int], "source", "confidence"}   lvdsStreamCfg dataFmt values the firmware accepts (gui-24);
+                   required when any board output has lvds, absent otherwise
   templates        {board: cfg path relative to config/}   one per board
   system_enables   {"serial": bool, "dca1000": bool}       what a system JSON for it turns on by default
   limits           {board: {name: {"value", "level", "source", "confidence"}}}
@@ -95,6 +97,15 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
                 bad.append(f'outputs[{b}] must be {{"tlv": bool, "lvds": bool}}')
             elif not (o["tlv"] or o["lvds"]):
                 bad.append(f"outputs[{b}]: firmware provides no output")
+    fm = d.get("lvds_data_fmts")
+    if fm is None:
+        if isinstance(out, dict) and any(isinstance(o, dict) and o.get("lvds") for o in out.values()):
+            bad.append("lvds_data_fmts missing (firmware has an LVDS output)")
+    elif not (isinstance(fm, dict) and {"value", "source", "confidence"} <= set(fm)
+              and isinstance(fm["value"], list) and fm["value"]
+              and all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in fm["value"])
+              and fm["source"] and fm["confidence"] in CONFIDENCES):
+        bad.append("lvds_data_fmts must be {value: [int, ...], source, confidence}")
     en = d.get("system_enables")
     if not (isinstance(en, dict) and set(en) == {"serial", "dca1000"} and all(isinstance(v, bool) for v in en.values())):
         bad.append('system_enables must be {"serial": bool, "dca1000": bool}')
@@ -206,6 +217,12 @@ def outputs(fw: dict, board: str) -> dict:
     return fw["outputs"][board]
 
 
+def lvds_data_fmts(fw: dict) -> list[int] | None:
+    """lvdsStreamCfg dataFmt values `fw` accepts (None: the firmware declares none, i.e. has no LVDS output)."""
+    f = fw.get("lvds_data_fmts")
+    return list(f["value"]) if f else None
+
+
 def flavour(fw: dict, board: str, lvds: bool = False) -> str:
     """The generator's internal cfg flavour: 'tlv' (demo), 'lvds' (demo + lvdsStreamCfg on), 'raw' (no demo).
     `lvds` asks a TLV firmware to also stream ADC data; ignored where the firmware has no LVDS output."""
@@ -247,6 +264,8 @@ def summary(board: str | None = None) -> list[dict]:
     return [{"id": d["id"], "description": d["description"], "boards": boards_of(d),
              "outputs": d["outputs"][board] if board else d["outputs"],
              "mimo": mimo(board, d) if board else _with_editable({k: v for k, v in d["mimo"].items()}, d),
+             "lvds_data_fmts": lvds_data_fmts(d), "lvds_data_fmts_source": (d.get("lvds_data_fmts") or {}).get("source"),
+             "lvds_data_fmts_confidence": (d.get("lvds_data_fmts") or {}).get("confidence"),
              "system_enables": d["system_enables"], "pending": d.get("pending"),
              "default": bool(board and fws and d is fws[0]),
              "template": d["templates"].get(board) if board else None} for d in fws]
