@@ -1,0 +1,35 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py"
+ },
+ "user_cfgs": {
+  "needfw.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap.cfg": "% fake\n"
+ },
+ "scenarios": [
+  {
+   "name": "a_run_missing_firmware",
+   "tab": "run",
+   "window": [1400, 1000],
+   "actions": [
+    {"wait": 1.5},
+    {"js": "window.confirm = () => true; return document.getElementById('rFwPick').value + '|' + document.getElementById('rFwMark').hidden"}
+   ],
+   "shots": [{"file": "before.png", "selector": "#rSavedBox"}],
+   "dumps": [{"file": "before.txt", "selector": "#rFwMark", "what": "text"}, {"file": "before_opts.txt", "selector": "#rFwPick", "what": "options"}]
+  },
+  {
+   "name": "b_run_after_click",
+   "tab": "run",
+   "window": [1400, 1000],
+   "fresh": false,
+   "actions": [
+    {"js": "window.confirm = () => true; return 'ok'"},
+    {"click": "#rFwAddBtn"},
+    {"wait": 2}
+   ],
+   "shots": [{"file": "after.png", "selector": "#rSavedBox"}],
+   "dumps": [{"file": "after_msg.txt", "selector": "#rSaveMsg", "what": "text"}, {"file": "after_mark.txt", "selector": "#rFwMark", "what": "html"}]
+  }
+ ]
+}

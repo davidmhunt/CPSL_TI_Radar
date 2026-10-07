@@ -77,7 +77,14 @@ def test_golden_conversion_matches_tracked_v2(v1, tmp_path):
     got = work.read_text()
     if v1.name in HAND_EDITS:
         got = mig.dumps(merge(json.loads(got), HAND_EDITS[v1.name]))
-    assert got == (SYSTEM / v1.name).read_text()
+    tracked = json.loads((SYSTEM / v1.name).read_text())
+    # the tracked file may predate the firmware key (gui-04): compare byte for byte without it, then check the key itself
+    fw = json.loads(got).pop("firmware")
+    assert fw in json.loads((BOARDS / f"{tracked['board']}.json").read_text())["firmwares"]
+    assert tracked.get("firmware", fw) == fw
+    assert mig.dumps({k: v for k, v in json.loads(got).items() if k != "firmware"}) == \
+        mig.dumps({k: v for k, v in tracked.items() if k != "firmware"})
+    assert list(json.loads(got))[:3] == ["schema_version", "board", "firmware"]
 
 
 def test_whole_directory_in_place_then_idempotent(tmp_path):
@@ -103,7 +110,8 @@ def test_never_writes_without_in_place(tmp_path):
     r = run(work)
     assert r.returncode == 0
     assert work.read_text() == src.read_text()  # untouched
-    assert json.loads(r.stdout) == json.loads((SYSTEM / "radar_1.json").read_text())
+    assert {k: v for k, v in json.loads(r.stdout).items() if k != "firmware"} == \
+        {k: v for k, v in json.loads((SYSTEM / "radar_1.json").read_text()).items() if k != "firmware"}
 
 
 def test_key_mapping_details():
@@ -152,3 +160,57 @@ def test_unmapped_key_is_reported_and_blocks_conversion(tmp_path):
     r = run(work, "--in-place", "--drop-unmapped")
     assert r.returncode == 0
     assert json.loads(work.read_text())["schema_version"] == 2
+
+
+# ---- gui-04: the mandatory "firmware" key ----
+V2_BASE = {"schema_version": 2, "board": "IWR1843", "radar_cfg": "a.cfg", "cli": {"port": "/dev/ttyACM0"},
+           "dca1000": {"enabled": False}}
+
+
+@pytest.mark.parametrize("doc,want", [
+    ({"board": "IWR1843"}, "demo"), ({"board": "IWR6843"}, "demo"), ({"board": "IWR6843ODS"}, "demo"),
+    ({"board": "IWR1843_SAR"}, "iwr1843_sar_lvds"), ({"board": "AWR2243_CASCADE"}, "cascade_ddm"),
+    ({"board": "IWR1443", "dca1000": {"enabled": True}}, "dca1000_raw"), ({"board": "IWR1443"}, "demo"),
+    ({"board": "SOMETHING_ELSE"}, None)])
+def test_inference(doc, want):
+    assert mig.firmware_for(doc) == want
+
+
+def test_v1_conversion_emits_firmware_after_board():
+    v1 = json.loads((FIXTURES / "radar_1.json").read_text())      # IWR1443 + DCA1000
+    v2, _, _ = mig.convert(v1, FIXTURES / "x.json")
+    assert list(v2)[:3] == ["schema_version", "board", "firmware"] and v2["firmware"] == "dca1000_raw"
+
+
+def test_add_firmware_in_place_idempotent_and_one_line(tmp_path):
+    p = tmp_path / "x.json"
+    p.write_text(mig.dumps(V2_BASE))
+    assert run(p, "--add-firmware", "--check").returncode == 1
+    assert run(p, "--check").returncode == 0                       # plain --check only looks for v1
+    assert run(p, "--add-firmware", "--in-place", "-q").returncode == 0
+    new = p.read_text()
+    assert new.splitlines().count('    "firmware": "demo",') == 1
+    assert [l for l in new.splitlines() if l not in mig.dumps(V2_BASE).splitlines()] == ['    "firmware": "demo",']
+    assert list(json.loads(new))[:3] == ["schema_version", "board", "firmware"]
+    assert run(p, "--add-firmware", "--check").returncode == 0
+    assert run(p, "--add-firmware", "--in-place", "-q").returncode == 0
+    assert p.read_text() == new                                    # idempotent; an existing key is never changed
+
+
+def test_add_firmware_explicit_and_refusals(tmp_path):
+    p = tmp_path / "x.json"
+    p.write_text(mig.dumps({**V2_BASE, "board": "WEIRD"}))
+    r = run(p, "--add-firmware", "--in-place")
+    assert r.returncode == 2 and "--firmware" in r.stderr         # ambiguous: refuses, asks for --firmware
+    p.write_text(mig.dumps(V2_BASE))
+    r = run(p, "--add-firmware", "--firmware", "cascade_ddm", "--in-place")
+    assert r.returncode == 2 and "supports demo, iwr1843_sar_lvds" in r.stderr   # not in the board's list
+    assert run(p, "--add-firmware", "--firmware", "iwr1843_sar_lvds", "--in-place", "-q").returncode == 0
+    assert json.loads(p.read_text())["firmware"] == "iwr1843_sar_lvds"
+
+
+def test_add_firmware_stdout_without_in_place(tmp_path):
+    p = tmp_path / "x.json"
+    p.write_text(mig.dumps(V2_BASE))
+    r = run(p, "--add-firmware")
+    assert r.returncode == 0 and json.loads(r.stdout)["firmware"] == "demo" and p.read_text() == mig.dumps(V2_BASE)

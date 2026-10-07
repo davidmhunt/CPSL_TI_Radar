@@ -23,16 +23,50 @@ class SysJsonError(Exception):
         self.status = status
 
 
-def atomic_write_json(path: Path, doc: dict) -> None:
+def dumps(doc: dict) -> str:
+    """The one serialisation of a system JSON (indent 4, trailing newline); the migration tool and the GUI both write this."""
+    return json.dumps(doc, indent=4) + "\n"
+
+
+# Firmware a system JSON means when it does not name one (gui-04): the migration tool and the Add-firmware button
+# both preselect this. IWR1443 depends on the DCA1000 enable (the 1443 demo has no LVDS); None = ambiguous.
+INFERRED_FIRMWARE = {"AWR2243_CASCADE": "cascade_ddm", "IWR1843_SAR": "iwr1843_sar_lvds", "IWR1843": "demo",
+                     "IWR6843": "demo", "IWR6843ODS": "demo"}
+
+
+def infer_firmware(doc: dict) -> str | None:
+    b = doc.get("board")
+    if b == "IWR1443":
+        return "dca1000_raw" if (doc.get("dca1000") or {}).get("enabled") else "demo"
+    return INFERRED_FIRMWARE.get(b) if isinstance(b, str) else None
+
+
+def with_firmware(doc: dict, firmware: str) -> dict:
+    """`doc` with `"firmware"` inserted right after `"board"` (key order kept; appended if there is no board)."""
+    out: dict = {}
+    for k, v in doc.items():
+        if k == "firmware":
+            continue
+        out[k] = v
+        if k == "board":
+            out["firmware"] = firmware
+    out.setdefault("firmware", firmware)
+    return out
+
+
+def atomic_write_text(path: Path, text: str) -> None:
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            json.dump(doc, f, indent=4)
-            f.write("\n")
+            f.write(text)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+
+
+def atomic_write_json(path: Path, doc: dict) -> None:
+    atomic_write_text(path, dumps(doc))
 
 
 def apply_overrides(doc: dict, ov: dict, caps: dict) -> dict:
@@ -105,3 +139,32 @@ def copy_to_user(src: Path, user_dir: Path, name: str, ov: dict, caps: dict) -> 
     apply_overrides(doc, ov, caps)
     atomic_write_json(dst, doc)
     return dst
+
+
+def add_firmware_to_user(path: Path, user_dir: Path, firmware: str, allowed: list[str], board: str | None = None) -> Path:
+    """gui-04 Step 2b: add `"firmware"` to a config/user system JSON that lacks it. Never overwrites an existing key (409);
+    keeps the previous bytes as `<name>.json.bak` (409 if one exists); the result is exactly what the migration tool's
+    `--add-firmware --in-place` writes."""
+    p, root = Path(path).resolve(), Path(user_dir).resolve()
+    if root not in p.parents or p.suffix != ".json" or not p.is_file():
+        raise SysJsonError(f"{path} is not a system JSON in the user config directory")
+    try:
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        raise SysJsonError(f"cannot read {p.name}: {e}")
+    if not isinstance(doc, dict):
+        raise SysJsonError(f"{p.name} is not a JSON object")
+    if "firmware" in doc:
+        raise SysJsonError(f"{p.name} already names a firmware ({doc['firmware']!r}); it is never overwritten here", 409)
+    b = doc.get("board")
+    if b == "IWR1843" and firmware == "iwr1843_sar_lvds":
+        raise SysJsonError('firmware iwr1843_sar_lvds on IWR1843 runs with board IWR1843_SAR (descriptor driver_board); '
+                           'set "board": "IWR1843_SAR"')
+    if firmware not in allowed:
+        raise SysJsonError(f"firmware {firmware!r} is not supported by board {b}: it supports {', '.join(allowed) or 'none'}")
+    bak = p.with_name(p.name + ".bak")
+    if bak.exists():
+        raise SysJsonError(f"{bak.name} already exists: move it away first (the backup is never overwritten)", 409)
+    shutil.copyfile(p, bak)
+    atomic_write_json(p, with_firmware(doc, firmware))
+    return p

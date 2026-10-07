@@ -11,12 +11,18 @@ Usage (from the repo root):
     uv run tools/migrate_config_v1_to_v2.py <file.json>              # print the v2 JSON
     uv run tools/migrate_config_v1_to_v2.py <file-or-dir>... --in-place
     uv run tools/migrate_config_v1_to_v2.py <file-or-dir>... --check
+    uv run tools/migrate_config_v1_to_v2.py <file-or-dir>... --add-firmware [--firmware ID] [--in-place | --check]
 
 A directory means every ``*.json`` directly inside it. Files that are already
 v2 are left alone, so running it twice changes nothing. Without
 ``--in-place`` nothing is written. A v1 key the script does not know is
 reported and the file is not converted (``--drop-unmapped`` converts it
 anyway, dropping the key).
+
+``--add-firmware`` also handles v2 files that lack the mandatory ``firmware`` key (gui-04): it inserts the id right
+after ``board`` (inferred: a board with one firmware -> it, IWR1843/IWR6843/IWR6843ODS -> demo, IWR1443 -> dca1000_raw
+if dca1000.enabled else demo; ``--firmware`` overrides), is idempotent, and with ``--check`` reports the files still
+missing it (exit 1). A v1 conversion always writes ``firmware`` (same inference).
 
 Mapping (v1 -> v2):
     verbose                                   -> runtime.log_level ("debug" if true, else "info")
@@ -51,6 +57,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from radar_gui import sysjson  # noqa: E402  (shared writer: the GUI's Add-firmware button writes identical bytes)
+
 SCHEMA_VERSION = 2
 BOARDS_ENV = "CPSL_TI_RADAR_BOARDS_DIR"
 REMOVED_TOP = ("Processor", "ROS", "Listeners")
@@ -79,7 +88,7 @@ def load_board(board: str, cfg_path: Path) -> dict | None:
         return None
 
 
-def convert(v1: dict, cfg_path: Path) -> tuple[dict, list[str], list[str]]:
+def convert(v1: dict, cfg_path: Path, forced: str | None = None) -> tuple[dict, list[str], list[str]]:
     """Return (v2 document, notes, unmapped keys). Does not modify ``v1``."""
     if not isinstance(v1, dict):
         raise Unmapped("top level is not a JSON object")
@@ -165,6 +174,10 @@ def convert(v1: dict, cfg_path: Path) -> tuple[dict, list[str], list[str]]:
                 del overrides[section]
 
     v2: dict = {"schema_version": SCHEMA_VERSION, "board": board}
+    fw = firmware_for({"board": board, "dca1000": dca or {}}, forced)
+    if fw is not None:
+        v2["firmware"] = fw
+        notes.append(f"firmware {fw!r} inferred from board {board!r}")
     if overrides:
         v2["board_overrides"] = overrides
     v2["radar_cfg"] = radar_cfg
@@ -183,8 +196,11 @@ def convert(v1: dict, cfg_path: Path) -> tuple[dict, list[str], list[str]]:
     return v2, notes, unmapped
 
 
-def dumps(doc: dict) -> str:
-    return json.dumps(doc, indent=4) + "\n"
+def firmware_for(doc: dict, forced: str | None = None) -> str | None:
+    return forced or sysjson.infer_firmware(doc)
+
+
+dumps = sysjson.dumps
 
 
 def expand(paths: list[Path]) -> list[Path]:
@@ -206,6 +222,9 @@ def main(argv=None) -> int:
                       help="write nothing; exit 1 if any file is still v1")
     ap.add_argument("--drop-unmapped", action="store_true",
                     help="convert even if a v1 key has no v2 mapping (the key is dropped)")
+    ap.add_argument("--add-firmware", action="store_true",
+                    help='also add the mandatory "firmware" key to v2 files lacking it')
+    ap.add_argument("--firmware", metavar="ID", help="firmware id to write instead of the inferred one")
     ap.add_argument("--quiet", "-q", action="store_true", help="only report problems")
     args = ap.parse_args(argv)
 
@@ -222,6 +241,33 @@ def main(argv=None) -> int:
             status = 2
             continue
         if is_v2(doc):
+            if args.add_firmware and isinstance(doc, dict) and "firmware" not in doc:
+                if args.check:
+                    print(f"nofw    {path}: missing required key \"firmware\"", file=sys.stderr)
+                    status = max(status, 1)
+                    continue
+                fw = firmware_for(doc, args.firmware)
+                if fw is None:
+                    print(f"ERROR {path}: cannot infer a firmware for board {doc.get('board')!r}: pass --firmware",
+                          file=sys.stderr)
+                    status = 2
+                    continue
+                listed = (load_board(str(doc.get("board")), path) or {}).get("firmwares")
+                if isinstance(listed, list) and fw not in listed:
+                    print(f"ERROR {path}: board {doc.get('board')} supports {', '.join(listed)}, not {fw!r}: "
+                          f"pass --firmware", file=sys.stderr)
+                    status = 2
+                    continue
+                out = dumps(sysjson.with_firmware(doc, fw))
+                if args.in_place:
+                    sysjson.atomic_write_text(path, out)
+                    if not args.quiet:
+                        print(f"wrote   {path}: firmware {fw!r}", file=sys.stderr)
+                else:
+                    if len(files) > 1:
+                        sys.stdout.write(f"// {path}\n")
+                    sys.stdout.write(out)
+                continue
             if not args.quiet:
                 print(f"ok      {path}: already v2", file=sys.stderr)
             if not (args.in_place or args.check) and len(files) == 1:
@@ -232,7 +278,7 @@ def main(argv=None) -> int:
             status = max(status, 1)
             continue
         try:
-            v2, notes, unmapped = convert(doc, path)
+            v2, notes, unmapped = convert(doc, path, args.firmware)
         except Unmapped as exc:
             print(f"ERROR {path}: {exc}", file=sys.stderr)
             status = 2
@@ -248,7 +294,7 @@ def main(argv=None) -> int:
             for n in notes:
                 print(f"note    {path}: {n}", file=sys.stderr)
         if args.in_place:
-            path.write_text(dumps(v2))
+            sysjson.atomic_write_text(path, dumps(v2))
             if not args.quiet:
                 print(f"wrote   {path}", file=sys.stderr)
         else:

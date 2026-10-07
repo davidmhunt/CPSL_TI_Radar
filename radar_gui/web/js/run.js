@@ -60,7 +60,41 @@ function renderSetup() {
   if (key !== R.cfgKey) { R.cfgKey = key; cfgChanged(); }
   const c = savedCfg();
   $('rCfgInfo').textContent = !quick && c ? c.path : '';
+  renderFwMark(!quick && c);
   renderState();
+}
+// gui-04: a system JSON without the mandatory "firmware" key is marked (firmware === null; undefined = an older backend, no mark).
+// A config/user file gets an Add firmware button: pick from the board's list (the migration tool's inference preselected).
+let fwPickFor = null;
+async function renderFwMark(c) {
+  const miss = !!c && c.firmware === null, user = miss && c.group === 'user';
+  $('rFwMark').hidden = !miss;
+  if (!miss) { fwPickFor = null; return; }
+  $('rFwMarkText').textContent = user ? 'This config needs a firmware: the driver will require one. Choose it and add it (the old file is kept as .bak). '
+    : 'needs firmware \u2014 re-save in Configure or run the migration tool (uv run tools/migrate_config_v1_to_v2.py --add-firmware --in-place <file>). ';
+  $('rFwAdd').hidden = !user;
+  if (!user || fwPickFor === c.path) return;
+  fwPickFor = c.path;
+  const { ok, j } = await api('/api/cfg/firmware?board=' + encodeURIComponent(c.board || ''));
+  if (fwPickFor !== c.path) return;
+  // SAR on a plain IWR1843 is refused by the server, so it is not offered
+  const ids = ok && j && j.firmware ? j.firmware.filter(f => !f.driver_board || f.driver_board === c.board).map(f => f.id) : [];
+  fill($('rFwPick'), [[null, ids.map(i => [i, i])]], c.firmware_hint && ids.includes(c.firmware_hint) ? c.firmware_hint : ids[0] || '');
+  $('rFwAddBtn').disabled = !ids.length || boardLive();
+}
+async function addFirmware() {
+  const c = savedCfg(); if (!c || c.firmware !== null || c.group !== 'user') return;
+  const fw = $('rFwPick').value; if (!fw) return;
+  if (!confirm(`Add "firmware": "${fw}" to config/user/${c.name}.json?\nThe previous version is kept as ${c.name}.json.bak.`)) return;
+  const m = $('rSaveMsg'); m.hidden = false; m.className = 'runmsg warn'; m.textContent = 'Adding firmware...';
+  const res = await api('/api/driver/configs/firmware', { config: c.path, firmware: fw });
+  if (!res.ok) { m.className = 'runmsg bad'; m.textContent = res.status === 404 || res.status === 405 ? 'This GUI server is older than this page: restart the GUI to add firmware.' : detailText(res); return; }
+  const v = res.j.validate || {};
+  m.className = 'runmsg ' + (v.ok ? 'ok' : 'bad');
+  m.textContent = `Added firmware ${res.j.firmware} to ${res.j.path} (previous version: ${res.j.backup.split('/').pop()}). Validation: ${v.ok ? 'OK' : 'INVALID'}` + (v.ok ? '' : '\n' + (v.text || '').trim());
+  fwPickFor = null;
+  await loadData();
+  specChanged();
 }
 function cfgChanged() {
   R.validated = null; R.expectHz = null; $('rValCard').hidden = true; msg('');
@@ -340,6 +374,7 @@ export function showRun() {
   on('rQDca', e => { spec.dca1000 = e.checked; });
   for (const [id, [k]] of [['rSaveAdc', FLAGS[0]], ['rSaveLvds', FLAGS[1]], ['rSaveSer', FLAGS[2]]]) on(id, e => { spec[k] = e.checked; });
   $('rSaveCfg').onclick = saveToConfig;
+  $('rFwAddBtn').onclick = addFirmware;
   on('rFwChk', e => { spec.fw_check = e.value; });
   $('rSkip').addEventListener('change', () => { spec.skip = $('rSkip').checked; spec.skipSet = true; specChanged(); });
   addEventListener('spec-changed', () => { if (R.ready) renderSetup(); });
