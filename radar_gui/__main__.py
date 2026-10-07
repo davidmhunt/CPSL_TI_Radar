@@ -13,6 +13,8 @@ def parse_args(argv=None):
     ap.add_argument("--source", choices=["mock", "replay"], default="mock")
     ap.add_argument("--file", help="TLV byte dump for --source replay")
     ap.add_argument("--rate", type=float, default=10.0, help="frame rate in Hz (mock/replay)")
+    ap.add_argument("--driver-bin", help="C++ driver binary for the Run tab (default CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP, "
+                                         "or $RADAR_GUI_DRIVER)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--tailscale", nargs="?", const="bind", choices=["bind", "serve"],
@@ -27,7 +29,7 @@ def parse_args(argv=None):
 
 def main(argv=None):
     a = parse_args(argv)
-    app = create_app(make_source(a.source, rate_hz=a.rate, path=a.file))
+    app = create_app(make_source(a.source, rate_hz=a.rate, path=a.file), driver_bin=a.driver_bin)
     print(f"radar_gui: source={a.source}  open http://{a.host}:{a.port}/", flush=True)
     ts, socks = None, None
     if a.tailscale:

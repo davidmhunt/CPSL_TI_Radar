@@ -27,3 +27,6 @@ CPSL_TI_Radar_cpp/build-bench-aligned/
 
 # radar_gui Configure tab saves user cfgs + system JSONs here (radar_gui/README.md)
 CPSL_TI_Radar_cpp/config/user/
+
+# radar_gui Run tab output (driver runs, adc_data.bin)
+runs/
