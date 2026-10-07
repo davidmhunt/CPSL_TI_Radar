@@ -1,0 +1,774 @@
+{
+ "user_cfgs": {
+  "smoke_1843_bpm.cfg": "% ***************************************************************\n% Created for SDK ver:03.05\n% Created using Visualizer ver:3.6.0.0\n% Frequency:77\n% Platform:xWR18xx\n% ***************************************************************\nsensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nadcCfg 2 1\nadcbufCfg -1 0 1 1 1\nprofileCfg 0 77 293 7 44 0 0 80.0 1 63 2100 0 0 30\nchirpCfg 0 0 0 0 0 0 0 5\nchirpCfg 1 1 0 0 0 0 0 5\nframeCfg 0 1 64 0 100 1 0\nlowPower 0 0\nguiMonitor -1 1 0 0 0 0 1\ncfarCfg -1 0 2 8 4 3 0 20 1\ncfarCfg -1 1 0 4 2 3 1 20 1\nmultiObjBeamForming -1 1 0.5\nclutterRemoval -1 0\ncalibDcRangeSig -1 0 -5 8 256\nextendedMaxVelocity -1 0\nlvdsStreamCfg -1 0 1 0\ncompRangeBiasAndRxChanPhase 0.0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0\nmeasureRangeBiasAndRxChanPhase 0 1.5 0.2\nCQRxSatMonitor 0 3 5 121 0\nCQSigImgMonitor 0 127 4\nanalogMonitor 0 0\naoaFovCfg -1 -90 90 -90 90\ncfarFovCfg -1 0 0 7.22\ncfarFovCfg -1 1 -3.92 3.92\ncalibData 0 0 0\nsensorStart\nbpmCfg -1 1 0 1\n",
+  "smoke_1843_14chirps.cfg": "% ***************************************************************\n% Created for SDK ver:03.05\n% Created using Visualizer ver:3.6.0.0\n% Frequency:77\n% Platform:xWR18xx\n% ***************************************************************\nsensorStop\nflushCfg\ndfeDataOutputMode 1\nchannelCfg 15 5 0\nadcCfg 2 1\nadcbufCfg -1 0 1 1 1\nprofileCfg 0 77 293 7 44 0 0 80.0 1 63 2100 0 0 30\nchirpCfg 0 0 0 0 0 0 0 1\nchirpCfg 1 1 0 0 0 0 0 4\nchirpCfg 2 2 0 0 0 0 0 2\nchirpCfg 3 3 0 0 0 0 0 1\nchirpCfg 4 4 0 0 0 0 0 4\nchirpCfg 5 5 0 0 0 0 0 2\nchirpCfg 6 6 0 0 0 0 0 1\nchirpCfg 7 7 0 0 0 0 0 4\nchirpCfg 8 8 0 0 0 0 0 2\nchirpCfg 9 9 0 0 0 0 0 1\nchirpCfg 10 10 0 0 0 0 0 4\nchirpCfg 11 11 0 0 0 0 0 2\nchirpCfg 12 12 0 0 0 0 0 1\nchirpCfg 13 13 0 0 0 0 0 4\nframeCfg 0 13 8 0 100 1 0\nlowPower 0 0\nguiMonitor -1 1 0 0 0 0 1\ncfarCfg -1 0 2 8 4 3 0 20 1\ncfarCfg -1 1 0 4 2 3 1 20 1\nmultiObjBeamForming -1 1 0.5\nclutterRemoval -1 0\ncalibDcRangeSig -1 0 -5 8 256\nextendedMaxVelocity -1 0\nlvdsStreamCfg -1 0 1 0\ncompRangeBiasAndRxChanPhase 0.0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0\nmeasureRangeBiasAndRxChanPhase 0 1.5 0.2\nCQRxSatMonitor 0 3 5 121 0\nCQSigImgMonitor 0 127 4\nanalogMonitor 0 0\naoaFovCfg -1 -90 90 -90 90\ncfarFovCfg -1 0 0 7.22\ncfarFovCfg -1 1 -3.92 3.92\ncalibData 0 0 0\nsensorStart\n"
+ },
+ "scenarios": [
+  {
+   "name": "1443_default",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1443"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_default",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "6843_default",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR6843"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "6843ODS_default",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR6843ODS"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "cascade_default",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_long_idle",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_idle_us",
+     "value": "300"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_short_ramp_adc_beyond",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_ramp_us",
+     "value": "20"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_tdm3",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "short_range_3D.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_bpm",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_bpm.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_14chirps",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_many_loops_128",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "smoke_1843_14chirps.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "128"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_large_frame_period",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_frame_period_ms",
+     "value": "2000"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "cascade_ddma_8loops",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "AWR2243_CASCADE"
+    },
+    {
+     "load": "cascade_shortrange.cfg"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_n_loops",
+     "value": "8"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    },
+    {
+     "file": "column.png",
+     "selector": "#cfgMain > .cfgcol:nth-of-type(2)"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_default_w800",
+   "window": [
+    800,
+    1700
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_default_w1400",
+   "window": [
+    1400,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_default_w1120_narrow",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_tdm3_w1120_narrow",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "firmware": "demo"
+    },
+    {
+     "load": "short_range_3D.cfg"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "1843_short_ramp_w1120",
+   "window": [
+    1120,
+    1500
+   ],
+   "actions": [
+    {
+     "board": "IWR1843"
+    },
+    {
+     "mode": "direct"
+    },
+    {
+     "set": "#p_ramp_us",
+     "value": "20"
+    }
+   ],
+   "shots": [
+    {
+     "file": "diagram.png",
+     "selector": "#profCard"
+    },
+    {
+     "file": "tiles.png",
+     "selector": "#tiles"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "tiles.txt",
+     "selector": "#tiles",
+     "what": "text"
+    },
+    {
+     "file": "diagram.txt",
+     "selector": "#profCard",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}
