@@ -36,7 +36,8 @@ def opt(name, cast):
 
 if "--help" in args or "-h" in args:
     print(f"usage: {sys.argv[0]} <system.json> [--validate] [--stats] [--frames N] [--duration S]" +
-          (" [--tap-fd N] [--tap-adc-every K]" if mode == "tap" else ""))
+          (" [--tap-fd N] [--tap-adc-every K]" if mode == "tap" else "") +
+          (" [--skip-configure]" if os.environ.get("FAKE_DRIVER_SKIP") else ""))
     sys.exit(0)
 
 if "--validate" in args:
@@ -58,7 +59,7 @@ else:
     signal.signal(signal.SIGINT, lambda *_: stop.update(flag=True))
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
 
-print(f"Using config: {cfg}", flush=True)
+print(f"Using config: {cfg}" + (" (skip-configure)" if "--skip-configure" in args else ""), flush=True)
 if os.environ.get("FAKE_DRIVER_CLI"):
     kind = os.environ["FAKE_DRIVER_CLI"]
     if kind == "by-config":

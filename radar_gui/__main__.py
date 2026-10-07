@@ -10,7 +10,8 @@ from .tailscale import TailscaleServe, bind_addresses, bind_sockets
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(prog="radar_gui", description="CPSL radar GUI server")
-    ap.add_argument("--source", choices=["mock", "replay"], default="mock")
+    ap.add_argument("--source", choices=["none", "mock", "replay"], default="none",
+                    help="none (default): the Live tab waits for Serial/Replay/a driver run; mock is for tests and shots")
     ap.add_argument("--file", help="TLV byte dump for --source replay")
     ap.add_argument("--rate", type=float, default=10.0, help="frame rate in Hz (mock/replay)")
     ap.add_argument("--driver-bin", help="C++ driver binary for the Run tab (default CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP, "

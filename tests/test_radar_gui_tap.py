@@ -183,3 +183,48 @@ def test_run_refused_while_serial_source_holds_the_board(env):
         assert r.status_code == 409 and "Live serial source holds the radar" in r.json()["detail"]
         assert "stop it in the Live tab" in r.json()["detail"]
         assert src(c)["kind"] == "mock"
+
+
+def test_default_source_is_none_and_idle():
+    from radar_gui.__main__ import parse_args
+    from radar_gui.sources import NoSource, make_source
+    assert parse_args([]).source == "none"
+    with TestClient(create_app(make_source("none"))) as c, c.websocket_connect("/stream") as ws:
+        assert c.get("/api/source").json()["kind"] == "none"
+        seen = [ws.receive_json() for _ in range(3)]
+        assert any(m.get("state") == "idle" and "Serial or Replay" in m["msg"] for m in seen)
+        assert next(m for m in seen if m["type"] == "cfg")["name"] == ""
+        assert isinstance(create_app(NoSource()).state.hub.source, NoSource)
+
+
+def test_replay_dialect_detected_from_name_and_overridable(tmp_path):
+    from radar_gui.sources import detect_dialect
+    assert [detect_dialect(n) for n in ("AWR2243_CASCADE_x.bin", "awr2243_cascade_20frames.bin", "IWR1443_a.bin",
+                                        "IWR1843_a.bin", "x.bin")] == ["mcuplus_cascade"] * 2 + ["sdk2", "sdk3", "sdk3"]
+    fx = Path(__file__).parent / "fixtures" / "replay"
+    with TestClient(create_app(MockSource(rate_hz=5), user_cfg_dir=tmp_path)) as c:
+        files = {f["name"]: f for f in c.get("/api/source/files").json()["files"]}
+        casc = files["awr2243_cascade_20frames.bin"]
+        assert casc["dialect"] == "mcuplus_cascade" and files["iwr1843_sdk3_20frames.bin"]["dialect"] == "sdk3"
+        assert c.post("/api/source", json={"kind": "replay", "file": casc["path"]}).json()["spec"]["dialect"] == "mcuplus_cascade"
+        r = c.post("/api/source", json={"kind": "replay", "file": casc["path"], "dialect": "sdk3"})
+        assert r.json()["spec"]["dialect"] == "sdk3"
+        assert c.post("/api/source", json={"kind": "replay", "file": casc["path"], "dialect": "bogus"}).status_code == 422
+
+
+def test_skip_configure_gated_on_usage_text(env, monkeypatch):
+    make, user = env
+    (user / "casc.json").write_text(json.dumps({"schema_version": 2, "board": "AWR2243_CASCADE", "radar_cfg": "x.cfg",
+                                                "cli": {"port": json.loads((user / "rig.json").read_text())["cli"]["port"]}}))
+    with make() as c:
+        j = c.get("/api/driver/configs").json()
+        assert j["caps"] == {"tap": True, "skip_configure": False}
+        assert {x["name"]: x["once_per_boot"] for x in j["configs"]}["casc"] is True
+        assert {x["name"]: x["once_per_boot"] for x in j["configs"]}["rig"] is False
+        r = c.post("/api/driver/start", json={"config": cfgp(user, "casc"), "skip_configure": True})
+        assert r.status_code == 422 and "rebuild the driver" in r.json()["detail"]
+    monkeypatch.setenv("FAKE_DRIVER_SKIP", "1")
+    with make() as c:
+        assert c.get("/api/driver/configs").json()["caps"]["skip_configure"] is True
+        assert c.post("/api/driver/start", json={"config": cfgp(user, "casc"), "skip_configure": True, "frames": 5}).status_code == 200
+        wait(lambda: any("skip-configure" in ln for ln in c.get("/api/driver/status").json()["log"]), what="flag passed")

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from . import cfgapi
 from .serial_source import PortBusy, SerialSource, SerialSourceError, load_board
-from .sources import MockSource, ReplaySource
+from .sources import MockSource, ReplaySource, detect_dialect
 
 _XDS = "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.{}__Embed_with_CMSIS-DAP_{}"
 # Defaults only (the bench's XDS110 interfaces); the Source card lets the user edit both ports.
@@ -64,6 +64,7 @@ class SourceReq(BaseModel):
     skip_configure: bool = False
     skip_firmware_check: bool = False  # serial: do not ask the board what firmware it runs before the cfg (gui-33)
     file: str | None = None            # replay: TLV dump (default: the one the GUI was started with)
+    dialect: Literal["sdk2", "sdk3", "mcuplus_cascade"] | None = None   # replay: TLV dialect (default: from the file name)
     rate_hz: float = 10.0
     dump: str | None = None            # serial: capture the raw data-port bytes to <dumps dir>/<this name> (a bare file name)
 
@@ -103,7 +104,7 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
     @r.get("/api/source/files")
     def files():
         """Replay files the GUI will accept (POST /api/source rejects any other path) and where dumps are written."""
-        return {"files": replay_files(hub.replay_file), "dump_dir": str(dump_dir())}
+        return {"files": [{**f, "dialect": detect_dialect(f["name"])} for f in replay_files(hub.replay_file)], "dump_dir": str(dump_dir())}
 
     @r.get("/api/source/boards")
     def boards():
@@ -142,7 +143,8 @@ def make_router(hub, user_dir=None, serial_factory=None) -> APIRouter:
                                          "(tests/fixtures/*.bin or this GUI's dumps directory)")
             path = resolved
             try:
-                new = ReplaySource(path, rate_hz=req.rate_hz)
+                spec["dialect"] = req.dialect or detect_dialect(path)
+                new = ReplaySource(path, rate_hz=req.rate_hz, dialect=spec["dialect"])
             except (OSError, ValueError) as e:
                 raise HTTPException(422, f"replay: {e}") from e
             spec["file"] = str(path)

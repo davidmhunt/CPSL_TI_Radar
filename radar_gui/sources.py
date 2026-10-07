@@ -28,6 +28,27 @@ class Source:
         yield  # pragma: no cover
 
 
+class NoSource(Source):
+    """No source yet (the default since gui-36 Step 3b): the Live tab waits for Serial, Replay or a driver run."""
+    name = "none"
+    drives_status = True
+    MSG = "pick Serial or Replay, or start a driver run in the Run tab"
+
+    def __init__(self):
+        self.on_status = lambda s, m: None
+
+    async def frames(self):
+        self.on_status("idle", self.MSG)
+        await asyncio.Event().wait()
+        yield  # pragma: no cover
+
+
+def detect_dialect(name: str) -> str:
+    """TLV dialect of a replay dump from its file name (gui-09 D16): AWR2243_CASCADE_* -> mcuplus_cascade, IWR1443* -> sdk2."""
+    n = os.path.basename(name).lower()
+    return "mcuplus_cascade" if n.startswith("awr2243_cascade") else "sdk2" if n.startswith("iwr1443") else "sdk3"
+
+
 class MockSource(Source):
     """Synthetic scene: three targets moving on loops plus a few static wall points."""
     name = "mock"
@@ -213,10 +234,12 @@ class DriverSource(Source):
 
 
 def make_source(kind, rate_hz=10.0, path=None):
+    if kind == "none":
+        return NoSource()
     if kind == "mock":
         return MockSource(rate_hz=rate_hz)
     if kind == "replay":
         if not path:
             raise SystemExit("--source replay needs --file <tlv dump>")
-        return ReplaySource(path, rate_hz=rate_hz)
+        return ReplaySource(path, rate_hz=rate_hz, dialect=detect_dialect(path))
     raise SystemExit(f"unknown source {kind!r}")

@@ -21,6 +21,16 @@ class ConfigReq(BaseModel):
 class StartReq(ConfigReq):
     frames: int | None = Field(None, ge=1)
     duration: float | None = Field(None, gt=0)
+    skip_configure: bool = False   # the board was already configured this power-up (once-per-boot boards): just stream
+
+
+def once_per_boot(board) -> bool:
+    """Board accepts a cfg once per power-up (config/boards/<board>.json lifecycle.config_once_per_boot)."""
+    try:
+        p = REPO / "CPSL_TI_Radar_cpp" / "config" / "boards" / f"{board}.json"
+        return bool(board and "/" not in board and json.loads(p.read_text()).get("lifecycle", {}).get("config_once_per_boot"))
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
@@ -36,7 +46,8 @@ def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
                     rel = str(p.resolve().relative_to(REPO))
                 except ValueError:
                     rel = str(p.resolve())
-                out.append({"name": p.stem, "group": group, "path": rel, "board": j.get("board")})
+                out.append({"name": p.stem, "group": group, "path": rel, "board": j.get("board"),
+                            "once_per_boot": once_per_boot(j.get("board"))})
     return out
 
 
@@ -61,7 +72,7 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
 
     @r.get("/configs")
     def configs():
-        return {"configs": list_configs(user_dir, system_dir)}
+        return {"configs": list_configs(user_dir, system_dir), "caps": mgr.caps()}
 
     @r.post("/validate")
     def validate(req: ConfigReq):
@@ -69,7 +80,7 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
 
     @r.post("/start")
     def start(req: StartReq):
-        return call(mgr.start, resolve(req.config), req.frames, req.duration)
+        return call(mgr.start, resolve(req.config), req.frames, req.duration, req.skip_configure)
 
     @r.post("/stop")
     def stop():

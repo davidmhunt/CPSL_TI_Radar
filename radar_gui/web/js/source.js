@@ -4,7 +4,7 @@
 import { $ } from './state.js';
 import { mountCliPanel } from './cli_panel.js';
 
-const C = { kind: 'mock', boards: [], cfgs: [], files: [], cur: null, ready: false, busy: false };
+const C = { kind: 'serial', boards: [], cfgs: [], files: [], cur: null, ready: false, busy: false };
 let cmdPanel = null;
 const KIND_LABEL = { mock: 'Mock', replay: 'Replay', serial: 'Serial' };
 
@@ -35,10 +35,15 @@ function layout() {
   $('srcSkipRow').hidden = fol || !(C.kind === 'serial' && b && b.once_per_boot);
   $('srcBoardNote').textContent = b ? `${b.tlv_dialect} TLV, CLI ${b.cli_baud} baud, data ${b.data_baud} baud` +
     (b.once_per_boot ? '. Accepts a cfg once per power-up.' : '') : '';
-  const live = C.cur && C.cur.kind !== 'driver' && C.cur.kind;
+  const live = C.cur && !['driver', 'none'].includes(C.cur.kind) && C.cur.kind;
   $('srcStop').disabled = C.busy || !live;
   $('srcStart').disabled = C.busy || (C.kind === 'serial' && !$('srcCfg').value) || (C.kind === 'replay' && !$('srcFile').value);
   $('srcStart').textContent = C.kind === 'serial' ? (live === 'serial' ? 'Restart' : 'Start serial') : `Use ${KIND_LABEL[C.kind].toLowerCase()}`;
+}
+// gui-09 D16: the dialect follows the file name (AWR2243_CASCADE_* -> mcuplus_cascade, IWR1443* -> sdk2, else sdk3); editable.
+function autoDialect() {
+  const f = C.files.find(x => x.path === $('srcFile').value);
+  if (f) $('srcDialect').value = f.dialect || (/^awr2243_cascade/i.test(f.name) ? 'mcuplus_cascade' : /^iwr1443/i.test(f.name) ? 'sdk2' : 'sdk3');
 }
 function fillCfgs() {
   const b = board(), sel = $('srcCfg'), keep = sel.value; sel.innerHTML = '';
@@ -71,6 +76,7 @@ function describeNow() {
   showFirmware(C.cur && C.cur.kind === 'serial' ? C.cur.firmware : null);
   const c = C.cur; if (!c) return;
   const sp = c.spec || {};
+  if (c.kind === 'none') { $('srcNow').textContent = 'No source'; return; }
   let t = c.kind === 'driver' ? 'Live: ' + driverLine(c) : `Live: ${c.kind}`;
   if (c.kind === 'serial') t += ` · ${sp.board || ''}${sp.skip_configure ? ' (cfg skipped)' : ''}`;
   if (c.kind === 'replay' && sp.file) t += ` · ${sp.file.split('/').pop()}`;
@@ -78,7 +84,7 @@ function describeNow() {
 }
 export async function refreshSource() {
   const { j } = await api('/api/source');
-  if (j) { C.cur = j; describeNow(); if (cmdPanel && j.kind === 'serial') cmdPanel.update(j.cli); else if (cmdPanel) cmdPanel.clear(); if (!C.ready) { C.kind = j.kind === 'driver' ? 'mock' : j.kind; } layout(); }
+  if (j) { C.cur = j; describeNow(); if (cmdPanel && j.kind === 'serial') cmdPanel.update(j.cli); else if (cmdPanel) cmdPanel.clear(); if (!C.ready && ['serial', 'replay'].includes(j.kind)) { C.kind = j.kind; } layout(); }
 }
 export async function initSource() {
   const [b, c, f] = await Promise.all([api('/api/source/boards'), api('/api/cfgs'), api('/api/source/files')]);
@@ -93,6 +99,7 @@ export async function initSource() {
     fs.append(og);
   }
   if (!C.files.length) fs.append(new Option('(no replay files found)', ''));
+  autoDialect();
   cmdPanel = mountCliPanel($('srcCmds'), { compact: true });
   await refreshSource();
   C.ready = true; boardChanged();
@@ -101,7 +108,7 @@ export async function initSource() {
 async function start() {
   msg(''); C.busy = true; layout();
   const body = { kind: C.kind };
-  if (C.kind === 'replay') body.file = $('srcFile').value;
+  if (C.kind === 'replay') { body.file = $('srcFile').value; body.dialect = $('srcDialect').value; }
   if (C.kind === 'serial') {
     Object.assign(body, { board: $('srcBoard').value, cfg_id: $('srcCfg').value, cli_port: $('srcCli').value.trim() || null,
       data_port: $('srcData').value.trim() || null, skip_configure: !$('srcSkipRow').hidden && $('srcSkip').checked,
@@ -142,7 +149,7 @@ export function resetStats() { for (const id of ['sFrame', 'sPts', 'sRate', 'sGa
 $('srcKind').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; C.kind = b.dataset.k; msg(''); layout(); });
 $('srcBoard').addEventListener('change', boardChanged);
 $('srcCfg').addEventListener('change', layout);
-$('srcFile').addEventListener('change', layout);
+$('srcFile').addEventListener('change', () => { autoDialect(); layout(); });
 $('srcStart').onclick = start;
 $('srcStop').onclick = stop;
 $('srcManage').onclick = () => dispatchEvent(new CustomEvent('goto-tab', { detail: 'run' }));

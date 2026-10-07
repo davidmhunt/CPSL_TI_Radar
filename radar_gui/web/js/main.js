@@ -8,7 +8,7 @@ import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
 
 // ---------- stream ----------
 const STATE_DOT = { streaming: 'ok', starting: 'warn', configuring: 'warn', waiting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad',
-  cfg_failed: 'bad', no_tap: 'warn', wrong_firmware: 'bad', no_board: 'bad', stalled: 'bad' };
+  idle: '', cfg_failed: 'bad', no_tap: 'warn', wrong_firmware: 'bad', no_board: 'bad', stalled: 'bad' };
 function setStatus(state, msg) {
   $('state').textContent = state.replace('_', ' ');
   $('dot').className = 'dot ' + (STATE_DOT[state] || '');

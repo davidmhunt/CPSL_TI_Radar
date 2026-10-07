@@ -33,6 +33,8 @@ class Hub:
     def cfg_msg(self):
         sp = self.spec
         name = f"{self.source.name} source" + (f" · {sp['board']}" if sp.get("board") else "")
+        if self.source.name == "none":
+            name = ""
         return {"type": "cfg", "name": name, **self.source.info}
 
     def publish(self, msg):

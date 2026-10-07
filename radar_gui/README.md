@@ -4,7 +4,7 @@ Single-process radar GUI prototype (gui-01): FastAPI + uvicorn backend, plain-JS
 no build step). The look, layout and point-cloud views are ported from `tools/radar_viewer/`, which is left
 untouched as a reference; `tlv.py` loads its `parse_frame`.
 
-    uv run python -m radar_gui --source mock              # http://127.0.0.1:8000/
+    uv run python -m radar_gui                      # http://127.0.0.1:8000/
     uv run python -m radar_gui --source replay --file tests/fixtures/sample_frames.bin
     # options: --rate HZ  --host H  --port P
 
@@ -92,8 +92,8 @@ The driver ports check covers the CLI and serial-data ports (not the DCA UDP por
 **Driver binary:** `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` by default; override with `--driver-bin PATH` or `RADAR_GUI_DRIVER`.
 Runs happen in `runs/gui/<UTC>_<json stem>/` (gitignored; override `RADAR_GUI_RUN_DIR`), unless the JSON sets `output.dir`.
 
-    uv run python -m radar_gui --source mock                        # real driver, default binary
-    uv run python -m radar_gui --source mock --driver-bin tests/fakes/fake_driver.py   # no hardware
+    uv run python -m radar_gui                                        # real driver, default binary
+    uv run python -m radar_gui --driver-bin tests/fakes/fake_driver.py   # no hardware
 
 Wire format (additions to `/stream`): `driver_state` (full status minus the log; also sent on connect), `driver_stats` (`stream`, `stats`
 with `rate_hz`), `driver_log_batch` (`lines`, `run`: output lines buffered and sent every 150 ms, in order; a backend older than gui-09 Step 4c sent one `driver_log` with `line` per line, which the page still accepts), `driver_cli` (`entry`, `run`, `first_fail`: one board command and its reply; see below). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
@@ -113,7 +113,7 @@ DONE|ERROR|TIMEOUT|SKIP, reply, ms}]`, first 500) and `cli_first_fail` (the firs
 **Recommended: one command, no Tailscale privileges or admin changes.**
 
 ```
-uv run python -m radar_gui --source mock --tailscale      # composes with --source/--port
+uv run python -m radar_gui --tailscale      # composes with --source/--port
 ```
 
 The server keeps listening on `127.0.0.1:<port>` and also on this machine's Tailscale IPv4 address (from `tailscale status --json`), same port, plain HTTP/`ws:`. It never binds `0.0.0.0`. It prints `GUI on tailnet: http://<tailscale-ip>:8000/` and `http://<machine-name>:8000/` (MagicDNS); open either from any device on the tailnet. Nothing to clean up on exit.
@@ -139,3 +139,5 @@ the board answers 409 "Live serial source holds the radar (<port>); stop it in t
 Wire format (`radar_gui/tap.py`): `u32 len (LE)`, `u8 type`, payload; 1 hello (JSON), 2 points (the Live frame JSON), 3 adc (JSON header line +
 int16 I/Q; counted and parsed, not displayed yet). Tests: `tests/test_radar_gui_tap.py` (fake driver modes `tap`/`no-tap`). Shots:
 `tools/gui_shots_specs/gui36.json` (running, ended, died) and `gui36_notap.json`.
+
+**No source by default (gui-36 3b).** `python -m radar_gui` starts with `--source none`: the Live tab says "pick Serial or Replay, or start a driver run in the Run tab". `--source mock` remains (hidden from the UI) for tests and `tools/gui_shots.py`. The Replay card has a **TLV dialect** select (sdk2 / sdk3 / mcuplus_cascade), preset from the file name (`AWR2243_CASCADE_*` -> mcuplus_cascade, `IWR1443*` -> sdk2, else sdk3); `POST /api/source` takes `dialect` (default: the same detection). **Skip cfg (Run tab):** for once-per-boot boards (the cascade) the Run tab offers "Already configured this power-up (skip cfg)", sent as `skip_configure` and passed to the driver as `--skip-configure` only when its usage text lists the flag; otherwise the box is disabled ("rebuild the driver") and the API answers 422. `GET /api/driver/configs` carries `caps` (`tap`, `skip_configure`) and per-config `once_per_boot`.

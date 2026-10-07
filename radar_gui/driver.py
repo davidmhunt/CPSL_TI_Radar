@@ -147,28 +147,45 @@ class DriverManager:
             raise DriverError("--validate timed out after 30 s", 503)
         return parse_validate(p.stdout + p.stderr, p.returncode)
 
-    def tap_supported(self, b: Path) -> bool:
-        """Once per binary (path + mtime): does its usage text list `--tap-fd`? An older build keeps working, untapped."""
+    def _usage(self, b: Path) -> str:
+        """The binary's usage text, once per binary (path + mtime): feature flags are detected from it, so an older
+        build keeps working without them."""
         try:
             key = (str(b), b.stat().st_mtime_ns)
         except OSError:
-            return False
+            return ""
         if key not in self._tap_cache:
             try:
                 p = subprocess.run([str(b), "--help"], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
-                self._tap_cache[key] = "--tap-fd" in (p.stdout + p.stderr)
+                self._tap_cache[key] = p.stdout + p.stderr
             except (OSError, subprocess.TimeoutExpired):
-                self._tap_cache[key] = False
+                self._tap_cache[key] = ""
         return self._tap_cache[key]
 
+    def tap_supported(self, b: Path) -> bool:
+        return "--tap-fd" in self._usage(b)
+
+    def caps(self) -> dict:
+        """What the configured binary can do (False for a missing binary): the Run tab greys options out with it."""
+        try:
+            b = driver_bin(self.bin_override)
+            ok = b.is_file() and os.access(b, os.X_OK)
+        except OSError:
+            ok = False
+        u = self._usage(b) if ok else ""
+        return {"tap": "--tap-fd" in u, "skip_configure": "--skip-configure" in u}
+
     # ---- start / stop ---------------------------------------------------------------------------
-    def start(self, config: str | os.PathLike, frames: int | None = None, duration: float | None = None) -> dict:
+    def start(self, config: str | os.PathLike, frames: int | None = None, duration: float | None = None,
+              skip_configure: bool = False) -> dict:
         config = Path(config).resolve()
         with self._mu:
             if self.state in ("running", "stopping"):
                 raise DriverError(f"driver already {self.state}")
             b = self._bin()
             sysjson = load_system_json(config)
+            if skip_configure and "--skip-configure" not in self._usage(b):
+                raise DriverError("this driver binary has no --skip-configure (rebuild the driver)", 422)
             val = self.validate(config)
             if not val["ok"]:
                 raise DriverError("config is INVALID:\n" + val["text"].strip(), 422)
@@ -194,6 +211,8 @@ class DriverManager:
                     cwd.mkdir(parents=True, exist_ok=True)
                     files_dir = cwd
                 cmd = [str(b), str(config), "--stats"]
+                if skip_configure:
+                    cmd += ["--skip-configure"]
                 if frames:
                     cmd += ["--frames", str(int(frames))]
                 if duration:

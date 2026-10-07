@@ -38,6 +38,7 @@ function curCfg() { return R.configs.find(c => c.path === cfgPath()); }
 async function loadConfigs() {
   const { j } = await api('/api/driver/configs');
   R.configs = (j && j.configs) || [];
+  R.caps = (j && j.caps) || null;   // absent on an older backend
   const sel = $('rCfg'); sel.innerHTML = '';
   for (const [group, label] of [['user', 'Saved from Configure (config/user)'], ['system', 'Shipped (config/system)']]) {
     const items = R.configs.filter(c => c.group === group); if (!items.length) continue;
@@ -60,6 +61,11 @@ function cfgChanged() {
   R.validated = null; R.expectHz = null; $('rValCard').hidden = true; msg('');
   const c = curCfg();
   $('rCfgInfo').textContent = c ? c.path : '';
+  // once-per-boot boards (the cascade): "already configured this power-up" needs a driver that can skip the cfg
+  $('rSkipRow').hidden = !(c && c.once_per_boot);
+  const can = !R.caps || R.caps.skip_configure;
+  $('rSkip').disabled = !can; if (!can) $('rSkip').checked = false;
+  $('rSkipRow').lastElementChild.textContent = can ? 'Already configured this power-up (skip cfg)' : 'Skip cfg unavailable: rebuild the driver (it has no --skip-configure)';
   buttons();
 }
 export async function openInRun(path) {
@@ -92,6 +98,7 @@ async function start() {
   const body = { config: cfgPath() };
   const f = $('rFrames').value, d = $('rDur').value;
   if (f) body.frames = +f; if (d) body.duration = +d;
+  if (!$('rSkipRow').hidden && $('rSkip').checked) body.skip_configure = true;
   const res = await api('/api/driver/start', body);
   if (!res.ok) { msg(refusal(res)); buttons(); return; }
   R.log = []; R.stats = {}; renderLog(); renderStreams();
