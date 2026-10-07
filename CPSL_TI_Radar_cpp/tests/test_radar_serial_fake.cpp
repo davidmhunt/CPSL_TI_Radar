@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -25,13 +26,15 @@ struct Rig {
     std::shared_ptr<FakeDataPort> data = std::make_shared<FakeDataPort>();
     std::unique_ptr<Radar> radar;
 
-    explicit Rig(const std::string& name, const std::string& board = "IWR1843") {
+    // skip: the driver's --skip-configure (RadarConfig::set_skip_configure)
+    explicit Rig(const std::string& name, const std::string& board = "IWR1843", bool skip = false) {
         Result<RadarConfig> cfg = RadarConfig::load(write_serial_config(name, TEST_TMP_DIR, board, 300));
         CHECK(static_cast<bool>(cfg));
         if (!cfg) {
             std::cerr << cfg.status.message << std::endl;
             return;
         }
+        if (skip) cfg->set_skip_configure(true);
         Transports t;
         t.cli = cli;
         t.data = data;
@@ -129,6 +132,77 @@ TEST_CASE(frames_replaced_before_they_are_taken_count_as_overwritten) {
     CHECK_EQ(pc.frame_number, 3u);
     CHECK_EQ(r.stats().serial_overwritten, 2u);
     r.stop();
+}
+
+// ---- gui-36 D14: skip_configure; gui-09 D10: no sensorStop on a once-per-boot board ----
+
+TEST_CASE(skip_configure_sends_no_cfg_no_start_and_no_stop) {
+    Rig rig("rs_skip", "IWR1843", true);
+    CHECK(rig.start());
+    if (!rig.radar) return;
+    CHECK_EQ(rig.cli->writes(), static_cast<size_t>(0));
+    rig.data->push(make_frame(1, {points_tlv(1, 1.0f)}));
+    PointCloud pc;
+    CHECK(rig.radar->next_point_cloud(pc, milliseconds(1000)));  // it still streams
+    CHECK_EQ(pc.frame_number, 1u);
+    CHECK(static_cast<bool>(rig.radar->stop()));
+    CHECK_EQ(rig.cli->writes(), static_cast<size_t>(0));
+}
+
+TEST_CASE(skip_configure_on_a_board_that_takes_cfgs_warns) {
+    WarnCapture warns;
+    Rig rig("rs_skip_warn", "IWR1843", true);
+    CHECK(rig.start());
+    bool found = false;
+    for (const std::string& w : warns.get()) found = found || w.find("skip_configure") != std::string::npos;
+    CHECK(found);
+    if (rig.radar) rig.radar->stop();
+}
+
+TEST_CASE(without_skip_configure_the_cfg_start_and_stop_are_sent) {
+    Rig rig("rs_noskip", "IWR1843");
+    CHECK(rig.start());
+    if (!rig.radar) return;
+    CHECK(rig.cli->writes() > 5);
+    CHECK_EQ(rig.cli->count("sensorStart\n"), static_cast<size_t>(1));
+    const size_t stops = rig.cli->count("sensorStop\n");  // the cfg's own sensorStop line
+    CHECK(static_cast<bool>(rig.radar->stop()));
+    CHECK_EQ(rig.cli->count("sensorStop\n"), stops + 1);
+}
+
+TEST_CASE(runtime_skip_configure_key_is_read_and_must_be_a_bool) {
+    const std::string path = write_serial_config("rs_skip_json", TEST_TMP_DIR);
+    std::ifstream in(path);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const std::string key = "\"output\":";
+    auto with_runtime = [&](const std::string& rt, const std::string& name) {
+        std::string t = text;
+        t.insert(t.find(key), "\"runtime\": " + rt + ", ");
+        const std::string p = std::string(TEST_TMP_DIR) + "/" + name + ".json";
+        std::ofstream(p) << t;
+        return p;
+    };
+    Result<RadarConfig> on = RadarConfig::load(with_runtime("{\"skip_configure\": true}", "rs_skip_on"));
+    CHECK(static_cast<bool>(on));
+    if (on) CHECK(on->system().get_skip_configure());
+    Result<RadarConfig> dflt = RadarConfig::load(path);
+    CHECK(static_cast<bool>(dflt));
+    if (dflt) CHECK(!dflt->system().get_skip_configure());
+    Result<RadarConfig> bad = RadarConfig::load(with_runtime("{\"skip_configure\": 1}", "rs_skip_bad"));
+    CHECK(!bad);
+}
+
+TEST_CASE(once_per_boot_board_stops_without_sensorStop) {
+    // the cascade demo never acknowledges sensorStop: waiting for it burned the CLI timeout (D10)
+    Rig rig("rs_once_stop", "AWR2243_CASCADE");
+    CHECK(rig.start());
+    if (!rig.radar) return;
+    const size_t stops = rig.cli->count("sensorStop\n");  // the cfg's own sensorStop line
+    rig.cli->reply_delay["sensorStop"] = std::chrono::milliseconds(3000);  // would block a real sensorStop
+    const clk::time_point t0 = clk::now();
+    CHECK(static_cast<bool>(rig.radar->stop()));
+    CHECK(ms_since(t0) < 1000);
+    CHECK_EQ(rig.cli->count("sensorStop\n"), stops);
 }
 
 TEST_MAIN()

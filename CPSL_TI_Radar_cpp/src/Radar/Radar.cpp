@@ -214,7 +214,7 @@ Status Radar::configure() {
         const BoardDescriptor& board = m.cfg.board();
         const std::string port = m.cfg.system().getRadarCliPort();
         const bool once = board.lifecycle.config_once_per_boot;
-        if (once) {
+        if (once && !m.cfg.system().get_skip_configure()) {
             std::lock_guard<std::mutex> g(once_mutex());
             if (configured_once().count(port) != 0) {
                 m.state = Impl::configured;
@@ -228,6 +228,17 @@ Status Radar::configure() {
         if (m.dca_on) {
             const Status s = m.packets->configure();
             if (!s) return s;
+        }
+
+        if (m.cfg.system().get_skip_configure()) {
+            // the board is already configured and streaming this power-up: send nothing to it
+            log_info("Radar: skip_configure: no cfg, sensorStart or sensorStop is sent to the ", board.name);
+            if (!once) {
+                log_warn("Radar: skip_configure on the ", board.name, ", which takes a cfg on every run: the board "
+                         "must already be configured and streaming, or no frame will arrive");
+            }
+            m.state = Impl::configured;
+            return Status::ok();
         }
 
         if (once) {
@@ -308,6 +319,7 @@ Status Radar::start() {
         }
         // running from here: stop() now joins the threads and stops the sensor
         m.state = Impl::running;
+        if (m.cfg.system().get_skip_configure()) return Status::ok();  // already streaming: no sensorStart (nor sensorStop)
         m.sensor_started = true;
         if (!m.cli.sendStartCommand()) {
             if (m.cli.io_error()) {
@@ -363,7 +375,13 @@ Status Radar::stop() {
             }
         }
 
-        if (m.sensor_started) {
+        if (m.sensor_started && m.cfg.board().lifecycle.config_once_per_boot) {
+            // gui-09 D10: this demo never acknowledges sensorStop and keeps streaming (waiting would
+            // only burn the CLI timeout), so it is left running; the next run uses --skip-configure
+            log_info("Radar: sensorStop not sent: the ", m.cfg.board().name,
+                     " never acknowledges it and keeps streaming (config_once_per_boot); power-cycle it before "
+                     "configuring it again");
+        } else if (m.sensor_started) {
             // an I/O error (radar unplugged) is a failure, a missing ack only a warning
             if (!m.cli.sendStopCommand()) {
                 if (m.cli.io_error()) {
@@ -373,9 +391,6 @@ Status Radar::stop() {
                 } else {
                     log_warn("Radar: sensorStop was not acknowledged with '", m.cfg.board().cli.ack, "'");
                 }
-            }
-            if (m.cfg.board().lifecycle.config_once_per_boot) {
-                log_info("Radar: power-cycle the ", m.cfg.board().name, " EVM before configuring it again");
             }
         }
     } catch (const std::exception& e) {

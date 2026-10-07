@@ -59,6 +59,8 @@ public:
     // The underlying readers (the driver's internals use them directly).
     const SystemConfigReader& system() const { return system_; }
     const RadarConfigReader& radar_cfg() const { return radar_; }
+    // The driver's --skip-configure: same as runtime.skip_configure = true in the system JSON.
+    void set_skip_configure(bool v) { system_.set_skip_configure(v); }
     // The cfg commands configure() sends, and the ones the board skips.
     const CfgCommandPlan& commands() const { return commands_; }
 

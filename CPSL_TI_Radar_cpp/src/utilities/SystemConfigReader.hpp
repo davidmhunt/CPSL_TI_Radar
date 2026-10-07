@@ -86,6 +86,10 @@ class SystemConfigReader {
         // thread; ThreadPlacement.hpp)
         uint32_t get_frame_queue_depth() const { return frame_queue_depth; }
         uint32_t get_stall_timeout_ms() const { return stall_timeout_ms; }
+        // runtime.skip_configure (or the driver's --skip-configure): open the ports but send no radar cfg,
+        // no sensorStart and no sensorStop; for a board already configured and streaming this power-up
+        bool get_skip_configure() const { return skip_configure; }
+        void set_skip_configure(bool v) { skip_configure = v; }
         int get_rx_cpu() const { return rx_cpu; }          // -1 = null (not pinned)
         int get_worker_cpu() const { return worker_cpu; }  // -1 = null (not pinned)
         uint32_t get_rx_priority() const { return rx_priority; }
@@ -125,6 +129,7 @@ class SystemConfigReader {
         LogLevel log_level;
         uint32_t frame_queue_depth;
         uint32_t stall_timeout_ms;
+        bool skip_configure;
         int rx_cpu;
         int worker_cpu;
         uint32_t rx_priority;

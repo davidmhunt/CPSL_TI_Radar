@@ -137,6 +137,7 @@ void SystemConfigReader::reset() {
     log_level = LogLevel::info;
     frame_queue_depth = kDefaultFrameQueueDepth;
     stall_timeout_ms = 0;
+    skip_configure = false;
     rx_cpu = -1;
     worker_cpu = -1;
     rx_priority = kDefaultRxPriority;
@@ -284,7 +285,7 @@ bool SystemConfigReader::load() {
         const std::string p = "/runtime";
         if (!r.object(rt, p,
                       {"log_level", "frame_queue_depth", "stall_timeout_ms", "rx_cpu", "worker_cpu", "rx_priority",
-                       "worker_priority"})) {
+                       "worker_priority", "skip_configure"})) {
             return failed();
         }
         if (rt.contains("log_level")) {
@@ -308,6 +309,7 @@ bool SystemConfigReader::load() {
             if (!r.uint(rt, "stall_timeout_ms", p, 0, 3600000, x)) return failed();
             stall_timeout_ms = static_cast<uint32_t>(x);
         }
+        if (rt.contains("skip_configure") && !r.boolean(rt, "skip_configure", p, skip_configure)) return failed();
         if (rt.contains("rx_cpu") && !r.cpu(rt, "rx_cpu", p, rx_cpu)) return failed();
         if (rt.contains("worker_cpu") && !r.cpu(rt, "worker_cpu", p, worker_cpu)) return failed();
         if (rt.contains("rx_priority")) {
