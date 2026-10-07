@@ -99,6 +99,9 @@ struct BoardDescriptor {
     DataUart data_uart;
     Lvds lvds;
     Dca1000 dca1000;
+    // Optional. Ids of the firmware descriptors (config/firmware/<id>.json) this board supports, default
+    // first. Empty = key absent. The system config's "firmware" must be one of them (gui-04).
+    std::vector<std::string> firmwares;
 
     // Load and validate a descriptor file. `name` must equal the file's stem.
     // If `overrides` is given (the system config's board_overrides object) it

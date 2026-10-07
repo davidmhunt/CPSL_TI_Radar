@@ -82,6 +82,73 @@ if(rc EQUAL 0 OR NOT err MATCHES "a_file/captures cannot be created: .*a_file is
   message(FATAL_ERROR "output.dir under a file was not rejected with its path (exit ${rc}):\n${out}${err}")
 endif()
 
+# gui-04: --validate --json. Good config: exit 0, one JSON object with the specified shape.
+execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT "${err}" STREQUAL "")
+  message(FATAL_ERROR "--validate --json failed on a good config (exit ${rc}):\n${out}${err}")
+endif()
+string(JSON ok GET "${out}" ok)
+string(JSON board GET "${out}" board)
+string(JSON n_err LENGTH "${out}" errors)
+string(JSON n_warn LENGTH "${out}" warnings)
+string(JSON n_notes LENGTH "${out}" notes)
+string(JSON rx GET "${out}" frame rx)
+string(JSON period GET "${out}" frame period_ms)
+string(JSON bpf GET "${out}" bytes_per_frame)
+string(JSON n_metrics LENGTH "${out}" metrics)
+string(JSON cfgname GET "${out}" config)
+string(JSON fw ERROR_VARIABLE fw_err GET "${out}" firmware)
+if(NOT ok STREQUAL "ON" AND NOT ok STREQUAL "true" OR NOT board STREQUAL "IWR1843" OR NOT n_err EQUAL 0
+   OR NOT rx GREATER 0 OR NOT bpf GREATER 0 OR NOT cfgname MATCHES "front_radar_IWR1843_stress_test.json$")
+  message(FATAL_ERROR "--validate --json good-config shape is wrong:\n${out}")
+endif()
+# the text summary must not leak into the JSON output
+if(out MATCHES "OK:" OR out MATCHES "bytes/frame:")
+  message(FATAL_ERROR "--validate --json printed text output:\n${out}")
+endif()
+
+# Bad config: exit 1, ok false, one error with code + message + source.
+file(READ "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json" j)
+string(JSON radar_cfg GET "${j}" radar_cfg)
+string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/system/${radar_cfg}\"")
+string(JSON j SET "${j}" board "\"${CONFIG_DIR}/boards/IWR1843.json\"")
+string(JSON j SET "${j}" firmware "\"iwr1843_sar_lvds\"")
+file(WRITE "${TMP_DIR}/alias_bad.json" "${j}")
+execute_process(COMMAND "${DRIVER}" --validate --json "${TMP_DIR}/alias_bad.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+string(JSON ok GET "${out}" ok)
+string(JSON code GET "${out}" errors 0 code)
+string(JSON msg GET "${out}" errors 0 message)
+string(JSON src GET "${out}" errors 0 source)
+string(JSON fw GET "${out}" firmware)
+if(rc EQUAL 0 OR NOT (ok STREQUAL "OFF" OR ok STREQUAL "false") OR NOT code STREQUAL "firmware_alias"
+   OR NOT msg MATCHES "runs with board IWR1843_SAR" OR NOT src MATCHES "iwr1843_sar_lvds.json$"
+   OR NOT fw STREQUAL "iwr1843_sar_lvds")
+  message(FATAL_ERROR "--validate --json bad-config shape is wrong (exit ${rc}):\n${out}")
+endif()
+# a file that does not parse is still one JSON object with ok false
+execute_process(COMMAND "${DRIVER}" --validate --json "${V1_FIXTURE}"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+string(JSON code GET "${out}" errors 0 code)
+string(JSON msg GET "${out}" errors 0 message)
+if(rc EQUAL 0 OR NOT code STREQUAL "config_invalid" OR NOT msg MATCHES "tools/migrate_config_v1_to_v2.py")
+  message(FATAL_ERROR "--validate --json on a v1 file is wrong (exit ${rc}):\n${out}")
+endif()
+# --json without --validate is a usage error
+execute_process(COMMAND "${DRIVER}" --json "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json"
+                RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL 2)
+  message(FATAL_ERROR "--json without --validate should exit 2, got ${rc}")
+endif()
+# the usage text keeps the flags the GUI detects
+execute_process(COMMAND "${DRIVER}" --help RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+foreach(flag --skip-configure --tap-fd --tap-adc-every --json)
+  if(NOT "${out}${err}" MATCHES "${flag}")
+    message(FATAL_ERROR "usage text lost ${flag}")
+  endif()
+endforeach()
+
 execute_process(COMMAND "${DRIVER}" RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(rc EQUAL 0 OR NOT err MATCHES "usage:")
   message(FATAL_ERROR "no-argument run did not print usage and fail (exit ${rc})")

@@ -18,6 +18,14 @@
 // looked up as <boards dir>/<name>.json, where the boards dir is
 // $CPSL_TI_RADAR_BOARDS_DIR if set, otherwise <JSON dir>/../boards (the
 // layout of CPSL_TI_Radar_cpp/config/).
+//
+// "firmware" (gui-04) names the firmware descriptor
+// (<boards dir>/../firmware/<id>.json, or $CPSL_TI_RADAR_FIRMWARE_DIR) the
+// config is meant for. When present it must be in the board's "firmwares" list
+// and agree with the descriptor's driver_board mapping (firmware
+// iwr1843_sar_lvds runs with board IWR1843_SAR, not IWR1843), and the enabled
+// streams must be outputs of that firmware on the board. It is optional in
+// this version of the driver and becomes required in a later commit.
 
 #include <cstdint>
 #include <string>
@@ -25,6 +33,7 @@
 
 #include "nlohmann/json.hpp"
 #include "BoardDescriptor.hpp"
+#include "FirmwareDescriptor.hpp"
 #include "Log.hpp"
 
 using json = nlohmann::json;
@@ -37,6 +46,15 @@ class SystemConfigReader {
         static constexpr int kSchemaVersion = 2;
         static constexpr const char* kMigrationScript = "tools/migrate_config_v1_to_v2.py";
         static constexpr const char* kBoardsDirEnv = "CPSL_TI_RADAR_BOARDS_DIR";
+        static constexpr const char* kFirmwareDirEnv = "CPSL_TI_RADAR_FIRMWARE_DIR";
+
+        // One load problem, machine-readable (--validate --json). `source` is the file that defines the
+        // violated rule or holds the bad value (system JSON, board or firmware descriptor, radar cfg).
+        struct Issue {
+            std::string code;
+            std::string message;
+            std::string source;
+        };
 
         SystemConfigReader();
         explicit SystemConfigReader(const std::string& jsonFilePath);
@@ -50,6 +68,12 @@ class SystemConfigReader {
         // board descriptor, with board_overrides already applied
         const cpsl::radar::BoardDescriptor& getBoard() const { return board; }
         const std::string& getBoardPath() const { return board_path; }
+        // "" when the config has no "firmware" key
+        const std::string& getFirmwareId() const { return firmware_id; }
+        const cpsl::radar::FirmwareDescriptor& getFirmware() const { return firmware; }
+        const std::string& getFirmwarePath() const { return firmware_path; }
+        // The problems of a failed load, one per error (get_error() joins them); empty after a successful load.
+        const std::vector<Issue>& getIssues() const { return issues; }
         // cross_check_radar_cfg notes (a check that could not be made; not fatal)
         const std::vector<std::string>& getCfgCheckNotes() const { return cfg_notes; }
 
@@ -101,12 +125,18 @@ class SystemConfigReader {
     private:
         void reset();
         bool load();
+        bool load_issue(const std::string& code, const std::string& message, const std::string& source);
+        bool check_firmware(const std::string& src, const std::string& boards_dir_hint);
 
         std::string json_file_path;
         std::string error;
 
         cpsl::radar::BoardDescriptor board;
         std::string board_path;
+        std::string firmware_id;
+        cpsl::radar::FirmwareDescriptor firmware;
+        std::string firmware_path;
+        std::vector<Issue> issues;
         std::vector<std::string> cfg_notes;
 
         std::string radar_cfg_path;

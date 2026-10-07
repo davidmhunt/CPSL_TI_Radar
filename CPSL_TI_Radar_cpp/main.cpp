@@ -1,6 +1,7 @@
 // CPSL_TI_Radar_CPP: the command-line driver, on the public API only
 // (cpsl::radar::RadarConfig, Radar, Status; design §3).
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iomanip>
@@ -8,6 +9,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "LiveTap.hpp"
 #include "Radar.hpp"
@@ -17,12 +20,15 @@ namespace radar = cpsl::radar;
 using steady = std::chrono::steady_clock;
 
 static void print_usage(const char* prog){
-    std::cerr << "usage: " << prog << " <system.json> [--validate] [--stats] [--frames N] [--duration S]\n"
+    std::cerr << "usage: " << prog << " <system.json> [--validate [--json]] [--stats] [--frames N] [--duration S]\n"
               << "                 [--skip-configure] [--tap-fd N] [--tap-adc-every K]\n"
               << "  <system.json>  system config, schema v2 (v1 files: uv run "
               << SystemConfigReader::kMigrationScript << ")\n"
               << "  --validate     load and cross-check the config (board descriptor, radar cfg, output.dir)\n"
               << "                 without opening any port or socket; exit 0 if it is usable\n"
+              << "  --json         with --validate: print one JSON object instead of the text summary:\n"
+              << "                 {ok, config, board, firmware, errors:[{code,message,source}], warnings, notes,\n"
+              << "                 frame:{rx,samples,chirps,period_ms}, bytes_per_frame, metrics}; exit 0 if ok, else 1\n"
               << "  --stats        print one 'stats v1' line per stream every second, and a final one\n"
               << "  --frames N     stop after N frames (DCA1000 frames if enabled, else TLV frames)\n"
               << "  --duration S   stop after S seconds of streaming\n"
@@ -118,6 +124,49 @@ static int validate(const std::string& config_file){
     return 0;
 }
 
+/**
+ * @brief --validate --json: the same checks as validate(), reported as one JSON object on stdout (nothing
+ * else is printed). errors[] carry a stable `code` and the `source` file that holds the violated rule or the
+ * bad value; warnings stay empty here (warning-level rules live in the GUI). metrics is reserved for the
+ * limit metrics. Exit 0 when ok, 1 otherwise.
+ */
+static int validate_json(const std::string& config_file){
+    using json = nlohmann::ordered_json;
+    json out = {{"ok", false}, {"config", config_file}, {"board", nullptr}, {"firmware", nullptr},
+                {"errors", json::array()}, {"warnings", json::array()}, {"notes", json::array()},
+                {"frame", nullptr}, {"bytes_per_frame", nullptr}, {"metrics", json::object()}};
+    auto add_error = [&](const std::string& code, const std::string& message, const std::string& source){
+        out["errors"].push_back({{"code", code}, {"message", message}, {"source", source}});
+    };
+
+    SystemConfigReader sys(config_file);
+    if (!sys.getBoard().name.empty()) out["board"] = sys.getBoard().name;
+    if (!sys.getFirmwareId().empty()) out["firmware"] = sys.getFirmwareId();
+    if (!sys.initialized) {
+        for (const SystemConfigReader::Issue& i : sys.getIssues()) add_error(i.code, i.message, i.source);
+    } else {
+        radar::Result<radar::RadarConfig> loaded = radar::RadarConfig::load(config_file);
+        if (!loaded) {
+            add_error("radar_cfg_parse", loaded.status.message, sys.getRadarConfigPath());
+        } else {
+            const radar::RadarConfig& rc = *loaded;
+            const radar::FrameShape& shape = rc.frame_shape();
+            out["frame"] = {{"rx", shape.rx}, {"samples", shape.samples}, {"chirps", shape.chirps},
+                            {"period_ms", std::round(static_cast<double>(shape.period_ms) * 1000.0) / 1000.0}};
+            out["bytes_per_frame"] = shape.bytes;
+            for (const std::string& n : sys.getCfgCheckNotes()) out["notes"].push_back(n);
+            if (rc.board().lifecycle.config_once_per_boot) {
+                out["notes"].push_back(rc.board().name + " accepts a cfg once per power-up");
+            }
+            const radar::OutputDirCheck od = rc.output_dir_check();
+            if (od.state == radar::OutputDirCheck::State::error) add_error("output_dir", od.message, config_file);
+        }
+    }
+    out["ok"] = out["errors"].empty();
+    std::cout << out.dump(2) << std::endl;
+    return out["ok"].get<bool>() ? 0 : 1;
+}
+
 // "stats v1" lines (format in docs/ARCHITECTURE.md): cumulative counters
 // since start(), t in seconds since start()
 static void print_stats(const radar::Radar& r, double t, const radar::LiveTap* tap){
@@ -162,6 +211,7 @@ int main(int argc, char* argv[]){
 
     std::string config_file;
     bool validate_only = false;
+    bool json_out = false;
     bool stats = false;
     bool skip_configure = false;
     long tap_fd = -1;             // -1 = no live tap
@@ -172,6 +222,8 @@ int main(int argc, char* argv[]){
         const std::string a = argv[i];
         if (a == "--validate") {
             validate_only = true;
+        } else if (a == "--json") {
+            json_out = true;
         } else if (a == "--stats") {
             stats = true;
         } else if (a == "--skip-configure") {
@@ -221,8 +273,13 @@ int main(int argc, char* argv[]){
         print_usage(argv[0]);
         return 2;
     }
+    if (json_out && !validate_only) {
+        std::cerr << "--json needs --validate" << std::endl;
+        print_usage(argv[0]);
+        return 2;
+    }
     if (validate_only) {
-        return validate(config_file);
+        return json_out ? validate_json(config_file) : validate(config_file);
     }
 
     //SIGINT/SIGTERM only set a flag; the loop below sees it and stops cleanly

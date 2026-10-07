@@ -181,7 +181,7 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     BoardDescriptor d;
 
     if (!r.object(j, "", {"schema", "name", "sdk", "cli", "lifecycle", "cfg_dialect", "data_uart", "lvds"},
-                  {"dca1000", "firmwares", "elevation_tx_bit"})) {   // "firmwares", "elevation_tx_bit": host-GUI metadata (radar_gui/cfg/), not read by the driver
+                  {"dca1000", "firmwares", "elevation_tx_bit"})) {   // "elevation_tx_bit": host-GUI metadata (radar_gui/cfg/), not read by the driver
         return false;
     }
 
@@ -352,6 +352,20 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
             }
         } else if (!r.object(l, p, {"supported"})) {
             return false;
+        }
+    }
+
+    // firmwares: optional list of firmware descriptor ids
+    if (j.contains("firmwares")) {
+        const json& v = j.at("firmwares");
+        if (!v.is_array() || v.empty()) return r.fail("/firmwares", "expected a non-empty array of firmware ids");
+        std::set<std::string> seen;
+        for (size_t i = 0; i < v.size(); i++) {
+            const std::string ip = "/firmwares/" + std::to_string(i);
+            if (!v[i].is_string() || v[i].get<std::string>().empty()) return r.fail(ip, "expected a non-empty string");
+            const std::string id = v[i].get<std::string>();
+            if (!seen.insert(id).second) return r.fail(ip, "\"" + id + "\" is listed twice");
+            d.firmwares.push_back(id);
         }
     }
 

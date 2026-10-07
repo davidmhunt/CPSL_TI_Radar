@@ -120,6 +120,10 @@ void SystemConfigReader::reset() {
     error.clear();
     board = cpsl::radar::BoardDescriptor();
     board_path.clear();
+    firmware_id.clear();
+    firmware = cpsl::radar::FirmwareDescriptor();
+    firmware_path.clear();
+    issues.clear();
     cfg_notes.clear();
     radar_cfg_path.clear();
     cli_port.clear();
@@ -148,11 +152,87 @@ bool SystemConfigReader::initialize(const std::string& jsonFilePath) {
     reset();
     json_file_path = jsonFilePath;
     initialized = load();  // on failure the caller reports get_error()
+    if (!initialized && issues.empty()) issues.push_back({"config_invalid", error, json_file_path});
     return initialized;
 }
 
 std::string SystemConfigReader::get_output_path(const std::string& name) const {
     return output_dir.empty() ? name : output_dir + "/" + name;
+}
+
+bool SystemConfigReader::load_issue(const std::string& code, const std::string& message,
+                                    const std::string& source) {
+    error = message;
+    issues.push_back({code, message, source});
+    return false;
+}
+
+// "firmware" checks (gui-04): descriptor exists and loads, the board lists it, the board name agrees with
+// the descriptor's driver_board mapping, and the enabled streams are outputs of that firmware.
+bool SystemConfigReader::check_firmware(const std::string& src, const std::string& board_dir) {
+    using cpsl::radar::FirmwareDescriptor;
+    const std::string where = src + ": /firmware: ";
+    std::string supported;
+    for (const std::string& f : board.firmwares) supported += (supported.empty() ? "" : ", ") + f;
+
+    // the board's own list first: it names the fix
+    if (!board.firmwares.empty()) {
+        bool listed = false;
+        for (const std::string& f : board.firmwares) listed = listed || f == firmware_id;
+        if (!listed) {
+            return load_issue("firmware_unsupported",
+                              where + "firmware \"" + firmware_id + "\" is not supported by board " + board.name +
+                                  ". Board " + board.name + " supports: " + supported + ".",
+                              board_path);
+        }
+    }
+
+    const char* env = std::getenv(kFirmwareDirEnv);
+    const std::string fw_dir = (env != nullptr && *env != '\0') ? std::string(env) : board_dir + "/../firmware";
+    firmware_path = fw_dir + "/" + firmware_id + ".json";
+    if (!file_exists(firmware_path)) {
+        return load_issue("firmware_unknown",
+                          where + "no firmware descriptor \"" + firmware_id + "\" at " + firmware_path +
+                              (supported.empty() ? "" : " (board " + board.name + " supports: " + supported + ")"),
+                          firmware_path);
+    }
+    std::string fw_err;
+    if (!FirmwareDescriptor::load(firmware_path, firmware, fw_err)) {
+        return load_issue("firmware_descriptor", src + ": firmware: " + fw_err, firmware_path);
+    }
+
+    // The descriptor is keyed by the GUI board name; a system JSON names the driver board.
+    const std::string gui_board = firmware.gui_board_for(board.name);
+    if (!firmware.supports_board(gui_board)) {
+        std::string boards;
+        for (const auto& kv : firmware.templates) boards += (boards.empty() ? "" : ", ") + kv.first;
+        return load_issue("firmware_board",
+                          where + "firmware \"" + firmware_id + "\" has no support for board " + board.name +
+                              " (its descriptor lists: " + boards + ")",
+                          firmware_path);
+    }
+    const std::string driver_board = firmware.driver_board_for(gui_board);
+    if (driver_board != board.name) {
+        return load_issue("firmware_alias",
+                          where + "firmware " + firmware_id + " on " + board.name + " runs with board " +
+                              driver_board + " (descriptor driver_board); set \"board\": \"" + driver_board + "\"",
+                          firmware_path);
+    }
+
+    const FirmwareDescriptor::Output& out = firmware.outputs.at(gui_board);
+    if (serial_enabled && !out.tlv) {
+        return load_issue("firmware_output_tlv",
+                          where + "firmware " + firmware_id + " has no TLV output on " + board.name +
+                              ": serial_stream.enabled is not allowed",
+                          firmware_path);
+    }
+    if (dca_enabled && !out.lvds) {
+        return load_issue("firmware_output_lvds",
+                          where + "firmware " + firmware_id + " has no LVDS output on " + board.name +
+                              ": dca1000.enabled is not allowed",
+                          firmware_path);
+    }
+    return true;
 }
 
 bool SystemConfigReader::load() {
@@ -196,7 +276,7 @@ bool SystemConfigReader::load() {
 
     if (!r.object(data, "",
                   {"schema_version", "board", "board_overrides", "radar_cfg", "cli", "serial_stream", "dca1000",
-                   "output", "runtime"},
+                   "output", "runtime", "firmware"},
                   {"board", "radar_cfg", "cli"})) {
         return failed();
     }
@@ -353,6 +433,11 @@ bool SystemConfigReader::load() {
         return false;
     }
 
+    if (data.contains("firmware")) {
+        if (!r.str(data, "firmware", "", firmware_id)) return failed();
+        if (!check_firmware(src, dir_of(board_path))) return false;
+    }
+
     // radar cfg vs board, for the enabled streams
     cpsl::radar::StreamSelection streams;
     streams.dca1000 = dca_enabled;
@@ -361,7 +446,10 @@ bool SystemConfigReader::load() {
     cfg_notes = chk.notes;
     if (!chk.ok()) {
         error = src + ": radar cfg does not fit board " + board.name + ":";
-        for (const std::string& e : chk.errors) error += "\n  " + e;
+        for (const std::string& e : chk.errors) {
+            error += "\n  " + e;
+            issues.push_back({"radar_cfg", e, radar_cfg_path});
+        }
         return false;
     }
 

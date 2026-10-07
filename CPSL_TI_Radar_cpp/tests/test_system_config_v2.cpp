@@ -337,4 +337,118 @@ TEST_CASE(copy_keeps_state) {
     CHECK_EQ(c.getRadarConfigPath(), a.getRadarConfigPath());
 }
 
+// ---- "firmware" key (gui-04 Step 1: optional, checked against the board list and the SAR alias) ----
+
+static std::string reject_code(const std::string& name, const json& j, const std::string& code) {
+    SystemConfigReader r(write_json(name, j));
+    CHECK(!r.initialized);
+    std::cout << "    rejected as expected: " << r.get_error() << std::endl;
+    CHECK(!r.getIssues().empty());
+    if (!r.getIssues().empty()) CHECK_EQ(r.getIssues()[0].code, code);
+    return r.get_error();
+}
+
+TEST_CASE(firmware_key_optional_and_accepted) {
+    json j = base_config();
+    SystemConfigReader none(write_json("fw_none.json", j));
+    CHECK(none.initialized);
+    CHECK_EQ(none.getFirmwareId(), std::string(""));
+    CHECK(none.getIssues().empty());
+
+    // IWR1843 lists demo and iwr1843_sar_lvds; demo has an lvds output on the 1843
+    j["firmware"] = "demo";
+    SystemConfigReader demo(write_json("fw_demo.json", j));
+    CHECK(demo.initialized);
+    CHECK_EQ(demo.getFirmwareId(), std::string("demo"));
+    CHECK_EQ(demo.getFirmware().id, std::string("demo"));
+    CHECK(demo.getFirmware().supports_board("IWR1843"));
+
+    // the SAR pair: board IWR1843_SAR + firmware iwr1843_sar_lvds (driver_board IWR1843 -> IWR1843_SAR)
+    j["board"] = "IWR1843_SAR";
+    j["firmware"] = "iwr1843_sar_lvds";
+    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    SystemConfigReader sar(write_json("fw_sar.json", j));
+    CHECK(sar.initialized);
+    if (!sar.initialized) std::cout << sar.get_error() << std::endl;
+}
+
+TEST_CASE(firmware_must_be_in_the_boards_list) {
+    json j = base_config();
+    j["firmware"] = "cascade_ddm";  // exists, but IWR1843 does not list it
+    std::string e = reject_code("fw_not_listed.json", j, "firmware_unsupported");
+    CHECK(has(e, "/firmware"));
+    CHECK(has(e, "not supported by board IWR1843"));
+    CHECK(has(e, "supports: demo, iwr1843_sar_lvds"));
+
+    j["firmware"] = "nope";
+    CHECK(has(reject_code("fw_unknown.json", j, "firmware_unsupported"), "supports: demo, iwr1843_sar_lvds"));
+
+    j["firmware"] = "";
+    CHECK(has(reject("fw_empty.json", j), "must not be empty"));
+    j["firmware"] = 3;
+    CHECK(has(reject("fw_int.json", j), "expected a string"));
+}
+
+TEST_CASE(sar_firmware_on_the_wrong_board_names_the_alias) {
+    json j = base_config();
+    j["firmware"] = "iwr1843_sar_lvds";  // board IWR1843 lists it, but it runs as IWR1843_SAR
+    std::string e = reject_code("fw_alias.json", j, "firmware_alias");
+    CHECK(has(e, "firmware iwr1843_sar_lvds on IWR1843 runs with board IWR1843_SAR"));
+    CHECK(has(e, "set \"board\": \"IWR1843_SAR\""));
+
+    // the reverse: the SAR board does not list demo
+    j = base_config();
+    j["board"] = "IWR1843_SAR";
+    j["firmware"] = "demo";
+    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    CHECK(has(reject_code("fw_sar_demo.json", j, "firmware_unsupported"), "supports: iwr1843_sar_lvds"));
+}
+
+TEST_CASE(firmware_outputs_must_cover_the_enabled_streams) {
+    // dca1000_raw is listed by IWR1443; serial_stream on a firmware whose tlv output is false is refused
+    // by the board first (SAR), so check the descriptor rule with a descriptor dir that flips tlv off
+    const std::string dir = kTmp + "/fwdir";
+    mkdir(dir.c_str(), 0755);
+    json fw;
+    {
+        std::ifstream f(std::string(CONFIG_DIR) + "/firmware/demo.json");
+        fw = json::parse(f);
+    }
+    fw["outputs"]["IWR1843"]["tlv"] = false;
+    fw["outputs"]["IWR1843"]["lvds"] = false;
+    write_text("fwdir/demo.json", fw.dump(2));
+    setenv(SystemConfigReader::kFirmwareDirEnv, dir.c_str(), 1);
+    json j = base_config();
+    j["firmware"] = "demo";
+    CHECK(has(reject_code("fw_no_lvds.json", j, "firmware_output_lvds"), "has no LVDS output on IWR1843"));
+    j["dca1000"]["enabled"] = false;
+    j["serial_stream"]["enabled"] = true;
+    CHECK(has(reject_code("fw_no_tlv.json", j, "firmware_output_tlv"), "has no TLV output on IWR1843"));
+    unsetenv(SystemConfigReader::kFirmwareDirEnv);
+
+    // a malformed descriptor is reported as such, with the descriptor as source
+    write_text("fwdir/demo.json", "{ \"schema\": 2 }");
+    setenv(SystemConfigReader::kFirmwareDirEnv, dir.c_str(), 1);
+    j = base_config();
+    j["firmware"] = "demo";
+    SystemConfigReader bad(write_json("fw_bad_desc.json", j));
+    CHECK(!bad.initialized);
+    CHECK(!bad.getIssues().empty());
+    if (!bad.getIssues().empty()) {
+        CHECK_EQ(bad.getIssues()[0].code, std::string("firmware_descriptor"));
+        CHECK(has(bad.getIssues()[0].source, "fwdir/demo.json"));
+    }
+    unsetenv(SystemConfigReader::kFirmwareDirEnv);
+}
+
+TEST_CASE(cross_check_errors_become_one_issue_each) {
+    json j = base_config();
+    j["board"] = "AWR2243_CASCADE";
+    j["radar_cfg"] = kData + "/radar/awr2243_cascade.cfg";
+    SystemConfigReader r(write_json("issues_cascade_dca.json", j));
+    CHECK(!r.initialized);
+    CHECK(!r.getIssues().empty());
+    for (const auto& i : r.getIssues()) CHECK_EQ(i.code, std::string("radar_cfg"));
+}
+
 TEST_MAIN()
