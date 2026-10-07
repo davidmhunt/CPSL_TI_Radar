@@ -283,10 +283,10 @@ function diagram(m) {
   let g = '';
   for (let l = 0; l < lanes; l++) {
     const y = top + l * lh;
-    g += `<text x="2" y="${y + 10}">TX${l + 1}</text><line class="lane" x1="${gx}" x2="${W - 2}" y1="${y + lh - 1}" y2="${y + lh - 1}"/>`;
+    g += `<text x="2" y="${y + 10}" style="fill:${txColor(l)}">TX${l + 1}</text><line class="lane" x1="${gx}" x2="${W - 2}" y1="${y + lh - 1}" y2="${y + lh - 1}"/>`;
     shown.forEach((c, k) => {
       const on = ddma || (c.tx_mask >> l) & 1, x = gx + k * slot;
-      g += `<rect class="${on ? 'on' : 'off'}" x="${x.toFixed(1)}" y="${y + 2}" width="${Math.max(1, slot * rampFrac - .5).toFixed(1)}" height="${lh - 5}" rx="1"/>`;
+      g += `<rect class="${on ? 'on' : 'off'}"${on ? ` style="fill:${txColor(l)}"` : ''} x="${x.toFixed(1)}" y="${y + 2}" width="${Math.max(1, slot * rampFrac - .5).toFixed(1)}" height="${lh - 5}" rx="1"/>`;
     });
   }
   shown.forEach((c, k) => { g += `<text x="${(gx + k * slot).toFixed(1)}" y="${top - 4}">${c.index + 1}</text>`; });
@@ -362,6 +362,26 @@ async function tableEdit(masks, bpm) {
   if (C.mode !== 'direct') await setMode('direct');   // editing the table = direct mode (seeds from the current cfg)
   C.tbl = { masks, bpm }; C.tblDirty = true; drawTable(); schedule();
 }
+// Per-TX phase readout (gui-23): one row per chirp of the loop (backend `chirp_phases`), TX columns coloured like the MIMO diagram.
+const ROWS_SCROLL = 12;
+const TX_COLORS = ['#4aa3ff', '#ff8a3d', '#4ccf7a', '#e05cc8', '#e6c84a', '#35d0d0', '#b08cff', '#ff6b6b', '#9ccc65', '#ffb74d', '#7986cb', '#a1887f'];
+const txColor = l => TX_COLORS[l % TX_COLORS.length];
+function phaseTable(m) {
+  const box = el('div', 'ptbl'), cp = m.chirp_phases || [], tx = m.phase_tx || [];
+  const unv = m.phase_confidence === 'unverified';
+  const cap = el('div', 'muted chint' + (unv ? ' unverified' : ''));
+  cap.textContent = (unv ? '\u2020 UNVERIFIED (hypothesis): ' : '') + 'Phase per TX, degrees' + (m.phase_source ? ` \u2014 ${m.phase_source}` : '') + (m.phase_note ? `. ${m.phase_note}` : '');
+  if (!cp.length) { box.append(el('div', 'muted chint', m.phase_note || 'No phase data for this configuration.')); return box; }
+  const sc = el('div', 'pscroll' + (cp.length > ROWS_SCROLL ? ' scroll' : '')), tb = document.createElement('table');
+  const hr = tb.createTHead().insertRow(); { const th0 = document.createElement('th'); th0.textContent = '#'; hr.append(th0); }
+  tx.forEach(name => { const th = document.createElement('th'), l = (parseInt(String(name).replace(/\D/g, ''), 10) || 1) - 1; th.textContent = name; th.style.color = txColor(l); th.style.borderBottomColor = txColor(l); hr.append(th); });
+  const body = tb.createTBody();
+  for (const c of cp) {
+    const r = body.insertRow(); r.insertCell().textContent = String(c.index + 1);
+    (c.phase_deg || []).forEach(v => { const td = r.insertCell(); td.textContent = v == null ? '\u2014' : (Math.round(v * 1000) / 1000) + '\u00b0'; if (v == null) td.title = 'not BPM-coded'; });
+  }
+  sc.append(tb); box.append(sc, cap); return box;
+}
 function drawTable() {
   const box = $('mChirpTable'); box.replaceChildren();
   const f = curFw(), mm = (f && f.mimo) || C.fwMimo || {}, m = C.metrics || C.mLast;
@@ -373,15 +393,11 @@ function drawTable() {
   const ro = !mimoEditState(m).editable, lock = ddma || ro || t.bpm;
   if (ddma) {
     const n = Math.max(1, Math.min(m.n_tx || 3, 12));
-    for (const [k, c] of (m.chirp_sequence || []).slice(0, 4).entries()) {
-      const r = el('div', 'crow'); r.append(el('span', 'ci', String(k + 1)));
-      for (let l = 0; l < n; l++) r.append(el('span', 'lit', 'TX' + (l + 1)));
-      wrap.append(r);
-    }
-    if ((m.chirp_sequence || []).length > 4) wrap.append(el('div', 'muted', `+${m.chirp_sequence.length - 4} more chirps`));
+    wrap.append(phaseTable(m));
     wrap.append(el('div', 'muted chint', `DDMA: all ${n} TX fire on every chirp, ${m.n_bands || 8} Doppler bands. Phase shifts are set by firmware, not cfg.`));
     box.append(wrap); flagTable(); return;
   }
+  const rows = el('div', 'crows' + (t.masks.length > ROWS_SCROLL ? ' scroll' : '')); wrap.append(rows);
   t.masks.forEach((mask, i) => {
     const r = el('div', 'crow' + (mask === 0 ? ' err' : '')); r.append(el('span', 'ci', String(i + 1)));
     for (let l = 0; l < 3; l++) {
@@ -393,8 +409,9 @@ function drawTable() {
     const mv = d => () => { const ms = t.masks.slice(); [ms[i], ms[i + d]] = [ms[i + d], ms[i]]; tableEdit(ms, false); };
     r.append(btn('▲', 'move up', mv(-1), lock || i === 0), btn('▼', 'move down', mv(1), lock || i === t.masks.length - 1),
       btn('✕', 'remove chirp', () => tableEdit(t.masks.filter((_, j) => j !== i), false), lock || t.masks.length <= 1));
-    wrap.append(r);
+    rows.append(r);
   });
+  if (m.chirp_phases && m.chirp_phases.length && !C.tblDirty) wrap.append(phaseTable(m));   // stale while the table is being edited
   const act = el('div', 'cacts');
   const add = el('button', 'btn mini', '+ Add chirp'); add.disabled = lock || t.masks.length >= max;
   add.title = t.masks.length >= max ? `the firmware accepts at most ${max} chirps per loop` : '';

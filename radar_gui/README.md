@@ -61,6 +61,6 @@ chirp of the loop with TX1/TX2/TX3 checkboxes, add / remove / move-up / move-dow
 `mimo.bpm` is true. Editing the table switches to the chirp-parameter mode and posts only the difference from the seed to
 `POST /api/cfg/params`: `chirp_tx_masks` (list of ints), or `{"bpm": true}` for the BPM preset (the backend writes masks `[5, 5]` and enables
 `bpmCfg`; `{"bpm": false}` leaves BPM). Warnings and errors come back in `issues` (e.g. `tx_pattern_invalid`, `bpm_unsupported`); chirp-pattern
-codes outline the table. On the cascade (DDMA) the table is read-only: all TX lit, and "phase shifts are set by firmware, not cfg"
+codes outline the table. Below the rows, a **phase table** (gui-23) lists every chirp of the loop with one degree column per TX (headers coloured like the timing diagram; `metrics.chirp_phases`/`phase_tx`/`phase_source`/`phase_note`; `—` = not BPM-coded; scrolls with a sticky header past 12 rows): BPM 0/180, plain TDM 0. On the cascade (DDMA) the table is read-only: every chirp is listed with the firmware-derived per-TX phases, labelled unverified (chirp order may be reversed), since the phases are set by firmware, not cfg
 (`chirp_tx_masks` edits there are ignored with `cascade_chirp_mask_ignored`). `tests/test_radar_gui_cfgapi.py::test_chirp_table_payloads`
 pins the payload shapes (no browser harness).
