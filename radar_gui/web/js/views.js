@@ -4,6 +4,8 @@ import { colorOf } from './colors.js';
 
 function fit(cv) {
   const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+  // hidden (display:none, e.g. Configure tab) or collapsed canvases report 0x0: nothing to draw.
+  if (r.width < 2 || r.height < 2) return null;
   if (cv.width !== Math.round(r.width * d) || cv.height !== Math.round(r.height * d)) {
     cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
   }
@@ -19,10 +21,11 @@ const alphaOf = age => S.trail > 1 ? Math.max(0.12, 1 - age / S.trail) : 1;
 
 export let topXf = null;
 function drawTop() {
-  const [ctx, W, H] = fit($('main'));
+  const f = fit($('main')); if (!f) return;
+  const [ctx, W, H] = f;
   ctx.clearRect(0, 0, W, H);
   const R = S.range, pad = 24;
-  const scale = Math.min((W - 2 * pad) / (2 * R), (H - 2 * pad) / R);
+  const scale = Math.max(0, Math.min((W - 2 * pad) / (2 * R), (H - 2 * pad) / R));
   const ox = W / 2, oy = H - pad;
   topXf = { scale, ox, oy };
   const X = x => ox + x * scale, Y = y => oy - y * scale;
@@ -63,7 +66,8 @@ function project(x, y, z, W, H) {
   return [W / 2 + x1 * f / depth, H / 2 - z2 * f / depth, depth];
 }
 function draw3D() {
-  const [ctx, W, H] = fit($('main'));
+  const f = fit($('main')); if (!f) return;
+  const [ctx, W, H] = f;
   ctx.clearRect(0, 0, W, H);
   const R = S.range, line = (a, b) => {
     const p = project(...a, W, H), q = project(...b, W, H);
@@ -82,13 +86,14 @@ function draw3D() {
   for (const [p, age, s] of pts) {
     ctx.globalAlpha = alphaOf(age); ctx.fillStyle = colorOf(p);
     const r = Math.max(1, S.size * (S.range * 2.2 / S.zoom) / s[2]);
-    ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(0, r), 0, 2 * Math.PI); ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
 function drawFront() {
-  const [ctx, W, H] = fit($('front'));
+  const f = fit($('front')); if (!f) return;
+  const [ctx, W, H] = f;
   ctx.clearRect(0, 0, W, H);
   const R = S.range, zMin = -2, zMax = 3, pad = 18;
   const sx = (W - 2 * pad) / (2 * R), sz = (H - 2 * pad) / (zMax - zMin);
@@ -104,7 +109,8 @@ function drawFront() {
 }
 
 function drawSpark() {
-  const [ctx, W, H] = fit($('spark'));
+  const f = fit($('spark')); if (!f) return;
+  const [ctx, W, H] = f;
   ctx.clearRect(0, 0, W, H);
   const c = S.counts; if (c.length < 2) return;
   const max = Math.max(10, ...c), pad = 6;

@@ -94,7 +94,7 @@ function fillParams(p) {   // p: a params dict from the endpoint -> inputs + der
     lab.hidden = v == null;
     $(pid(k)).value = v == null ? '' : kind === 'm' ? v.join(', ') : +(+v).toPrecision(8);
   }
-  C.seed = JSON.parse(JSON.stringify(p)); C.tbl = null; C.tblDirty = false;
+  C.seed = JSON.parse(JSON.stringify(p)); C.tbl = null; C.tblDirty = false; C.tblStale = false;
   $('pl_low_power').hidden = $('pl_low_power').nextElementSibling.hidden = p.low_power == null;
   if (p.low_power != null) $('p_low_power').value = String(p.low_power);
   const lv = p.lvds_stream;
@@ -140,6 +140,7 @@ async function seedDirect() {   // last generated/loaded cfg -> inputs (endpoint
   fillParams(j.params); applyDirect(j);
 }
 function applyDirect(j) {
+  C.tblStale = false;
   C.text = j.text; C.metrics = j.metrics; C.ok = j.ok; render(j); markFields(j.issues);
   if (j.params) showDerived(j.params.derived);
 }
@@ -148,6 +149,16 @@ async function analyzeDirect(seq) {
   if (seq !== C.seq) return;
   if (!ok) { render({ ok: false, metrics: null, issues: [{ level: 'error', code: 'api', message: JSON.stringify(j && j.detail || j), confidence: '' }], text: C.text }); return; }
   applyDirect(j);
+}
+// Board or firmware changed while in direct mode: the seeded cfg belongs to the old board/template, so regenerate the
+// new firmware's template from the targets and re-seed every parameter field from it (gui-28).
+async function reseedDirect() {
+  const seq = ++C.seq;
+  const { ok, j } = await api('/api/cfg/analyze', { board: $('cBoard').value, firmware: $('cFw').value, targets: targets() });
+  if (seq !== C.seq) return;
+  if (!ok) { render({ ok: false, metrics: null, issues: [{ level: 'error', code: 'api', message: JSON.stringify(j && j.detail || j), confidence: '' }], text: C.text }); return; }
+  C.text = j.text; C.name = j.name || C.name; setSource('targets');
+  await seedDirect();
 }
 async function setMode(m) {
   if (m === C.mode) return;
@@ -276,6 +287,8 @@ function lvdsVis() {
   if (o && o.lvds && $('l_data_fmt').options.length) fillDataFmt();
   $('lvdsTargets').hidden = !(o && o.tlv && o.lvds);          // raw-ADC firmwares always stream; nothing to toggle in the targets view
   $('lvdsParams').hidden = !(o && o.lvds && C.seed && C.seed.lvds_stream);
+  // raw-only firmware whose template has no lvdsStreamCfg: say why the group is absent (gui-28)
+  $('lvdsNote').hidden = !(o && o.lvds && !o.tlv && C.seed && !C.seed.lvds_stream);
   lvdsWarn();
 }
 function cfgLvdsOn(text) {
@@ -383,7 +396,7 @@ function tableParams(sd) {
 async function tableEdit(masks, bpm) {
   if (isDdma() || viewOnly()) return;
   if (C.mode !== 'direct') await setMode('direct');   // editing the table = direct mode (seeds from the current cfg)
-  C.tbl = { masks, bpm }; C.tblDirty = true; drawTable(); schedule();
+  C.tbl = { masks, bpm }; C.tblDirty = true; C.tblStale = true; drawTable(); schedule();   // tblDirty: differs from the seed (sent on); tblStale: not analysed yet (phase readout hidden)
 }
 // Per-TX phase readout (gui-23): one row per chirp of the loop (backend `chirp_phases`), TX columns coloured like the MIMO diagram.
 const ROWS_SCROLL = 12;
@@ -433,7 +446,7 @@ function drawTable() {
       btn('✕', 'remove chirp', () => tableEdit(t.masks.filter((_, j) => j !== i), false), lock || t.masks.length <= 1));
     rows.append(r);
   });
-  if (m.chirp_phases && m.chirp_phases.length && !C.tblDirty) wrap.append(phaseTable(m));   // stale while the table is being edited
+  if (m.chirp_phases && m.chirp_phases.length && !C.tblStale) wrap.append(phaseTable(m));   // stale only until the edit has been re-analysed
   const act = el('div', 'cacts');
   const add = el('button', 'btn mini', '+ Add chirp'); add.disabled = lock || t.masks.length >= max;
   add.title = t.masks.length >= max ? `the firmware accepts at most ${max} chirps per loop` : '';
@@ -528,8 +541,8 @@ async function init() {
   await loadFirmware('IWR1843');
   await loadList();
   for (const k of TARGETS) $('t_' + k).addEventListener('input', () => { setSource('targets'); schedule(); });
-  $('cFw').addEventListener('change', () => { showFirmware(); if (C.source === 'targets' || C.mode === 'direct') schedule(); else analyze(); });
-  $('cBoard').addEventListener('change', async () => { await loadFirmware($('cBoard').value, $('cFw').value); if (C.source === 'targets' || C.mode === 'direct') schedule(); else analyze(); });
+  $('cFw').addEventListener('change', () => { showFirmware(); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
+  $('cBoard').addEventListener('change', async () => { await loadFirmware($('cBoard').value, $('cFw').value); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
   $('cLoad').addEventListener('change', onLoad);
   $('cToTargets').onclick = toTargets;
   buildParams();
