@@ -65,6 +65,34 @@ codes outline the table. Below the rows, a **phase table** (gui-23) lists every 
 (`chirp_tx_masks` edits there are ignored with `cascade_chirp_mask_ignored`). `tests/test_radar_gui_cfgapi.py::test_chirp_table_payloads`
 pins the payload shapes (no browser harness).
 
+## Run tab (gui-05)
+
+Open `http://127.0.0.1:8000/#run` (or the **Run** tab): pick a system JSON (saved ones from `config/user/` first, then `config/system/`;
+Configure's Save result has an **Open in Run** link that preselects the file), **Validate** (runs `<driver> <json> --validate`; shows
+OK / INVALID, frame geometry, bytes/frame, notes and the raw text), optionally set **Frames** / **Duration**, then **Start** (spawns
+`<driver> <json> --stats [--frames N] [--duration S]`, validating first) and **Stop** (SIGINT so the driver flushes its files; SIGKILL after
+`max(5 s, 2 x frame period)`). The header shows a `driver <state>` pill on every tab. Per stream (DCA1000, serial) the cards show frames, rate
+(from successive `stats v1` lines; flagged when below 90 % of the config's frame rate), dropped / kernel drops / incomplete (DCA) or missed (serial),
+and any other non-zero counters; a stream with drops is outlined red. After exit: run directory, files with sizes, and the `adc_data.bin` size verdict
+(`exact` / `short_sigint_tail` / `MISMATCH`, expected = bytes/frame x final DCA frames). The log pane is the driver's stdout+stderr (last 500 lines;
+`stats v1` lines hidden by default).
+
+Refusals show in a red box: **409** radar in use (another session, e.g. a driver run already active) or `ports busy: <port> held by <pid> <comm>`,
+**422** config not listed / INVALID / port not found, **503** driver binary missing. One run at a time; the radar lock is shared with future serial sources.
+The driver ports check covers the CLI and serial-data ports (not the DCA UDP ports).
+
+**Driver binary:** `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` by default; override with `--driver-bin PATH` or `RADAR_GUI_DRIVER`.
+Runs happen in `runs/gui/<UTC>_<json stem>/` (gitignored; override `RADAR_GUI_RUN_DIR`), unless the JSON sets `output.dir`.
+
+    uv run python -m radar_gui --source mock                        # real driver, default binary
+    uv run python -m radar_gui --source mock --driver-bin tests/fakes/fake_driver.py   # no hardware
+
+Wire format (additions to `/stream`): `driver_state` (full status minus the log; also sent on connect), `driver_stats` (`stream`, `stats`
+with `rate_hz`), `driver_log` (`line`). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
+(body `{config, frames?, duration?}`; only configs listed by `/configs` are accepted). Tests: `tests/test_radar_gui_driver.py` (fake driver
+`tests/fakes/fake_driver.py`, modes via `FAKE_DRIVER_MODE`). Shots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui05.json`
+(own server, fake driver; the spec's `user_cfgs` carry the system JSONs, `@PORT@` stands for a scratch file used as the CLI port).
+
 ## Remote access over Tailscale
 
 **Recommended: one command, no Tailscale privileges or admin changes.**

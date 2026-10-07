@@ -8,8 +8,11 @@ Configure tab, runs scenarios and saves PNGs.
     uv run python tools/gui_shots.py --scenarios builtin --out /some/dir
     uv run python tools/gui_shots.py --scenarios my.json --url http://127.0.0.1:8000
 
-Spec: a JSON list of scenarios, or {"user_cfgs": {"name.cfg": "<text>"}, "scenarios": [...]}
-(user_cfgs appear in the picker as saved cfgs, for cfgs not shipped); each scenario:
+Spec: a JSON list of scenarios, or {"user_cfgs": {"name.cfg": "<text>"}, "env": {...}, "scenarios": [...]}
+(user_cfgs appear in the picker as saved cfgs, for cfgs not shipped; a name.json is a system JSON for the Run tab, and
+"@PORT@" in any user_cfgs text becomes a scratch file that exists, for "cli.port"; "env" is added to the server's
+environment, e.g. FAKE_DRIVER_MODE, RADAR_GUI_DRIVER=tests/fakes/fake_driver.py; or pass --driver-bin); each scenario (optional "tab":
+"run" opens the Run tab instead of Configure):
     {"name": "x", "window": [1400, 2400],           # optional; "fresh": false keeps the previous page state;
                                                    # "expand": false disables un-clipping the scrolling columns
      "actions": [ ... ],
@@ -138,8 +141,8 @@ class Driver:
 EXPAND_JS = """
 const st = document.getElementById('__expand') || document.head.appendChild(document.createElement('style'));
 st.id = '__expand';
-st.textContent = 'html,body,#cfgMain{height:auto!important;max-height:none!important;overflow:visible!important}' +
-                 '.cfgcol{overflow:visible!important;max-height:none!important}';
+st.textContent = 'html,body,#cfgMain,#runMain{height:auto!important;max-height:none!important;overflow:visible!important}' +
+                 '.cfgcol,.runcol{overflow:visible!important;max-height:none!important}';
 """
 
 SET_JS = """
@@ -207,7 +210,7 @@ def run_action(d, a):
 def run_scenario(d, sc, out, url):
     if sc.get("fresh", True):   # isolate scenarios: reload the page so no state leaks from the previous one
         d.cmd("POST", "/url", {"url": "about:blank"})
-        d.cmd("POST", "/url", {"url": url.rstrip("/") + "/#configure"})
+        d.cmd("POST", "/url", {"url": url.rstrip("/") + "/#" + sc.get("tab", "configure")})
         time.sleep(2.5)
         d.js(HOOK)
     sdir = os.path.join(out, sc["name"])
@@ -233,6 +236,7 @@ def main(argv=None):
     ap.add_argument("--scenarios", default="builtin", help="JSON spec file or 'builtin'")
     ap.add_argument("--out", help="output dir (default: <repo root>/gui_shots/<spec name>)")
     ap.add_argument("--url", help="attach to a running GUI instead of starting one")
+    ap.add_argument("--driver-bin", help="driver binary for the Run tab (e.g. tests/fakes/fake_driver.py)")
     ap.add_argument("--only", help="run only scenarios whose name contains this")
     a = ap.parse_args(argv)
     spec, user_cfgs = load_spec(a.scenarios)
@@ -249,14 +253,25 @@ def main(argv=None):
         if not url:
             port = free_port()
             env = dict(os.environ)
+            if a.scenarios != "builtin":   # optional top-level "env": {NAME: value} for the server (e.g. FAKE_DRIVER_MODE)
+                with open(a.scenarios) as f:
+                    sp = json.load(f)
+                env.update({k: str(v) for k, v in (sp.get("env", {}) if isinstance(sp, dict) else {}).items()})
+                if env.get("RADAR_GUI_DRIVER") and not os.path.isabs(env["RADAR_GUI_DRIVER"]):
+                    env["RADAR_GUI_DRIVER"] = os.path.join(ROOT, env["RADAR_GUI_DRIVER"])
             if user_cfgs:   # scratch saved-cfg dir for this run only
                 udir = os.path.join(out, "_usercfg"); os.makedirs(udir, exist_ok=True)
+                fake_port = os.path.join(udir, "fake_port")   # a path that exists and nobody holds, for system JSON "cli.port"
+                open(fake_port, "w").close()
                 for fn, txt in user_cfgs.items():
                     with open(os.path.join(udir, fn), "w") as f:
-                        f.write(txt)
+                        f.write(txt.replace("@PORT@", fake_port))
                 env["RADAR_GUI_USER_CFG_DIR"] = udir
+            cmd = ["uv", "run", "python", "-m", "radar_gui", "--source", "mock", "--port", str(port)]
+            if a.driver_bin:
+                cmd += ["--driver-bin", os.path.abspath(a.driver_bin)]
             procs.append(subprocess.Popen(
-                ["uv", "run", "python", "-m", "radar_gui", "--source", "mock", "--port", str(port)],
+                cmd,
                 cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
             url = "http://127.0.0.1:%d" % port
         wait_url(url + "/api/cfgs")

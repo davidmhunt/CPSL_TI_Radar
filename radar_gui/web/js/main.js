@@ -3,6 +3,7 @@ import { $, S } from './state.js';
 import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
 import { showConfigure } from './cfg.js';
+import { showRun, onDriverMessage, openInRun } from './run.js';
 
 // ---------- stream ----------
 const STATE_DOT = { streaming: 'ok', starting: 'warn', ended: 'warn', error: 'bad', disconnected: 'bad' };
@@ -13,6 +14,7 @@ function setStatus(state, msg) {
 }
 function onMessage(m) {
   if (m.type === 'status') setStatus(m.state, m.msg);
+  else if (m.type && m.type.startsWith('driver_')) onDriverMessage(m);
   else if (m.type === 'cfg') {
     S.cfg = m;
     $('cfgName').textContent = m.name || ''; $('cfgName').style.display = m.name ? '' : 'none';
@@ -101,14 +103,17 @@ cv.addEventListener('wheel', e => {
 addEventListener('resize', redraw);
 
 // ---------- tabs ----------
+const HASH = { cfg: '#configure', run: '#run' };
 function tab(name) {
   [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.tab === name));
-  $('liveMain').hidden = name !== 'live'; $('cfgMain').hidden = name !== 'cfg';
-  if (name === 'cfg') showConfigure(); else redraw();
-  history.replaceState(null, '', name === 'cfg' ? '#configure' : location.pathname);
+  $('liveMain').hidden = name !== 'live'; $('cfgMain').hidden = name !== 'cfg'; $('runMain').hidden = name !== 'run';
+  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else redraw();
+  history.replaceState(null, '', HASH[name] || location.pathname);
 }
+// Configure -> Save result "Open in Run" link
+addEventListener('open-in-run', e => { tab('run'); openInRun(e.detail); });
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
-if (location.hash === '#configure') tab('cfg');
+if (location.hash === '#configure') tab('cfg'); else if (location.hash === '#run') tab('run');
 
 if (location.hash === '#3d') $('viewSeg').children[1].click();  // link straight to the 3D view
 connect();

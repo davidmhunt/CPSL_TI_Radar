@@ -225,3 +225,20 @@ def test_missing_binary_is_503(env):
     with c:
         r = c.post("/api/driver/validate", json={"config": str(cfg)})
         assert r.status_code == 503 and "not found" in r.json()["detail"]
+
+
+def test_user_dir_env_override_lists_configs(env, monkeypatch):
+    """The Run tab's picker must see the same saved-config dir the Configure tab saves to (RADAR_GUI_USER_CFG_DIR)."""
+    _, cfg, _, tmp = env
+    monkeypatch.setenv("RADAR_GUI_USER_CFG_DIR", str(cfg.parent))
+    with TestClient(create_app(MockSource(rate_hz=5), driver_bin=FAKE, system_cfg_dir=tmp / "system",
+                               run_root=tmp / "runs")) as c:
+        assert [x["name"] for x in c.get("/api/driver/configs").json()["configs"]] == ["rig"]
+
+
+def test_run_tab_is_served(env):
+    make, *_ = env
+    with make() as c:
+        html = c.get("/").text
+        assert 'data-tab="run"' in html and 'id="runMain"' in html
+        assert c.get("/js/run.js").status_code == 200

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -40,7 +41,7 @@ def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
 
 
 def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter:
-    user_dir = Path(user_dir) if user_dir else DEFAULT_USER_DIR
+    user_dir = Path(user_dir or os.environ.get("RADAR_GUI_USER_CFG_DIR") or DEFAULT_USER_DIR)
     system_dir = Path(system_dir) if system_dir else DEFAULT_SYSTEM_DIR
     r = APIRouter(prefix="/api/driver")
 

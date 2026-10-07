@@ -9,8 +9,9 @@
 <body>
 <header>
   <h1>CPSL Radar</h1>
-  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button></span>
+  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button><button data-tab="run">Run</button></span>
   <span class="pill"><span class="dot" id="dot"></span><span id="state">connecting</span></span>
+  <span class="pill" id="drvPill" style="display:none"><span class="dot" id="drvDot"></span><span id="drvText"></span></span>
   <span class="pill" id="cfgName" style="display:none"></span>
   <span id="statusMsg"></span>
   <div class="stats">
@@ -196,6 +197,54 @@
     <section class="card grow">
       <h2>cfg preview</h2>
       <pre id="cText"></pre>
+    </section>
+  </div>
+</main>
+<main id="runMain" hidden>
+  <div class="runcol">
+    <section class="card">
+      <h2>Driver run <span class="pill" id="rPill"><span class="dot" id="rDot"></span><span id="rState">idle</span></span></h2>
+      <div class="controls">
+        <label>System config
+          <select id="rCfg"></select></label>
+        <div class="muted" id="rCfgInfo"></div>
+        <div class="grid2">
+          <label>Frames (optional) <input type="number" id="rFrames" min="1" step="1" placeholder="until stopped"></label>
+          <label>Duration s (optional) <input type="number" id="rDur" min="0.1" step="any" placeholder="until stopped"></label>
+        </div>
+        <div class="btnrow">
+          <button class="btn" id="rValidate">Validate</button>
+          <button class="btn primary" id="rStart">Start</button>
+          <button class="btn" id="rStop" disabled>Stop</button>
+        </div>
+        <div id="rMsg" class="runmsg" hidden></div>
+      </div>
+    </section>
+    <section class="card" id="rValCard" hidden>
+      <h2>Validate <span class="badge" id="rValBadge"></span></h2>
+      <div class="controls">
+        <div class="muted" id="rValSummary"></div>
+        <details id="rValDet"><summary>Raw --validate output</summary><pre class="runpre" id="rValText"></pre></details>
+      </div>
+    </section>
+  </div>
+
+  <div class="runcol">
+    <section class="card">
+      <h2>Streams <span class="muted sub" id="rStreamsNote"></span></h2>
+      <div class="streams" id="rStreams"><div class="muted pad">No stats yet. Start a run to see frames, drops and rates.</div></div>
+    </section>
+    <section class="card" id="rOutCard" hidden>
+      <h2>Output <span class="badge" id="rVerdictBadge"></span></h2>
+      <div class="controls">
+        <div class="muted" id="rRunDir"></div>
+        <div id="rVerdict" class="muted"></div>
+        <table class="ftbl" id="rFiles"></table>
+      </div>
+    </section>
+    <section class="card grow">
+      <h2>Log <label class="chk logchk"><input type="checkbox" id="rHideStats" checked> hide stats lines</label></h2>
+      <pre class="runpre logpane" id="rLog"></pre>
     </section>
   </div>
 </main>

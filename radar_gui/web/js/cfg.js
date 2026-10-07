@@ -535,7 +535,8 @@ async function save() {
   }
   msg.className = 'ok';
   msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
-    (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span>`;
+    (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span><br><a href="#run" id="sOpenRun">Open in Run</a>`;
+  $('sOpenRun').onclick = e => { e.preventDefault(); dispatchEvent(new CustomEvent('open-in-run', { detail: j.json_path })); };
   loadList();
 }
 
