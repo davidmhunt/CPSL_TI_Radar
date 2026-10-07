@@ -73,6 +73,12 @@ Serial, step by step: choose **Serial**, pick the **Board** (IWR1443/1843/6843/6
 
 API: `GET /api/source`, `POST /api/source` (`{kind, board, cfg_id, cli_port, data_port, skip_configure, file, dump}`), `POST /api/source/stop`, `GET /api/source/boards`, `GET /api/source/files`. The GUI is unauthenticated, so the paths are confined: replay accepts only `tests/fixtures/**/*.bin`, `*.bin` in the dumps directory (`runs/gui/dumps/`, or `RADAR_GUI_DUMP_DIR`) and the file the GUI was started with, anything else is 422; `dump` must be a plain file name and is always written inside the dumps directory.
 
+## Settings tab (gui-32)
+
+A read-only **Settings** tab (`#settings`). **Serial ports** lists `/dev/serial/by-id/*` grouped by XDS110 serial (`-if00` = CLI, `-if03` = data, ttyACM node, and the process holding each port from a `/proc` scan, via `ports.py`); serial `00000000` is labelled as the cascade. Nothing is opened or probed. "Use for Configure -> Save" / "Use for Live serial source" only fill the existing port fields. **DCA1000 host check** runs `tools/setup/host_setup.py`'s `check_dca_nic` (never confirmed, so no fix is ever applied) and `check_sysctl` (`rmem_max`), plus an optional single ping of 192.168.33.180; fix commands are shown as text only. Changing the host stays a terminal job (`uv run tools/setup/host_setup.py --nic <nic> --apply`).
+
+API: `GET /api/settings/ports`, `GET /api/settings/dca?nic=<wired NIC>&ping=0|1` (a `nic` that is not a wired ethernet interface is 422). Tests: `tests/test_radar_gui_settings.py` (fake by-id dir mirroring the bench, host_setup's FakeHost). Shots: `tools/gui_shots_specs/gui32.json`.
+
 ## Run tab (gui-05)
 
 Open `http://127.0.0.1:8000/#run` (or the **Run** tab): pick a system JSON (saved ones from `config/user/` first, then `config/system/`;

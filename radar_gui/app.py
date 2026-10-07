@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .cfgapi import make_router
 from .driver import DriverManager
 from .driver_api import make_router as make_driver_router
+from .settings import make_router as make_settings_router
 from .source_api import make_router as make_source_router
 from .sources import DriverSource, Source
 
@@ -157,6 +158,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     app.include_router(make_router(user_cfg_dir))
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
     app.include_router(make_source_router(hub, user_cfg_dir, serial_factory))
+    app.include_router(make_settings_router())
 
     @app.get("/api/health")
     def health():

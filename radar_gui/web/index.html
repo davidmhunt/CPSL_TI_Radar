@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>CPSL Radar</h1>
-  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button><button data-tab="run">Run</button></span>
+  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button><button data-tab="run">Run</button><button data-tab="settings">Settings</button></span>
   <span class="pill"><span class="dot" id="dot"></span><span id="state">connecting</span></span>
   <span class="pill" id="drvPill" style="display:none"><span class="dot" id="drvDot"></span><span id="drvText"></span></span>
   <span class="pill" id="cfgName" style="display:none" title="live source"></span>
@@ -28,7 +28,7 @@
     <h2>
       <span class="seg" id="viewSeg"><button data-v="top" class="on">Top view</button><button data-v="3d">3D</button></span>
     </h2>
-    <span class="hint" id="hint">x = right, y = forward (m)</span>
+    <span class="sethint" id="hint">x = right, y = forward (m)</span>
     <canvas id="main"></canvas>
     <div id="tip"></div>
   </section>
@@ -280,6 +280,25 @@
       <h2>Log <label class="chk logchk"><input type="checkbox" id="rHideStats" checked> hide stats lines</label></h2>
       <pre class="runpre logpane" id="rLog"></pre>
       <div id="rCli" hidden></div>
+    </section>
+  </div>
+</main>
+<main id="setMain" hidden>
+  <div class="setcol">
+    <section class="card">
+      <h2>Serial ports <button class="btn" id="setRefresh">Refresh</button></h2>
+      <p class="sethint">Read-only: names come from <code>/dev/serial/by-id</code>; no port is opened or probed. "Held by" is a <code>/proc</code> scan.</p>
+      <div id="setPorts" class="controls"></div>
+    </section>
+    <section class="card">
+      <h2>DCA1000 host check</h2>
+      <div class="controls">
+        <div class="btnrow"><label>NIC <select id="setNic"></select></label>
+          <label class="chk"><input type="checkbox" id="setPing"> ping the DCA1000 (192.168.33.180)</label>
+          <button class="btn" id="setDcaRun">Check</button></div>
+        <div id="setDca"></div>
+        <p class="sethint">Fix commands are shown as text only: run them yourself in a terminal (<code>uv run tools/setup/host_setup.py --nic &lt;nic&gt; --apply</code>). The GUI never changes host settings.</p>
+      </div>
     </section>
   </div>
 </main>

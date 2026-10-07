@@ -245,3 +245,13 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 .clipanel.compact .clitbl tbody { border-top: 1px solid var(--line); }
 .clipanel.compact .clitbl tbody.bad td, .clipanel.compact .clitbl tbody.bad td.clirep { color: var(--bad); background: rgba(248,81,73,.10); }
 .clipanel.compact .clitbl td.clicmd { overflow-wrap: break-word; }
+
+/* gui-32 Settings tab */
+#setMain { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 12px 16px; align-content: start; }
+#setMain .setcol { display: flex; flex-direction: column; gap: 12px; max-width: 1100px; }
+#setMain .sethint { color: var(--muted); font-size: 12px; margin: 0; padding: 0 12px 8px; }
+#setMain h2 .btn { margin-left: 8px; font-size: 12px; }
+#setMain .setboard { margin-bottom: 10px; }
+#setMain .setboard h3 { font-size: 13px; margin: 6px 0 4px; }
+#setMain code, #setMain .cmd { font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }
+#setMain .runmsg { margin-top: 6px; }

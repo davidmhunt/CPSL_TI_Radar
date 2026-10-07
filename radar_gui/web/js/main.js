@@ -4,6 +4,7 @@ import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
 import { showConfigure } from './cfg.js';
 import { initSource, srcStatus, resetStats } from './source.js';
+import { showSettings } from './settings.js';
 import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
 
 // ---------- stream ----------
@@ -121,18 +122,18 @@ cv.addEventListener('wheel', e => {
 addEventListener('resize', redraw);
 
 // ---------- tabs ----------
-const HASH = { cfg: '#configure', run: '#run' };
+const HASH = { cfg: '#configure', run: '#run', settings: '#settings' };
 function tab(name) {
   [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.tab === name));
-  $('liveMain').hidden = name !== 'live'; $('cfgMain').hidden = name !== 'cfg'; $('runMain').hidden = name !== 'run';
-  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else redraw();
+  $('liveMain').hidden = name !== 'live'; $('cfgMain').hidden = name !== 'cfg'; $('runMain').hidden = name !== 'run'; $('setMain').hidden = name !== 'settings';
+  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else redraw();
   history.replaceState(null, '', HASH[name] || location.pathname);
 }
 // Configure -> Save result "Open in Run" link
 addEventListener('open-in-run', e => { tab('run'); openInRun(e.detail); });
 addEventListener('goto-tab', e => tab(e.detail));   // gui-36: Live card "Manage in Run tab" / Run "Watching in Live"
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
-if (location.hash === '#configure') tab('cfg'); else if (location.hash === '#run') tab('run');
+if (location.hash === '#configure') tab('cfg'); else if (location.hash === '#run') tab('run'); else if (location.hash === '#settings') tab('settings');
 
 if (location.hash === '#3d') $('viewSeg').children[1].click();  // link straight to the 3D view
 initSource();

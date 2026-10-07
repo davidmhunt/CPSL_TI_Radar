@@ -1,0 +1,11 @@
+{
+ "scenarios": [
+  {"name": "settings_1400", "tab": "settings", "window": [1400, 900],
+   "actions": [{"wait": 2.5}],
+   "shots": [{"file": "settings_1400.png"}],
+   "dumps": [{"file": "ports.txt", "selector": "#setPorts", "what": "text"}, {"file": "dca.txt", "selector": "#setDca", "what": "text"}]},
+  {"name": "settings_use_buttons", "tab": "settings", "window": [1400, 900],
+   "actions": [{"wait": 2.5}, {"click_text": "Use for Configure \u2192 Save"}, {"wait": 0.5}, {"click": "#tabs button[data-tab=cfg]"}, {"wait": 0.5}],
+   "dumps": [{"file": "save_ports.txt", "selector": "#cfgMain", "what": "values"}]}
+ ]
+}
