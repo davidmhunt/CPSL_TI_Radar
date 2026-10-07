@@ -358,7 +358,7 @@ class AdcProcessor:
                 self._slot = self._last_raw          # re-render the newest frame with the new options (not an input)
                 self._cv.notify()
 
-    def process_one(self, head: dict, data: bytes) -> bytes | None:
+    def process_one(self, head: dict, data: bytes, rerender: bool = False) -> bytes | None:
         t0 = time.perf_counter()
         try:
             a, partial = decode(head, data, self.geom)
@@ -370,7 +370,8 @@ class AdcProcessor:
         self.partial = partial
         self.last_error = ""
         self.proc_ms.append((time.perf_counter() - t0) * 1000.0)
-        self.adc_shown += 1
+        if not rerender:
+            self.adc_shown += 1
         return encode(res, {"index": head.get("index"), "missing_bytes": head.get("missing_bytes", 0),
                             "partial": partial, "shape": list(a.shape[:3]), **self.counters()})
 
@@ -382,8 +383,9 @@ class AdcProcessor:
                 if self._stop:
                     return
                 item, self._slot = self._slot, None
+                rerender = item is self._last_raw     # set_options re-queued the frame already shown
                 self._last_raw = item
-            msg = self.process_one(*item)
+            msg = self.process_one(*item, rerender=rerender)
             if msg is not None:
                 self.last_msg = msg
                 try:

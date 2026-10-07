@@ -63,6 +63,7 @@ function cfgChanged() {
   $('rCfgInfo').textContent = c ? c.path : '';
   // once-per-boot boards (the cascade): "already configured this power-up" needs a driver that can skip the cfg
   $('rSkipRow').hidden = !(c && c.once_per_boot);
+  adcRestore();
   const can = !R.caps || R.caps.skip_configure;
   $('rSkip').disabled = !can; if (!can) $('rSkip').checked = false;
   $('rSkipRow').lastElementChild.textContent = can ? 'Already configured this power-up (skip cfg)' : 'Skip cfg unavailable: rebuild the driver (it has no --skip-configure)';
@@ -71,6 +72,20 @@ function cfgChanged() {
 export async function openInRun(path) {
   R.wantPath = path;
   if (R.ready) { await loadConfigs(); }
+}
+
+// ---------- ADC views setting (gui-07): every frame (default) | every K | off, remembered per config ----------
+const adcKey = () => 'radar_gui.adc_every:' + cfgPath();
+function adcValue() { const v = $('rAdc').value; return v === 'k' ? Math.max(2, parseInt($('rAdcK').value, 10) || 2) : +v; }
+function adcSave() { try { localStorage.setItem(adcKey(), String(adcValue())); } catch (e) { /* private mode */ } }
+function adcShow() { $('rAdcKRow').hidden = $('rAdc').value !== 'k'; }
+function adcRestore() {
+  let v = 1; try { const s = localStorage.getItem(adcKey()); if (s != null) v = +s; } catch (e) { /* ignore */ }
+  if (v >= 2) { $('rAdc').value = 'k'; $('rAdcK').value = v; } else $('rAdc').value = v === 0 ? '0' : '1';
+  adcShow();
+  const can = !R.caps || R.caps.adc_tap !== false;   // absent on an older backend: leave it enabled
+  $('rAdcNote').textContent = can ? 'ADC tab: live views of the DCA1000 data (needs a DCA1000 config and a driver with the ADC tap).'
+    : 'ADC views unavailable: rebuild the driver (it has no --tap-adc-every).';
 }
 
 // ---------- validate / start / stop ----------
@@ -99,6 +114,7 @@ async function start() {
   const f = $('rFrames').value, d = $('rDur').value;
   if (f) body.frames = +f; if (d) body.duration = +d;
   if (!$('rSkipRow').hidden && $('rSkip').checked) body.skip_configure = true;
+  body.adc_every = adcValue(); adcSave();
   const res = await api('/api/driver/start', body);
   if (!res.ok) { msg(refusal(res)); buttons(); return; }
   R.log = []; R.stats = {}; renderLog(); renderStreams();
@@ -119,7 +135,7 @@ function buttons() {
   $('rStart').disabled = live || !cfgPath();
   $('rStop').disabled = s !== 'running';
   $('rValidate').disabled = live || !cfgPath();
-  $('rCfg').disabled = live; $('rFrames').disabled = live; $('rDur').disabled = live;
+  $('rCfg').disabled = live; $('rFrames').disabled = live; $('rDur').disabled = live; $('rAdc').disabled = live; $('rAdcK').disabled = live;
 }
 // A new run id means a new driver run: drop the previous run's transcript. (Merging, not replacing, because the
 // start response can arrive after the first WebSocket cli events of the same run.)
@@ -281,6 +297,7 @@ export function showRun() {
   R.ready = true; cliPanel = mountCliPanel($('rCli'));
   $('rCfg').addEventListener('change', cfgChanged);
   $('rWatch').onclick = () => dispatchEvent(new CustomEvent('goto-tab', { detail: 'live' }));
+  $('rAdc').addEventListener('change', () => { adcShow(); adcSave(); }); $('rAdcK').addEventListener('change', adcSave);
   $('rValidate').onclick = validate; $('rStart').onclick = start; $('rStop').onclick = stop;
   $('rHideStats').addEventListener('change', () => { pend.rebuild = true; schedule(); });
   loadConfigs().then(refresh);

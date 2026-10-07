@@ -217,3 +217,32 @@ def test_timing_bench_shape(geom, record_property):
     print(f"\nadc proc_ms median {med:.2f} ms (4x128x256, bench_1843_dca)")
     record_property("proc_ms_median", med)
     assert med < 50
+
+
+def _real_frames():
+    raw = np.fromfile(FIX / "iwr1843_bench_dca_2frames.bin", "<i2")
+    per = 256 * 4 * 128 * 2
+    assert raw.size == 2 * per
+    for f in range(2):   # file order: chirp, rx, sample, (I, Q) -> tap layout [rx][sample][chirp]
+        a = raw[f * per:(f + 1) * per].reshape(256, 4, 128, 2).transpose(1, 2, 0, 3)
+        yield f, np.ascontiguousarray(a).astype("<i2")
+
+
+def test_real_bench_frames_run_end_to_end(geom, capsys):
+    for f, a in _real_frames():
+        head = {"index": f, "shape": [4, 128, 256], "missing_bytes": 0, "layout": "rx,sample,chirp", "iq_order": "IQ"}
+        p = adc.AdcProcessor(geom)
+        msg = p.process_one(head, a.tobytes())
+        assert msg is not None and p.rejected == 0
+        hl = struct.unpack_from("<I", msg)[0]
+        h = json.loads(msg[4:4 + hl])
+        body = msg[4 + hl:]
+        arrs = {x["name"]: x for x in h["arrays"]}
+        assert arrs["rd"]["shape"] == [128, 128] and arrs["ra"]["shape"] == [64, 128] and arrs["series"]["shape"] == [4, 2, 128]
+        assert np.isfinite(np.frombuffer(body, "<f4", count=128, offset=arrs["profile"]["offset"])).all()
+        assert h["ra"] is not None and np.isfinite(h["image_ratio_db"])
+        rows = h["diag"]["rows"]
+        assert len(rows) == 4 and all(r["clipped"] == 0 and r["bits"] < 16 for r in rows)
+        print(f"real frame {f}: peak bin {h['profile_peak_bin']} image {h['image_ratio_db']:.1f} dB; "
+              f"bits {[r['bits'] for r in rows]} clipped {[r['clipped'] for r in rows]} "
+              f"rms_dbfs {[round(r['rms_dbfs'], 1) for r in rows]}")

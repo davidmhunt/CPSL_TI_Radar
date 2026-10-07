@@ -7,7 +7,7 @@ import random
 import threading
 import time
 
-from . import tap, tlv
+from . import adc, tap, tlv
 
 
 class Source:
@@ -123,12 +123,22 @@ class DriverSource(Source):
     finished_status = False   # the Hub must not overwrite the final status with "Source finished"
     NO_TAP_MSG = "driver run has no live tap (rebuild the driver)"
 
-    def __init__(self, mgr, run: int, config: str, pid: int | None, fd: int | None, adc_every: int = 0):
+    def __init__(self, mgr, run: int, config: str, pid: int | None, fd: int | None, adc_every: int = 0,
+                 adc_reason: str | None = None):
         self.mgr, self.run, self.config, self.pid, self.fd = mgr, run, config, pid, fd
+        self.adc_every, self.adc_reason = adc_every, adc_reason
+        self.adc_sink = None          # callable(bytes) set by the app: encoded ADC view messages (called from the processor thread)
+        self.geom, self.geom_err, self.processor = None, "", None
+        if fd is not None and adc_every > 0:
+            try:
+                self.geom = adc.Geometry.from_system_json(config)
+                self.processor = adc.AdcProcessor(self.geom, self._adc_out)
+            except Exception as e:   # a cfg the maths cannot read: the ADC panels say so, Live is unaffected
+                self.geom_err = f"cannot build the ADC geometry from the run's cfg: {e}"
         self.tapped = fd is not None
         self.state, self.msg = "running", "" if self.tapped else self.NO_TAP_MSG
         self.hello = None
-        self.frames_in = self.adc_in = self.skipped = 0
+        self.frames_in = self.adc_in = self.adc_bad = self.skipped = 0
         self.last_adc = None          # header of the newest adc message (plumbing for gui-07; the data is not kept)
         self.on_status = lambda s, m: None
         self._slot, self._mu, self._eof, self._stop = None, threading.Lock(), False, False
@@ -140,8 +150,41 @@ class DriverSource(Source):
     def running(self) -> bool:
         return self.state == "running"
 
+    def _adc_out(self, msg: bytes):
+        sink = self.adc_sink
+        if sink is not None:
+            sink(msg)
+
+    def adc_status(self) -> dict:
+        """State of the ADC views for this run (the /adc panels show `msg`): none/no_tap/no_dca/off/error/waiting/running/ended/died."""
+        p = self.processor
+        out = {"run": self.run, "config": self.spec["name"], "adc_every": self.adc_every, "adc_in": self.adc_in,
+               **(p.counters() if p else {})}
+        if not self.tapped:
+            return {**out, "state": "no_tap", "msg": adc.MSG_NO_TAP}
+        r = self.adc_reason
+        if r == "off":
+            return {**out, "state": "off", "msg": adc.MSG_OFF}
+        if r == "no_dca":
+            return {**out, "state": "no_dca", "msg": adc.MSG_NO_DCA}
+        if r in ("no_adc_tap", "no_tap"):
+            return {**out, "state": "no_tap", "msg": adc.MSG_NO_TAP}
+        if self.hello is not None and "adc" not in (self.hello.get("streams") or []):
+            return {**out, "state": "no_dca", "msg": adc.MSG_NO_DCA}
+        if self.geom_err:
+            return {**out, "state": "error", "msg": self.geom_err}
+        if self.state in ("ended", "died"):
+            return {**out, "state": self.state, "msg": self.msg}
+        if p is not None and p.rejected and not p.adc_shown:
+            return {**out, "state": "error", "msg": p.last_error}
+        if not self.adc_in:
+            return {**out, "state": "waiting", "msg": adc.MSG_WAIT}
+        return {**out, "state": "running", "msg": ""}
+
     def release(self):
         self._stop = True
+        if self.processor is not None:
+            self.processor.stop()
         t = self._thread
         if t is not None and t.is_alive() and t is not threading.current_thread():
             t.join(timeout=1.0)
@@ -172,8 +215,14 @@ class DriverSource(Source):
                         self.frames_in += 1
                     self._poke()
                 elif kind == tap.ADC:
-                    self.last_adc, _ = tap.decode_adc(payload)
+                    try:
+                        self.last_adc, raw = tap.decode_adc(payload)
+                    except ValueError:   # a bad adc header must not end the point-cloud stream
+                        self.adc_bad += 1
+                        continue
                     self.adc_in += 1
+                    if self.processor is not None:
+                        self.processor.submit(self.last_adc, raw)
                 # unknown types are skipped (forward compatible)
         except (tap.TapClosed, ValueError):
             pass
@@ -197,6 +246,8 @@ class DriverSource(Source):
         self._loop, self._wake = asyncio.get_running_loop(), asyncio.Event()
         if self.tapped:
             self.on_status("waiting", "driver run starting: waiting for the first frame")
+            if self.processor is not None:
+                self.processor.start()
             self._thread = threading.Thread(target=self._read, daemon=True, name="driver-tap")
             self._thread.start()
         else:

@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>CPSL Radar</h1>
-  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button><button data-tab="run">Run</button><button data-tab="settings">Settings</button></span>
+  <span class="seg" id="tabs"><button data-tab="live" class="on">Live</button><button data-tab="cfg">Configure</button><button data-tab="run">Run</button><button data-tab="adc">ADC</button><button data-tab="settings">Settings</button></span>
   <span class="pill"><span class="dot" id="dot"></span><span id="state">connecting</span></span>
   <span class="pill" id="drvPill" style="display:none"><span class="dot" id="drvDot"></span><span id="drvText"></span></span>
   <span class="pill" id="cfgName" style="display:none" title="live source"></span>
@@ -241,6 +241,11 @@
           <select id="rCfg"></select></label>
         <div class="muted" id="rCfgInfo"></div>
         <label class="chk" id="rSkipRow" hidden><input type="checkbox" id="rSkip"> <span>Already configured this power-up (skip cfg)</span></label>
+        <div class="grid2" id="rAdcRow">
+          <label>ADC views <select id="rAdc"><option value="1">every frame</option><option value="k">every K frames</option><option value="0">off</option></select></label>
+          <label id="rAdcKRow" hidden>K <input type="number" id="rAdcK" min="2" step="1" value="2"></label>
+        </div>
+        <div class="muted" id="rAdcNote">ADC tab: live views of the DCA1000 data (needs a DCA1000 config and a driver with the ADC tap).</div>
         <div class="grid2">
           <label>Frames (optional) <input type="number" id="rFrames" min="1" step="1" placeholder="until stopped"></label>
           <label>Duration s (optional) <input type="number" id="rDur" min="0.1" step="any" placeholder="until stopped"></label>
@@ -281,6 +286,30 @@
       <pre class="runpre logpane" id="rLog"></pre>
       <div id="rCli" hidden></div>
     </section>
+  </div>
+</main>
+<main id="adcMain" hidden>
+  <div class="adctop">
+    <span class="badge" id="adcState">connecting</span>
+    <span class="muted" id="adcStatMsg"></span>
+    <span class="badge warn" id="adcPartial" hidden>partial frame</span>
+    <span class="muted" id="adcCounters"></span>
+    <span class="adcopts">
+      <label class="chk"><input type="checkbox" id="adcClutter"> clutter removal</label>
+      <label class="inl">max range <input type="range" id="adcRmax" min="0" max="12" step="1" value="0"><span id="adcRmaxVal">full</span></label>
+    </span>
+  </div>
+  <div class="muted" id="adcErr" hidden></div>
+  <div class="adcgrid">
+    <section class="card"><h2>Range profile</h2><canvas id="adcProf"></canvas><div class="adcmsg" id="adcMsgProf" hidden></div></section>
+    <section class="card"><h2>Range-Doppler</h2><canvas id="adcRd"></canvas><div class="adcmsg" id="adcMsgRd" hidden></div></section>
+    <section class="card"><h2>Range-azimuth <span class="seg" id="adcRaSeg"><button data-m="cart" class="on">Cartesian</button><button data-m="polar">Polar</button></span></h2>
+      <canvas id="adcRa"></canvas><div class="adcmsg" id="adcMsgRa" hidden></div><div class="adcmsg" id="adcRaMsg" hidden></div></section>
+    <section class="card adcdiag"><h2>Diagnostics
+      <label class="inl">chirp <input type="number" id="adcChirp" min="0" step="1" value="0"></label>
+      <label class="inl">series <select id="adcRx"></select></label></h2>
+      <div class="diagbody"><canvas id="adcSeries"></canvas><canvas id="adcBits"></canvas><table class="ftbl" id="adcTable"></table></div>
+      <div class="adcmsg" id="adcMsgDiag" hidden></div></section>
   </div>
 </main>
 <main id="setMain" hidden>

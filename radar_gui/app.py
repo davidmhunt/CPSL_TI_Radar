@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import json
 import os
 import time
 
@@ -7,6 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import adc as adcmod
 from .cfgapi import make_router
 from .driver import DriverManager
 from .driver_api import make_router as make_driver_router
@@ -30,6 +32,7 @@ class Hub:
         self.frames = self.errors = self.gaps = 0
         self.last_t = None
         self.rate = 0.0
+        self.adc_sink = None   # callable(bytes) -> ADC view messages to /adc clients (set by create_app)
 
     def cfg_msg(self):
         sp = self.spec
@@ -89,7 +92,9 @@ class Hub:
 
     async def follow_driver(self, mgr, info: dict):
         """A GUI-started driver run begins: Live shows it (no radar lock to claim, the run holds it)."""
-        new = DriverSource(mgr, info["run"], info["config"], info["pid"], info.get("tap_fd"))
+        new = DriverSource(mgr, info["run"], info["config"], info["pid"], info.get("tap_fd"),
+                           info.get("adc_every") or 0, info.get("adc_reason"))
+        new.adc_sink = self.adc_sink
         try:
             await self.set_source(new, new.spec)
         except Exception:
@@ -142,6 +147,22 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
         sp = hub.spec
         return f" ({sp.get('cli_port')})" if hub.source.holds_lock and sp.get("cli_port") else ""
 
+    adc_clients = set()
+
+    def adc_publish(msg: bytes):   # processor thread -> every /adc client's 1-slot queue (newest wins)
+        loop = loop_ref.get("loop")
+        if loop is None or loop.is_closed():
+            return
+
+        def put():
+            for q in list(adc_clients):
+                if q.full():
+                    with contextlib.suppress(asyncio.QueueEmpty):
+                        q.get_nowait()
+                q.put_nowait(msg)
+        loop.call_soon_threadsafe(put)
+    hub.adc_sink = adc_publish
+
     driver = DriverManager(bin_override=driver_bin, run_root_override=run_root, emit=emit,
                            min_stop_grace=min_stop_grace, on_run=on_run, owner_detail=owner_detail)
 
@@ -184,6 +205,59 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
             pass
         finally:
             hub.clients.discard(q)
+
+    def adc_state() -> dict:
+        s = hub.source
+        if isinstance(s, DriverSource):
+            return s.adc_status()
+        return {"state": "none", "msg": adcmod.MSG_NO_RUN, "run": 0}
+
+    @app.websocket("/adc")
+    async def adc_stream(ws: WebSocket):
+        """Binary ADC views (gui-07): each message = u32 header length + JSON header + arrays (radar_gui/adc.py `encode`).
+        Separate from /stream so heatmaps never delay point frames. Newest wins per client; the browser may send
+        {"clutter": bool, "chirp": int} text messages to change the processing options."""
+        await ws.accept()
+        q = asyncio.Queue(maxsize=1)
+        adc_clients.add(q)
+
+        async def options():
+            try:
+                while True:
+                    m = json.loads(await ws.receive_text())
+                    p = getattr(hub.source, "processor", None)
+                    if p is not None and isinstance(m, dict):
+                        kw = {}
+                        if "clutter" in m:
+                            kw["clutter"] = bool(m["clutter"])
+                        if isinstance(m.get("chirp"), int) and not isinstance(m.get("chirp"), bool):
+                            kw["chirp"] = max(0, m["chirp"])
+                        p.set_options(**kw)
+            except (WebSocketDisconnect, RuntimeError, ValueError):
+                pass
+        task = asyncio.create_task(options())
+        try:
+            key, last_sent = None, 0.0
+            while not task.done():
+                st = adc_state()
+                k = (st.get("run"), st["state"], st["msg"])
+                now = time.monotonic()
+                if k != key or now - last_sent > 1.0:   # on a state change, and once a second for the counters
+                    first = key is None
+                    key, last_sent = k, now
+                    await ws.send_bytes(adcmod.encode_status(st["state"], st["msg"], {kk: v for kk, v in st.items() if kk not in ("state", "msg")}))
+                    p = getattr(hub.source, "processor", None)
+                    if first and p is not None and p.last_msg:
+                        await ws.send_bytes(p.last_msg)    # a fresh client sees the newest frame at once
+                try:
+                    await ws.send_bytes(await asyncio.wait_for(q.get(), 0.4))
+                except asyncio.TimeoutError:
+                    pass
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            adc_clients.discard(q)
+            task.cancel()
 
     @app.get("/")
     def index():

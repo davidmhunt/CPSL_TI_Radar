@@ -147,3 +147,31 @@ int16 I/Q; counted and parsed, not displayed yet). Tests: `tests/test_radar_gui_
 `tools/gui_shots_specs/gui36.json` (running, ended, died) and `gui36_notap.json`.
 
 **No source by default (gui-36 3b).** `python -m radar_gui` starts with `--source none`: the Live tab says "pick Serial or Replay, or start a driver run in the Run tab". `--source mock` remains (hidden from the UI) for tests and `tools/gui_shots.py`. The Replay card has a **TLV dialect** select (sdk2 / sdk3 / mcuplus_cascade), preset from the file name (`AWR2243_CASCADE_*` -> mcuplus_cascade, `IWR1443*` -> sdk2, else sdk3); `POST /api/source` takes `dialect` (default: the same detection). **Skip cfg (Run tab):** for once-per-boot boards (the cascade) the Run tab offers "Already configured this power-up (skip cfg)", sent as `skip_configure` and passed to the driver as `--skip-configure` only when its usage text lists the flag; otherwise the box is disabled ("rebuild the driver") and the API answers 422. `GET /api/driver/configs` carries `caps` (`tap`, `skip_configure`) and per-config `once_per_boot`.
+
+## ADC tab (gui-07)
+
+Live range profile, range-Doppler, range-azimuth and raw-ADC diagnostics from the driver tap's `adc` messages, so `save_adc_frames` can stay off.
+Needs a Run-tab driver run with a DCA1000 config and a driver whose usage text lists `--tap-fd` and `--tap-adc-every` (Rebuild 1 or later).
+
+- **Rate.** Run tab "ADC views": **every frame** (default, K=1), **every K frames**, or **off**; remembered per config in the browser and sent as
+  `adc_every` in `POST /api/driver/start` (null = 1, 0 = off). The GUI passes `--tap-adc-every K` only when K > 0, the system JSON has
+  `dca1000.enabled` and the binary lists the flag; `GET /api/driver/configs` carries `caps.adc_tap`. The processor thread keeps only the newest
+  frame: if it falls behind it drops (counted as `dropped(gui)` in the tab) and never stalls the tap reader. Median `proc` time is shown too
+  (about 30 ms for the bench 4x128x256 cube, `tests/test_radar_gui_adc.py`).
+- **Processing** (`radar_gui/adc.py`, hand-written numpy, no new dependency). Hann-windowed range FFT; the range profile shows all N bins (complex
+  1x gives positive IF only, so an I/Q swap puts a reflector at N-k and the image ratio goes negative). Range-Doppler: FFT over loops per virtual
+  channel, centre = 0 m/s, **+ = receding**. Range-azimuth: azimuth-TX slots x RX as a lambda/2 line, 64-point zero-padded FFT per loop,
+  uniform in sin(theta), **+ = toward +x**; **assumption: element index grows toward +x** (`AZ_SIGN`), to be confirmed against the Live cloud at the
+  bench. Disabled (with the reason shown) for BPM, DDMA, IWR6843ODS and fewer than 2 azimuth virtual channels. No TDM motion compensation.
+  Geometry comes from the run's system JSON and cfg, not from the tap; a different frame shape is rejected (counted) with both shapes named.
+  "clutter removal" subtracts the mean over loops per range bin (default off). Diagnostics per RX: peak I/Q, bits used, RMS dBFS, DC offsets,
+  I/Q power ratio, clipped count (|x| >= 32767), bit-usage bars, and one chirp's I/Q time series (chirp selectable).
+- **Transport.** A separate binary WebSocket `/adc` (u32 LE header length, JSON header, arrays; heatmaps uint8 over a 60 dB window, axes above
+  256 max-pooled), newest wins per client, so heatmaps never delay `/stream`. The browser may send `{"clutter": bool, "chirp": int}`. The socket
+  is open only while the ADC tab is shown.
+- **Range-azimuth views.** Cartesian (x = r sin, y = r cos; default) and Polar (angle across, range up) are drawn from the same array; toggle in the card.
+- **States** (shown in every panel): needs a driver run / driver has no live tap or ADC tap (rebuild) / this run has no DCA1000 stream / ADC views
+  off / waiting / ended or died (last frame stays).
+- **Tests and shots.** `tests/test_radar_gui_adc.py` (synthetic cube with exact bins + 2 real bench frames in `tests/fixtures/adc/`),
+  `tests/test_radar_gui_adc_api.py` (gate, `/adc`, states); `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui07.json`
+  (and `gui07_notap.json`, which needs `FAKE_DRIVER_MODE=no-tap`). Fake driver: `FAKE_DRIVER_ADC=bench` sends a synthetic bench-shaped cube.

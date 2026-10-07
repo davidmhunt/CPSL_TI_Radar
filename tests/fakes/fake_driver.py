@@ -9,7 +9,9 @@ tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using confi
 Mode "tap" writes the gui-36 live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
 inherited `--tap-fd N`, and its usage text lists --tap-fd; every other mode's usage text does not (an old binary). A config whose
 name contains "_die" SIGKILLs itself after FAKE_DRIVER_DIE_S (default 4) seconds (a crashed driver for the page).
-FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
+Tap ADC messages (--tap-adc-every K): FAKE_DRIVER_ADC=tiny (default, a 2x4x2 ramp) or bench (a synthetic 4x128x256 cube
+matching tests/fixtures/adc/bench_1843_dca.*: a mover at range bin 34, Doppler +10, ~20 deg, and a static reflector at bin 60,
+0 deg; FAKE_DRIVER_ADC_AMP scales both, e.g. 30000 for clipping). FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
 default 0) imitate a log_level debug run for the GUI lag measurement (gui-09 D8).
 """
 import json
@@ -36,7 +38,7 @@ def opt(name, cast):
 
 if "--help" in args or "-h" in args:
     print(f"usage: {sys.argv[0]} <system.json> [--validate] [--stats] [--frames N] [--duration S]" +
-          (" [--tap-fd N] [--tap-adc-every K]" if mode == "tap" else "") +
+          (" [--tap-fd N]" + ("" if os.environ.get("FAKE_DRIVER_NO_ADC_TAP") else " [--tap-adc-every K]") if mode == "tap" else "") +
           (" [--skip-configure]" if os.environ.get("FAKE_DRIVER_SKIP") else ""))
     sys.exit(0)
 
@@ -71,6 +73,15 @@ if os.environ.get("FAKE_DRIVER_CLI"):
                 print(ln.replace("\r", "\r"), flush=True)
 tapf = os.fdopen(opt("--tap-fd", int), "wb", buffering=0) if mode == "tap" and "--tap-fd" in args else None
 adc_every = opt("--tap-adc-every", int) or 0
+if mode == "tap":
+    print(f"tap: adc_every={adc_every}", flush=True)
+adc_cube = None
+if mode == "tap" and adc_every and os.environ.get("FAKE_DRIVER_ADC") == "bench":
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import synth_cube
+    amp = float(os.environ.get("FAKE_DRIVER_ADC_AMP", "4000"))
+    adc_cube = synth_cube.wire(synth_cube.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.342, "amp": amp},
+                                                         {"kr": 60, "kd": 0, "sin": 0.0, "amp": amp * 0.4}], noise=25.0))
 tap_ok = {"on": tapf is not None}
 
 
@@ -117,9 +128,13 @@ while not stop["flag"]:
         if tapf is not None:
             tap_points(frames - 1)
             if adc_every and (frames - 1) % adc_every == 0:
-                head = {"index": frames - 1, "shape": [2, 4, 2], "missing_bytes": 0, "layout": "rx,sample,chirp",
-                        "iq_order": "IQ"}
-                tap_send(3, json.dumps(head).encode() + b"\n" + struct.pack("<32h", *range(32)))
+                if adc_cube is not None:
+                    head, body = dict(adc_cube[0], index=frames - 1), adc_cube[1]
+                else:
+                    head = {"index": frames - 1, "shape": [2, 4, 2], "missing_bytes": 0, "layout": "rx,sample,chirp",
+                            "iq_order": "IQ"}
+                    body = struct.pack("<32h", *range(32))
+                tap_send(3, json.dumps(head).encode() + b"\n" + body)
         if binf:
             binf.write(b"\0" * bpf)
     if mode == "tap" and "_die" in os.path.basename(cfg) and t > float(os.environ.get("FAKE_DRIVER_DIE_S", "4")):

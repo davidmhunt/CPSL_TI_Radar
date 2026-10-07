@@ -22,6 +22,7 @@ class StartReq(ConfigReq):
     frames: int | None = Field(None, ge=1)
     duration: float | None = Field(None, gt=0)
     skip_configure: bool = False   # the board was already configured this power-up (once-per-boot boards): just stream
+    adc_every: int | None = Field(None, ge=0)   # gui-07 ADC views: null = every frame (K=1), 0 = off, K = every K-th frame
 
 
 def once_per_boot(board) -> bool:
@@ -80,7 +81,7 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
 
     @r.post("/start")
     def start(req: StartReq):
-        return call(mgr.start, resolve(req.config), req.frames, req.duration, req.skip_configure)
+        return call(mgr.start, resolve(req.config), req.frames, req.duration, req.skip_configure, req.adc_every)
 
     @r.post("/stop")
     def stop():

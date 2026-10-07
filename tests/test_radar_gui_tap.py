@@ -220,7 +220,7 @@ def test_skip_configure_gated_on_usage_text(env, monkeypatch):
                                                 "cli": {"port": json.loads((user / "rig.json").read_text())["cli"]["port"]}}))
     with make() as c:
         j = c.get("/api/driver/configs").json()
-        assert j["caps"] == {"tap": True, "skip_configure": False}
+        assert j["caps"] == {"tap": True, "skip_configure": False, "adc_tap": True}
         assert {x["name"]: x["once_per_boot"] for x in j["configs"]}["casc"] is True
         assert {x["name"]: x["once_per_boot"] for x in j["configs"]}["rig"] is False
         r = c.post("/api/driver/start", json={"config": cfgp(user, "casc"), "skip_configure": True})

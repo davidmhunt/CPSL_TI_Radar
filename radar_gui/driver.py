@@ -129,6 +129,8 @@ class DriverManager:
         self.sigint_sent = False
         self.t_start = 0.0
         self.tap = None   # "on" = run started with --tap-fd, "off" = the binary has no tap, None = no run yet
+        self.adc_every = 0        # gui-07: K passed as --tap-adc-every (0 = not passed)
+        self.adc_reason = None    # why not: "off" | "no_dca" | "no_adc_tap" | "no_tap"; None = ADC tap on
 
     # ---- validate -------------------------------------------------------------------------------
     def _bin(self) -> Path:
@@ -173,11 +175,11 @@ class DriverManager:
         except OSError:
             ok = False
         u = self._usage(b) if ok else ""
-        return {"tap": "--tap-fd" in u, "skip_configure": "--skip-configure" in u}
+        return {"tap": "--tap-fd" in u, "skip_configure": "--skip-configure" in u, "adc_tap": "--tap-adc-every" in u}
 
     # ---- start / stop ---------------------------------------------------------------------------
     def start(self, config: str | os.PathLike, frames: int | None = None, duration: float | None = None,
-              skip_configure: bool = False) -> dict:
+              skip_configure: bool = False, adc_every: int | None = None) -> dict:
         config = Path(config).resolve()
         with self._mu:
             if self.state in ("running", "stopping"):
@@ -224,9 +226,25 @@ class DriverManager:
                                "period_ms": (val["frame"] or {}).get("period_ms")}
                 self.t_start = time.time()
                 rfd = wfd = None
-                if self.tap_supported(b):
+                tap_ok = self.tap_supported(b)
+                # gui-07 ADC views: K = None -> every frame (1), 0 = off. Passed only when the run has a DCA1000 stream and
+                # the binary's usage text lists --tap-adc-every (an older build keeps working without it).
+                k = 1 if adc_every is None else max(0, int(adc_every))
+                reason = None
+                if k == 0:
+                    reason = "off"
+                elif not (sysjson.get("dca1000") or {}).get("enabled"):
+                    reason = "no_dca"
+                elif not tap_ok:
+                    reason = "no_tap"
+                elif "--tap-adc-every" not in self._usage(b):
+                    reason = "no_adc_tap"
+                self.adc_every, self.adc_reason = (0, reason) if reason else (k, None)
+                if tap_ok:
                     rfd, wfd = os.pipe()
                     cmd += ["--tap-fd", str(wfd)]
+                    if self.adc_every:
+                        cmd += ["--tap-adc-every", str(self.adc_every)]
                 try:
                     self.proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                                  stdin=subprocess.DEVNULL, text=True, bufsize=1,
@@ -251,7 +269,8 @@ class DriverManager:
             if self.on_run is not None:
                 try:
                     taken = bool(self.on_run({"run": self.run_id, "config": self.config, "pid": self.proc.pid,
-                                              "tap_fd": rfd, "tap": self.tap}))
+                                              "tap_fd": rfd, "tap": self.tap,
+                                              "adc_every": self.adc_every, "adc_reason": self.adc_reason}))
                 except Exception:
                     taken = False
             if rfd is not None and not taken:
@@ -453,4 +472,5 @@ class DriverManager:
                     "error": self.error, "stats": dict(self.stats), "log": list(self.log)[-100:] if log else [],
                     "run": self.run_id, "cli": [dict(e) for e in self.cli] if log else [], "cli_first_fail": first_fail(self.cli),
                     "files": list(self.files), "bin_verdict": self.bin_verdict,
-                    "radar_owner": self.lock.owner, "tap": self.tap}
+                    "radar_owner": self.lock.owner, "tap": self.tap,
+                    "adc_every": self.adc_every, "adc_reason": self.adc_reason}

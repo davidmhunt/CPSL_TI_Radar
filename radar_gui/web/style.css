@@ -255,3 +255,22 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 #setMain .setboard h3 { font-size: 13px; margin: 6px 0 4px; }
 #setMain code, #setMain .cmd { font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }
 #setMain .runmsg { margin-top: 6px; }
+
+/* ADC tab (gui-07) */
+#adcMain { display: flex; flex-direction: column; gap: 8px; }
+#adcMain .adctop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+#adcMain .adcopts { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+#adcMain label.inl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+#adcMain label.inl input[type=number] { width: 64px; }
+#adcMain label.inl input[type=range] { width: 90px; }
+.adcgrid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(220px, 1fr) minmax(220px, 1fr); gap: 12px; }
+.adcgrid .card canvas { min-height: 120px; }
+.adcmsg { position: absolute; left: 12px; right: 12px; top: 44px; color: var(--muted); font-size: 13px; background: var(--panel); padding: 8px; border: 1px dashed var(--line); border-radius: 6px; z-index: 1; }
+#adcRaMsg { top: auto; bottom: 8px; }
+.adcdiag .diagbody { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 6px 10px; padding: 0 10px 8px; }
+.adcdiag .diagbody canvas { min-height: 80px; height: 100%; }
+.adcdiag .ftbl { grid-column: 1 / 3; font-size: 12px; width: 100%; }
+.adcdiag .ftbl th, .adcdiag .ftbl td { text-align: right; padding: 1px 6px; }
+.adcdiag .ftbl tr.badrow td { color: var(--bad); }
+.rxdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+@media (max-width: 1000px) { .adcgrid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(260px, auto); } #adcMain { height: auto; } .adcdiag .diagbody { grid-template-columns: 1fr; } .adcdiag .diagbody canvas { height: 170px; } .adcdiag .ftbl { grid-column: 1; } }
