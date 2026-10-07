@@ -58,8 +58,19 @@ def test_angle_bins(geom, deg):
     s = math.sin(math.radians(deg))
     r = run(geom, sc.cube(targets=[{"kr": 50, "sin": s}]))
     assert r.header["ra"]["peak"] == [round(32 + 32 * s), 50]
-    # +theta is toward +x: the bin index grows with sin(theta)
+    # right (+x) is a POSITIVE angle: the bin index grows with sin(theta). Bench-confirmed for the IWR1843 (2026-10-07);
+    # the synthetic cube encodes the hardware's element ordering (index grows toward -x), see adc.AZ_SIGN_BY_BOARD.
+    if deg > 0:
+        assert r.header["ra"]["peak"][0] > r.header["ra"]["sin_zero_bin"]
+    elif deg < 0:
+        assert r.header["ra"]["peak"][0] < r.header["ra"]["sin_zero_bin"]
     assert r.header["ra"]["sin_zero_bin"] == 32
+
+
+def test_az_sign_per_board(geom):
+    assert geom.board == "IWR1843" and geom.az_sign == -1
+    assert adc.az_sign_for("IWR1843") == -1                       # bench-confirmed
+    assert adc.az_sign_for("IWR6843") == adc.az_sign_for(None) == adc.AZ_SIGN_DEFAULT   # assumption, unverified
 
 
 def test_iq_swap_moves_peak_and_flips_image_ratio(geom):

@@ -10,9 +10,9 @@ Conventions (all pinned by tests/test_radar_gui_adc.py against hand-computed bin
   * Doppler: FFT over loops, fftshifted, bin D/2 = 0. A signal exp(+j w l) (range increasing, "receding") peaks at a
     positive bin, matching the Live cloud's "+ = receding".
   * Angle: the azimuth virtual array is the azimuth-TX slots x RX in TX order, position m = slot_index * n_rx + rx,
-    element spacing lambda/2. A target at +theta (toward +x) gives element phase -pi*m*sin(theta) (shorter path to the
-    elements at larger x). ASSUMPTION: element index increases toward +x. Bench Step 3(c) checks the side against the
-    Live cloud; flip `AZ_SIGN` if it is mirrored.
+    element spacing lambda/2. A target at +theta (toward +x) gives element phase +pi*m*sin(theta) on the hardware (element index
+    grows toward -x), so the angle FFT is mirrored (`az_sign_for(board)` = -1) to put +theta = right = +x, like the Live cloud.
+    BENCH-CONFIRMED for the IWR1843 only (2026-10-07, bench_1843_dca); see AZ_SIGN_BY_BOARD.
 """
 from __future__ import annotations
 
@@ -33,7 +33,14 @@ from .cfg import firmware as fwmod
 mt = importlib.import_module("radar_gui.cfg.metrics")   # `radar_gui.cfg.metrics` the module (the package re-exports the function)
 from .cfg.parse import Cfg, CfgError, parse_cfg_file
 
-AZ_SIGN = 1                 # +1: sin(theta) = +(bin - A/2) / (A/2); see the module docstring
+# Azimuth sign: +1 = element index grows toward +x, -1 = toward -x (the angle axis is mirrored so right = +angle = +x).
+# BENCH RESULT (user, 2026-10-07, IWR1843 + DCA1000, bench_1843_dca, Raw ADC tab): the firmware point cloud puts left at
+# -x (right = +x) but the unflipped range-azimuth showed right as a negative angle, i.e. the IWR1843 element index grows
+# toward -x -> -1. Only the IWR1843 is bench-confirmed; the other boards are ASSUMED to share the TI single-chip
+# EVM antenna layout (same RX/TX ordering) and are not verified. There is no per-board sign in config/boards/*.json,
+# so it lives here keyed by board name; confirm each other board on the bench and add it.
+AZ_SIGN_BY_BOARD = {"IWR1843": -1}      # bench-confirmed
+AZ_SIGN_DEFAULT = -1                    # ASSUMPTION for IWR1443 / IWR6843 / unknown boards (not bench-verified)
 ANGLE_BINS = 64             # zero-padded angle FFT size
 FULL_SCALE = 32768.0
 DB_FLOOR = 1e-3             # added to power before 10*log10
@@ -48,6 +55,10 @@ MSG_NO_TAP = "driver has no live tap / no ADC tap (rebuild the driver)"
 MSG_NO_DCA = "this run has no DCA1000 stream"
 MSG_OFF = "ADC views off for this run"
 MSG_WAIT = "waiting for ADC frames…"
+
+
+def az_sign_for(board: str | None) -> int:
+    return AZ_SIGN_BY_BOARD.get(board or "", AZ_SIGN_DEFAULT)
 
 
 def pow2(x: int) -> int:
@@ -73,6 +84,7 @@ class Geometry:
     doppler_bins: int
     frame_rate_hz: float
     board: str = ""
+    az_sign: int = AZ_SIGN_DEFAULT   # see AZ_SIGN_BY_BOARD
     ra_reason: str = ""              # non-empty = the range-azimuth view is disabled, with the reason
     notes: list[str] = field(default_factory=list)
 
@@ -113,7 +125,7 @@ class Geometry:
         return cls(n_rx=m.n_rx, n_samples=m.num_samples, n_loops=m.n_loops, cpl=m.chirps_per_loop, slot_masks=masks,
                    az_slots=az_slots, range_res_m=m.range_res_m, loop_period_s=m.loop_period_us * 1e-6,
                    lambda_m=m.lambda_mm * 1e-3, doppler_bins=pow2(m.n_loops), frame_rate_hz=m.frame_rate_hz,
-                   board=board or "", ra_reason=reason, notes=list(m.notes))
+                   board=board or "", az_sign=az_sign_for(board), ra_reason=reason, notes=list(m.notes))
 
     @classmethod
     def from_system_json(cls, path) -> "Geometry":
@@ -254,8 +266,8 @@ def process(a: np.ndarray, geom: Geometry, opts: dict | None = None) -> Result:
         v = v.transpose(2, 1, 3, 0).reshape(nl, nf, len(az) * rx)         # position m = slot_index * rx + rx
         ang = np.fft.fftshift(np.fft.ifft(v, n=ANGLE_BINS, axis=2) * v.shape[2], axes=2)
         ra = (ang.real ** 2 + ang.imag ** 2).sum(axis=0).T                # [ANGLE_BINS, nf]
-        if AZ_SIGN < 0:
-            ra = ra[::-1]
+        if geom.az_sign < 0:
+            ra = np.roll(ra[::-1], 1, axis=0)         # mirror about the zero bin: j -> (A - j) % A (a bare [::-1] would shift by one)
         ra_db = _db(ra)
         rap, ra_f = maxpool(ra_db, 1, MAX_POOL)
         ra_u8, ra_lo, ra_hi = to_u8(rap)
