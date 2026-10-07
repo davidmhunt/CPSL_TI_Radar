@@ -20,6 +20,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -83,6 +84,10 @@ private:
     //Read up to `want` more bytes into rx_ (one read_some, at most 100 ms so
     //close() is seen). False on deadline, close() or a port error.
     bool read_more(size_t want, clock::time_point deadline);
+    //the body of process_next_message (which flushes the raw-byte file after it)
+    bool process_next_message_impl(void);
+    //output.save_serial_bytes: append what read_more just read (reader thread)
+    void write_raw(const uint8_t * data, size_t n);
     //drop the first n bytes of rx_
     void discard(size_t n);
     //publish work_ (swaps its points with the published buffer)
@@ -112,6 +117,12 @@ private:
     bool have_previous_frame_ = false;
     uint32_t previous_frame_number_ = 0;
     uint32_t missed_frame_count_ = 0;
+
+    //output.save_serial_bytes: serial_data.bin, written on the reader thread
+    //through a buffered stream; a write error warns once and stops writing
+    std::ofstream raw_out_;
+    std::vector<char> raw_buf_;
+    bool raw_failed_ = false;
 
     std::atomic<bool> closed_{false};
     std::atomic<int64_t> last_frame_ns_{0};

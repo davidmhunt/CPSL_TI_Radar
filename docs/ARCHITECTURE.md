@@ -380,6 +380,12 @@ two 2-byte writes per sample, about 252 000 per frame). The write happens
 after the frame is queued, so the consumer does not wait for the disk. With
 `output.save_raw_lvds`, `LVDS_Raw_0.bin` gets every packet's payload as it
 arrives (no reordering or zero fill). `stop()` flushes and closes both.
+With `output.save_serial_bytes` (serial streams; off by default),
+`SerialStreamer` writes the data-port bytes exactly as `read_some` returned
+them (before framing, so junk between frames is kept) to `serial_data.bin` in
+`output.dir`. The write is on the reader thread through a 64 kB buffered
+stream, flushed whenever `process_next_message` returns; a write error logs
+one warning and stops saving without stopping the stream.
 
 ## Serial TLV path
 

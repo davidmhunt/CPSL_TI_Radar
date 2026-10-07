@@ -141,6 +141,7 @@ void SystemConfigReader::reset() {
     output_dir.clear();
     save_adc_frames = false;
     save_raw_lvds = false;
+    save_serial_bytes = false;
     log_level = LogLevel::info;
     frame_queue_depth = kDefaultFrameQueueDepth;
     stall_timeout_ms = 0;
@@ -363,7 +364,7 @@ bool SystemConfigReader::load() {
     if (data.contains("output")) {
         const json& o = data.at("output");
         const std::string p = "/output";
-        if (!r.object(o, p, {"dir", "save_adc_frames", "save_raw_lvds"})) return failed();
+        if (!r.object(o, p, {"dir", "save_adc_frames", "save_raw_lvds", "save_serial_bytes"})) return failed();
         if (o.contains("dir")) {
             std::string dir;
             if (!r.str(o, "dir", p, dir)) return failed();
@@ -371,6 +372,7 @@ bool SystemConfigReader::load() {
         }
         if (o.contains("save_adc_frames") && !r.boolean(o, "save_adc_frames", p, save_adc_frames)) return failed();
         if (o.contains("save_raw_lvds") && !r.boolean(o, "save_raw_lvds", p, save_raw_lvds)) return failed();
+        if (o.contains("save_serial_bytes") && !r.boolean(o, "save_serial_bytes", p, save_serial_bytes)) return failed();
     }
 
     // runtime: optional; every key is applied (rx_cpu, worker_cpu, rx_priority

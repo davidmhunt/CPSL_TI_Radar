@@ -8,6 +8,10 @@
 #include "SerialStreamer.hpp"
 
 #include <chrono>
+#include <cstdio>
+#include <fstream>
+#include <iterator>
+#include <sstream>
 #include <cmath>
 #include <memory>
 #include <mutex>
@@ -379,6 +383,89 @@ TEST_CASE(point_buffers_are_reused) {
         if (k > 3 && std::find(seen.begin(), seen.end(), pts.data()) == seen.end()) seen.push_back(pts.data());
     }
     CHECK(seen.size() <= 3u);
+}
+
+namespace {
+// the system JSON of write_serial_config with output.save_serial_bytes = `on`
+// and output.dir = a fresh directory under TEST_TMP_DIR
+std::string raw_dir(const std::string& name) {
+    const std::string d = std::string(TEST_TMP_DIR) + "/" + name + "_out";
+    std::string cmd = "rm -rf '" + d + "' && mkdir -p '" + d + "'";
+    CHECK(std::system(cmd.c_str()) == 0);
+    return d;
+}
+SystemConfigReader raw_config(const std::string& name, const std::string& dir, bool on) {
+    const std::string path = write_serial_config(name, TEST_TMP_DIR);
+    std::ifstream in(path);
+    std::string txt((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    const std::string from = "\"output\": {\"dir\": \"" + std::string(TEST_TMP_DIR) + "\"";
+    const size_t at = txt.find(from);
+    CHECK(at != std::string::npos);
+    txt.replace(at, from.size(),
+                "\"output\": {\"save_serial_bytes\": " + std::string(on ? "true" : "false") + ", \"dir\": \"" + dir + "\"");
+    std::ofstream(path) << txt;
+    return SystemConfigReader(path);
+}
+std::string slurp(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+}  // namespace
+
+TEST_CASE(save_serial_bytes_writes_the_stream_exactly) {
+    const std::string dir = raw_dir("ss_raw_on");
+    SystemConfigReader sys = raw_config("ss_raw_on", dir, true);
+    CHECK(sys.initialized);
+    CHECK(sys.get_save_serial_bytes());
+    auto port = std::make_shared<FakeDataPort>(13);  // odd read sizes
+    SerialStreamer s;
+    CHECK(s.initialize(sys, port));
+    std::string expect;
+    auto push = [&](const Bytes& b) {
+        port->push(b);
+        expect.append(b.begin(), b.end());
+    };
+    push(Bytes{1, 2, 3, 4, 5});  // junk before the first magic word is kept too
+    push(make_frame(1, {points_tlv(2, 1.0f), side_info_tlv(2)}));
+    push(make_frame(2, {}));
+    push(Bytes{9, 9, 9});
+    push(make_frame(3, {points_tlv(1, 0.0f)}));
+    for (int k = 0; k < 3; k++) CHECK(s.process_next_message());
+    CHECK_EQ(s.get_committed_frame_count(), 3u);
+    CHECK(slurp(dir + "/serial_data.bin") == expect);  // flushed on return
+}
+
+TEST_CASE(save_serial_bytes_off_writes_no_file) {
+    const std::string dir = raw_dir("ss_raw_off");
+    SystemConfigReader sys = raw_config("ss_raw_off", dir, false);
+    CHECK(!sys.get_save_serial_bytes());
+    auto port = std::make_shared<FakeDataPort>();
+    SerialStreamer s;
+    CHECK(s.initialize(sys, port));
+    port->push(make_frame(1, {}));
+    CHECK(s.process_next_message());
+    std::ifstream f(dir + "/serial_data.bin");
+    CHECK(!f.is_open());
+}
+
+TEST_CASE(save_serial_bytes_defaults_to_off) {
+    SystemConfigReader sys(write_serial_config("ss_raw_default", TEST_TMP_DIR));
+    CHECK(sys.initialized);
+    CHECK(!sys.get_save_serial_bytes());
+}
+
+TEST_CASE(save_serial_bytes_rejects_a_non_boolean) {
+    const std::string path = write_serial_config("ss_raw_bad", TEST_TMP_DIR);
+    std::ifstream in(path);
+    std::string txt((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    const size_t at = txt.find("\"save_raw_lvds\"");
+    CHECK(at != std::string::npos);
+    txt.insert(at, "\"save_serial_bytes\": 3, ");
+    std::ofstream(path) << txt;
+    SystemConfigReader sys(path);
+    CHECK(!sys.initialized);
 }
 
 TEST_MAIN()

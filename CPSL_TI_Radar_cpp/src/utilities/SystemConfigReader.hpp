@@ -107,6 +107,8 @@ class SystemConfigReader {
         std::string get_output_dir() const { return output_dir; }
         bool get_save_adc_frames() const { return save_adc_frames; }
         bool get_save_raw_lvds() const { return save_raw_lvds; }
+        // serial data-port bytes as read, to serial_data.bin in output.dir
+        bool get_save_serial_bytes() const { return save_serial_bytes; }
         // output_dir + "/" + name, or just name when output_dir is ""
         std::string get_output_path(const std::string& name) const;
 
@@ -171,6 +173,7 @@ class SystemConfigReader {
         std::string output_dir;
         bool save_adc_frames;
         bool save_raw_lvds;
+        bool save_serial_bytes;
 
         LogLevel log_level;
         uint32_t frame_queue_depth;

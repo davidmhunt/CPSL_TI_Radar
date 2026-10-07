@@ -20,6 +20,7 @@ constexpr std::chrono::milliseconds kReadSlice(100);
 bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader){
     stream_.reset();  //closes a port this streamer opened before
     initialized = false;
+    raw_out_.close();
     if(!systemConfigReader.initialized){
         cpsl::radar::log_error("attempted to initialize the serial streamer, ",
                                "but system_config_reader was not initialized");
@@ -57,6 +58,19 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader,
         previous_frame_number_ = 0;
         missed_frame_count_ = 0;
     }
+    raw_failed_ = false;
+    if(initialized && system_config_reader.get_save_serial_bytes()){
+        //64 kB buffer: the file is written in large blocks, not per read
+        raw_buf_.resize(64 * 1024);
+        raw_out_.clear();
+        raw_out_.rdbuf()->pubsetbuf(raw_buf_.data(), static_cast<std::streamsize>(raw_buf_.size()));
+        const std::string path = system_config_reader.get_output_path("serial_data.bin");
+        raw_out_.open(path, std::ios::out | std::ios::binary | std::ios::trunc);
+        if(!raw_out_.is_open()){
+            cpsl::radar::log_error("Failed to open or create ", path);
+            initialized = false;
+        }
+    }
     closed_.store(false);
     last_frame_ns_.store(0, std::memory_order_relaxed);
     io_error_.store(false, std::memory_order_relaxed);
@@ -65,6 +79,29 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader,
 }
 
 bool SerialStreamer::process_next_message(void){
+    const bool ok = process_next_message_impl();
+    if(raw_out_.is_open() && !raw_failed_){
+        raw_out_.flush();
+        if(!raw_out_){
+            raw_failed_ = true;
+            cpsl::radar::log_warn("SerialStreamer: writing serial_data.bin failed; the raw bytes are no longer ",
+                                  "saved (the stream continues)");
+        }
+    }
+    return ok;
+}
+
+void SerialStreamer::write_raw(const uint8_t * data, size_t n){
+    if(raw_failed_ || !raw_out_.is_open() || n == 0) return;
+    raw_out_.write(reinterpret_cast<const char *>(data), static_cast<std::streamsize>(n));
+    if(!raw_out_){
+        raw_failed_ = true;
+        cpsl::radar::log_warn("SerialStreamer: writing serial_data.bin failed; the raw bytes are no longer ",
+                              "saved (the stream continues)");
+    }
+}
+
+bool SerialStreamer::process_next_message_impl(void){
 
     if(!stream_){
         return false;
@@ -157,6 +194,7 @@ bool SerialStreamer::read_more(size_t want, clock::time_point deadline){
         return false;
     }
     io_error_.store(false, std::memory_order_relaxed);
+    write_raw(rx_.data() + rx_len_, std::min(n, want));
     rx_len_ += std::min(n, want);
     return true;
 }

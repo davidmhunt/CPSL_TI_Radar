@@ -40,6 +40,8 @@ static void print_usage(const char* prog){
               << "                 the parent process passed in; never slows the run; SIGPIPE is ignored and a\n"
               << "                 closed pipe only disables the tap (docs/ARCHITECTURE.md, \"Live tap\")\n"
               << "  --tap-adc-every K  with --tap-fd: also send every K-th ADC frame (DCA1000 runs; K >= 1)\n"
+              << "Output flags (system.json \"output\"): save_adc_frames (adc_data.bin), save_raw_lvds\n"
+              << "                 (LVDS_Raw_0.bin), save_serial_bytes (serial_data.bin: the data-port bytes as read)\n"
               << "Without --frames/--duration the run ends on Ctrl-C (SIGINT/SIGTERM), or when no\n"
               << "frame arrives for 2 s (runtime.stall_timeout_ms instead, when it is set)."
               << std::endl;
