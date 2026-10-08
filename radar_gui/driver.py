@@ -51,6 +51,31 @@ _ERR_TOKENS = ("Error", "not recognized")
 _STOP_PENDING = ("stats v1", "warning:", "error:", "SerialStreamer", "Received ", "no frame")
 
 
+# gui-33: the driver's firmware identity check (Radar.cpp check_firmware_identity). One verdict line per run:
+#   [warning: ]firmware: <match|mismatch|skipped|unknown> expected=<fw> found=<fields | not queried | no reply>
+# and detail lines: the fatal/warn mismatch message (carries the flash hint), the skipped reason, the unknown reason.
+_FW_RE = re.compile(r"^(?:warning: |error: )?firmware: (?P<verdict>match|mismatch|skipped|unknown) expected=(?P<exp>\S+) found=(?P<found>.*)$")
+_FW_HINT_RE = re.compile(r"firmware mismatch on \S+: system JSON expects .*?Flash it: (?P<hint>.+?), or set runtime\.firmware_check")
+_FW_SKIP_RE = re.compile(r"Radar: firmware check skipped: (?P<d>.+)$")
+_FW_UNK_RE = re.compile(r"Radar: could not confirm the firmware on \S+ \((?P<d>.*)\); sending the cfg anyway")
+
+
+def parse_firmware_line(line: str) -> dict | None:
+    """The `firmware:` verdict line -> {verdict, expected, found} (None for any other line)."""
+    m = _FW_RE.match(line.replace("\r", "").strip())
+    return {"verdict": m["verdict"], "expected": m["exp"], "found": m["found"].strip()} if m else None
+
+
+def parse_firmware_extra(line: str) -> dict:
+    """A detail line of the firmware check -> {hint} (mismatch message) or {detail} (skipped / unknown reason); {} otherwise."""
+    t = line.replace("\r", "").strip()
+    if (m := _FW_HINT_RE.search(t)):
+        return {"hint": m["hint"]}
+    if (m := _FW_SKIP_RE.search(t)) or (m := _FW_UNK_RE.search(t)):
+        return {"detail": m["d"]}
+    return {}
+
+
 def clean_reply(lines, drop_done: bool) -> str:
     """Reply lines -> one line: newlines as ' | ', optional lone 'Done' dropped, capped at CLI_REPLY_MAX chars."""
     keep = [ln for ln in lines if not (drop_done and ln == "Done")]
@@ -180,6 +205,7 @@ class DriverManager:
         self.t_start = 0.0
         self.label = self.session_json = self._logf = None   # gui-37: display label, the run's session.json, driver.log handle
         self.saving, self.fw_id, self.notes = {}, None, []
+        self.fw_check = None      # gui-33: the driver's `firmware:` verdict line, parsed (parse_firmware_line); None = no line seen
         self.tap = None   # "on" = run started with --tap-fd, "off" = the binary has no tap, None = no run yet
         self.adc_every = 0        # gui-07: K passed as --tap-adc-every (0 = not passed)
         self.adc_reason = None    # why not: "off" | "no_dca" | "no_adc_tap" | "no_tap"; None = ADC tap on
@@ -350,7 +376,7 @@ class DriverManager:
                                               "tap_fd": rfd, "tap": self.tap,
                                               "adc_every": self.adc_every, "adc_reason": self.adc_reason,
                     "label": self.label, "session_json": self.session_json, "saving": dict(self.saving),
-                    "firmware": self.fw_id, "notes": list(self.notes)}))
+                    "firmware": self.fw_id, "firmware_check": None, "notes": list(self.notes)}))
                 except Exception:
                     taken = False
             if rfd is not None and not taken:
@@ -441,6 +467,7 @@ class DriverManager:
                 self._flush_timer.daemon = True
                 self._flush_timer.start()
             cli_events = self._cli_line(line)
+            fw_msg = self._firmware_line(line)
             n = len(self.parser.events)
             self.parser.feed(t, line)
             msg = None
@@ -460,6 +487,22 @@ class DriverManager:
             self.emit(msg)
         for ev in cli_events:
             self.emit(ev)
+        if fw_msg:
+            self.emit(fw_msg)
+
+    def _firmware_line(self, line):
+        """gui-33: fold the driver's firmware-check output into `fw_check`; returns the driver_firmware event on a change.
+        Caller holds the lock."""
+        new = parse_firmware_line(line)
+        if new is not None:
+            self.fw_check = new
+        elif self.fw_check is not None and (extra := parse_firmware_extra(line)):
+            if all(self.fw_check.get(k) == v for k, v in extra.items()):
+                return None
+            self.fw_check = {**self.fw_check, **extra}
+        else:
+            return None
+        return {"type": "driver_firmware", "run": self.run_id, "firmware_check": dict(self.fw_check)}
 
     def _flush_log(self):
         """Send the buffered output lines as one driver_log_batch (order kept). A page that drops the oldest message on
@@ -584,4 +627,5 @@ class DriverManager:
                     "radar_owner": self.lock.owner, "tap": self.tap,
                     "adc_every": self.adc_every, "adc_reason": self.adc_reason,
                     "label": self.label, "session_json": self.session_json, "saving": dict(self.saving),
-                    "firmware": self.fw_id, "notes": list(self.notes), "boot": self.boot}
+                    "firmware": self.fw_id, "firmware_check": dict(self.fw_check) if self.fw_check else None,
+                    "notes": list(self.notes), "boot": self.boot}

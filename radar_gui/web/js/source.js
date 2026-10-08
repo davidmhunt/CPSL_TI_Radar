@@ -3,7 +3,7 @@
 // Status text arrives through main.js (setStatus) -> srcStatus().
 import { $ } from './state.js';
 import { mountCliPanel } from './cli_panel.js';
-import { api, detailText, D, SS, spec, specChanged, specReady, specLabel, specBoard, onceBoard, skipEffective, skipSupported, cfgSentHere,
+import { api, fwVerdictView, detailText, D, SS, spec, specChanged, specReady, specLabel, specBoard, onceBoard, skipEffective, skipSupported, cfgSentHere,
   cfgsFor, boardInfo, FLAGS, flagEff, hasSetup, caps, fill, splitBy, view, onSession, startSession, stopSession, refreshSrc, boardLive, blockedReason } from './session.js';
 
 const C = { kind: 'board', files: [], ready: false, busy: false, userKind: false };
@@ -50,6 +50,8 @@ function showFirmware() {
   const el = $('srcFw'), d = SS.drv, show = boardLive() || ['exited', 'failed'].includes(d.state);
   const fw = d.firmware; el.hidden = !(show && fw);
   if (el.hidden) return;
+  const vv = fwVerdictView(d.firmware_check);
+  if (vv) { el.textContent = vv.text; el.className = 'runmsg ' + vv.cls; return; }
   el.textContent = `Firmware: ${fw} · ` + (caps().firmware_check ? 'checked by the driver at start (verdict in the Radar log)' : 'not checked (this driver build has no firmware check)');
   el.className = 'runmsg ' + (caps().firmware_check ? 'ok' : 'warn');
 }

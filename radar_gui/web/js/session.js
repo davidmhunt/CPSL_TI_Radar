@@ -142,12 +142,26 @@ function evidence() {
   const bad = SS.cli.some(e => e.verdict === 'ERROR' || e.verdict === 'TIMEOUT');
   if (bad) markSent(b, false); else if (SS.cli.some(e => e.verdict === 'DONE')) markSent(b, true);
 }
+// gui-33: the driver's firmware identity verdict (status.firmware_check = {verdict, expected, found, hint?, detail?}) as one
+// line + a colour class, shared by the Radar and Point cloud tabs. null = no verdict (older driver or backend, or no check yet).
+export function fwVerdictView(fc) {
+  if (!fc || !fc.verdict) return null;
+  const exp = fc.expected || '?', found = fc.found || '';
+  if (fc.verdict === 'match') return { cls: 'ok', text: `Firmware: ${exp} \u00b7 match \u2014 board answered ${found}` };
+  if (fc.verdict === 'mismatch') return { cls: 'bad', text: `Firmware mismatch: the config expects ${exp}, the board answered ${found}.` +
+    (fc.hint ? ` Flash it: ${fc.hint}` : ' See the log for the flash command.') + ' Or set the firmware check to "warn".' };
+  if (fc.verdict === 'skipped') return { cls: 'warn', text: `Firmware: ${exp} \u00b7 check skipped (the board was not asked)` + (fc.detail ? ` \u2014 ${fc.detail}` : '') };
+  return { cls: 'warn', text: `Firmware: ${exp} \u00b7 not confirmed (${fc.found || 'no reply'})` + (fc.detail ? ` \u2014 ${fc.detail}` : '') + '; the cfg was sent anyway' };
+}
 export function feedMessage(m) {
   if (m.type === 'driver_state') { const was = live(); mergeDrv(m); if (was && !live()) loadData(); }   // a run ended: new captures may be replayable
   else if (m.type === 'driver_cli') {
     if (m.run != null && m.run !== SS.runId) { SS.runId = m.run; SS.cli = []; }
     const k = SS.cli.findIndex(e => e.seq === m.entry.seq); if (k >= 0) SS.cli[k] = m.entry; else SS.cli.push(m.entry);
     evidence();
+  } else if (m.type === 'driver_firmware') {
+    if (m.run != null && m.run !== SS.runId) { SS.runId = m.run; SS.cli = []; SS.drv = { log: [] }; }
+    SS.drv.firmware_check = m.firmware_check;
   } else if (m.type === 'driver_stats') SS.drv.stats = { ...(SS.drv.stats || {}), [m.stream]: m.stats };
   else if (m.type === 'status') SS.stream = { state: m.state, msg: m.msg || '' };
   else if (m.type === 'driver_log_batch') { if (m.run === SS.runId) SS.drv.log = [...(SS.drv.log || []), ...m.lines].slice(-60); return; }

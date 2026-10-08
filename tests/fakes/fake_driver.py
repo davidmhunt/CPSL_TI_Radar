@@ -3,7 +3,7 @@
 
 argv: <system.json> [--validate] [--stats] [--frames N] [--duration S]
 Mode comes from FAKE_DRIVER_MODE (default "run"): run | crash | ignore-sigint | validate-invalid |
-write-bin | stall | tap | no-tap.  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
+write-bin | stall | tap | no-tap.  FAKE_DRIVER_FW=match|mismatch|skipped|unknown|by-config prints the driver's `firmware:` check lines (gui-33).  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
 FAKE_DRIVER_PERIOD_MS (default 100). FAKE_DRIVER_CLI=debug|info|ok (or by-config: ok when the config name contains "_ok", else debug) replays the board command transcript of
 tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using config", ending in a rejected sensorStart.
 Mode "tap" writes the gui-36 live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
@@ -86,6 +86,30 @@ if os.environ.get("FAKE_DRIVER_CLI"):
         for ln in f.read().split("\n"):
             if ln and not ln.startswith(("stats v1", "Using config")):
                 print(ln.replace("\r", "\r"), flush=True)
+# gui-33: FAKE_DRIVER_FW=match|mismatch|skipped|unknown prints the real driver's `firmware:` lines (Radar.cpp) before the run;
+# mismatch ends the run like the real driver does (firmware_mismatch, exit 1, no cfg sent).
+_fw = os.environ.get("FAKE_DRIVER_FW")
+if _fw == "by-config":   # the verdict comes from the config path (session.json sits in a run folder named after the config)
+    _fw = next((k for k in ("mismatch", "skipped", "unknown", "match") if f"_fw{k}" in cfg), None)
+if _fw:
+    _exp = os.environ.get("FAKE_DRIVER_FW_EXPECTED", "demo")
+    _ok = "platform=xWR18xx sdk=03.06.02.00 device=IWR18xx ES 02.00"
+    _hint = f"./fw flash {_exp}"
+    print("garbage: firmware match", flush=True)
+    if _fw == "match":
+        print(f"firmware: match expected={_exp} found={_ok}", flush=True)
+    elif _fw == "skipped":
+        print("firmware: skipped expected=cascade_ddm found=not queried", flush=True)
+        print("Radar: firmware check skipped: once-per-power-up board, identify entry is not once_safe", flush=True)
+    elif _fw == "unknown":
+        print(f"warning: firmware: unknown expected={_exp} found=no reply", flush=True)
+        print("warning: Radar: could not confirm the firmware on /dev/ttyACM0 (no reply to version); sending the cfg anyway", flush=True)
+    elif _fw == "mismatch":
+        _found = "platform=xWR18xx sdk=03.06.02.00 sarStats=Done"
+        print(f"firmware: mismatch expected=iwr1843_sar_lvds found={_found}", flush=True)
+        print(f"error: firmware mismatch on /dev/ttyACM0: system JSON expects iwr1843_sar_lvds (IWR1843_SAR), board answered {_found}. "
+              f"Flash it: ./fw flash iwr1843_sar_lvds, or set runtime.firmware_check \"warn\"", file=sys.stderr, flush=True)
+        sys.exit(1)
 tapf = os.fdopen(opt("--tap-fd", int), "wb", buffering=0) if mode == "tap" and "--tap-fd" in args else None
 adc_every = opt("--tap-adc-every", int) or 0
 if mode == "tap":

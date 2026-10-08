@@ -39,7 +39,7 @@ sink.
 |------|------|
 | `RadarConfig::load(path)` | `Result<RadarConfig>`: system JSON + board descriptor (with `board_overrides`) + parsed radar cfg, cross-checked; `board()`, `frame_shape()`, `commands()` |
 | `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets, data}` swaps in a fake CLI `ByteStream`, a `ReplayPacketSource` or a fake serial data `ByteStream` |
-| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured`. With `runtime.skip_configure` (`--skip-configure`): the DCA1000 setup only, no radar cfg |
+| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured`. With `runtime.skip_configure` (`--skip-configure`): the DCA1000 setup only, no radar cfg. Order (gui-33): the `already_configured` guard, then the firmware identity check (below), then the DCA1000 setup, then the cfg and the once-per-boot mark, so a fatal mismatch spends nothing |
 | `start()` | `recordStart` and the RX thread, the DCA worker and serial reader threads (CPUs and priorities from `runtime.*`, see "DCA1000 RX path"), then `sensorStart` (not with `skip_configure`) |
 | `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
@@ -84,6 +84,17 @@ frame for that long while running, the next `next_adc_frame` /
 returns false with `stalled`, once per stall (later calls in the same stall
 time out normally). `main` stops the run on it. 0 (the default) turns it
 off, and `main` keeps its 2 s no-frame exit.
+
+**Firmware identity check** (gui-33, `Radar.cpp` `check_firmware_identity`, `BoardDescriptor/FirmwareIdentity.cpp`). Before any cfg line
+`configure()` sends the probe commands of `config/firmware/<fw>.json` `identify.<board>` (`CLIController::query`, echoed with tag `[id]`,
+e.g. `version`; `sarStats` tells the stock demo from the SAR image) and matches the replies with the entry's `require`/`reject`
+regexes (`match_firmware_identity`; the Python mirror `radar_gui/fwident.py` is pinned to it by `tests/data/fw_replies/manifest.json`).
+Policy `runtime.firmware_check`: `auto` (default) makes a mismatch fatal (`Code::firmware_mismatch`: "firmware mismatch on <port>: system
+JSON expects <fw> (<board>), board answered <fields>. Flash it: <flash_hint>"), no reply or an `unverified` entry a single warning, a
+`config_once_per_boot` board without `once_safe` a skip (so the cascade is not queried until its reply is bench-recorded); `warn` sends
+the cfg anyway; `off` sends nothing. `--skip-configure` never runs the check. The outcome is one log line,
+`firmware: <match|mismatch|skipped|unknown> expected=<fw> found=<fields | not queried | no reply>`, which the GUI backend parses into
+`status.firmware_check`. `--validate` only loads the `identify` block and prints a `firmware check: ...` note.
 
 **Skip-configure and once-per-boot stop** (gui-36 D14, gui-09 D10). The
 cascade demo accepts a cfg once per power-up, never acknowledges

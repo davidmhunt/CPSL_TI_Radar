@@ -278,3 +278,81 @@ def test_log_batches_keep_order_and_lose_nothing(env, monkeypatch):
         assert seqs == sorted(seqs) and len(seqs) >= 150
         assert batches < len(lines) / 3   # batched, not one message per line
         assert lines[-1] == "Stopped."
+
+
+# ---- gui-33: the driver's `firmware:` check lines -> status.firmware_check -----------------------------------------
+from radar_gui.driver import parse_firmware_extra, parse_firmware_line  # noqa: E402
+
+FW_OK = "platform=xWR18xx sdk=03.06.02.00 device=IWR18xx ES 02.00"
+
+
+@pytest.mark.parametrize("line,want", [
+    (f"firmware: match expected=demo found={FW_OK}", {"verdict": "match", "expected": "demo", "found": FW_OK}),
+    ("firmware: skipped expected=cascade_ddm found=not queried",
+     {"verdict": "skipped", "expected": "cascade_ddm", "found": "not queried"}),
+    ("firmware: unknown expected=demo found=no reply", {"verdict": "unknown", "expected": "demo", "found": "no reply"}),
+    ("warning: firmware: unknown expected=demo found=no reply\r", {"verdict": "unknown", "expected": "demo", "found": "no reply"}),
+    ("firmware: mismatch expected=iwr1843_sar_lvds found=platform=xWR18xx sarStats=Done",
+     {"verdict": "mismatch", "expected": "iwr1843_sar_lvds", "found": "platform=xWR18xx sarStats=Done"}),
+])
+def test_parse_firmware_line(line, want):
+    assert parse_firmware_line(line) == want
+
+
+@pytest.mark.parametrize("line", ["", "firmware", "firmware: maybe expected=demo found=x", "firmware: match found=x",
+                                  "Using config: firmware: match expected=demo found=x", "stats v1 dca t=1", "garbage: firmware match",
+                                  "firmware check: version before the cfg (level bench)"])
+def test_parse_firmware_line_ignores_garbage(line):
+    assert parse_firmware_line(line) is None
+
+
+def test_parse_firmware_extra():
+    msg = ('error: firmware mismatch on /dev/ttyACM0: system JSON expects iwr1843_sar_lvds (IWR1843_SAR), board answered x. '
+           'Flash it: ./fw flash iwr1843_sar_lvds, or set runtime.firmware_check "warn"')
+    assert parse_firmware_extra(msg) == {"hint": "./fw flash iwr1843_sar_lvds"}
+    assert parse_firmware_extra("Radar: firmware check skipped: not once_safe") == {"detail": "not once_safe"}
+    assert parse_firmware_extra("warning: Radar: could not confirm the firmware on /dev/x (no reply to version); sending the cfg anyway") \
+        == {"detail": "no reply to version"}
+    assert parse_firmware_extra("nothing here") == {}
+
+
+@pytest.mark.parametrize("mode,verdict,extra", [("match", "match", {}), ("skipped", "skipped", {"detail": "once-per-power-up board, identify entry is not once_safe"}),
+                                                ("unknown", "unknown", {"detail": "no reply to version"})])
+def test_status_firmware_check(env, monkeypatch, mode, verdict, extra):
+    make, cfg, _, _ = env
+    monkeypatch.setenv("FAKE_DRIVER_FW", mode)
+    with make() as c:
+        c.post("/api/driver/start", json={"config": str(cfg), "frames": 3})
+        st = wait_for(c, {"exited", "failed"})
+        fc = st["firmware_check"]
+        assert fc["verdict"] == verdict and fc["expected"] == ("cascade_ddm" if mode == "skipped" else "demo")
+        assert all(fc[k] == v for k, v in extra.items()) and "hint" not in fc
+        assert st["firmware"] == "demo" or st["firmware"] is None   # the config's firmware id is unchanged (a string)
+
+
+def test_status_firmware_check_mismatch_and_ws_event(env, monkeypatch):
+    make, cfg, _, _ = env
+    monkeypatch.setenv("FAKE_DRIVER_FW", "mismatch")
+    with make() as c, c.websocket_connect("/stream") as ws:
+        c.post("/api/driver/start", json={"config": str(cfg)})
+        st = wait_for(c, {"exited", "failed"})
+        assert st["state"] == "failed"
+        fc = st["firmware_check"]
+        assert fc["verdict"] == "mismatch" and fc["expected"] == "iwr1843_sar_lvds" and fc["hint"] == "./fw flash iwr1843_sar_lvds"
+        got, end = None, time.time() + 5
+        while time.time() < end and got is None:
+            m = ws.receive_json()
+            got = m if m["type"] == "driver_firmware" else None
+        assert got and got["firmware_check"]["verdict"] == "mismatch" and got["run"] == st["run"]
+
+
+def test_status_firmware_check_absent_and_reset(env, monkeypatch):
+    make, cfg, _, _ = env
+    with make() as c:
+        assert c.get("/api/driver/status").json().get("firmware_check") is None
+        monkeypatch.setenv("FAKE_DRIVER_FW", "match")
+        c.post("/api/driver/start", json={"config": str(cfg), "frames": 2})
+        assert wait_for(c, {"exited"})["firmware_check"]["verdict"] == "match"
+        monkeypatch.delenv("FAKE_DRIVER_FW")
+        c.post("/api/driver/start", json={"config": str(cfg), "frames": 2})
+        assert wait_for(c, {"exited"})["firmware_check"] is None   # an old driver / no check: a new run clears the last verdict

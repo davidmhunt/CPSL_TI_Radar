@@ -1,0 +1,758 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py",
+  "FAKE_DRIVER_MODE": "tap",
+  "FAKE_DRIVER_RATE": "10",
+  "FAKE_DRIVER_CLI": "ok",
+  "FAKE_DRIVER_SKIP": "1",
+  "FAKE_DRIVER_FW": "by-config"
+ },
+ "server": [
+  "tests/fakes/gui_fake_session.py"
+ ],
+ "user_cfgs": {
+  "a_fwmatch.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "a_fwmismatch.json": "{\"schema_version\": 2, \"board\": \"IWR1843_SAR\", \"firmware\": \"iwr1843_sar_lvds\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "a_fwskipped.json": "{\"schema_version\": 2, \"board\": \"AWR2243_CASCADE\", \"firmware\": \"cascade_ddm\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "a_fwunknown.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap.cfg": "% fake\n"
+ },
+ "scenarios": [
+  {
+   "name": "match_radar_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwmatch"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "match_radar_1400.png"
+    },
+    {
+     "file": "match_radar_1400_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "match_pointcloud_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "match_pointcloud_1400.png"
+    },
+    {
+     "file": "match_pointcloud_1400_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "match_radar_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwmatch"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "match_radar_800.png"
+    },
+    {
+     "file": "match_radar_800_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "match_pointcloud_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "match_pointcloud_800.png"
+    },
+    {
+     "file": "match_pointcloud_800_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "mismatch_radar_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwmismatch"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "mismatch_radar_1400.png"
+    },
+    {
+     "file": "mismatch_radar_1400_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "mismatch_pointcloud_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "mismatch_pointcloud_1400.png"
+    },
+    {
+     "file": "mismatch_pointcloud_1400_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "mismatch_radar_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwmismatch"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "mismatch_radar_800.png"
+    },
+    {
+     "file": "mismatch_radar_800_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "mismatch_pointcloud_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "mismatch_pointcloud_800.png"
+    },
+    {
+     "file": "mismatch_pointcloud_800_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "skipped_radar_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwskipped"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "skipped_radar_1400.png"
+    },
+    {
+     "file": "skipped_radar_1400_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "skipped_pointcloud_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "skipped_pointcloud_1400.png"
+    },
+    {
+     "file": "skipped_pointcloud_1400_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "skipped_radar_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwskipped"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "skipped_radar_800.png"
+    },
+    {
+     "file": "skipped_radar_800_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "skipped_pointcloud_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "skipped_pointcloud_800.png"
+    },
+    {
+     "file": "skipped_pointcloud_800_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "unknown_radar_1400",
+   "tab": "run",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwunknown"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "unknown_radar_1400.png"
+    },
+    {
+     "file": "unknown_radar_1400_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "unknown_pointcloud_1400",
+   "tab": "live",
+   "window": [
+    1400,
+    1000
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "unknown_pointcloud_1400.png"
+    },
+    {
+     "file": "unknown_pointcloud_1400_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "unknown_radar_800",
+   "tab": "run",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "js": "const b=document.getElementById('sessBtn'); if(b.dataset.act==='stop') b.click(); return 'ok'"
+    },
+    {
+     "wait": 3.5
+    },
+    {
+     "click": "#rMode button[data-m=saved]"
+    },
+    {
+     "set": "#rCfg",
+     "value": "a_fwunknown"
+    },
+    {
+     "set": "#rDur",
+     "value": "30"
+    },
+    {
+     "click": "#rStart"
+    },
+    {
+     "wait": 2.5
+    }
+   ],
+   "shots": [
+    {
+     "file": "unknown_radar_800.png"
+    },
+    {
+     "file": "unknown_radar_800_card.png",
+     "selector": "#rFwVerdict"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "verdict.txt",
+     "selector": "#rFwVerdict",
+     "what": "text"
+    }
+   ]
+  },
+  {
+   "name": "unknown_pointcloud_800",
+   "tab": "live",
+   "window": [
+    800,
+    1100
+   ],
+   "actions": [
+    {
+     "click": "#tabs button[data-tab=live]"
+    },
+    {
+     "wait": 1.2
+    }
+   ],
+   "fresh": false,
+   "shots": [
+    {
+     "file": "unknown_pointcloud_800.png"
+    },
+    {
+     "file": "unknown_pointcloud_800_line.png",
+     "selector": "#srcFw"
+    }
+   ],
+   "dumps": [
+    {
+     "file": "overflow.txt",
+     "selector": "body",
+     "what": "overflow"
+    },
+    {
+     "file": "line.txt",
+     "selector": "#srcFw",
+     "what": "text"
+    }
+   ]
+  }
+ ]
+}

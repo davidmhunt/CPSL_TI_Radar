@@ -4,7 +4,7 @@
 // driver_log messages on the shared /stream WebSocket (routed here by main.js).
 import { $ } from './state.js';
 import { mountCliPanel } from './cli_panel.js';
-import { api, refusal, detailText, D, caps, hasSetup, boardInfo, cfgsFor, spec, specChanged, specReady, onceBoard, skipEffective, skipSupported,
+import { api, fwVerdictView, refusal, detailText, D, caps, hasSetup, boardInfo, cfgsFor, spec, specChanged, specReady, onceBoard, skipEffective, skipSupported,
   cfgSentHere, specBoard, savedCfg, loadData, fill, splitBy, FLAGS, flagGate, flagEff, ownFlag, recDiff, startSession, stopSession, registerExtras, onSession, boardLive, SS } from './session.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -205,7 +205,10 @@ function renderState() {
   buttons();
   const st = R.st || {}, fw = st.firmware, c = caps();
   const notes = (st.notes || []).map(n => 'note: ' + n).join('\n');
-  $('rFwLine').textContent = ((st.state && st.state !== 'idle' && fw) ? `Firmware: ${fw} \u00b7 ` + (c.firmware_check ? 'checked by the driver at start (verdict in the log)' : 'not checked (this driver build has no firmware check)') : '') +
+  const vv = fwVerdictView(st.state && st.state !== 'idle' ? st.firmware_check : null), v = $('rFwVerdict');
+  v.hidden = !vv; if (vv) { v.className = 'runmsg ' + vv.cls; v.textContent = vv.text; }
+  // without a verdict (older driver / backend, or a start still in progress) the id line is what there is
+  $('rFwLine').textContent = ((st.state && st.state !== 'idle' && fw && !vv) ? `Firmware: ${fw} \u00b7 ` + (c.firmware_check ? 'checked by the driver at start (verdict in the log)' : 'not checked (this driver build has no firmware check)') : '') +
     (notes ? '\n' + notes : '');
 }
 // A new run id means a new driver run: drop the previous run's transcript. (Merging, not replacing, because the
@@ -352,6 +355,8 @@ export function onDriverMessage(m) {
     clearTimeout(cliSync); cliSync = setTimeout(() => { if (R.ready) refresh(); }, 500);
   } else if (m.type === 'driver_stats') {
     R.stats[m.stream] = m.stats; if (R.ready) { pend.streams = true; schedule(); }
+  } else if (m.type === 'driver_firmware') {
+    sawRun(m.run); R.st = { ...(R.st || {}), firmware_check: m.firmware_check }; if (R.ready) renderState();
   } else if (m.type === 'driver_state') {
     const first = !seenState; seenState = true;
     const { type, ...st } = m; sawRun(st.run);
