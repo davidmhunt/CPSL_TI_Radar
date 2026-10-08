@@ -4,7 +4,7 @@ Check a config without hardware, then run it. Needs [tutorial 1](01_install.md).
 
 ## What a run is made of
 
-A **system config** (`CPSL_TI_Radar_cpp/config/system/<BOARD>_<fw>_<purpose>[_<mount>].json`, 39 shipped) names:
+A **system config** (`CPSL_TI_Radar_cpp/config/system/<BOARD>_<fw>_<purpose>[_<mount>].json`, 40 shipped) names:
 
 - a **board** (`"board": "IWR1843"`, a descriptor in `config/boards/`: the serial handshake, TLV format and LVDS layout);
 - the **firmware** the board runs (`"firmware": "demo"`, a descriptor in `config/firmware/`; required, and it must match the image on the board);

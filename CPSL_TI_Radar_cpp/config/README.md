@@ -68,6 +68,7 @@ under "Same-cfg groups" below.
 | [`IWR1843_demo_vel_sr.json`](system/IWR1843_demo_vel_sr.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_sr.cfg` | purpose unknown (named "vel_sr") |
 | [`IWR1843_demo_vel_sr_r1.json`](system/IWR1843_demo_vel_sr_r1.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_sr.cfg` | purpose unknown (named "vel_sr") |
 | [`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`](system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json) | IWR1843_SAR | iwr1843_sar_lvds | DCA1000 | `IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg` | SAR raw-ADC capture over LVDS (iwr1843_sar_lvds firmware) |
+| [`IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json`](system/IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json) | IWR1843_SAR | iwr1843_sar_lvds | DCA1000 | `IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt2.cfg` | same capture as `SAR_2ms` with `lvdsStreamCfg ... dataFmt 2` (ADC + per-chirp SAR metadata, core-24; needs the firmware-17 image) |
 | [`IWR6843ODS_demo_IcaRAus_10Hz_down.json`](system/IWR6843ODS_demo_IcaRAus_10Hz_down.json) | IWR6843ODS | demo | DCA1000 | `IWR6843ODS/demo/IcaRAus_ods_10Hz.cfg` | IcaRAus 10Hz project config |
 | [`IWR6843ODS_demo_RadVel.json`](system/IWR6843ODS_demo_RadVel.json) | IWR6843ODS | demo | serial TLV, DCA1000 | `IWR6843ODS/demo/RadVel_ods_10Hz.cfg` | RadVel project config |
 | [`IWR6843ODS_demo_RadVel_10Hz_down.json`](system/IWR6843ODS_demo_RadVel_10Hz_down.json) | IWR6843ODS | demo | DCA1000 | `IWR6843ODS/demo/RadVel_ods_10Hz.cfg` | RadVel 10Hz project config |

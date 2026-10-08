@@ -63,7 +63,7 @@ def run(*args, cwd=REPO):
 def test_fixtures_cover_every_tracked_config():
     assert len(V1_FILES) == 39
     # configs born in v2 (no v1 form, so no migration fixture)
-    native_v2 = {"IWR1843_iwr1843_sar_lvds_SAR_2ms.json"}
+    native_v2 = {"IWR1843_iwr1843_sar_lvds_SAR_2ms.json", "IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json"}
     # rel-01: two v1 fixtures (down_radar_6843_RadVel_ods_10Hz, down_radar_IWR6843_ods_dca_RadVel) now resolve to the
     # one remaining JSON, so the fixtures cover the tracked set with exactly one duplicate target
     assert sorted(set(TRACKED.values())) == sorted(p.name for p in SYSTEM.glob("*.json") if p.name not in native_v2)

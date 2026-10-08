@@ -88,7 +88,7 @@ std::string write_sar_system(const std::string& name, const std::string& cfg_fil
         "output": { "dir": "", "save_adc_frames": true, "save_raw_lvds": false },
         "runtime": { "firmware_check": "off", "frame_queue_depth": 16 }
     })");
-    j["radar_cfg"] = kData + "/" + cfg_file;
+    j["radar_cfg"] = (!cfg_file.empty() && cfg_file[0] == '/') ? cfg_file : kData + "/" + cfg_file;
     j["output"]["dir"] = out_dir;
     j["output"]["save_adc_frames"] = save;
     const std::string path = dca_test::tmp_dir() + "/sar_" + name + ".json";
@@ -111,9 +111,9 @@ struct Replay {
 // replay `datagrams` through a DCA1000Handler configured for `cfg_file`; every frame is taken as soon as it is
 // published (no frame is overwritten)
 Replay replay(const std::string& name, const std::string& cfg_file,
-              const std::vector<std::vector<uint8_t>>& datagrams) {
+              const std::vector<std::vector<uint8_t>>& datagrams, const std::string& out_dir = "") {
     Replay r;
-    const std::string out = dca_test::tmp_dir() + "/sar_out_" + name;
+    const std::string out = out_dir.empty() ? dca_test::tmp_dir() + "/sar_out_" + name : out_dir;
     std::filesystem::remove_all(out);
     std::filesystem::create_directories(out);
     SystemConfigReader sys(write_sar_system(name, cfg_file, out, true));
@@ -427,6 +427,28 @@ TEST_CASE(radar_api_publishes_chirp_meta) {
     const cpsl::radar::Stats s = radar.stats();
     CHECK_EQ(s.records_valid, uint64_t(40));
     CHECK_EQ(s.records_invalid, uint64_t(0));
+}
+
+// Bench tool, a no-op unless SAR_REPLAY_CAPTURE is set: replays a dca_capture.py SARCAP1 file through the driver and
+// leaves adc_data.bin + chirp_meta.csv in SAR_REPLAY_OUT, for a diff against sar_parse.py's _adc.bin / _meta.csv.
+// SAR_REPLAY_CFG overrides the cfg (default: the shipped SAR_2ms_fmt2.cfg).
+TEST_CASE(replay_env_capture) {
+    const char* cap = std::getenv("SAR_REPLAY_CAPTURE");
+    const char* out = std::getenv("SAR_REPLAY_OUT");
+    if (!cap || !*cap) return;
+    CHECK(out != nullptr && *out);
+    if (!out || !*out) return;
+    const char* cfg = std::getenv("SAR_REPLAY_CFG");
+    const std::string cfg_file = (cfg && *cfg) ? cfg
+        : std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt2.cfg";
+    const std::vector<std::vector<uint8_t>> datagrams = read_capture(cap);
+    CHECK(!datagrams.empty());
+    const Replay r = replay("env", cfg_file, datagrams, out);
+    CHECK(r.ok);
+    std::cout << "    replayed " << datagrams.size() << " datagrams -> " << r.indices.size() << " frames, records_valid "
+              << r.stats.records_valid << " invalid " << r.stats.records_invalid << " other_run "
+              << r.stats.records_other_run << "; wrote " << out << "/adc_data.bin (" << r.adc.size() << " B), chirp_meta.csv ("
+              << r.csv.size() << " B)" << std::endl;
 }
 
 TEST_MAIN()

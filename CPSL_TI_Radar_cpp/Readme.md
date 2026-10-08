@@ -361,7 +361,7 @@ stock cfg fails the load naming the command. `lvdsStreamCfg ... dataFmt 1` (plai
 `meta` (record fields, validity, time, lag-aligned saturation per chirp), `--stats` adds `records_valid` /
 `records_invalid` / `records_other_run`, and with `save_adc_frames` the driver writes `chirp_meta.csv` beside
 `adc_data.bin`, in the format of the firmware project's `sar_parse.py` (`docs/ARCHITECTURE.md`, "LVDS stream
-formats"). dataFmt 2 has been tested on synthetic captures only; no shipped system JSON uses it yet. There is no TLV
+formats"). dataFmt 2 is shipped as [`IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json`](./config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json) (cfg `SAR_2ms_fmt2.cfg`); it has been tested on synthetic captures only (no bench run yet). To replay a `dca_capture.py` SARCAP1 file through the driver (writes `adc_data.bin` and `chirp_meta.csv`, diffable against `sar_parse.py`'s `_adc.bin`/`_meta.csv`): `SAR_REPLAY_CAPTURE=<file.sarcap> SAR_REPLAY_OUT=<dir> ctest --test-dir CPSL_TI_Radar_cpp/build -R test_sar_meta --output-on-failure` (optional `SAR_REPLAY_CFG=<cfg>`, default the shipped fmt2 cfg). There is no TLV
 point cloud on this firmware. Check without hardware:
 `CPSL_TI_Radar_CPP --validate config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json`.
 
