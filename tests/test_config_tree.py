@@ -35,8 +35,8 @@ def cfg_of(system_json: Path) -> Path:
 
 
 def test_counts():
-    assert len(SYSTEMS) >= 40 and len(CFGS) == 73       # 75 moved cfgs minus the 2 archived ones
-    assert len(MOVED["radar"]) == 75 and len(MOVED["system"]) == 40
+    assert len(SYSTEMS) >= 39 and len(CFGS) == 73       # 75 moved cfgs minus the 2 archived ones
+    assert len(MOVED["radar"]) == 75 and len(MOVED["system"]) == 41
 
 
 @pytest.mark.parametrize("path", SYSTEMS, ids=lambda p: p.name)

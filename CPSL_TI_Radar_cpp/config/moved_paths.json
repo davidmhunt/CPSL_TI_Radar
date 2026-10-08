@@ -77,13 +77,14 @@
   "radar/sar_configs/1843_SAR_2ms_fmt1.cfg": "radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg"
  },
  "system": {
+  "IWR6843ODS_demo_RadVel_down.json": "IWR6843ODS_demo_RadVel_10Hz_down.json",
   "back_radar_IWR1843_IcaRAus.json": "IWR1843_demo_IcaRAus_back.json",
   "back_radar_IWR1843_RaGNNarok_UGV_10m.json": "IWR1843_demo_RaGNNarok_UGV_10m_back.json",
   "back_radar_IWR1843_RaGNNarok_UGV_5m.json": "IWR1843_demo_RaGNNarok_UGV_5m_back.json",
   "back_radar_IWR1843_dca_RadVel_10Hz.json": "IWR1843_demo_RadVel_10Hz_back.json",
   "down_radar_6843_IcaRAus_ods_10Hz.json": "IWR6843ODS_demo_IcaRAus_10Hz_down.json",
   "down_radar_6843_RadVel_ods_10Hz.json": "IWR6843ODS_demo_RadVel_10Hz_down.json",
-  "down_radar_IWR6843_ods_dca_RadVel.json": "IWR6843ODS_demo_RadVel_down.json",
+  "down_radar_IWR6843_ods_dca_RadVel.json": "IWR6843ODS_demo_RadVel_10Hz_down.json",
   "front_radar_IWR1843_Hermes.json": "IWR1843_demo_Hermes_front.json",
   "front_radar_IWR1843_IcaRAus.json": "IWR1843_demo_IcaRAus_front.json",
   "front_radar_IWR1843_RaGNNarok_UAV_10m.json": "IWR1843_demo_RaGNNarok_UAV_10m_front.json",

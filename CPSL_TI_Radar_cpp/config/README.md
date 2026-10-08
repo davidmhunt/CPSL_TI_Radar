@@ -71,7 +71,6 @@ under "Same-cfg groups" below.
 | [`IWR6843ODS_demo_IcaRAus_10Hz_down.json`](system/IWR6843ODS_demo_IcaRAus_10Hz_down.json) | IWR6843ODS | demo | DCA1000 | `IWR6843ODS/demo/IcaRAus_ods_10Hz.cfg` | IcaRAus 10Hz project config |
 | [`IWR6843ODS_demo_RadVel.json`](system/IWR6843ODS_demo_RadVel.json) | IWR6843ODS | demo | serial TLV, DCA1000 | `IWR6843ODS/demo/RadVel_ods_10Hz.cfg` | RadVel project config |
 | [`IWR6843ODS_demo_RadVel_10Hz_down.json`](system/IWR6843ODS_demo_RadVel_10Hz_down.json) | IWR6843ODS | demo | DCA1000 | `IWR6843ODS/demo/RadVel_ods_10Hz.cfg` | RadVel 10Hz project config |
-| [`IWR6843ODS_demo_RadVel_down.json`](system/IWR6843ODS_demo_RadVel_down.json) | IWR6843ODS | demo | DCA1000 | `IWR6843ODS/demo/RadVel_ods_10Hz.cfg` | RadVel project config |
 | [`IWR6843ODS_demo_human_movement.json`](system/IWR6843ODS_demo_human_movement.json) | IWR6843ODS | demo | serial TLV, DCA1000 | `IWR6843ODS/demo/RadVel_ods_10Hz.cfg` | human-movement TLV capture |
 
 ### Same-cfg groups
@@ -85,14 +84,12 @@ System JSONs that point at the same radar cfg (they differ in mount, ports or ou
 - `IWR1843/demo/RadVel_10Hz_lr.cfg`: `IWR1843_demo_RadVel_10Hz_back`, `IWR1843_demo_RadVel_10Hz_front`, `IWR1843_demo_nav_RadVel_10Hz`
 - `IWR1843/demo/vel_nav.cfg`: `IWR1843_demo_nav`, `IWR1843_demo_nav_r1`
 - `IWR1843/demo/vel_sr.cfg`: `IWR1843_demo_vel_sr`, `IWR1843_demo_vel_sr_r1`
-- `IWR6843ODS/demo/RadVel_ods_10Hz.cfg`: `IWR6843ODS_demo_RadVel`, `IWR6843ODS_demo_RadVel_10Hz_down`, `IWR6843ODS_demo_RadVel_down`, `IWR6843ODS_demo_human_movement`
+- `IWR6843ODS/demo/RadVel_ods_10Hz.cfg`: `IWR6843ODS_demo_RadVel`, `IWR6843ODS_demo_RadVel_10Hz_down`, `IWR6843ODS_demo_human_movement`
 
-`IWR6843ODS_demo_RadVel_down.json` is byte-identical to `IWR6843ODS_demo_RadVel_10Hz_down.json` (same JSON). It is kept
-(nothing was deleted in the reorganisation); use the `_10Hz_down` name.
 
 ## Old to new: system JSONs
 
-Run directories, results and old launch scripts cite the old names. `moved_paths.json` holds the same map.
+Run directories, results and old launch scripts cite the old names. `IWR6843ODS_demo_RadVel_down.json` (a gui-38 name) was a byte-identical duplicate of `_10Hz_down` and was removed in rel-01. `moved_paths.json` holds the same map.
 
 | Old (`system/`) | New |
 |---|---|
@@ -102,7 +99,8 @@ Run directories, results and old launch scripts cite the old names. `moved_paths
 | `back_radar_IWR1843_dca_RadVel_10Hz.json` | `IWR1843_demo_RadVel_10Hz_back.json` |
 | `down_radar_6843_IcaRAus_ods_10Hz.json` | `IWR6843ODS_demo_IcaRAus_10Hz_down.json` |
 | `down_radar_6843_RadVel_ods_10Hz.json` | `IWR6843ODS_demo_RadVel_10Hz_down.json` |
-| `down_radar_IWR6843_ods_dca_RadVel.json` | `IWR6843ODS_demo_RadVel_down.json` |
+| `down_radar_IWR6843_ods_dca_RadVel.json` | `IWR6843ODS_demo_RadVel_10Hz_down.json` |
+| `IWR6843ODS_demo_RadVel_down.json` | `IWR6843ODS_demo_RadVel_10Hz_down.json` |
 | `front_radar_IWR1843_Hermes.json` | `IWR1843_demo_Hermes_front.json` |
 | `front_radar_IWR1843_IcaRAus.json` | `IWR1843_demo_IcaRAus_front.json` |
 | `front_radar_IWR1843_RaGNNarok_UAV_10m.json` | `IWR1843_demo_RaGNNarok_UAV_10m_front.json` |

@@ -12,8 +12,8 @@
 
 file(GLOB configs "${CONFIG_DIR}/system/*.json")
 list(LENGTH configs n)
-if(n LESS 40)
-  message(FATAL_ERROR "expected at least 40 tracked system configs, found ${n}")
+if(n LESS 39)
+  message(FATAL_ERROR "expected at least 39 tracked system configs, found ${n}")
 endif()
 
 set(failed 0)
