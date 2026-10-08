@@ -54,7 +54,7 @@ Basename: `baseline_pre_rework_iwr1843_serial_release__radar_0_IWR1843_demo__rep
 
 ## Bench validation, IWR1843 (core-06)
 
-Tag `validation_iwr1843_dca_release`, DCA1000 raw-ADC, `front_radar_IWR1843_stress_test_baseline.json`, 3 x 60 s SIGINT stops (plus a rep 4 confirm run), run by following `docs/tutorials/bench_validation.md`. Driver binary sha256 `3ecd94cd17a3...` (with `cap_sys_nice`), repo HEAD `6281aad`. Files in `docs/results/validation/`, basenames `validation_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep<k>__60s__<UTC>` (rep1 `20261005T214321Z`, rep2 `20261005T214452Z`, rep3 `20261005T214602Z`).
+Tag `validation_iwr1843_dca_release`, DCA1000 raw-ADC, `front_radar_IWR1843_stress_test_baseline.json`, 3 x 60 s SIGINT stops (plus a rep 4 confirm run), run by following `docs/tutorials/14_bench_validation.md`. Driver binary sha256 `3ecd94cd17a3...` (with `cap_sys_nice`), repo HEAD `6281aad`. Files in `docs/results/validation/`, basenames `validation_iwr1843_dca_release__front_radar_IWR1843_stress_test_baseline__rep<k>__60s__<UTC>` (rep1 `20261005T214321Z`, rep2 `20261005T214452Z`, rep3 `20261005T214602Z`).
 
 | Rep | fps mean / min / max | Dropped packets | rx_overrun_count | CPU % mean / max | RSS max (kB) | Granted SO_RCVBUF | .bin check |
 |---|---|---|---|---|---|---|---|
@@ -69,7 +69,7 @@ Caveats: exit 0 on all four; every run logs `sensorStop was not acknowledged wit
 
 ## Bench pass, reworked v2 driver, IWR1843 (core-11 to core-16, core-20)
 
-Release build of the reworked driver on `release/v2.0`, 2026-10-06, host `cpsl-gmk-6`, 10 Hz `front_radar_IWR1843_stress_test_baseline.json` (DCA) and `radar_0_IWR1843_demo.json` (serial), SIGINT stops, run per `docs/tutorials/bench_validation.md`. Every value below is read from the CSV and `.json` sidecars in `docs/results/validation/` (basenames abbreviated to tag, `rep<k>` and UTC stamp). Driver sha256 `2e44b47c...` for the core-16 and ab2 runs; `09abcbec...` for core-20 (default build). Kernel drops, resyncs and `rx_overrun_count` are 0 in every successful run.
+Release build of the reworked driver on `release/v2.0`, 2026-10-06, host `cpsl-gmk-6`, 10 Hz `front_radar_IWR1843_stress_test_baseline.json` (DCA) and `radar_0_IWR1843_demo.json` (serial), SIGINT stops, run per `docs/tutorials/14_bench_validation.md`. Every value below is read from the CSV and `.json` sidecars in `docs/results/validation/` (basenames abbreviated to tag, `rep<k>` and UTC stamp). Driver sha256 `2e44b47c...` for the core-16 and ab2 runs; `09abcbec...` for core-20 (default build). Kernel drops, resyncs and `rx_overrun_count` are 0 in every successful run.
 
 ### DCA1000 validation, 3 x 60 s (tag `validation_iwr1843_dca_core16`, with `cap_sys_nice`)
 
@@ -220,3 +220,20 @@ The driver and the GUI validator now agree on every error code they share, on th
 - The GUI Live source (gui-33 Step 6c) was accepted through the GUI-backend run (it drives the same C++ driver), not as a separate serial-source session.
 - **core-24 dataFmt 2** (`adc_sar_meta`) is verified on synthetic captures only (`tests/data/sar_fmt2/`, golden compare against `sar_parse`); the core-23 SAR bench has not run.
 - The driver checks error-level rules only; warnings stay in the GUI (user ruling, 2026-10-07).
+
+## Release readiness: Docker image and test suite (2026-10-08)
+
+Measured 2026-10-08 on `release/v2.0`; values are read from the Logs of the closed directives `rel-04` (test-suite audit, `19f949e`) and `rel-05` (Docker image, `d77b9f5`, `3e6526d`, `12a5fd4`) in `.friday/active/harness/plans/directives/closed/`. Each is a single run.
+
+| Item | Result |
+|------|--------|
+| Docker image `cpsl-ti-radar:dev` | about 500 MB (501 MB, then 500 MB after the numpy fix) |
+| ctest inside the image build | 27/27 passed (re-run fresh by the Reviewer) |
+| Demo mode (`127.0.0.1:8090`) | `/` returned HTTP 200 with the GUI HTML; `/api/cfgs` returned the shipped cfgs |
+| Real-board (`hw`) mode | **not verified on hardware** |
+| `uv run pytest` (full) | 1085 passed, 53.2 s on a quiet box (80 s under concurrent load) |
+| `uv run pytest -m "not slow"` | 1002 passed, 83 deselected, 20.2 s (`slow` marker added in `19f949e`) |
+| ctest, Release, host build | 27/27 passed, 20.6 s |
+| Line coverage, `radar_gui/` + `tools/` | 88% (6743 statements); lowest per file: `gui_shots` 17%, `__main__` 38%, `migrate_config` 52% |
+
+Interpretation: the image builds, passes the C++ suite and serves the GUI in demo mode, and the Python suite is fast enough to run on every change. The audit found the large test counts come mostly from per-file cfg round-trips that cost milliseconds each and pin real shipped files, so little time was to be saved by cutting; the user chose to keep all tests (no cut commit). Caveats: the `hw` profile (device and port pass-through, DCA1000 capture writing under host `runs/`) has only been checked as compose configuration, not with a board attached, so the image is release-ready for demo use only until a bench check is done. The 20.2 s `not slow` time is the quiet-box figure; the audit's 37 s was measured under load.
