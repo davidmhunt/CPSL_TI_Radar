@@ -83,7 +83,7 @@ until "Manual field of view" is ticked; the cascade DDM build has no `cfarFovCfg
   target keys still work as threshold aliases.
 - Checks (`cfar_*` codes, GUI-only: the C++ driver does not enforce them; the firmware answers `Done`/errors itself): argument
   count and ranges, unknown enum, threshold above 100 dB, FOV min >= max, a missing direction line, cascade Doppler mode /
-  guard / enable, and as warnings `2*(noiseWin+guardLen)` against the FFT bins (the shipped `1843_RadarHD.cfg` violates it,
+  guard / enable, and as warnings `2*(noiseWin+guardLen)` against the FFT bins (the shipped `IWR1843/demo/RadarHD.cfg` violates it,
   so it is not an error until a bench run settles it) and the TI `divShift` formula. FOV beyond the cfg's range or velocity is info.
 - Live re-tune while streaming is not part of this card.
 - Screenshots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui35.json` (1843, 1443, cascade, SAR note,

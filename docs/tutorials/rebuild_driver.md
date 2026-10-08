@@ -29,7 +29,7 @@ Debugging a crash? `--preset asan-ubsan` builds and tests under AddressSanitizer
 
 ```bash
 cd CPSL_TI_Radar_cpp/build
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --validate
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_stress_test_front.json --validate
 cd ../..
 ```
 

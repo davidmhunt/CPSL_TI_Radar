@@ -105,7 +105,7 @@ Example (IWR1843, DCA1000):
   "schema_version": 2,
   "board": "IWR1843",
   "board_overrides": {},
-  "radar_cfg": "../radar/nav_configs/1843_stress_test.cfg",
+  "radar_cfg": "../radar/IWR1843/demo/stress_test.cfg",
   "cli":           { "port": "/dev/ttyACM0" },
   "serial_stream": { "enabled": false, "port": "/dev/ttyACM1" },
   "dca1000": { "enabled": true, "fpga_ip": "192.168.33.180", "host_ip": "192.168.33.30",

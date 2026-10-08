@@ -10,7 +10,7 @@ python3 server.py            # then open http://localhost:8080
 ```
 
 - Needs only Python 3 + pyserial (already installed). Ports default to the XDS110 by-id paths.
-- Sends `../../CPSL_TI_Radar_cpp/config/radar/cascade/cascade_shortrange.cfg` by default (needs `guiMonitor -1 1 …`
+- Sends `../../CPSL_TI_Radar_cpp/config/radar/AWR2243_CASCADE/cascade_ddm/shortrange.cfg` by default (needs `guiMonitor -1 1 …`
   so frames carry type 1 points + type 7 SNR). Use `--cfg` for another file.
 - The board accepts a cfg once per power-up. Power-cycle before starting. If you power-cycle while the
   viewer runs, it notices the USB drop and reconfigures the board by itself.
@@ -18,7 +18,7 @@ python3 server.py            # then open http://localhost:8080
 - Can't run at the same time as the C++ driver (they'd fight over the serial ports).
 - Views: top (hover a point for range/x/y/z/velocity/SNR), 3D (drag to rotate, scroll to zoom; `#3d` in the URL
   opens it directly), front (x–z). Colour by velocity, SNR or height; trail, range, size and min-SNR sliders.
-- Denser points: `python3 server.py --cfg ../../CPSL_TI_Radar_cpp/config/radar/cascade/cascade_shortrange_dense.cfg`.
+- Denser points: `python3 server.py --cfg ../../CPSL_TI_Radar_cpp/config/radar/AWR2243_CASCADE/cascade_ddm/shortrange_dense.cfg`.
   The cfg is re-read on every power cycle, so to tune: edit the thresholds, save, power-cycle the board, look.
   `cfarCfg` threshold (8th number, dB): lower = more points. `localMaxCfg -1 <azim> <doppler>`: higher = more points.
 
@@ -28,7 +28,7 @@ python3 server.py            # then open http://localhost:8080
 
 - **Board:** shows which cfg the board is running. You can also pick which cfg the next power-up gets.
 - **Design a cfg:** set max range, max velocity, frame rate, CFAR and local-max thresholds, and the field of view.
-  - `cfggen.py` solves for the chirp: sample rate, slope, idle time and ramp time. It writes a cfg to `configs/`, based on the driver's `cascade_shortrange.cfg`.
+  - `cfggen.py` solves for the chirp: sample rate, slope, idle time and ramp time. It writes a cfg to `configs/`, based on the driver's `AWR2243_CASCADE/cascade_ddm/shortrange.cfg`.
   - With a fixed number of ADC samples, max range and range resolution are tied (max ≈ 0.9 × samples × resolution). Max velocity and the number of chirps tie velocity resolution the same way.
   - TI only tested 192 samples × 256 chirps. Other counts are allowed but flagged as untested.
 - **Antenna calibration:** uses TI's `cascade_shortrange_calib.cfg` with your reflector distance.

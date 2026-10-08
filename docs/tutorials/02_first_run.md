@@ -13,7 +13,7 @@ A **system config** (`config/system/*.json`) names three things: a **board descr
 ## Check it without hardware
 
 ```bash
-./CPSL_TI_Radar_CPP ../config/system/radar_0_IWR1843_demo.json --validate
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_tlv_default.json --validate
 ```
 
 It opens no port or socket. It prints the board, ports, `frame:` shape, `bytes/frame:` and the cfg commands it will skip (none on the shipped boards), and exits 0 after `OK:`; a bad config prints why and exits 1.
@@ -25,16 +25,16 @@ It opens no port or socket. It prints the board, ports, `frame:` shape, `bytes/f
 | You get | detected points: x, y, z, v, SNR | the raw ADC cube, `adc_data.bin` |
 | Needs | the board's demo firmware, USB | DCA1000 on LVDS and Ethernet, host settings from tutorial 1 |
 | Switch | `"serial_stream": {"enabled": true, "port": ...}` | `"dca1000": {"enabled": true, ...}` plus the radar `.cfg` `lvdsStreamCfg` line |
-| Example | `radar_0_IWR1843_demo.json` | `front_radar_IWR1843_stress_test.json` |
+| Example | `IWR1843_demo_tlv_default.json` | `IWR1843_demo_stress_test_front.json` |
 
-Enable one or both; at least one is required. Which `Point` fields are filled depends on the board's TLV dialect (`config/boards/README.md`, "TLV dialects"): the IWR1443 sends no velocity or SNR, so those are NaN. The cascade (`radar_0_AWR2243_cascade_serial.json`) is serial only and accepts a cfg **once per power-up**: power-cycle the EVM before every run.
+Enable one or both; at least one is required. Which `Point` fields are filled depends on the board's TLV dialect (`config/boards/README.md`, "TLV dialects"): the IWR1443 sends no velocity or SNR, so those are NaN. The cascade (`AWR2243_CASCADE_cascade_ddm_shortrange.json`) is serial only and accepts a cfg **once per power-up**: power-cycle the EVM before every run.
 
 ## Run
 
 Edit `cli.port` (and `serial_stream.port`) in your config to your board's ports: `utilities/determine_serial_ports.ipynb` lists them, and the lower-numbered `/dev/ttyACM*` is the CLI. Power the board in functional mode (`bench_validation.md` section 2 shows the switches), then:
 
 ```bash
-./CPSL_TI_Radar_CPP ../config/system/radar_0_IWR1843_demo.json --frames 100 --stats
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_tlv_default.json --frames 100 --stats
 ```
 
 Serial runs print one line per frame, `TLV frame <n>: <k> detected points`. DCA1000 runs print nothing per frame; `--stats` prints one `stats v1 ...` line per stream every second (columns in [tutorial 4](04_troubleshooting.md)). With `output.save_adc_frames` true a DCA1000 run writes `adc_data.bin` in `output.dir` (the current directory if unset).

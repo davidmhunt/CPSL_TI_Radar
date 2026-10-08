@@ -497,7 +497,7 @@ Three files describe a run (design §1, §2):
    `board_overrides` is deep-merged over it before the strict
    `cpsl::radar::BoardDescriptor::load` validates it. Field sources are in
    `config/boards/README.md`.
-3. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): the TI chirp config.
+3. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): the TI chirp config. Shipped cfgs sit at `radar/<BOARD>/<firmware>/<name>.cfg` and system JSONs are named `<BOARD>_<fw>_<purpose>[_<mount>].json` (gui-38); `config/README.md` indexes every system JSON and maps the pre-reorganisation names to the new ones (`config/moved_paths.json`).
    DCA1000 streaming needs `lvdsStreamCfg -1 0 1 0` (ADC only) or
    `lvdsStreamCfg -1 1 1 1` (all data).
 

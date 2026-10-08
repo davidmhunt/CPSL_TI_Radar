@@ -10,7 +10,7 @@ A board descriptor is one JSON file in `CPSL_TI_Radar_cpp/config/boards/`; the f
 cd CPSL_TI_Radar_cpp
 sed 's/"name": "IWR1843"/"name": "TOY1843"/; s/"cmd_timeout_ms": 100/"cmd_timeout_ms": 300/' \
     config/boards/IWR1843.json > config/boards/TOY1843.json
-sed 's/"board": "IWR1843"/"board": "TOY1843"/' config/system/radar_0_IWR1843_demo.json > config/system/toy_1843.json
+sed 's/"board": "IWR1843"/"board": "TOY1843"/' config/system/IWR1843_demo_tlv_default.json > config/system/toy_1843.json
 ./build/CPSL_TI_Radar_CPP config/system/toy_1843.json --validate | grep -E '^(board|cli)|OK'
 cd ..
 ```

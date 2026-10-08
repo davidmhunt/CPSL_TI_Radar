@@ -94,3 +94,23 @@ def test_e_system_name_matches_board_and_firmware(path):
     assert m, path.name
     doc = json.loads(path.read_text())
     assert m.group(1) == gui_board(doc["board"]) and m.group(2) == doc["firmware"], path.name
+
+
+# --- config/README.md index (gui-38 Step 2) ---------------------------------------------------------------
+
+README = (CONFIG / "README.md").read_text()
+_ROW = re.compile(r"^\| \[`([^`]+\.json)`\]\(system/([^)]+)\) \| ([^|]+?) \| ([^|]+?) \|", re.M)
+
+
+def test_readme_indexes_every_system_json_with_matching_board_and_firmware():
+    rows = {m.group(1): (m.group(3), m.group(4)) for m in _ROW.finditer(README)}
+    assert sorted(rows) == [p.name for p in SYSTEMS], "config/README.md index != config/system/*.json"
+    for path in SYSTEMS:
+        doc = json.loads(path.read_text())
+        assert rows[path.name] == (doc["board"], doc["firmware"]), path.name
+
+
+def test_readme_old_to_new_tables_cover_moved_paths():
+    for old, new in MOVED["system"].items():
+        assert f"| `{old}` | `{new}` |" in README, old
+    assert all(f"`{old}`" in README for old in MOVED["radar"])

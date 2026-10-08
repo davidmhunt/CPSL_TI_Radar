@@ -50,7 +50,7 @@ Each name is a board descriptor in [`CPSL_TI_Radar_cpp/config/boards/`](./CPSL_T
 The AWR2243 cascade runs TI's 2-chip cascade DDM demo, built and flashed from the companion
 [`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo. Only the
 UART point cloud is supported (data port at 3,125,000 baud); raw ADC capture through the DCA1000 is not yet supported.
-See `CPSL_TI_Radar_cpp/config/system/radar_0_AWR2243_cascade_serial.json`.
+See `CPSL_TI_Radar_cpp/config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json`.
 
 ## Firmware
 

@@ -22,12 +22,12 @@ The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for y
 
 ## 4. Choose a config
 
-Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
+Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
 The commands below use the example config unchanged. To use your own, copy it, and pass the copy's path to both commands. For DCA runs `output.save_adc_frames` must be `true` (the example sets it); otherwise there is no `adc_data.bin` size check. Any `runtime.log_level` works: the harness runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
-CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json --validate
+CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json --validate
 ```
 
 It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the values the harness compares against. `calibData` is sent on the IWR1843 (the SDK 3.6 demo needs it).
@@ -35,7 +35,7 @@ It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the va
 ## 5. Run the harness
 
 ```bash
-uv run tools/bench/bench_run.py CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json \
+uv run tools/bench/bench_run.py CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json \
     --seconds 60 --rep 1 --tag validation_iwr1843_dca_release --out-dir docs/results/validation
 ```
 
@@ -90,11 +90,11 @@ A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, 
 |---|---|---|---|---|
 | Board descriptor | `config/boards/IWR1843.json` | `IWR1443.json` | `IWR6843.json` | `AWR2243_CASCADE.json` |
 | LVDS lanes | 2, `q_first` | 4, `lane_per_rx`, `i_first` | 2, `q_first` | none (`lvds.supported: false`) |
-| Example system config | `front_radar_IWR1843_stress_test_baseline.json` (DCA), `radar_0_IWR1843_demo.json` (serial) | `radar_1.json` | `radar_0_IWR6843_ods_dca_RadVel.json` | `radar_0_AWR2243_cascade_serial.json` |
+| Example system config | `IWR1843_demo_stress_test_baseline_front.json` (DCA), `IWR1843_demo_tlv_default.json` (serial) | `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json` | `IWR6843ODS_demo_RadVel.json` | `AWR2243_CASCADE_cascade_ddm_shortrange.json` |
 | DCA1000 needed | yes for raw ADC; no for serial | yes (serial TLV rejected) | yes for raw ADC; no for serial | no (serial only) |
 | One cfg per boot | no | no | no | **yes**: power-cycle (12 V off and on) before every run |
 | Serial baud (data) | 921600 | n/a | 921600 | 3125000 |
-| Known limits | `calibData` rejected by the flashed firmware; I/Q order not confirmed | serial TLV (`sdk2`) unconfirmed; bench-unproven; `radar_1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (D4); never run through `bench_run.py` |
+| Known limits | `calibData` rejected by the flashed firmware; I/Q order not confirmed | serial TLV (`sdk2`) unconfirmed; bench-unproven; `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (D4); never run through `bench_run.py` |
 
 Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 

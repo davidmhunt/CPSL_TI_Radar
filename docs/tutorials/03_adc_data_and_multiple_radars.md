@@ -6,7 +6,7 @@ Capture first. With the DCA1000 cabled and configured as in tutorials [1](01_bui
 
 ```bash
 cd CPSL_TI_Radar_cpp/build
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --frames 20
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_stress_test_front.json --frames 20
 ```
 
 That config sets `save_adc_frames` true and has no `output.dir`, so every completed frame is appended to `adc_data.bin` in the launch folder (`CPSL_TI_Radar_cpp/build`). To choose the folder, add `"dir": "out/front"` to its `output` block (relative to the JSON file, created for you). The file has no header: per frame, for chirp, for rx, for sample, an int16 real part then an int16 imaginary part, little-endian. Lost packets stay in the file as zeros, so after a clean stop the size is a whole multiple of `bytes/frame` (from `--validate`). Anything else means a killed process.
@@ -33,7 +33,7 @@ For range, Doppler and azimuth processing, use the notebook. It reads the radar 
 
 ```bash
 cd utilities
-CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg \
+CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/IWR1843/demo/stress_test.cfg \
 ADC_DATA_FILE=../CPSL_TI_Radar_cpp/build/adc_data.bin \
 uv run --group notebooks jupyter nbconvert --to html --execute process_adc_data.ipynb --output-dir ../CPSL_TI_Radar_cpp/build --output adc_report
 ```
@@ -47,8 +47,8 @@ The executed notebook, with its plots, lands in `CPSL_TI_Radar_cpp/build/adc_rep
 One process per radar; run one per config, each in its own terminal:
 
 ```bash
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_dca_RadVel_10Hz.json
-./CPSL_TI_Radar_CPP ../config/system/back_radar_IWR1843_dca_RadVel_10Hz.json
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_RadVel_10Hz_front.json
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_RadVel_10Hz_back.json
 ```
 
 Those two tracked configs show what must differ between radars:

@@ -6,7 +6,7 @@ Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Rada
 
 ```bash
 cd utilities
-CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test_baseline_numframes0.cfg \
+CFG_FILE=../CPSL_TI_Radar_cpp/config/radar/IWR1843/demo/stress_test_baseline_numframes0.cfg \
 ADC_DATA_FILE=/path/to/adc_data.bin \
 uv run --group notebooks jupyter nbconvert --to notebook --execute process_adc_data.ipynb --output /tmp/out.ipynb
 ```

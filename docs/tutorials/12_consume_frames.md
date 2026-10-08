@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 ```bash
 cmake -S . -B build -DCMAKE_PREFIX_PATH=~/cpsl_install && cmake --build build
 ./build/consumer /nonexistent.json        # prints "cannot open system config", exits 1
-./build/consumer ~/path/to/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test.json
+./build/consumer ~/path/to/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json
 ```
 
 Use a DCA1000 config for the last line. For a serial config call `next_point_cloud(cloud, timeout, &why)` the same way; `cloud.points` is a `std::vector<Point>` (`x, y, z, v, snr_db, noise_db`).

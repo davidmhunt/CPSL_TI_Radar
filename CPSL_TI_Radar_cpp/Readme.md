@@ -141,7 +141,7 @@ cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --pre
 
 ### Replay benchmark (`ctest -C bench -L bench`)
 
-`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) the driver's `ADCCubeConverter`, called as `DCA1000Handler` calls it, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/nav_configs/1843_stress_test.cfg` unless you pass `--cfg`. The test is registered with `CONFIGURATIONS bench`, so the plain `ctest` run above never lists or runs it. `-C bench` adds it and `-L bench` runs only it. Use a Release build for numbers you can compare (the default build type, so the `-DCMAKE_BUILD_TYPE=Release` below is optional):
+`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) the driver's `ADCCubeConverter`, called as `DCA1000Handler` calls it, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/IWR1843/demo/stress_test.cfg` unless you pass `--cfg`. The test is registered with `CONFIGURATIONS bench`, so the plain `ctest` run above never lists or runs it. `-C bench` adds it and `-L bench` runs only it. Use a Release build for numbers you can compare (the default build type, so the `-DCMAKE_BUILD_TYPE=Release` below is optional):
 
 ```bash
 cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
@@ -225,7 +225,7 @@ failed, and log messages go to stderr at `runtime.log_level` unless you install
 
 int main() {
     namespace radar = cpsl::radar;
-    auto cfg = radar::RadarConfig::load("config/system/front_radar_IWR1843_stress_test.json");
+    auto cfg = radar::RadarConfig::load("config/system/IWR1843_demo_stress_test_front.json");
     if (!cfg) { std::cerr << cfg.status.message << "\n"; return 1; }
     auto opened = radar::Radar::open(*cfg);       // ports, sockets, output.dir; sends nothing
     if (!opened) { std::cerr << opened.status.message << "\n"; return 1; }
@@ -271,13 +271,15 @@ strict: an unknown key, a wrong type or a repeated key is an error that names th
 file (no `"schema_version"`) is rejected with the command that converts it (see the README's
 v1 -> v2 migration section).
 
+The tracked configs are in [`config/`](./config/README.md): system JSONs are named `<BOARD>_<fw>_<purpose>[_<mount>].json` and radar cfgs sit at `radar/<BOARD>/<firmware>/`; that README indexes every file and maps the pre-v2.0 names to the new ones.
+
 ```json
 {
     "schema_version": 2,
     "board": "IWR1843",
     "firmware": "demo",
     "board_overrides": {},
-    "radar_cfg": "../radar/nav_configs/1843_stress_test.cfg",
+    "radar_cfg": "../radar/IWR1843/demo/stress_test.cfg",
     "cli": { "port": "/dev/ttyACM0" },
     "serial_stream": { "enabled": false, "port": "/dev/ttyACM1" },
     "dca1000": { "enabled": true, "fpga_ip": "192.168.33.180", "host_ip": "192.168.33.30",
@@ -347,17 +349,17 @@ stay in the `.cfg` file but are never sent: no shipped board skips anything (the
 
 ##### IWR1843 SAR firmware example
 For the `iwr1843_sar_lvds` firmware (see [`docs/firmware.md`](../docs/firmware.md)) use
-[`radar_0_IWR1843_SAR.json`](./config/system/radar_0_IWR1843_SAR.json) (`"board": "IWR1843_SAR"`,
+[`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`](./config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json) (`"board": "IWR1843_SAR"`,
 DCA1000 on, `serial_stream` off) with
-[`sar_configs/1843_SAR_2ms_fmt1.cfg`](./config/radar/sar_configs/1843_SAR_2ms_fmt1.cfg). Set the CLI port
+[`IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg`](./config/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg). Set the CLI port
 for your EVM. The board requires `calibData` and rejects stock-demo commands such as `guiMonitor`, so a
 stock cfg fails the load naming the command. Only `lvdsStreamCfg ... dataFmt 1` is supported (`dataFmt 2`
 decoding is planned, core-24). There is no TLV point cloud on this firmware. Check without hardware:
-`CPSL_TI_Radar_CPP --validate config/system/radar_0_IWR1843_SAR.json`.
+`CPSL_TI_Radar_CPP --validate config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json`.
 
 ##### AWR2243 cascade notes
-* Use [`radar_0_AWR2243_cascade_serial.json`](./config/system/radar_0_AWR2243_cascade_serial.json) with
-  [`cascade_shortrange.cfg`](./config/radar/cascade/cascade_shortrange.cfg). Replace the port paths
+* Use [`AWR2243_CASCADE_cascade_ddm_shortrange.json`](./config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json) with
+  [`shortrange.cfg`](./config/radar/AWR2243_CASCADE/cascade_ddm/shortrange.cfg). Replace the port paths
   with the EVM's `/dev/serial/by-id/...` paths. Use the Application/User UART for the CLI and the other port for data.
   The descriptor sets the 5000 ms command timeout and the 3,125,000 baud data port.
 * **Configure only once per boot.** TI doesn't support stopping the cascade demo and sending a new config. Power-cycle
@@ -368,7 +370,7 @@ decoding is planned, core-24). There is no TLV point cloud on this firmware. Che
 * DCA1000 streaming is rejected for this board until 4-lane LVDS capture is added.
 * TI has only tested up to 192 ADC samples, 256 chirps, and 8 Rx channels. BFP compression isn't supported.
 * With `guiMonitor` detectedObjects 3 (TI's default) the demo sends compact points (TLV 12), which the driver does
-  not decode: point clouds stay empty and the driver warns once. The driver's `cascade_shortrange.cfg` uses 1.
+  not decode: point clouds stay empty and the driver warns once. The driver's `AWR2243_CASCADE/cascade_ddm/shortrange.cfg` uses 1.
 
 ### 2. Radar .cfg file
 
@@ -386,14 +388,14 @@ cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 # check a config without hardware: loads the board descriptor and radar cfg, runs the
 # cross-checks, prints the board, ports, frame shape, bytes/frame, output.dir and skipped
 # commands; opens no port or socket; exit 0 if usable, 1 otherwise
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --validate
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_stress_test_front.json --validate
 
 # run it
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_stress_test_front.json
 
 # run 300 frames (or 30 s), printing a stats line every second
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --frames 300 --stats
-./CPSL_TI_Radar_CPP ../config/system/front_radar_IWR1843_stress_test.json --duration 30
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_stress_test_front.json --frames 300 --stats
+./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_stress_test_front.json --duration 30
 ```
 
 | Flag | Effect |
