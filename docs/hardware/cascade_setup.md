@@ -80,7 +80,7 @@ Start with TI's own firmware. If this works, you know the board, cable, and port
 4. Run this, replacing `/dev/ttyACM0` with **your CLI port**:
    ```bash
    cd ~/Documents/radar_dev/CPSL_TI_Radar/firmware_dev
-   docker compose run --rm flash /build_context/scripts/flash_cascade.sh /dev/ttyACM0 prebuilt
+   ./fw flash awr2243_cascade_ddm /dev/ttyACM0 prebuilt
    ```
 5. Wait about a minute. ✅ **Success** looks like this:
    ```
@@ -101,9 +101,9 @@ try the **other** port. More help is in [Troubleshooting](#troubleshooting).
 4. Run this, replacing the ports with **yours**:
    ```bash
    cd ~/Documents/radar_dev/CPSL_TI_Radar/firmware_dev
-   docker compose run --rm flash python3 /build_context/scripts/cascade_serial_check.py \
+   docker compose run --rm flash python3 /build_context/projects/awr2243_cascade_ddm/tools/cascade_serial_check.py \
        --cli /dev/ttyACM0 --data /dev/ttyACM1 \
-       --cfg /build_context/firmware/cascade/src/demo/chirp_configs/cascade_shortrange.cfg
+       --cfg /build_context/projects/awr2243_cascade_ddm/configs/cascade_shortrange.cfg
    ```
 5. ✅ **Success** looks like this:
    - Every settings line starts with `Done`
@@ -122,7 +122,7 @@ This is the same as Steps 2 and 3, but **leave off the word `prebuilt`**:
 2. Flash:
    ```bash
    cd ~/Documents/radar_dev/CPSL_TI_Radar/firmware_dev
-   docker compose run --rm flash /build_context/scripts/flash_cascade.sh /dev/ttyACM0
+   ./fw flash awr2243_cascade_ddm /dev/ttyACM0
    ```
 3. 12 V **off**, jumper on the **top** pins, 12 V **on**.
 4. Run the same check command as in Step 3. The results should look the same as with TI's firmware.

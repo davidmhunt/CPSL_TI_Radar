@@ -209,8 +209,8 @@ To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool 
 #### [AWR2243 2-chip cascade] IWR Demo (serial TLV)
 The cascade EVM (AM273x + 2× AWR2243) runs TI's 2-chip cascade DDM demo. Build and flash it with the
 [`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo
-(`scripts/flash_cascade.sh`, J6 jumper on the bottom pins to flash and on the top pins to run), then check it with
-`scripts/cascade_serial_check.py` before using this driver.
+(`./fw flash awr2243_cascade_ddm <port>`, J6 jumper on the bottom pins to flash and on the top pins to run), then check it with
+`firmware_dev/projects/awr2243_cascade_ddm/tools/cascade_serial_check.py` before using this driver.
 
 Once the correct firmware is flashed onto your board, power cycle the board and place it into functional mode.
 

@@ -23,14 +23,15 @@ The submodule is initialised with `git submodule update --init shipped_firmware/
 
 - The IWR1843 and IWR6843 stock demos, and the IWR1843 SAR/LVDS image
   (`iwr1843_sar_lvds`), are built from `firmware_dev/` (an opt-in submodule;
-  see `docs/firmware.md`) and are not tracked here yet.
+  see `docs/firmware.md`); publish them with `fw publish`.
 - The cascade (AWR2243 + AM273x) image is built from
   `firmware_dev/projects/awr2243_cascade_ddm/`; TI's two SBL `.tiimage` files
   it needs for flashing sit in that project's `prebuilt_binaries/`.
 
-A future publish script is meant to fill this directory from `firmware_dev`
-builds and record each image's provenance (`firmware_dev` commit, build config,
-chirp config) next to it.
+`fw publish` (from `firmware_dev/`, clean builds only) fills this directory from `firmware_dev` builds:
+`./fw publish <project> [--dry-run]` copies each flashable image to `<BOARD>/<descriptor>/` with an
+`<image>.provenance.json` (`firmware_dev` commit, variant, toolchain, image sha256, chirp cfgs). See
+`firmware_dev/docs/tutorials/04_publish.md`. Nothing from it is tracked here yet.
 
 ## Licensing
 

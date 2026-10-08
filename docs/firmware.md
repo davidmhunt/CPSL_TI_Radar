@@ -9,8 +9,8 @@ Firmware role's source of project facts
 | Path | What | Repo / branch |
 |------|------|---------------|
 | `firmware_dev/` | Firmware sources, Docker build env, download/build/flash scripts | submodule `CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`; opt-in (`update = none`) — fetch with `git submodule update --init --checkout firmware_dev` |
-| `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.env`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `docs/`, `build/`), copied from `_template/`. **Usage guide: [`firmware_dev/projects/README.md`](../firmware_dev/projects/README.md)** | ″ |
-| `firmware_dev/fw` | Bash entry point to `tools/fwcli/` (stdlib Python >= 3.11): `list`, `ports`, `new`, `deps`, `build`, `test`, `flash`, `verify`, `publish`, `help`, each with `--json` (JSON Lines, final `result`, exit codes per `docs/specs/fw_project_contract.md` App. A); runs compose as the host UID. Reads `project.toml`, or `project.env` with a deprecation line until the project migrates (fwstd-04..06). Own tests: `cd firmware_dev && uv run --group dev pytest tests -q` (fake compose/fuser/pty, no hardware) | ″ |
+| `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.toml`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `tests/`, `docs/`, `build/`), copied from `_template/`. **Start at [`firmware_dev/README.md`](../firmware_dev/README.md)** (5-step path and tutorials); verb/manifest reference: [`projects/README.md`](../firmware_dev/projects/README.md) | ″ |
+| `firmware_dev/fw` | Bash entry point to `tools/fwcli/` (stdlib Python >= 3.11): `list`, `ports`, `new`, `deps`, `build`, `test`, `flash`, `verify`, `publish`, `help`, each with `--json` (JSON Lines, final `result`, exit codes per `docs/specs/fw_project_contract.md` App. A); runs compose as the host UID. Reads each project's `project.toml`. Own tests: `cd firmware_dev && uv run --group dev pytest tests -q` (fake compose/fuser/pty, no hardware) | ″ |
 | `firmware_dev/tools/` | Cross-project code: `fwcli/` (the `fw` logic); `md_to_pdf.py` was removed in fwstd-07 and `cascade_serial_check.py` moved into `awr2243_cascade_ddm/tools/` in fwstd-06 | ″ |
 | `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/`, `prebuilt_binaries/` SBL images + demo.cfg) | ″ |
 | `firmware_dev/projects/ti_stock_demos/` | Stock SDK 3.6 IWR1843/IWR6843 mmw demos, built out of tree (overlay in `build/sdk/`; no TI source tracked) | ″ |
@@ -35,19 +35,20 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 
 ## Commands (run from `firmware_dev/`)
 
-| Task | Command |
-|------|---------|
-| List / create projects | `./fw list` · `./fw new <project>` (guide: `projects/README.md`) |
-| Build a project | `./fw build <project>` → `projects/<project>/build/` (`CCS_CONFIG`, `FW_*` passed through; build.sh gets the commit as `FW_COMMIT`, short hash of `firmware_dev` HEAD, `-dirty` if `git status --porcelain` is non-empty). Long builds: `setsid nohup ./fw build <p> > log 2>&1 &` |
-| Flash a project | `./fw flash <project> <port> [image] [--dry-run]` — `flash.sh` exits 0 flashed, 1 failed, 2 bad args, 3 flasher missing. `iwr1843_sar_lvds` (UniFlash 9.6.0 DSLite, `UNIFLASH_PATH=/opt/ti/uniflash_9.6.0`, ccxml `configs/iwr1843_uniflash.ccxml`; **bench-confirmed** 2026-10-06 on one board: success line seen after a full USB+5 V power-cycle in SOP 101, `-f <image>,1` and the `-if00` bootloader port accepted, exit code 0 (`Flashed (DSLite rc=0)`), no trailing `Can't Run Target CPU` line, image then boots to `mmwDemo:/>` in SOP 001; power-cycle before EVERY attempt (a retry without it fails with `unexpected data`); stock-demo restore observed 2026-10-07 (firmware-19: `ti_stock_demos` flash rc=0, SUCCESS line, `mmwDemo:/>` + `version` in SOP 001); no `-e`, it is verbose): `fw` gates on the host before any container — by-id `-if00` port (else warning), no process holds the port (`fuser`/`lsof`), typed `FLASH MODE CONFIRMED` on an interactive TTY (a non-by-id port first needs the typed `USE THIS PORT` on a TTY, and `--plan`/`--json` refuse it; a wrong phrase or no TTY exits 5; scripts use `--plan` then `--confirm <token>`; since fwstd-03 these gates apply to every flashable project incl. the cascade); `--dry-run` prints the DSLite command + image sha256 and starts only the no-/dev `firmware-env`. Success = `SUCCESS!! File type META_IMAGE1`. UniFlash 9.6.0 is `downloads/download.sh` item 9 (size + TOFU sha256 pin). Stock-demo restore: `./fw flash ti_stock_demos <port>` (own `flash.sh`, same DSLite flow, IWR1843 only; the IWR6843 image prints the UniFlash GUI steps and exits 3; bench guide `projects/ti_stock_demos/docs/bench_check.md`, record in its `project.toml` `[[bench]]`) |
-| Bench host tool | `picocom` for the CLI port in bench bring-up (`sudo apt install picocom`; verify `command -v picocom`); no-install fallback `uv run python -m serial.tools.miniterm <by-id port> 115200` (Ctrl-] exits) |
-| Fetch installers | `./downloads/download.sh` |
-| Build image | `docker compose build` (image `cpsl-ti-radar-firmware-dev:latest`) |
-| Build cascade | `./fw build awr2243_cascade_ddm` → `projects/awr2243_cascade_ddm/build/am273x_cascade.appimage` (`CCS_CONFIG=Debug` for debug) |
-| Build SDK 3.6 stock demos | `./fw build ti_stock_demos [--variant 18xx\|68xx]` → `projects/ti_stock_demos/build/iwr{1843,6843}_demo.{bin,elf}` |
-| Build IWR1843 SAR/LVDS project | `./fw build iwr1843_sar_lvds` → `projects/iwr1843_sar_lvds/build/iwr1843_sar_lvds.{bin,elf}` + `_mss.map` (MSS-only, no DSS outputs, R4F compiler only; clean build of `src/` every time; `./fw flash` uses DSLite, bench-confirmed once) |
-| Flash cascade | `./fw flash awr2243_cascade_ddm <CLI port> [image\|prebuilt]` — success only on `All commands from config file are executed !!!` |
-| Bring-up check (manual, sends a cfg; `./fw verify` on the cascade only listens, probe skipped since `once_safe` is false) | `docker compose run --rm flash python3 /build_context/projects/awr2243_cascade_ddm/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
+One row per `fw` verb; arguments, flash modes and per-project details are in [`firmware_dev/README.md`](../firmware_dev/README.md), the tutorials and each project README. `./fw help` is the live summary.
+
+| Verb | What it does |
+|------|--------------|
+| `./downloads/download.sh` · `docker compose build` | Once: fetch the TI installers (~3.6 GB, gitignored; includes UniFlash 9.6.0) and build image `cpsl-ti-radar-firmware-dev:latest` |
+| `./fw list` · `./fw ports` | Projects (status, board, SDK, baseline, build state); candidate by-id serial ports and who holds them |
+| `./fw new <p>` · `./fw deps [p]` | Copy `_template/`; check the installers a project needs |
+| `./fw build <p> [--variant V] [--dry-run]` | Build in the container as the host UID to `projects/<p>/build/` with `build_info.json`; `CCS_CONFIG`/`FW_*` pass through; `FW_COMMIT` = short `firmware_dev` HEAD, `-dirty` if `git status --porcelain` is non-empty. Long builds: `setsid nohup ./fw build <p> > log 2>&1 &` |
+| `./fw test [p]` | Hardware-free checks (manifest, descriptors, cfgs, `[test].commands`, `build --dry-run`) |
+| `./fw flash <p> <by-id -if00 port> [image] [--dry-run \| --plan \| --confirm TOKEN]` | Gated flash: no process holds the port, typed `FLASH MODE CONFIRMED` on a TTY (a non-by-id port also needs `USE THIS PORT`; wrong phrase or no TTY exits 5; scripts use `--plan` then `--confirm`). Power-cycle before EVERY attempt. Exit 3 = no headless flasher, manual steps printed. Bench-confirmed projects and their jumper/power steps: project READMEs and `docs/bench_check.md` |
+| `./fw verify <p> [--port P]` | Descriptor identify probes, never a cfg (the cascade only listens: `once_safe` false) |
+| `./fw publish <p> [--dest D] [--dry-run]` | Clean builds only: images + provenance to `shipped_firmware/<BOARD>/<descriptor>/` |
+| Bench host tool | `picocom` for the CLI port (`sudo apt install picocom`); no-install fallback `uv run python -m serial.tools.miniterm <by-id port> 115200` (Ctrl-] exits) |
+| Cascade bring-up check (manual, sends a cfg) | `docker compose run --rm flash python3 /build_context/projects/awr2243_cascade_ddm/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
 
 ## Boards (single-user: claim in `status.md` before use)
 
