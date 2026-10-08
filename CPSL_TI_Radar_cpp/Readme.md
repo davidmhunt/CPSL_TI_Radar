@@ -275,6 +275,7 @@ v1 -> v2 migration section).
 {
     "schema_version": 2,
     "board": "IWR1843",
+    "firmware": "demo",
     "board_overrides": {},
     "radar_cfg": "../radar/nav_configs/1843_stress_test.cfg",
     "cli": { "port": "/dev/ttyACM0" },
@@ -290,6 +291,7 @@ v1 -> v2 migration section).
 |-----|----------|---------|
 | `schema_version` | yes | `2` |
 | `board` | yes | A board name (`IWR1443`, `IWR1843`, `IWR6843`, `AWR2243_CASCADE`), looked up as `<boards dir>/<name>.json`: the boards dir is `$CPSL_TI_RADAR_BOARDS_DIR` if set, otherwise `../boards` next to the JSON file (the layout of `config/`). Or a path to a descriptor file (relative to the JSON file). |
+| `firmware` | yes | The firmware id the radar runs, a file in `config/firmware/` (`demo`, `dca1000_raw`, `iwr1843_sar_lvds`, `cascade_ddm`); it must be in the board descriptor's `firmwares` list. The driver applies that descriptor's error-level limits (TX/RX counts, band, slope, sample rate, chirp cycle, frame period, ADC buffer, L3 cube, LVDS rate, required/forbidden commands) and refuses a stream the firmware does not produce. `board: IWR1843` with `iwr1843_sar_lvds` is an error: use `"board": "IWR1843_SAR"`. A missing key is an error naming the board's list. A `config/user/*.json` without it is refused; fix it with the Radar tab's Add firmware button or `uv run tools/migrate_config_v1_to_v2.py --add-firmware --in-place <file>`. |
 | `board_overrides` | no | Deep-merged over the descriptor, then validated like it. Baud rates and timeouts live here, for example `{"cli": {"cmd_timeout_ms": 300}, "data_uart": {"baud": 3125000, "timeout_ms": 5000}}`. `cli.stop_timeout_ms` sets how long `sensorStop` waits for `Done`; by default it is `max(cmd_timeout_ms, frame period + 200 ms)`, because the demo answers only after the current frame. |
 | `radar_cfg` | yes | The TI `.cfg` sent to the radar. Relative paths resolve against the JSON file's directory; the tracked configs use `../radar/<subdir>/<file>.cfg`. |
 | `cli.port` | yes | CLI serial port (usually the lower-numbered `/dev/ttyACM*`; [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) lists them). |
@@ -308,6 +310,11 @@ v1 -> v2 migration section).
 | `runtime.rx_priority`, `.worker_priority` | no | SCHED_RR priority (0-99) requested for the RX thread and the DCA worker; default 0 = normal priority. Above 0 needs `cap_sys_nice` or an `rtprio` limit; without it, one warning and normal priority. |
 
 At least one of `serial_stream` and `dca1000` must be enabled.
+
+`--validate --json` prints one JSON object instead of the text (`ok`, `config`, `board`, `firmware`, `errors[]`
+with `code`/`message`/`source`, `warnings[]`, `notes[]`, `frame`, `bytes_per_frame`, `metrics`) and exits 0 or 1. The error
+`code`s are the rule codes of `radar_gui/cfg/validate.py`; `tests/test_validate_parity.py` checks that the two agree.
+The GUI-only rules (MIMO / chirp pattern, LVDS data format, CFAR editing) are not in the driver.
 
 Notes on the radar `.cfg` for DCA1000 streaming with the mmWave SDK demos (for example SDK 3.5 on
 the IWR1843): `lvdsStreamCfg -1 0 1 0` streams ADC samples only. `lvdsStreamCfg -1 1 1 1` also

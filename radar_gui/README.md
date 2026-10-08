@@ -52,6 +52,16 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 Tests: `uv run pytest tests/test_radar_gui_skeleton.py tests/test_radar_gui_cfgapi.py` (the driver `--validate` test
 skips when `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` is absent).
 
+**Driver verdict on Save (gui-04).** `POST /api/cfg/save` also returns `driver`: the real driver's
+`<json> --validate --json` verdict on the file just written (`available`, `ok`, `errors[]`, `warnings[]`, `text`), and Configure
+shows it under the Saved message ("Driver check: OK" or the error codes). `available: false` when no driver binary is found (the
+Python verdict above it still stands). The driver, not the Python validator, is the final gate: both read the same
+`config/firmware/*.json` limits, and `tests/test_validate_parity.py` pins them together. `radar_gui/driver.py` `validate_config()`
+(used by Radar-tab Validate and Start too) runs `--validate --json` and falls back to the plain-text `--validate` on a driver
+without `--json`. A saved system JSON carries `firmware`; a `config/user/*.json` without it is refused by the driver and is fixed
+with the Radar tab's **Add firmware** button or `tools/migrate_config_v1_to_v2.py --add-firmware`. Shots:
+`tools/gui_shots_specs/gui04_save.json`.
+
 ## Detection (CFAR) card (gui-35)
 
 The Configure tab's "Detection (CFAR)" card edits the on-chip detector: `cfarCfg`, `cfarFovCfg` (FOV) and, on the IWR1443,

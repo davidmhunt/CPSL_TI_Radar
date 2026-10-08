@@ -464,14 +464,19 @@ Three files describe a run (design §1, §2):
 
 1. **System config** (`CPSL_TI_Radar_cpp/config/system/*.json`, schema v2,
    read by `SystemConfigReader`): `"schema_version": 2`, `board`,
-   `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
+   `firmware` (required), `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
    `output` (`dir`, `save_adc_frames`, `save_raw_lvds`) and `runtime`
    (`log_level`, `stall_timeout_ms`, `frame_queue_depth`, and since core-15
    `rx_cpu`, `worker_cpu`, `rx_priority`, `worker_priority`; all applied). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
    is strict (unknown keys, bad types, repeated keys are errors with a JSON
    path). A v1 file is rejected with the name of
    `tools/migrate_config_v1_to_v2.py`. The fields are listed in
-   `CPSL_TI_Radar_cpp/Readme.md`.
+   `CPSL_TI_Radar_cpp/Readme.md`. `firmware` names a descriptor in
+   `CPSL_TI_Radar_cpp/config/firmware/<id>.json` (`FirmwareDescriptor`,
+   strict like the board descriptor); `SystemConfigReader` checks it is in the
+   board's `firmwares`, that the enabled streams are ones the firmware
+   outputs, and the `IWR1843_SAR` alias rule. `$CPSL_TI_RADAR_FIRMWARE_DIR`
+   overrides the directory (default `<boards dir>/../firmware`). A `config/user/*.json` written before this key existed is refused by the driver (the message names the key and the board's firmware list); fix it with the Radar tab's **Add firmware** button or `uv run tools/migrate_config_v1_to_v2.py --add-firmware --in-place <file>`.
 2. **Board descriptor** (`CPSL_TI_Radar_cpp/config/boards/<board>.json`:
    `IWR1443`, `IWR1843`, `IWR1843_SAR`, `IWR6843`, `AWR2243_CASCADE`), named by `board`
    (a name is looked up in `$CPSL_TI_RADAR_BOARDS_DIR`, else `../boards`
@@ -491,6 +496,19 @@ interleave vs `lvds.layout`, `lvdsStreamCfg` ADC streaming, no DCA1000 on a
 board without LVDS); an error fails the load. Loading a descriptor also
 checks that `data_uart.header_bytes` matches `tlv_dialect` (36 for `sdk2`,
 40 otherwise).
+
+After the cross-check, `check_cfg_limits` (`src/BoardDescriptor/CfgLimits.cpp`)
+applies the firmware descriptor's `limits.<board>` (plus
+`config/limits/host.json`) to the radar .cfg: TX/RX counts, band, slope,
+sample rate, chirp cycle, loops, frame period, ADC buffer, L3 cube, LVDS
+rate. An error-level violation fails the load and carries the rule `code` of
+`radar_gui/cfg/validate.py`; warning-level ones are reported only by
+`--validate --json` (`warnings[]`, `metrics`). One set of numbers, two readers:
+the GUI and the driver both load the same descriptor files, and
+`tests/test_validate_parity.py` runs the real driver against Python
+`validate()` for every shipped config and the seeded-bad corpus in
+`tests/fixtures/parity/`. Not in the driver: the MIMO / chirp-pattern rules,
+`lvds_fmt_unsupported`, and the CFAR rules (GUI only).
 
 **Dispatch.** No component branches on a board name; each reads descriptor
 fields through `SystemConfigReader::getBoard()`:

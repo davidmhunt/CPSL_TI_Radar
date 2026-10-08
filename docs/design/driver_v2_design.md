@@ -599,3 +599,12 @@ This draft reflects the user's rulings on D8, D10 and D11 (accepted) and D5
 >
 > **Boards.** To add or tune a board, copy a file in `config/boards/` and edit
 > it. No rebuild is needed.
+
+## 10. Note, 2026-10-07 (gui-04): `firmware` key and driver-side limits
+
+Added after this design: a system config now names its firmware (`"firmware": "demo"`, required, no schema bump;
+schema_version stays 2 because v2 is unreleased). `SystemConfigReader` loads `config/firmware/<id>.json`, checks the
+board lists it, and `check_cfg_limits` applies that descriptor's `limits.<board>` as error-level rules with the Python rule
+codes. `--validate --json` prints the verdict as one JSON object. Warnings stay GUI-side except in that JSON. The rules in
+sections 1-2 above are otherwise unchanged; see `docs/ARCHITECTURE.md` "Configuration" and `CPSL_TI_Radar_cpp/Readme.md`
+for the current key table. The example in section 2 predates the key and lacks `"firmware"`.

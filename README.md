@@ -84,7 +84,8 @@ v2.0 is a rework and may break v1 interfaces. Removed from the tree (all recover
 ### System configs (schema v2)
 
 v2 system configs carry `"schema_version": 2` and name a board descriptor (`"board": "IWR1843"`,
-from `CPSL_TI_Radar_cpp/config/boards/`). The driver rejects a v1 file (no `schema_version`) and
+from `CPSL_TI_Radar_cpp/config/boards/`) and the firmware it runs (`"firmware": "demo"`, from
+`CPSL_TI_Radar_cpp/config/firmware/`; required, see the key table in `CPSL_TI_Radar_cpp/Readme.md`). The driver rejects a v1 file (no `schema_version`) and
 names the script that converts it. All tracked configs in `CPSL_TI_Radar_cpp/config/system/` are
 already converted. To convert your own:
 
@@ -93,6 +94,10 @@ uv run tools/migrate_config_v1_to_v2.py my_config.json              # print the 
 uv run tools/migrate_config_v1_to_v2.py my_configs/ --in-place      # rewrite every v1 *.json in a directory
 uv run tools/migrate_config_v1_to_v2.py my_configs/ --check         # exit 1 if any file is still v1
 ```
+
+A v2 file without `firmware` (every `config/user/*.json` made before it was required) is refused by the driver; add it with
+`uv run tools/migrate_config_v1_to_v2.py my_config.json --add-firmware --in-place` (`--check` lists files still missing it), or with the
+GUI Radar tab's **Add firmware** button.
 
 The script is idempotent (v2 files are left alone) and reports any key it cannot map instead of
 converting that file.
