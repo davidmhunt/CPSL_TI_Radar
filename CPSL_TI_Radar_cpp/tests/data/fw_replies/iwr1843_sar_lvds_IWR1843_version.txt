@@ -5,4 +5,4 @@ mmWave SDK Version      : 03.06.02.00
 Device Info             : IWR18xx ES 02.00
 Done
 
-mmwDemo:/>
+mm_sar_lvds:/>

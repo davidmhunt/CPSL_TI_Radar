@@ -2,4 +2,4 @@
 sarStats
 Done
 
-mmwDemo:/>
+mm_sar_lvds:/>

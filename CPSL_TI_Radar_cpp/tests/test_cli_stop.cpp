@@ -411,4 +411,17 @@ TEST_CASE(both_demo_and_sar_prompts_satisfy_the_prompt_wait) {
     }
 }
 
+// firmware-17 Step 3: the identity probes' "require" list can match the prompt
+// only if query() hands back the reply with the trailing prompt still on it.
+TEST_CASE(query_returns_the_reply_with_the_prompt_included) {
+    SystemConfigReader sys = serial_free_config("cli_query_prompt");
+    std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
+    fake->prompt = "mm_sar_lvds:/>";
+    CLIController cli;
+    CHECK(cli.initialize(sys, fake));
+    const std::string r = cli.query("sarStats", 1000);
+    CHECK(r.find("Done") != std::string::npos);
+    CHECK(r.find("mm_sar_lvds:/>") != std::string::npos);
+}
+
 TEST_MAIN()

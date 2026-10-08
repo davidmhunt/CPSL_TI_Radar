@@ -46,6 +46,17 @@
       "note": ""
     },
     {
+      "id": "old_sar_image",
+      "fw": "iwr1843_sar_lvds",
+      "board": "IWR1843",
+      "replies": {
+        "version": "iwr1843_sar_lvds_IWR1843_version.txt",
+        "sarStats": "iwr1843_sar_lvds_old_IWR1843_sarStats.txt"
+      },
+      "verdict": "mismatch",
+      "note": "pre-firmware-17 SAR image: sarStats Done but the prompt is mmwDemo:/>"
+    },
+    {
       "id": "demo_1843_on_6843_board",
       "fw": "demo",
       "board": "IWR1843",
