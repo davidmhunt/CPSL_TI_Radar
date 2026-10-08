@@ -92,3 +92,4 @@ Decided 2026-10-08 (user): `--confirm` needs no typed phrase (TTY path keeps it)
 2. 2026-10-08 (user): `publish` provenance `chirp_cfg` lists every `[test].cfgs` file of the project with its sha256.
 3. 2026-10-08 (user): commits that change only `[[bench]]` entries and/or `project.status` in `project.toml` do not make a build dirty or stale (A7). Any other change under the project still does.
 4. 2026-10-08 (user, ratified): R4 gains an optional `[flash].manual_images` list naming images that must be flashed by hand; `--plan`/`--dry-run` on such an image return the manual steps in `result.data.checklist` with exit 3 and issue no token.
+5. 2026-10-08 (user, ratified): any exit 3 (manual) from a project's flash step carries that step's output in `result.data.checklist`. This applies on every flash path: `--confirm`, TTY, and `--dry-run` for images not listed in `[flash].manual_images`.
