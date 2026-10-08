@@ -208,10 +208,12 @@ inline std::string write_serial_config(const std::string& name, const std::strin
     if (board == "IWR6843") cfg = std::string(TEST_DATA_DIR) + "/radar/iwr6843.cfg";
     if (board == "AWR2243_CASCADE") cfg = std::string(TEST_DATA_DIR) + "/radar/awr2243_cascade.cfg";
     const std::string path = dir + "/" + name + ".json";
-    std::ofstream(path) << "{\"schema_version\": 2, \"board\": \"" << board << "\", \"radar_cfg\": \"" << cfg
+    const std::string firmware = board == "AWR2243_CASCADE" ? "cascade_ddm" : "demo";  // required key (gui-04)
+    std::ofstream(path) << "{\"schema_version\": 2, \"board\": \"" << board << "\", \"firmware\": \""
+                        << firmware << "\", \"radar_cfg\": \"" << cfg
                         << "\", \"cli\": {\"port\": \"/dev/null-not-opened\"}, "
                         << "\"serial_stream\": {\"enabled\": true, \"port\": \"/dev/null-not-opened\"}, "
-                        << "\"dca1000\": {\"enabled\": false}, "
+                        << "\"dca1000\": {\"enabled\": false}, \"runtime\": {\"firmware_check\": \"off\"}, "
                         << "\"board_overrides\": {\"data_uart\": {\"timeout_ms\": " << timeout_ms << "}}, "
                         << "\"output\": {\"dir\": \"" << dir << "\", \"save_adc_frames\": false, "
                         << "\"save_raw_lvds\": false}}";

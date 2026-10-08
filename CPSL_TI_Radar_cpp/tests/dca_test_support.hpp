@@ -31,6 +31,7 @@ inline std::string write_system_config(const std::string& name, const std::strin
     nlohmann::json j = nlohmann::json::parse(R"({
         "schema_version": 2,
         "board": "IWR1843",
+        "firmware": "demo",
         "radar_cfg": "",
         "cli": { "port": "/dev/null-not-opened" },
         "dca1000": { "enabled": true, "fpga_ip": "127.0.0.1", "host_ip": "127.0.0.1",
@@ -42,6 +43,7 @@ inline std::string write_system_config(const std::string& name, const std::strin
     j["dca1000"]["cmd_port"] = cmd_port;
     j["dca1000"]["data_port"] = data_port;
     j["output"]["dir"] = out_dir;
+    j["runtime"]["firmware_check"] = "off";  // the fakes do not answer the firmware identity probe
     j["output"]["save_adc_frames"] = save_adc_frames;
     const std::string path = tmp_dir() + "/" + name + ".json";
     std::ofstream(path) << j.dump(2);

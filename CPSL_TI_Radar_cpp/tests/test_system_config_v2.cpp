@@ -24,6 +24,7 @@ static json base_config() {
     json j = json::parse(R"({
         "schema_version": 2,
         "board": "IWR1843",
+        "firmware": "demo",
         "board_overrides": {},
         "radar_cfg": "",
         "cli": { "port": "/dev/ttyACM0" },
@@ -97,6 +98,7 @@ TEST_CASE(minimal_config_defaults_and_optional_sections) {
     // disabled stream sections, output and runtime may all be omitted
     json j = {{"schema_version", 2},
               {"board", "IWR1843"},
+              {"firmware", "demo"},
               {"radar_cfg", kData + "/radar/iwr1843.cfg"},
               {"cli", {{"port", "/dev/ttyACM0"}}},
               {"serial_stream", {{"enabled", true}, {"port", "/dev/ttyACM1"}}}};
@@ -276,6 +278,12 @@ TEST_CASE(board_lookup_by_name_path_and_json_dir) {
         std::ofstream out(root + "/boards/IWR1843.json");
         out << in.rdbuf();
     }
+    mkdir((root + "/firmware").c_str(), 0755);
+    {
+        std::ifstream in(std::string(CONFIG_DIR) + "/firmware/demo.json");
+        std::ofstream out(root + "/firmware/demo.json");
+        out << in.rdbuf();
+    }
     std::ofstream(root + "/system/s.json") << base_config().dump(4);
     unsetenv(SystemConfigReader::kBoardsDirEnv);
     SystemConfigReader byDir(root + "/system/s.json");
@@ -299,14 +307,16 @@ TEST_CASE(cross_check_errors_fail_the_load) {
     // DCA1000 on the cascade (lvds.supported false)
     json j = base_config();
     j["board"] = "AWR2243_CASCADE";
+    j["firmware"] = "cascade_ddm";
     j["radar_cfg"] = kData + "/radar/awr2243_cascade.cfg";
     std::string e = reject("v2_cascade_dca.json", j);
-    CHECK(has(e, "radar cfg does not fit board AWR2243_CASCADE"));
-    CHECK(has(e, "lvds.supported false"));
+    CHECK(has(e, "cascade_ddm"));
+    CHECK(has(e, "LVDS"));
 
     // serial on the IWR1443 is accepted since core-16 (sdk2 dialect confirmed)
     j = base_config();
     j["board"] = "IWR1443";
+    j["firmware"] = "demo";
     j["radar_cfg"] = kData + "/radar/iwr1443.cfg";
     j["dca1000"]["enabled"] = false;
     j["serial_stream"]["enabled"] = true;
@@ -357,12 +367,23 @@ static std::string reject_code(const std::string& name, const json& j, const std
     return r.get_error();
 }
 
-TEST_CASE(firmware_key_optional_and_accepted) {
+TEST_CASE(firmware_key_required_message) {
+    // gui-04 Step 3a: no default; the error names the key, the board's list and the migration command
     json j = base_config();
-    SystemConfigReader none(write_json("fw_none.json", j));
-    CHECK(none.initialized);
-    CHECK_EQ(none.getFirmwareId(), std::string(""));
-    CHECK(none.getIssues().empty());
+    j.erase("firmware");
+    const std::string path = write_json("fw_none.json", j);
+    SystemConfigReader none(path);
+    CHECK(!none.initialized);
+    CHECK_EQ(none.get_error(),
+             path + ": missing required key \"firmware\". Board IWR1843 supports: demo, iwr1843_sar_lvds. "
+                    "Add \"firmware\": \"<one of these>\" or run: uv run tools/migrate_config_v1_to_v2.py "
+                    "--add-firmware --in-place " + path);
+    CHECK(!none.getIssues().empty());
+    if (!none.getIssues().empty()) CHECK_EQ(none.getIssues()[0].code, std::string("firmware_missing"));
+}
+
+TEST_CASE(firmware_key_accepted) {
+    json j = base_config();
 
     // IWR1843 lists demo and iwr1843_sar_lvds; demo has an lvds output on the 1843
     j["firmware"] = "demo";
@@ -452,12 +473,11 @@ TEST_CASE(firmware_outputs_must_cover_the_enabled_streams) {
 
 TEST_CASE(cross_check_errors_become_one_issue_each) {
     json j = base_config();
-    j["board"] = "AWR2243_CASCADE";
-    j["radar_cfg"] = kData + "/radar/awr2243_cascade.cfg";
+    j["radar_cfg"] = kData + "/radar/awr2243_cascade.cfg";   // a cascade cfg on the IWR1843
     SystemConfigReader r(write_json("issues_cascade_dca.json", j));
     CHECK(!r.initialized);
     CHECK(!r.getIssues().empty());
-    for (const auto& i : r.getIssues()) CHECK_EQ(i.code, std::string("radar_cfg"));
+    for (const auto& i : r.getIssues()) CHECK(i.code.rfind("firmware_", 0) != 0);  // cfg-vs-board issues
 }
 
 TEST_MAIN()

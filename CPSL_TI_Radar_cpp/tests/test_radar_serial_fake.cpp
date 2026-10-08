@@ -177,6 +177,8 @@ TEST_CASE(runtime_skip_configure_key_is_read_and_must_be_a_bool) {
     const std::string key = "\"output\":";
     auto with_runtime = [&](const std::string& rt, const std::string& name) {
         std::string t = text;
+        const std::string writer_rt = "\"runtime\": {\"firmware_check\": \"off\"}, ";  // from write_serial_config
+        t.erase(t.find(writer_rt), writer_rt.size());
         t.insert(t.find(key), "\"runtime\": " + rt + ", ");
         const std::string p = std::string(TEST_TMP_DIR) + "/" + name + ".json";
         std::ofstream(p) << t;

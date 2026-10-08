@@ -54,7 +54,7 @@ struct Fixture {
                 std::ifstream in(path);
                 j = nlohmann::json::parse(in);
             }
-            j["runtime"] = {{"frame_queue_depth", queue_depth}};
+            j["runtime"]["frame_queue_depth"] = queue_depth;
             std::ofstream(path) << j.dump(2);
         }
         sys.initialize(path);

@@ -105,12 +105,12 @@ int main(int argc, char** argv) {
     std::string dir = (std::filesystem::temp_directory_path() / "bench_latency_XXXXXX").string();
     if (mkdtemp(&dir[0]) == nullptr) return 1;
     const std::string json = dir + "/system.json";
-    std::ofstream(json) << "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"" << cfg
+    std::ofstream(json) << "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"" << cfg
                         << "\", \"cli\": {\"port\": \"/dev/null-not-opened\"}, \"dca1000\": {\"enabled\": true, "
                            "\"fpga_ip\": \"127.0.0.1\", \"host_ip\": \"127.0.0.1\", \"cmd_port\": 4096, "
                            "\"data_port\": 4098}, \"output\": {\"dir\": \""
                         << dir << "\", \"save_adc_frames\": false, \"save_raw_lvds\": false}, "
-                        << "\"runtime\": {\"log_level\": \"warn\"}}";
+                        << "\"runtime\": {\"log_level\": \"warn\", \"firmware_check\": \"off\"}}";
     Result<RadarConfig> rc = RadarConfig::load(json);
     if (!rc) {
         std::fprintf(stderr, "%s\n", rc.status.message.c_str());

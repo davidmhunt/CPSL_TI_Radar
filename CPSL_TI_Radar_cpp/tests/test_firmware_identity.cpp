@@ -151,7 +151,7 @@ struct Rig {
         const std::string path = uart_test::write_serial_config(name, TEST_TMP_DIR, board, 300);
         json j = json::parse(read_file(path));
         if (!firmware.empty()) j["firmware"] = firmware;
-        if (!check.empty()) j["runtime"]["firmware_check"] = check;
+        j["runtime"]["firmware_check"] = check.empty() ? "auto" : check;  // the writer defaults to "off"
         std::ofstream(path) << j.dump(2);
         Result<RadarConfig> cfg = RadarConfig::load(path);
         CHECK(static_cast<bool>(cfg));
@@ -264,13 +264,14 @@ TEST_CASE(off_writes_no_version) {
     CHECK(!log.has_line("firmware: match expected=demo found=no reply"));
 }
 
-TEST_CASE(config_without_a_firmware_key_asks_nothing) {
-    Lines log;
-    Rig rig("fwid_nokey", "IWR1843", "", "");
-    CHECK(rig.radar != nullptr);
-    if (!rig.radar) return;
-    CHECK(static_cast<bool>(rig.radar->configure()));
-    CHECK_EQ(rig.cli->count("version\n"), static_cast<size_t>(0));
+TEST_CASE(config_without_a_firmware_key_is_refused) {
+    // gui-04 Step 3a: the key is required, so there is no "asks nothing" mode any more
+    const std::string path = uart_test::write_serial_config("fwid_nokey", TEST_TMP_DIR, "IWR1843", 300);
+    json j = json::parse(read_file(path));
+    j.erase("firmware");
+    std::ofstream(path) << j.dump(2);
+    Result<RadarConfig> cfg = RadarConfig::load(path);
+    CHECK(!static_cast<bool>(cfg));
 }
 
 TEST_CASE(cascade_is_skipped_and_sends_the_cfg) {

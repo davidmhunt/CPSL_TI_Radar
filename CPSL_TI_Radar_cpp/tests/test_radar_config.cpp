@@ -29,6 +29,7 @@ static json base_config() {
     json j = json::parse(R"({
         "schema_version": 2,
         "board": "IWR1843",
+        "firmware": "demo",
         "radar_cfg": "",
         "cli": { "port": "/dev/null-not-opened" },
         "dca1000": { "enabled": true, "fpga_ip": "127.0.0.1", "host_ip": "127.0.0.1",

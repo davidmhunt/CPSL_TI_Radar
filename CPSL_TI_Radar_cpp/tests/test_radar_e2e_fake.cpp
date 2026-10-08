@@ -194,7 +194,7 @@ TEST_CASE(frame_queue_drops_the_oldest_and_counts_it) {
 }
 
 TEST_CASE(frame_queue_depth_one_is_latest_wins) {
-    Rig rig(load("overwrite1", [](json& j) { j["runtime"] = {{"frame_queue_depth", 1}}; }));
+    Rig rig(load("overwrite1", [](json& j) { j["runtime"]["frame_queue_depth"] = 1; }));
     if (!rig.radar) return;
     Radar& r = *rig.radar;
     CHECK(static_cast<bool>(r.configure()));
@@ -213,7 +213,7 @@ TEST_CASE(frame_queue_depth_one_is_latest_wins) {
 // producer never sees a stale, duplicate or torn frame, indices strictly
 // increase, and every frame it did not get was counted in frames_overwritten.
 static void race(const std::string& name, int depth, int frames) {
-    Rig rig(load(name, [depth](json& j) { j["runtime"] = {{"frame_queue_depth", depth}}; }));
+    Rig rig(load(name, [depth](json& j) { j["runtime"]["frame_queue_depth"] = depth; }));
     if (!rig.radar) return;
     Radar& r = *rig.radar;
     CHECK(static_cast<bool>(r.configure()));
@@ -405,7 +405,7 @@ TEST_CASE(config_once_per_boot) {
 }
 
 TEST_CASE(stall_policy) {
-    Rig rig(load("stall", [](json& j) { j["runtime"] = {{"stall_timeout_ms", 200}}; }));
+    Rig rig(load("stall", [](json& j) { j["runtime"]["stall_timeout_ms"] = 200; }));
     if (!rig.radar) return;
     Radar& r = *rig.radar;
     CHECK(static_cast<bool>(r.configure()));
@@ -538,7 +538,8 @@ private:
 TEST_CASE(worker_cpu_pins_the_dca_worker_thread) {
     for (const bool pin : {true, false}) {
         const RadarConfig cfg = load(pin ? "worker_cpu0" : "worker_cpu_null", [pin](json& j) {
-            j["runtime"] = {{"worker_cpu", pin ? json(0) : json(nullptr)}, {"worker_priority", 10}};
+            j["runtime"]["worker_cpu"] = pin ? json(0) : json(nullptr);
+            j["runtime"]["worker_priority"] = 10;
         });
         auto cli = std::make_shared<FakeCli>();
         auto src = std::make_shared<AffinityRecordingSource>();
@@ -570,6 +571,7 @@ TEST_CASE(sar_board_sends_calibdata_and_frame_is_3366000_bytes) {
     // core-22: IWR1843_SAR board + the shipped SAR cfg (dataFmt 1)
     Rig rig(load("sar", [](json& j) {
         j["board"] = "IWR1843_SAR";
+        j["firmware"] = "iwr1843_sar_lvds";
         j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
     }));
     if (!rig.radar) return;
@@ -589,6 +591,7 @@ TEST_CASE(sar_board_refuses_serial_stream) {
         j = json::parse(f);
     }
     j["board"] = "IWR1843_SAR";
+    j["firmware"] = "iwr1843_sar_lvds";
     j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
     j["serial_stream"] = {{"enabled", true}, {"port", "/dev/null-not-opened"}};
     const std::string path = kRoot + "/sar_serial.json";

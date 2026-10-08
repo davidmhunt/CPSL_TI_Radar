@@ -478,30 +478,15 @@ bool SystemConfigReader::load() {
             return load_issue("firmware_descriptor", src + ": firmware: " + apply_err, firmware_path);
         }
     } else {
-        // No "firmware" key (optional until gui-04 Step 3a): the board's default firmware (first of its
-        // "firmwares" list) supplies the rules. A missing descriptor file means no rules (custom board dirs);
-        // a descriptor that exists must load.
-        const std::string def_id = cpsl::radar::default_firmware_id(board);
-        if (!def_id.empty()) {
-            const char* env = std::getenv(kFirmwareDirEnv);
-            const std::string fw_dir =
-                (env != nullptr && *env != '\0') ? std::string(env) : dir_of(board_path) + "/../firmware";
-            const std::string def_path = fw_dir + "/" + def_id + ".json";
-            if (file_exists(def_path)) {
-                cpsl::radar::FirmwareDescriptor& def_fw = default_fw;
-                std::string fw_err;
-                if (!cpsl::radar::FirmwareDescriptor::load(def_path, def_fw, fw_err)) {
-                    return load_issue("firmware_descriptor", src + ": default firmware " + def_id + ": " + fw_err,
-                                      def_path);
-                }
-                if (!cpsl::radar::apply_firmware_to_board(def_fw, def_path, keep_prompt, board, fw_err)) {
-                    return load_issue("firmware_descriptor", src + ": default firmware " + def_id + ": " + fw_err,
-                                      def_path);
-                }
-                limit_fw = &default_fw;
-                limit_fw_path = def_path;
-            }
-        }
+        // "firmware" is required (gui-04 Step 3a): no default, the error names the board's list and the fix.
+        std::string supported;
+        for (const std::string& f : board.firmwares) supported += (supported.empty() ? "" : ", ") + f;
+        if (supported.empty()) supported = "(none listed)";
+        return load_issue("firmware_missing",
+                          src + ": missing required key \"firmware\". Board " + board.name + " supports: " +
+                              supported + ". Add \"firmware\": \"<one of these>\" or run: uv run "
+                              "tools/migrate_config_v1_to_v2.py --add-firmware --in-place " + src,
+                          src);
     }
 
     // radar cfg vs board, for the enabled streams

@@ -300,6 +300,8 @@ bool make_driver_rig(DriverRig& rig, const std::string& cfg, const std::string& 
         j << "{\n"
              "  \"schema_version\": 2,\n"
              "  \"board\": \"IWR1843\",\n"
+             "  \"firmware\": \"demo\",\n"
+             "  \"runtime\": { \"firmware_check\": \"off\" },\n"
              "  \"radar_cfg\": \"" << cfg << "\",\n"
              "  \"cli\": { \"port\": \"/dev/null-not-opened\" },\n"
              "  \"dca1000\": { \"enabled\": true, \"fpga_ip\": \"127.0.0.1\", \"host_ip\": \"127.0.0.1\",\n"
