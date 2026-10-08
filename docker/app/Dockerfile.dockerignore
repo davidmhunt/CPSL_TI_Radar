@@ -7,7 +7,6 @@
 !CPSL_TI_Radar_cpp
 !tools/bench
 !tools/setup
-!tools/radar_viewer/configs
 !tests/fakes
 !tests/fixtures/replay
 # ctest fixtures (validate_all_configs, validate_parity_corpus)

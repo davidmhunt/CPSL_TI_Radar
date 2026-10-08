@@ -35,13 +35,9 @@ ENV UV_PYTHON_PREFERENCE=only-system UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
-# radar_gui/adc.py imports numpy, which pyproject.toml lists only in the `notebooks` group: install the locked version alone
-RUN uv export --frozen --only-group notebooks --no-hashes --no-emit-project | grep -i '^numpy==' > /tmp/np.txt \
- && uv pip install --python /app/.venv/bin/python -r /tmp/np.txt && rm /tmp/np.txt
 COPY radar_gui radar_gui
 COPY tools/bench tools/bench
 COPY tools/setup tools/setup
-COPY tools/radar_viewer/configs tools/radar_viewer/configs
 COPY tests/fakes tests/fakes
 COPY tests/fixtures/replay tests/fixtures/replay
 COPY CPSL_TI_Radar_cpp/config CPSL_TI_Radar_cpp/config

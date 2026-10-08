@@ -5,6 +5,7 @@ description = "Host-side drivers, configs, and tools for TI mmWave radars (IWR14
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.142.2",
+    "numpy>=2.5.3",
     "pyserial>=3.5",
     "uvicorn[standard]>=0.54.0",
 ]
