@@ -1,0 +1,44 @@
+# CPSL TI Radar driver + GUI. Run from the repo root (paths below are relative to this file):
+#   docker compose -f docker/app/compose.yaml up demo            # no hardware, http://127.0.0.1:8090/
+#   docker compose -f docker/app/compose.yaml --profile hw up hw # real boards (Linux host), see docs/docker.md
+name: cpsl-ti-radar
+
+x-build: &build
+  context: ../..
+  dockerfile: docker/app/Dockerfile
+  target: runtime
+
+services:
+  demo:
+    image: cpsl-ti-radar:dev
+    build: *build
+    profiles: ["demo"]
+    ports: ["127.0.0.1:8090:8090"]
+    environment:
+      RADAR_GUI_DRIVER: tests/fakes/fake_driver.py
+    command: ["python", "-m", "radar_gui", "--host", "0.0.0.0", "--port", "8090",
+              "--source", "replay", "--file", "tests/fixtures/replay/iwr1843_sdk3_20frames.bin"]
+    restart: "no"
+
+  hw:
+    image: cpsl-ti-radar:dev
+    build: *build
+    profiles: ["hw"]
+    # Host networking reaches the DCA1000 on 192.168.33.x; the GUI listens on loopback only
+    # (no authentication, so it must not be on the LAN).
+    network_mode: host
+    command: ["python", "-m", "radar_gui", "--host", "127.0.0.1", "--port", "8090"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    group_add: ["${DIALOUT_GID:-20}"]          # host `getent group dialout | cut -d: -f3`
+    # Serial ports by env var (restart the container after a re-plug changes the node).
+    devices:
+      - "${RADAR_CLI:-/dev/ttyACM0}:${RADAR_CLI:-/dev/ttyACM0}"
+      - "${RADAR_DATA:-/dev/ttyACM1}:${RADAR_DATA:-/dev/ttyACM1}"
+    # Real-time priority is optional: needed only for runtime.rx_priority / worker_priority > 0.
+    cap_add: [SYS_NICE]
+    ulimits:
+      rtprio: 99
+    volumes:
+      - ../../CPSL_TI_Radar_cpp/config/user:/app/CPSL_TI_Radar_cpp/config/user
+      - ../../runs:/app/runs
+    restart: "no"

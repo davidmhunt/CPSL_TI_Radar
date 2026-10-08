@@ -1,0 +1,23 @@
+# Whitelist: the build context is the repo root, but only these paths enter the image.
+# (A per-Dockerfile ignore file beats any root .dockerignore, so harness files cannot change this.)
+*
+!pyproject.toml
+!uv.lock
+!radar_gui
+!CPSL_TI_Radar_cpp
+!tools/bench
+!tools/setup
+!tools/radar_viewer/configs
+!tests/fakes
+!tests/fixtures/replay
+# ctest fixtures (validate_all_configs, validate_parity_corpus)
+!tests/fixtures/v1_configs
+!tests/fixtures/parity
+# never the host build trees, user cfgs, caches or run output
+CPSL_TI_Radar_cpp/build
+CPSL_TI_Radar_cpp/build-*
+CPSL_TI_Radar_cpp/.vscode
+CPSL_TI_Radar_cpp/config/user
+tools/bench/runs
+**/__pycache__
+**/.venv
