@@ -59,6 +59,11 @@ bool SerialStreamer::initialize(const SystemConfigReader & systemConfigReader,
         missed_frame_count_ = 0;
     }
     raw_failed_ = false;
+    //Drop bytes left in the data port by a previous run (a stale last frame would restart the frame
+    //numbers). Radar::open runs this before the cfg and sensorStart, so nothing wanted is lost; with
+    //skip_configure a partial frame is dropped and the framing resyncs on the next magic word. Done
+    //before serial_data.bin opens, so that file holds only what is read after the flush.
+    if(stream_) stream_->discard_input();
     if(initialized && system_config_reader.get_save_serial_bytes()){
         //64 kB buffer: the file is written in large blocks, not per read
         raw_buf_.resize(64 * 1024);
@@ -217,7 +222,12 @@ void SerialStreamer::commit(clock::time_point completed_at){
 
         //track gaps in the frame number (dropped/corrupted frames)
         const uint32_t fn = work_.header.frame_number;
-        if(have_previous_frame_ && fn != previous_frame_number_ + 1){
+        const bool wrapped = previous_frame_number_ >= 0xFFFF0000u && fn < 0x10000u;
+        if(have_previous_frame_ && fn < previous_frame_number_ && !wrapped){
+            //not a gap: stale bytes from an earlier run, or a sensor restart. Re-base.
+            cpsl::radar::log_info("SerialStreamer: frame number went back from ", previous_frame_number_,
+                                  " to ", fn, ": treated as a restart, nothing counted as missed");
+        } else if(have_previous_frame_ && fn != previous_frame_number_ + 1){
             const uint32_t missed = fn - previous_frame_number_ - 1;
             missed_frame_count_ += missed;
             cpsl::radar::log_warn("SerialStreamer: frame number jumped from ", previous_frame_number_,

@@ -32,6 +32,9 @@ public:
     // Wait at most `timeout` for data and read up to `cap` bytes into `buf`;
     // `n` is the count read. No data in time: std::errc::timed_out, n == 0.
     virtual std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) = 0;
+
+    // Drop whatever input is pending (tcflush TCIFLUSH on a real port). Default: nothing to drop.
+    virtual void discard_input() {}
 };
 
 // A serial port at a given baud rate: a non-blocking file descriptor in raw
@@ -47,6 +50,7 @@ public:
 
     std::error_code write(const uint8_t* data, size_t len, std::chrono::milliseconds timeout) override;
     std::error_code read_some(uint8_t* buf, size_t cap, size_t& n, std::chrono::milliseconds timeout) override;
+    void discard_input() override;
 
 private:
     explicit SerialPortStream(int fd) : fd_(fd) {}

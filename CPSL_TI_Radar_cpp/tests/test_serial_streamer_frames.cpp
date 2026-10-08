@@ -149,6 +149,49 @@ TEST_CASE(missed_frames_counted_from_frame_number_gaps) {
     CHECK_EQ(r.s.get_missed_frame_count(), 2u);
 }
 
+TEST_CASE(stale_high_frame_number_then_restart_counts_no_missed) {
+    // gui-37: stale bytes of an earlier run's last frame, then the new run from 1
+    Rig r("ss_stale");
+    WarnLines w;
+    for (uint32_t fn : {100u, 1u, 2u, 3u}) r.port->push(make_frame(fn, {}));
+    for (int i = 0; i < 4; ++i) CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_missed_frame_count(), 0u);
+    CHECK_EQ(w.count("jumped"), 0u);
+    CHECK_EQ(r.s.get_latest_frame_number(), 3u);
+}
+
+TEST_CASE(genuine_gap_still_counts_after_restart_support) {
+    Rig r("ss_gap58");
+    for (uint32_t fn : {5u, 8u}) r.port->push(make_frame(fn, {}));
+    CHECK(r.s.process_next_message());
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_missed_frame_count(), 2u);
+}
+
+TEST_CASE(u32_wrap_is_not_a_restart) {
+    Rig r("ss_wrap");
+    for (uint32_t fn : {0xFFFFFFFEu, 1u}) r.port->push(make_frame(fn, {}));
+    CHECK(r.s.process_next_message());
+    CHECK(r.s.process_next_message());
+    CHECK_EQ(r.s.get_missed_frame_count(), 2u);  // FFFFFFFF and 0 missed
+}
+
+namespace {
+struct FlushSpy : FakeDataPort {
+    int flushes = 0;
+    void discard_input() override { ++flushes; }
+};
+}  // namespace
+
+TEST_CASE(initialize_discards_pending_input_once) {
+    auto port = std::make_shared<FlushSpy>();
+    SerialStreamer s;
+    SystemConfigReader sys(write_serial_config("ss_flush", TEST_TMP_DIR, "IWR1843", 300));
+    CHECK(sys.initialized);
+    CHECK(s.initialize(sys, port));
+    CHECK_EQ(port->flushes, 1);
+}
+
 TEST_CASE(frame_with_bad_tlv_publishes_nothing) {
     // valid header, broken TLV: the previous frame stays published, the bad
     // frame is not counted for frame-number gaps (7 follows 5: 6 missed)

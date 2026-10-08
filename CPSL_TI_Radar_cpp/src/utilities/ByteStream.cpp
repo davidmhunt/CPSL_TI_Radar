@@ -98,6 +98,10 @@ std::error_code SerialPortStream::write(const uint8_t* data, size_t len, std::ch
     return std::error_code();
 }
 
+void SerialPortStream::discard_input() {
+    if (fd_ >= 0) (void)tcflush(fd_, TCIFLUSH);
+}
+
 std::error_code SerialPortStream::read_some(uint8_t* buf, size_t cap, size_t& n,
                                             std::chrono::milliseconds timeout) {
     n = 0;
