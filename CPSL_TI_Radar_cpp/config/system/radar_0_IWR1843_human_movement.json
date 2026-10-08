@@ -1,6 +1,7 @@
 {
     "schema_version": 2,
     "board": "IWR1843",
+    "firmware": "demo",
     "radar_cfg": "../radar/human_movement/1843_human_movement.cfg",
     "cli": {
         "port": "/dev/ttyACM0"

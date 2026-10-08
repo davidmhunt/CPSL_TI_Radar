@@ -5,8 +5,8 @@
   "FAKE_DRIVER_RATE": "10"
  },
  "user_cfgs": {
-  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
-  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
   "tap.cfg": "% fake\n"
  },
  "scenarios": [

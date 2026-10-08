@@ -1,6 +1,7 @@
 {
     "schema_version": 2,
     "board": "AWR2243_CASCADE",
+    "firmware": "cascade_ddm",
     "radar_cfg": "../radar/cascade/cascade_shortrange.cfg",
     "cli": {
         "port": "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with_CMSIS-DAP_00000000-if00"

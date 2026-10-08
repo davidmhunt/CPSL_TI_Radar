@@ -120,9 +120,10 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
     en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
     serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
     dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled   # never inferred from the cfg (gui-22)
-    return {
+    doc = {
         "schema_version": 2,
         "board": fwmod.driver_board(fw, req.board) if fw else req.board,   # gui-30: IWR1843 + SAR -> IWR1843_SAR
+        "firmware": fw["id"] if fw else None,   # gui-04: mandatory in the driver; the resolved descriptor id
         "radar_cfg": cfg_name,
         "cli": {"port": req.cli_port},
         "serial_stream": {"enabled": serial, "port": req.data_port},
@@ -131,6 +132,9 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
         "output": {"save_adc_frames": req.save_adc_frames, "save_raw_lvds": req.save_raw_lvds},
         "runtime": {"log_level": req.log_level},
     }
+    if doc["firmware"] is None:
+        del doc["firmware"]
+    return doc
 
 
 def lvds_mismatch_warnings(req: SaveReq, dca: bool) -> list[str]:

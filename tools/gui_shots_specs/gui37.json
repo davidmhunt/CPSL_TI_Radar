@@ -10,10 +10,10 @@
   "tests/fakes/gui_fake_session.py"
  ],
  "user_cfgs": {
-  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
-  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
-  "casc_run.json": "{\"schema_version\": 2, \"board\": \"AWR2243_CASCADE\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
-  "dca_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}, \"dca1000\": {\"enabled\": true}, \"output\": {\"save_raw_lvds\": true}}",
+  "tap_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "tap_die.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "casc_run.json": "{\"schema_version\": 2, \"board\": \"AWR2243_CASCADE\", \"firmware\": \"cascade_ddm\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "dca_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"tap.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}, \"dca1000\": {\"enabled\": true}, \"output\": {\"save_raw_lvds\": true}}",
   "tap.cfg": "% fake\n",
   "quick_1843.cfg": "% fake 1843\n",
   "quick_1843_b.cfg": "% fake 1843 b\n"

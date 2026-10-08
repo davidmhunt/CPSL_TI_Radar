@@ -1,6 +1,7 @@
 {
     "schema_version": 2,
     "board": "IWR1443",
+    "firmware": "dca1000_raw",
     "radar_cfg": "../radar/DCA1000/custom_configs/RadSAR.cfg",
     "cli": {
         "port": "/dev/ttyACM0"

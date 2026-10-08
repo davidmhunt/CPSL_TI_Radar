@@ -1,6 +1,7 @@
 {
     "schema_version": 2,
     "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
     "radar_cfg": "../radar/sar_configs/1843_SAR_2ms_fmt1.cfg",
     "cli": {
         "port": "/dev/ttyACM0"

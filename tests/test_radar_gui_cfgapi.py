@@ -13,7 +13,9 @@ from radar_gui.cfg import generate, parse_cfg
 from radar_gui.sources import MockSource
 
 REPO = Path(__file__).resolve().parent.parent
-DRIVER = REPO / "CPSL_TI_Radar_cpp" / "build" / "CPSL_TI_Radar_CPP"
+# a driver that knows the `firmware` key (gui-04): a build-gui04 tree if present (until `build/` is rebuilt), else build/
+DRIVER = next((d for d in (REPO / "CPSL_TI_Radar_cpp" / b / "CPSL_TI_Radar_CPP" for b in ("build-gui04", "build")) if d.exists()),
+              REPO / "CPSL_TI_Radar_cpp" / "build" / "CPSL_TI_Radar_CPP")
 T = {"max_range_m": 10, "max_velocity_ms": 3}
 
 
@@ -101,6 +103,7 @@ def test_save_writes_parseable_cfg_and_schema_v2_json(client):
     assert cfg.has("profileCfg")
     s = json.loads(Path(j["json_path"]).read_text())
     assert s["schema_version"] == 2 and s["board"] == "IWR1843" and s["radar_cfg"] == "t1.cfg"
+    assert s["firmware"] == "demo" and list(s)[:3] == ["schema_version", "board", "firmware"]   # gui-04: mandatory key, after board
     assert s["dca1000"]["enabled"] and s["dca1000"]["cmd_port"] == 4092 and s["dca1000"]["data_port"] == 4094
     assert s["cli"]["port"] == "/dev/ttyACM0" and s["serial_stream"]["enabled"]
     # the saved cfg shows up in the listing
@@ -305,6 +308,7 @@ def test_save_sar_writes_the_driver_board_and_matches_the_shipped_system_json(cl
     assert r.status_code == 200, r.text
     s = json.loads(Path(r.json()["json_path"]).read_text())
     ref = json.loads((REPO / "CPSL_TI_Radar_cpp" / "config" / "system" / "radar_0_IWR1843_SAR.json").read_text())
+    assert s["firmware"] == ref["firmware"] == "iwr1843_sar_lvds"
     assert s["board"] == ref["board"] == "IWR1843_SAR" and s["schema_version"] == ref["schema_version"] == 2
     assert set(s) == set(ref) and set(s["dca1000"]) == set(ref["dca1000"]) and set(s["output"]) == set(ref["output"])
     assert s["serial_stream"]["enabled"] is False and s["dca1000"]["enabled"] is True

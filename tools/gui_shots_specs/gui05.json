@@ -1,8 +1,8 @@
 {"env": {"RADAR_GUI_DRIVER": "tests/fakes/fake_driver.py", "FAKE_DRIVER_MODE": "write-bin", "FAKE_DRIVER_RATE": "10", "FAKE_DRIVER_BPF": "288000", "FAKE_DRIVER_PERIOD_MS": "100"},
  "user_cfgs": {
-  "bench_1843_dca.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"bench_1843_dca.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": false}, \"dca1000\": {\"enabled\": true}}",
+  "bench_1843_dca.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"bench_1843_dca.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": false}, \"dca1000\": {\"enabled\": true}}",
   "bench_1843_dca.cfg": "% fake\n",
-  "no_port.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"no_port.cfg\", \"cli\": {\"port\": \"/dev/ttyACM_nonexistent\"}, \"serial_stream\": {\"enabled\": false}}",
+  "no_port.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"no_port.cfg\", \"cli\": {\"port\": \"/dev/ttyACM_nonexistent\"}, \"serial_stream\": {\"enabled\": false}}",
   "no_port.cfg": "% fake\n"},
  "scenarios": [
   {"name": "a_idle", "tab": "run", "window": [1400, 1000],

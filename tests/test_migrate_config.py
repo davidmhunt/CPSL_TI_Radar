@@ -214,3 +214,12 @@ def test_add_firmware_stdout_without_in_place(tmp_path):
     p.write_text(mig.dumps(V2_BASE))
     r = run(p, "--add-firmware")
     assert r.returncode == 0 and json.loads(r.stdout)["firmware"] == "demo" and p.read_text() == mig.dumps(V2_BASE)
+
+
+def test_every_tracked_system_json_names_a_firmware_the_board_lists():
+    r = run(SYSTEM, "--add-firmware", "--check", "-q")
+    assert r.returncode == 0 and "nofw" not in r.stderr, r.stderr
+    for p in SYSTEM.glob("*.json"):
+        d = json.loads(p.read_text())
+        assert d["firmware"] in json.loads((BOARDS / f"{d['board']}.json").read_text())["firmwares"], p.name
+        assert list(d)[:3] == ["schema_version", "board", "firmware"], p.name

@@ -1,6 +1,7 @@
 {
     "schema_version": 2,
     "board": "IWR6843ODS",
+    "firmware": "demo",
     "radar_cfg": "../radar/nav_configs/6843_IcaRAus_ods_10Hz.cfg",
     "cli": {
         "port": "/dev/ttyUSB0"

@@ -9,7 +9,7 @@
   "FAKE_DRIVER_LOG_LPS": "300"
  },
  "user_cfgs": {
-  "bench_1843_tlv.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"radar_cfg\": \"bench_1843_tlv.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
+  "bench_1843_tlv.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"bench_1843_tlv.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"serial_stream\": {\"enabled\": true}}",
   "bench_1843_tlv.cfg": "% fake\n",
   "rig1843.cfg": "flushCfg\nsensorStart\n"
  },
