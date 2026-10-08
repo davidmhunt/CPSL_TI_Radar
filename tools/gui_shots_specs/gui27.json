@@ -179,7 +179,7 @@
      "board": "AWR2243_CASCADE"
     },
     {
-     "load": "cascade_shortrange.cfg"
+     "load": "cascade_ddm/shortrange.cfg"
     },
     {
      "mode": "direct"
@@ -541,7 +541,7 @@
      "board": "AWR2243_CASCADE"
     },
     {
-     "load": "cascade_shortrange.cfg"
+     "load": "cascade_ddm/shortrange.cfg"
     },
     {
      "mode": "direct"

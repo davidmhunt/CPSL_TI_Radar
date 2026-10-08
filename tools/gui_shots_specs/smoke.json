@@ -92,7 +92,7 @@
      "board": "AWR2243"
     },
     {
-     "load": "cascade_shortrange.cfg"
+     "load": "cascade_ddm/shortrange.cfg"
     }
    ],
    "shots": [
@@ -302,7 +302,7 @@
    ],
    "actions": [
     {
-     "load": "cascade_shortrange.cfg"
+     "load": "cascade_ddm/shortrange.cfg"
     },
     {
      "mode": "direct"
@@ -336,7 +336,7 @@
      "firmware": "demo"
     },
     {
-     "load": "1843_RadVel_10Hz.cfg"
+     "load": "IWR1843/demo/RadVel_10Hz.cfg"
     },
     {
      "click_text": "BPM (2 TX)",

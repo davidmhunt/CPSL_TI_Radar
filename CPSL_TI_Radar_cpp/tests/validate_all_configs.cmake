@@ -35,7 +35,7 @@ if(failed GREATER 0)
   message(FATAL_ERROR "${failed} of ${n} system configs failed --validate")
 endif()
 
-execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test_baseline.json"
+execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/IWR1843_demo_stress_test_baseline_front.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0 OR out MATCHES "skipped: +calibData")
   message(FATAL_ERROR "IWR1843 --validate skips calibData (it must be sent):\n${out}${err}")
@@ -43,15 +43,15 @@ endif()
 
 # core-22: the SAR system config validates (exit 0 is covered by the glob above);
 # the same board with a stock cfg is rejected naming the forbidden command
-execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/radar_0_IWR1843_SAR.json"
+execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0)
   message(FATAL_ERROR "SAR system config failed --validate (exit ${rc}):\n${out}${err}")
 endif()
 file(REMOVE_RECURSE "${TMP_DIR}")
 file(MAKE_DIRECTORY "${TMP_DIR}")
-file(READ "${CONFIG_DIR}/system/radar_0_IWR1843_SAR.json" j)
-string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/radar/nav_configs/1843_RadVel.cfg\"")
+file(READ "${CONFIG_DIR}/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json" j)
+string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/radar/IWR1843/demo/RadVel.cfg\"")
 string(JSON j SET "${j}" board "\"${CONFIG_DIR}/boards/IWR1843_SAR.json\"")
 file(WRITE "${TMP_DIR}/sar_stock_cfg.json" "${j}")
 execute_process(COMMAND "${DRIVER}" --validate "${TMP_DIR}/sar_stock_cfg.json"
@@ -70,7 +70,7 @@ endif()
 file(REMOVE_RECURSE "${TMP_DIR}")
 file(MAKE_DIRECTORY "${TMP_DIR}")
 file(WRITE "${TMP_DIR}/a_file" "x")
-file(READ "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json" j)
+file(READ "${CONFIG_DIR}/system/IWR1843_demo_stress_test_front.json" j)
 string(JSON radar_cfg GET "${j}" radar_cfg)
 string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/system/${radar_cfg}\"")
 string(JSON j SET "${j}" board "\"${CONFIG_DIR}/boards/IWR1843.json\"")
@@ -83,7 +83,7 @@ if(rc EQUAL 0 OR NOT err MATCHES "a_file/captures cannot be created: .*a_file is
 endif()
 
 # gui-04: --validate --json. Good config: exit 0, one JSON object with the specified shape.
-execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json"
+execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/IWR1843_demo_stress_test_front.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0 OR NOT "${err}" STREQUAL "")
   message(FATAL_ERROR "--validate --json failed on a good config (exit ${rc}):\n${out}${err}")
@@ -100,7 +100,7 @@ string(JSON n_metrics LENGTH "${out}" metrics)
 string(JSON cfgname GET "${out}" config)
 string(JSON fw ERROR_VARIABLE fw_err GET "${out}" firmware)
 if(NOT ok STREQUAL "ON" AND NOT ok STREQUAL "true" OR NOT board STREQUAL "IWR1843" OR NOT n_err EQUAL 0
-   OR NOT rx GREATER 0 OR NOT bpf GREATER 0 OR NOT cfgname MATCHES "front_radar_IWR1843_stress_test.json$")
+   OR NOT rx GREATER 0 OR NOT bpf GREATER 0 OR NOT cfgname MATCHES "IWR1843_demo_stress_test_front.json$")
   message(FATAL_ERROR "--validate --json good-config shape is wrong:\n${out}")
 endif()
 # gui-04 Step 3b: metrics carry the cfg limit numbers; warning-level limits land in warnings[], not errors[]
@@ -109,7 +109,7 @@ string(JSON m_bpf GET "${out}" metrics bytes_per_frame)
 if(NOT m_rx EQUAL rx OR NOT m_bpf EQUAL bpf)
   message(FATAL_ERROR "--validate --json metrics disagree with frame (n_rx ${m_rx} vs ${rx}, bytes ${m_bpf} vs ${bpf}):\n${out}")
 endif()
-execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/radar_0_IWR1843_vel_sr.json"
+execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/IWR1843_demo_vel_sr.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE wout ERROR_VARIABLE werr)
 string(JSON wcode GET "${wout}" warnings 0 code)
 string(JSON werrs LENGTH "${wout}" errors)
@@ -122,7 +122,7 @@ if(out MATCHES "OK:" OR out MATCHES "bytes/frame:")
 endif()
 
 # Bad config: exit 1, ok false, one error with code + message + source.
-file(READ "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json" j)
+file(READ "${CONFIG_DIR}/system/IWR1843_demo_stress_test_front.json" j)
 string(JSON radar_cfg GET "${j}" radar_cfg)
 string(JSON j SET "${j}" radar_cfg "\"${CONFIG_DIR}/system/${radar_cfg}\"")
 string(JSON j SET "${j}" board "\"${CONFIG_DIR}/boards/IWR1843.json\"")
@@ -149,7 +149,7 @@ if(rc EQUAL 0 OR NOT code STREQUAL "config_invalid" OR NOT msg MATCHES "tools/mi
   message(FATAL_ERROR "--validate --json on a v1 file is wrong (exit ${rc}):\n${out}")
 endif()
 # --json without --validate is a usage error
-execute_process(COMMAND "${DRIVER}" --json "${CONFIG_DIR}/system/front_radar_IWR1843_stress_test.json"
+execute_process(COMMAND "${DRIVER}" --json "${CONFIG_DIR}/system/IWR1843_demo_stress_test_front.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 2)
   message(FATAL_ERROR "--json without --validate should exit 2, got ${rc}")

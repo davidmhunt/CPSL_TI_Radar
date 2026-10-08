@@ -674,7 +674,7 @@ int run_udp(const std::string& cfg, size_t frames, size_t bytes_per_frame, const
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string cfg = std::string(CONFIG_DIR) + "/radar/nav_configs/1843_stress_test.cfg";
+    std::string cfg = std::string(CONFIG_DIR) + "/radar/IWR1843/demo/stress_test.cfg";
     size_t frames = 40;
     size_t reps = 7;
     std::string log_level = "info";

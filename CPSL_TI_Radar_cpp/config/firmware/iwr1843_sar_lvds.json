@@ -19,7 +19,7 @@
     "confidence": "high"
   },
   "templates": {
-    "IWR1843": "radar/sar_configs/1843_SAR_2ms_fmt1.cfg"
+    "IWR1843": "radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg"
   },
   "driver_board": {
     "IWR1843": "IWR1843_SAR"

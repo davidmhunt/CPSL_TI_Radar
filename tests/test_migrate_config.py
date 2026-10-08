@@ -25,18 +25,21 @@ sys.path.insert(0, str(SCRIPT.parent))
 import migrate_config_v1_to_v2 as mig  # noqa: E402
 
 V1_FILES = sorted(FIXTURES.glob("*.json"))
+# gui-38: the tracked files were renamed and their radar cfgs moved; the v1 fixtures keep their old names as history.
+MOVED = json.loads((REPO / "CPSL_TI_Radar_cpp/config/moved_paths.json").read_text())
+TRACKED = {p.name: MOVED["system"][p.name] for p in V1_FILES}      # v1 fixture name -> tracked v2 name
 
-# Deliberate edits made to a tracked v2 file after the scripted migration
+# Deliberate edits made to a tracked v2 file (keyed by its current name) after the scripted migration
 # (merged over the script's output before comparing):
 # - the bench baseline keeps writing LVDS_Raw_0.bin, as the pre-rework
 #   baseline runs did, so later runs do the same disk I/O (core-10 step 7)
 HAND_EDITS = {
-    "front_radar_IWR1843_stress_test_baseline.json": {"output": {"save_raw_lvds": True}},
+    "IWR1843_demo_stress_test_baseline_front.json": {"output": {"save_raw_lvds": True}},
     # gui-25: the ODS configs were re-pointed from IWR6843 to IWR6843ODS after migration
     **{n: {"board": "IWR6843ODS"} for n in (
-        "down_radar_6843_IcaRAus_ods_10Hz.json", "down_radar_6843_RadVel_ods_10Hz.json",
-        "down_radar_IWR6843_ods_dca_RadVel.json", "radar_0_IWR6843_ods_dca_RadVel.json",
-        "radar_0_IWR6843_ods_human_movement.json")},
+        "IWR6843ODS_demo_IcaRAus_10Hz_down.json", "IWR6843ODS_demo_RadVel_10Hz_down.json",
+        "IWR6843ODS_demo_RadVel_down.json", "IWR6843ODS_demo_RadVel.json",
+        "IWR6843ODS_demo_human_movement.json")},
 }
 
 
@@ -60,9 +63,9 @@ def run(*args, cwd=REPO):
 def test_fixtures_cover_every_tracked_config():
     assert len(V1_FILES) == 39
     # configs born in v2 (no v1 form, so no migration fixture)
-    native_v2 = {"radar_0_IWR1843_SAR.json"}
-    assert sorted(p.name for p in V1_FILES) == sorted(
-        p.name for p in SYSTEM.glob("*.json") if p.name not in native_v2)
+    native_v2 = {"IWR1843_iwr1843_sar_lvds_SAR_2ms.json"}
+    assert sorted(TRACKED.values()) == sorted(p.name for p in SYSTEM.glob("*.json") if p.name not in native_v2)
+    assert len(set(TRACKED.values())) == len(V1_FILES)
     for p in V1_FILES:
         assert not mig.is_v2(json.loads(p.read_text())), p.name
 
@@ -75,9 +78,9 @@ def test_golden_conversion_matches_tracked_v2(v1, tmp_path):
     assert r.returncode == 0, r.stderr
     assert "UNMAPPED" not in r.stderr
     got = work.read_text()
-    if v1.name in HAND_EDITS:
-        got = mig.dumps(merge(json.loads(got), HAND_EDITS[v1.name]))
-    tracked = json.loads((SYSTEM / v1.name).read_text())
+    if TRACKED[v1.name] in HAND_EDITS:
+        got = mig.dumps(merge(json.loads(got), HAND_EDITS[TRACKED[v1.name]]))
+    tracked = json.loads((SYSTEM / TRACKED[v1.name]).read_text())
     # the tracked file may predate the firmware key (gui-04): compare byte for byte without it, then check the key itself
     fw = json.loads(got).pop("firmware")
     assert fw in json.loads((BOARDS / f"{tracked['board']}.json").read_text())["firmwares"]
@@ -111,7 +114,7 @@ def test_never_writes_without_in_place(tmp_path):
     assert r.returncode == 0
     assert work.read_text() == src.read_text()  # untouched
     assert {k: v for k, v in json.loads(r.stdout).items() if k != "firmware"} == \
-        {k: v for k, v in json.loads((SYSTEM / "radar_1.json").read_text()).items() if k != "firmware"}
+        {k: v for k, v in json.loads((SYSTEM / TRACKED["radar_1.json"]).read_text()).items() if k != "firmware"}
 
 
 def test_key_mapping_details():
@@ -119,7 +122,10 @@ def test_key_mapping_details():
     v2, notes, unmapped = mig.convert(v1, FIXTURES / "x.json")
     assert unmapped == []
     assert v2["schema_version"] == 2 and v2["board"] == "IWR1843"
-    assert v2["radar_cfg"] == v1["TI_Radar_Config_Management"]["TI_Radar_config_path"]
+    old = v1["TI_Radar_Config_Management"]["TI_Radar_config_path"]
+    assert old == "../radar/nav_configs/1843_stress_test_baseline_numframes0.cfg"
+    assert v2["radar_cfg"] == "../radar/IWR1843/demo/stress_test_baseline_numframes0.cfg" == mig.remap_radar_cfg(old)
+    assert mig.remap_radar_cfg(v2["radar_cfg"]) == v2["radar_cfg"] and mig.remap_radar_cfg("my/own.cfg") == "my/own.cfg"
     assert v2["cli"] == {"port": "/dev/ttyACM0"}
     assert v2["dca1000"] == {"enabled": True, "fpga_ip": "192.168.33.180", "host_ip": "192.168.33.30",
                              "cmd_port": 4096, "data_port": 4098}
@@ -223,3 +229,13 @@ def test_every_tracked_system_json_names_a_firmware_the_board_lists():
         d = json.loads(p.read_text())
         assert d["firmware"] in json.loads((BOARDS / f"{d['board']}.json").read_text())["firmwares"], p.name
         assert list(d)[:3] == ["schema_version", "board", "firmware"], p.name
+
+
+def test_v2_file_with_a_moved_radar_cfg_is_rewritten_in_place_and_idempotent(tmp_path):
+    p = tmp_path / "x.json"
+    p.write_text(mig.dumps({**V2_BASE, "firmware": "demo", "radar_cfg": "../radar/nav_configs/1843_RadVel_10Hz.cfg"}))
+    assert run(p, "--check").returncode == 1 and "moved" in run(p, "--check").stderr
+    assert run(p, "--in-place", "-q").returncode == 0
+    assert json.loads(p.read_text())["radar_cfg"] == "../radar/IWR1843/demo/RadVel_10Hz.cfg"
+    new = p.read_text()
+    assert run(p, "--check").returncode == 0 and run(p, "--in-place", "-q").returncode == 0 and p.read_text() == new

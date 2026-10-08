@@ -45,7 +45,7 @@ def test_ports_grouped_by_board(bench):
     assert [(p["interface"], p["role"], os.path.basename(p["tty"])) for p in one["ports"]] == [("00", "cli", "ttyACM0"), ("03", "data", "ttyACM1")]
     assert one["ports"][0]["by_id"] == f"{d}/{X05}-if00" and one["ports"][0]["holders"] == []
     c = b["00000000"]
-    assert c["cascade"] and "radar_0_AWR2243_cascade_serial.json" in c["label"]
+    assert c["cascade"] and "AWR2243_CASCADE_cascade_ddm_shortrange.json" in c["label"]
     assert [(p["role"], os.path.basename(p["tty"])) for p in c["ports"]] == [("cli", "ttyACM2"), ("data", "ttyACM3")]
 
 

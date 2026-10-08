@@ -572,7 +572,7 @@ TEST_CASE(sar_board_sends_calibdata_and_frame_is_3366000_bytes) {
     Rig rig(load("sar", [](json& j) {
         j["board"] = "IWR1843_SAR";
         j["firmware"] = "iwr1843_sar_lvds";
-        j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+        j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg";
     }));
     if (!rig.radar) return;
     CHECK_EQ(rig.bytes_per_frame, size_t(3366000));
@@ -592,7 +592,7 @@ TEST_CASE(sar_board_refuses_serial_stream) {
     }
     j["board"] = "IWR1843_SAR";
     j["firmware"] = "iwr1843_sar_lvds";
-    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg";
     j["serial_stream"] = {{"enabled", true}, {"port", "/dev/null-not-opened"}};
     const std::string path = kRoot + "/sar_serial.json";
     std::ofstream(path) << j.dump(2);

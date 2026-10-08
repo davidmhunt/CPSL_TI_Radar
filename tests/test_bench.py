@@ -13,8 +13,8 @@ import bench_lib as lib  # noqa: E402
 import bench_run  # noqa: E402
 import host_setup  # noqa: E402  (on sys.path via bench_run)
 
-STRESS_JSON = REPO / "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test.json"
-STRESS_CFG = REPO / "CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg"
+STRESS_JSON = REPO / "CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json"
+STRESS_CFG = REPO / "CPSL_TI_Radar_cpp/config/radar/IWR1843/demo/stress_test.cfg"
 
 
 def dca_line(t, frames, pkts, dropped=0, events=0, overrun=0):
@@ -348,17 +348,17 @@ def test_refuses_non_release(tmp_path):
 
 def test_baseline_configs_run_forever_and_match_stress():
     base = REPO / "CPSL_TI_Radar_cpp/config"
-    new_cfg = (base / "radar/nav_configs/1843_stress_test_baseline_numframes0.cfg").read_text()
+    new_cfg = (base / "radar/IWR1843/demo/stress_test_baseline_numframes0.cfg").read_text()
     assert lib.frame_cfg_num_frames(new_cfg) == 0
     assert lib.frame_cfg_num_frames(STRESS_CFG.read_text()) == 30  # shipped file untouched
     assert lib.expected_from_radar_cfg(new_cfg) == lib.expected_from_radar_cfg(STRESS_CFG.read_text())
-    sysj = json.loads((base / "system/front_radar_IWR1843_stress_test_baseline.json").read_text())
+    sysj = json.loads((base / "system/IWR1843_demo_stress_test_baseline_front.json").read_text())
     assert sysj["schema_version"] == 2 and sysj["board"] == "IWR1843"
-    assert sysj["radar_cfg"].endswith("1843_stress_test_baseline_numframes0.cfg")
+    assert sysj["radar_cfg"].endswith("IWR1843/demo/stress_test_baseline_numframes0.cfg")
     # same work as the pre-rework baseline runs: debug stats, both output files, cwd output
     assert sysj["runtime"]["log_level"] == "debug"
     assert sysj["output"] == {"save_adc_frames": True, "save_raw_lvds": True}
-    demo = base / "radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg"
+    demo = base / "radar/IWR1843/demo/demo_tlv_default.cfg"
     assert lib.frame_cfg_num_frames(demo.read_text()) == 0
 
 

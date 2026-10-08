@@ -34,10 +34,10 @@ BY_ID = "/dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.29__Embed_with
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG_DIRS = {
     "driver": os.path.normpath(os.path.join(HERE, "..", "..", "CPSL_TI_Radar_cpp", "config", "radar",
-                                            "cascade")),
+                                            "AWR2243_CASCADE", "cascade_ddm")),
     "viewer": cfggen.OUT_DIR,
 }
-DEFAULT_CFG = os.path.join(CFG_DIRS["driver"], "cascade_shortrange.cfg")
+DEFAULT_CFG = os.path.join(CFG_DIRS["driver"], "shortrange.cfg")
 CALIB_RE = re.compile(r"range\s+(-?[\d.]+)\s+peakVal\s+(\d+)\s+" +
                       r"\s+".join(rf"(antennaCalibParams{i}(?:\s+-?\d+\.\d+){{32}})" for i in (1, 2, 3)))
 

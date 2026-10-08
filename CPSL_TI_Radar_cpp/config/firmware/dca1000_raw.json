@@ -17,7 +17,7 @@
     "confidence": "unverified"
   },
   "templates": {
-    "IWR1443": "radar/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg"
+    "IWR1443": "radar/IWR1443/dca1000_raw/rosnode_indoor_human_rcs.cfg"
   },
   "system_enables": {
     "serial": false,

@@ -14,7 +14,7 @@ FIX = ROOT / "tests" / "fixtures" / "mimo"
 REPEAT = (FIX / "s3_repeat.cfg").read_text()      # TDM [1,4,1,4], 4 chirps x 32 loops, channelCfg 15 5 0, no bpm
 BPM = (FIX / "s2_bpm.cfg").read_text()            # masks 5,5 + bpmCfg on
 ADV = (FIX / "adv_subframe_4.cfg").read_text()    # advFrameCfg 4 subframes
-CASCADE = (RADAR / "cascade" / "cascade_shortrange.cfg").read_text()
+CASCADE = (RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg").read_text()
 
 
 def edit(text, old, new):
@@ -228,15 +228,16 @@ def test_issues_carry_source_and_confidence():
 def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
     import sys
     sys.path.insert(0, str(ROOT / "tests"))
-    from test_radar_gui_cfg import SHIPPED, board_for, is_legacy_no_calib
+    from test_radar_gui_cfg import SHIPPED, board_for, firmware_for
     seen = set()
     for p in SHIPPED:
-        r = validate(parse_cfg_file(p), board_for(p))
-        errs = [i.message for i in r.errors if not (i.code == "missing_calibData" and is_legacy_no_calib(p))]
+        r = validate(parse_cfg_file(p), board_for(p), firmware_for(p))
+        errs = [i.message for i in r.errors]
         assert not errs, (str(p), errs)
         seen |= {(i.level, i.code) for i in r.issues} & {(l, c) for l in ("warning", "info", "error") for c in MIX}
-    # raw-ADC cfgs enable TX channels no chirp uses; 6843 ODS cfgs use the 1,2,4 order: both reported, neither an error
-    assert seen == {("info", "tx_missing_from_loop"), ("warning", "tx_order_convention")}, seen
+    # raw-ADC cfgs enable TX channels no chirp uses (reported, not an error). gui-38: the ODS cfgs now validate as
+    # IWR6843ODS by folder, where their 1,2,4 order is the convention, so tx_order_convention no longer fires.
+    assert seen == {("info", "tx_missing_from_loop")}, seen
 
 
 def test_tx_order_convention_is_per_board_ods_elevation_is_tx3():
@@ -250,8 +251,9 @@ def test_tx_order_convention_is_per_board_ods_elevation_is_tx3():
 
 def test_ods_board_helpers():
     from radar_gui.cfgapi import guess_board
-    assert guess_board("nav_configs/6843_IcaRAus_ods_10Hz.cfg") == "IWR6843ODS"
-    assert guess_board("IWR_Demos/6843.cfg") == "IWR6843"
+    assert guess_board("IWR6843ODS/demo/IcaRAus_ods_10Hz.cfg") == "IWR6843ODS"
+    assert guess_board("IWR6843/demo/default.cfg") == "IWR6843"
+    assert guess_board("user:my_ods_10Hz.cfg") == "IWR6843ODS" and guess_board("user:1843_x.cfg") == "IWR1843"
     assert fwmod.elevation_tx_bit("IWR6843ODS") == 4 and fwmod.elevation_tx_bit("IWR6843") == 2
     assert fwmod.elevation_tx_bit("IWR1843") == 2
     assert fwmod.check_boards() == []

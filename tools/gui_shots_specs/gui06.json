@@ -426,7 +426,7 @@
      "value": "/dev/ttyNONE_data"
     },
     {
-     "js": "const s=document.getElementById('srcCfg'); s.append(new Option('cascade_shortrange.cfg (forced)','driver:cascade/cascade_shortrange.cfg',true,true)); s.value='driver:cascade/cascade_shortrange.cfg'; s.dispatchEvent(new Event('change')); return 1"
+     "js": "const s=document.getElementById('srcCfg'); s.append(new Option('shortrange.cfg (forced)','driver:AWR2243_CASCADE/cascade_ddm/shortrange.cfg',true,true)); s.value='driver:AWR2243_CASCADE/cascade_ddm/shortrange.cfg'; s.dispatchEvent(new Event('change')); return 1"
     },
     {
      "click": "#srcStart"

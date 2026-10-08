@@ -55,7 +55,7 @@ def rescore(log):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--config", default=str(REPO / "CPSL_TI_Radar_cpp/config/system/front_radar_IWR1843_stress_test_baseline.json"))
+    ap.add_argument("--config", default=str(REPO / "CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json"))
     ap.add_argument("--driver", default=str(REPO / "CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP"))
     ap.add_argument("--no-stats", action="store_true", help="do not pass --stats (then no frame detection)")
     ap.add_argument("--start-timeout", type=float, default=60, help="s to wait for frames to flow")

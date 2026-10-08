@@ -302,12 +302,12 @@ def test_chirp_table_payloads(client):
 
 
 def test_save_sar_writes_the_driver_board_and_matches_the_shipped_system_json(client):
-    """gui-30: IWR1843 + iwr1843_sar_lvds saves the driver board IWR1843_SAR (descriptor driver_board), same schema as radar_0_IWR1843_SAR.json."""
+    """gui-30: IWR1843 + iwr1843_sar_lvds saves the driver board IWR1843_SAR (descriptor driver_board), same schema as IWR1843_iwr1843_sar_lvds_SAR_2ms.json."""
     text = generate("IWR1843", T, firmware="iwr1843_sar_lvds").text
     r = client.post("/api/cfg/save", json={"board": "IWR1843", "name": "sar1", "cfg_text": text, "firmware": "iwr1843_sar_lvds"})
     assert r.status_code == 200, r.text
     s = json.loads(Path(r.json()["json_path"]).read_text())
-    ref = json.loads((REPO / "CPSL_TI_Radar_cpp" / "config" / "system" / "radar_0_IWR1843_SAR.json").read_text())
+    ref = json.loads((REPO / "CPSL_TI_Radar_cpp" / "config" / "system" / "IWR1843_iwr1843_sar_lvds_SAR_2ms.json").read_text())
     assert s["firmware"] == ref["firmware"] == "iwr1843_sar_lvds"
     assert s["board"] == ref["board"] == "IWR1843_SAR" and s["schema_version"] == ref["schema_version"] == 2
     assert set(s) == set(ref) and set(s["dca1000"]) == set(ref["dca1000"]) and set(s["output"]) == set(ref["output"])

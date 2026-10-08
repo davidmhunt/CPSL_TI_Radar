@@ -26,7 +26,9 @@ missing it (exit 1). A v1 conversion always writes ``firmware`` (same inference)
 
 Mapping (v1 -> v2):
     verbose                                   -> runtime.log_level ("debug" if true, else "info")
-    TI_Radar_Config_Management.TI_Radar_config_path -> radar_cfg (same relative path)
+    TI_Radar_Config_Management.TI_Radar_config_path -> radar_cfg (same relative path; a shipped cfg that moved in
+                                                 the gui-38 reorganisation is rewritten via config/moved_paths.json,
+                                                 and so is a v2 file's radar_cfg under --in-place / --check)
     CLI_Controller.CLI_port                   -> cli.port
     CLI_Controller.{baud_rate,cmd_timeout_ms} -> board_overrides.cli.{baud,cmd_timeout_ms}
     Streamer.serial_streaming.{enabled,data_port} -> serial_stream.{enabled,port}
@@ -63,6 +65,17 @@ from radar_gui import sysjson  # noqa: E402  (shared writer: the GUI's Add-firmw
 SCHEMA_VERSION = 2
 BOARDS_ENV = "CPSL_TI_RADAR_BOARDS_DIR"
 REMOVED_TOP = ("Processor", "ROS", "Listeners")
+MOVED_PATHS = Path(__file__).resolve().parent.parent / "CPSL_TI_Radar_cpp" / "config" / "moved_paths.json"
+
+
+def remap_radar_cfg(value):
+    """gui-38: a radar_cfg that points at a pre-reorganisation shipped cfg (config/moved_paths.json "radar") is
+    rewritten to its new <BOARD>/<firmware>/ location. Any other value, and an already-new one, comes back unchanged."""
+    if not isinstance(value, str) or "radar/" not in value or not MOVED_PATHS.is_file():
+        return value
+    i = value.index("radar/")
+    new = json.loads(MOVED_PATHS.read_text()).get("radar", {}).get(value[i:])
+    return value if new is None else value[:i] + new
 
 
 class Unmapped(Exception):
@@ -110,6 +123,7 @@ def convert(v1: dict, cfg_path: Path, forced: str | None = None) -> tuple[dict, 
     _leftovers(mgmt, "TI_Radar_Config_Management", unmapped)
     if radar_cfg is None:
         raise Unmapped("TI_Radar_Config_Management.TI_Radar_config_path is missing")
+    radar_cfg = remap_radar_cfg(radar_cfg)
 
     overrides: dict = {}
     cli_port = cli_v1.pop("CLI_port", None)
@@ -268,6 +282,18 @@ def main(argv=None) -> int:
                         sys.stdout.write(f"// {path}\n")
                     sys.stdout.write(out)
                 continue
+            moved = remap_radar_cfg(doc.get("radar_cfg")) if isinstance(doc, dict) else None
+            if isinstance(doc, dict) and moved != doc.get("radar_cfg"):
+                if args.check:
+                    print(f"moved   {path}: radar_cfg {doc['radar_cfg']!r} is now {moved!r}", file=sys.stderr)
+                    status = max(status, 1)
+                    continue
+                doc = {**doc, "radar_cfg": moved}
+                if args.in_place:
+                    sysjson.atomic_write_text(path, dumps(doc))
+                    if not args.quiet:
+                        print(f"wrote   {path}: radar_cfg -> {moved!r}", file=sys.stderr)
+                    continue
             if not args.quiet:
                 print(f"ok      {path}: already v2", file=sys.stderr)
             if not (args.in_place or args.check) and len(files) == 1:

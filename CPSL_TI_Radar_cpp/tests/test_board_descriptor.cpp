@@ -229,7 +229,7 @@ TEST_CASE(good_sdk3_cfg_passes_without_notes) {
 
 TEST_CASE(tracked_baseline_cfg_passes_for_IWR1843_dca) {
     BoardDescriptor d = must_load("IWR1843");
-    CfgCheckResult r = check(d, std::string(CONFIG_DIR) + "/radar/nav_configs/1843_stress_test.cfg", true, true);
+    CfgCheckResult r = check(d, std::string(CONFIG_DIR) + "/radar/IWR1843/demo/stress_test.cfg", true, true);
     CHECK(r.ok());
 }
 
@@ -249,14 +249,14 @@ TEST_CASE(raw_capture_cfg_without_adcbufcfg_gives_notes_only) {
     // iwr_raw_rosnode cfgs (raw-capture firmware) have no adcbufCfg/lvdsStreamCfg
     BoardDescriptor d = must_load("IWR1443");
     CfgCheckResult r =
-        check(d, std::string(CONFIG_DIR) + "/radar/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg", true, false);
+        check(d, std::string(CONFIG_DIR) + "/radar/IWR1443/dca1000_raw/rosnode_indoor_human_rcs.cfg", true, false);
     CHECK(r.ok());
     CHECK_EQ(r.notes.size(), static_cast<size_t>(2));
 }
 
 TEST_CASE(rejects_dca1000_on_cascade) {
     BoardDescriptor d = must_load("AWR2243_CASCADE");
-    std::string cfg = std::string(CONFIG_DIR) + "/radar/cascade/cascade_shortrange.cfg";
+    std::string cfg = std::string(CONFIG_DIR) + "/radar/AWR2243_CASCADE/cascade_ddm/shortrange.cfg";
     CHECK(any_has(check(d, cfg, true, true).errors, "lvds.supported false"));
     CHECK(check(d, cfg, false, true).ok());
 }
@@ -561,7 +561,7 @@ TEST_MAIN()
 // IWR1843_SAR descriptor (core-22 Step 3/4)
 // ---------------------------------------------------------------------------
 
-static const std::string kSarCfg = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+static const std::string kSarCfg = std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg";
 
 static std::string read_text(const std::string& path) {
     std::ifstream f(path);

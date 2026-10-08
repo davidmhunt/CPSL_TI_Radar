@@ -16,11 +16,11 @@ REL = 5e-4   # oracle is given to 4 significant figures
 # case: (cfg path, board, scheme, n_tx, T_loop us, N, bins, step, dv, vmax, n_virtual)
 CASES = {
     "A_simo": (FIX / "s1_simo.cfg", "IWR6843", "tdm", 1, 108, 64, 64, 0.3481, 0.3481, 11.14, 4),
-    "B_tdm2": (RADAR / "IWR_Demos" / "6843.cfg", "IWR6843", "tdm", 2, 216, 64, 32, 0.3481, 0.3481, 5.570, 8),
-    "C1_tdm3": (RADAR / "IWR_Demos" / "short_range_3D.cfg", "IWR6843", "tdm", 3, 192.4, 48, 16, 0.6147, 0.6147, 4.917, 12),
+    "B_tdm2": (RADAR / "IWR6843" / "demo" / "default.cfg", "IWR6843", "tdm", 2, 216, 64, 32, 0.3481, 0.3481, 5.570, 8),
+    "C1_tdm3": (RADAR / "IWR1443" / "demo" / "short_range_3D.cfg", "IWR6843", "tdm", 3, 192.4, 48, 16, 0.6147, 0.6147, 4.917, 12),
     "D_bpm": (FIX / "s2_bpm.cfg", "IWR6843", "tdm", 2, 216, 128, 64, 0.1741, 0.1741, 5.570, 8),
     "E_repeat": (FIX / "s3_repeat.cfg", "IWR6843", "tdm", 2, 216, 128, 64, 0.1741, 0.1741, 5.570, 8),
-    "F_ddma": (RADAR / "cascade" / "cascade_shortrange.cfg", "AWR2243_CASCADE", "ddma", 6, 50, 256, 256,
+    "F_ddma": (RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg", "AWR2243_CASCADE", "ddma", 6, 50, 256, 256,
                0.1499, 0.1499, 19.19, 48),
 }
 
@@ -38,7 +38,7 @@ def test_oracle_case(name):
 
 
 def test_oracle_c2_non_pow2_step_differs_from_resolution():
-    txt = (RADAR / "IWR_Demos" / "short_range_3D.cfg").read_text().replace(
+    txt = (RADAR / "IWR1443" / "demo" / "short_range_3D.cfg").read_text().replace(
         "frameCfg 0 2 16 0 33.333 1 0", "frameCfg 0 2 50 0 33.333 1 0")
     m = metrics(parse_cfg(txt), "IWR6843", "tdm")
     assert (m.n_tx, m.n_chirps, m.doppler_bins) == (3, 150, 64)
@@ -48,9 +48,9 @@ def test_oracle_c2_non_pow2_step_differs_from_resolution():
 
 def test_oracle_lambda_is_sampled_band_centre():
     assert metrics(parse_cfg_file(FIX / "s1_simo.cfg"), "IWR6843", "tdm").lambda_mm == pytest.approx(4.812, rel=REL)
-    assert metrics(parse_cfg_file(RADAR / "IWR_Demos" / "short_range_3D.cfg"), "IWR6843", "tdm").lambda_mm == \
+    assert metrics(parse_cfg_file(RADAR / "IWR1443" / "demo" / "short_range_3D.cfg"), "IWR6843", "tdm").lambda_mm == \
         pytest.approx(3.785, rel=REL)
-    assert metrics(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "AWR2243_CASCADE", "ddma"
+    assert metrics(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "AWR2243_CASCADE", "ddma"
                    ).lambda_mm == pytest.approx(3.838, rel=REL)
 
 
@@ -69,11 +69,11 @@ def test_simo_is_not_popcount():
 
 def test_bpm_flag_parsed():
     assert metrics(parse_cfg_file(FIX / "s2_bpm.cfg"), "IWR6843", "tdm").bpm_enabled
-    assert not metrics(parse_cfg_file(RADAR / "IWR_Demos" / "6843.cfg"), "IWR6843", "tdm").bpm_enabled
+    assert not metrics(parse_cfg_file(RADAR / "IWR6843" / "demo" / "default.cfg"), "IWR6843", "tdm").bpm_enabled
 
 
 def test_ddma_two_vmax_pattern_period_and_unverified_bins():
-    m = metrics(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "AWR2243_CASCADE", "ddma")
+    m = metrics(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "AWR2243_CASCADE", "ddma")
     assert m.vmax_full_ms == pytest.approx(19.19, rel=REL) and m.vmax_per_tx_ms == pytest.approx(2.399, rel=REL)
     assert m.n_bands == 8 and m.loop_period_us == pytest.approx(50) and m.pattern_period_us == pytest.approx(400)
     assert m.doppler_bins // m.n_bands == 32
@@ -85,19 +85,19 @@ def test_ddma_two_vmax_pattern_period_and_unverified_bins():
 
 
 def test_tdm_derivations_and_vmax_per_tx_equals_full():
-    m = metrics(parse_cfg_file(RADAR / "IWR_Demos" / "6843.cfg"), "IWR6843", "tdm")
+    m = metrics(parse_cfg_file(RADAR / "IWR6843" / "demo" / "default.cfg"), "IWR6843", "tdm")
     assert m.vmax_per_tx_ms == m.vmax_full_ms and m.n_bands == 1
     assert all(v["scheme"] == "tdm" and v["formula"] for v in m.derivations.values())
     assert m.derivations["doppler_bins"]["confidence"] == "derived"
 
 
 def test_chirp_sequence_and_default_scheme():
-    cfg = parse_cfg_file(RADAR / "IWR_Demos" / "short_range_3D.cfg")
+    cfg = parse_cfg_file(RADAR / "IWR1443" / "demo" / "short_range_3D.cfg")
     assert cfg.chirp_sequence == [(0, 1), (1, 4), (2, 2)]
     assert [c["tx_mask"] for c in metrics(cfg, "IWR6843").chirp_sequence] == [1, 4, 2]
     # no scheme passed: the board's default firmware decides, else the cfg layout
     assert metrics(cfg, "IWR6843").scheme == fwmod.mimo("IWR6843", fwmod.default_for("IWR6843"))["scheme"] == "tdm"
-    casc = parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg")
+    casc = parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg")
     assert metrics(casc, "AWR2243_CASCADE").scheme == "ddma" and metrics(casc).scheme == "ddma"
     assert metrics(cfg).scheme == "tdm"
     with pytest.raises(CfgError):
@@ -105,7 +105,7 @@ def test_chirp_sequence_and_default_scheme():
 
 
 def test_validate_passes_the_firmware_scheme():
-    cfg = parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg")
+    cfg = parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg")
     assert validate(cfg, "AWR2243_CASCADE", "cascade_ddm").metrics.scheme == "ddma"
     assert validate(parse_cfg_file(FIX / "s3_repeat.cfg"), "IWR6843", "demo").metrics.scheme == "tdm"
 
@@ -176,7 +176,7 @@ def test_golden_every_shipped_cfg_unchanged():
 # --- gui-23: per-TX phase readout --------------------------------------------------------------
 
 def test_ddma_phase_table_6tx_cpl8():
-    m = metrics(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "AWR2243_CASCADE", "ddma")
+    m = metrics(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "AWR2243_CASCADE", "ddma")
     assert m.phase_tx == ["TX1", "TX2", "TX3", "TX4", "TX5", "TX6"]
     assert len(m.chirp_phases) == 8 and m.phase_confidence == "unverified" and "HYPOTHESIS" in m.phase_note
     assert "firmware-derived" in m.phase_source
@@ -205,7 +205,7 @@ def test_bpm_phase_table_0_180_on_chirp1():
 
 
 def test_tdm_phase_table_zeros():
-    m = metrics(parse_cfg_file(RADAR / "IWR_Demos" / "short_range_3D.cfg"), "IWR6843", "tdm")
+    m = metrics(parse_cfg_file(RADAR / "IWR1443" / "demo" / "short_range_3D.cfg"), "IWR6843", "tdm")
     assert m.phase_source == "none (TDM)" and m.phase_tx == ["TX1", "TX2", "TX3"]
     assert [r["phase_deg"] for r in m.chirp_phases] == [[0, 0, 0]] * 3
     assert [r["index"] for r in m.chirp_phases] == [0, 1, 2]

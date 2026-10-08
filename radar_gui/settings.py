@@ -21,7 +21,7 @@ sys.path.insert(0, str(REPO / "tools" / "setup"))
 import host_setup as hs  # noqa: E402
 
 BY_ID = "/dev/serial/by-id"
-CASCADE_SERIAL = "00000000"  # the cascade's XDS110 reports serial 00000000 (config/system/radar_0_AWR2243_cascade_serial.json)
+CASCADE_SERIAL = "00000000"  # the cascade's XDS110 reports serial 00000000 (config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json)
 # usb-<vendor>_<product...>_<SERIAL>-if<NN>[-port0]: the serial is the last "_" field
 NAME = re.compile(r"^usb-(?P<dev>.+)_(?P<serial>[^_]+)-if(?P<ifn>[0-9a-fA-F]{2})(?:-port\d+)?$")
 
@@ -44,7 +44,7 @@ def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None
     for g in groups.values():
         g["ports"].sort(key=lambda p: p["interface"])
         g["cascade"] = g["serial"] == CASCADE_SERIAL
-        g["label"] = ("cascade (per radar_0_AWR2243_cascade_serial.json)" if g["cascade"]
+        g["label"] = ("cascade (per AWR2243_CASCADE_cascade_ddm_shortrange.json)" if g["cascade"]
                       else "XDS110 board" if g["xds110"] else "USB serial device")
         out.append(g)
     out.sort(key=lambda g: g["serial"])

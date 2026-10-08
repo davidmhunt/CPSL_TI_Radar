@@ -217,7 +217,7 @@ def from_setup(setup: dict, caps: dict) -> dict:
     cfg_src = Path(setup["cfg_path"]).resolve()
     if not cfg_src.is_file():
         raise SessionError(f"cfg not found: {cfg_src}")
-    if (cfgapi.guess_board(cfg_src.name) == "AWR2243_CASCADE") != (board == "AWR2243_CASCADE") and not setup.get("allow_cfg_mismatch"):
+    if (cfgapi.guess_board(str(cfg_src)) == "AWR2243_CASCADE") != (board == "AWR2243_CASCADE") and not setup.get("allow_cfg_mismatch"):
         raise SessionError(f"cfg {cfg_src.name!r} is not for board {board}")
     fw = fwmod.get(setup["firmware"]) if setup.get("firmware") else fwmod.default_for(board)
     if fw is None:

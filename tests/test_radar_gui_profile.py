@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RADAR = ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar"
 FIX = ROOT / "tests" / "fixtures" / "mimo"
 SRC = (ROOT / "radar_gui" / "web" / "js" / "profile.js").read_text()
-CASES = [(FIX / "s1_simo.cfg", "IWR6843"), (FIX / "s2_bpm.cfg", "IWR6843"), (RADAR / "IWR_Demos" / "short_range_3D.cfg", "IWR6843"),
-         (RADAR / "cascade" / "cascade_shortrange.cfg", "AWR2243_CASCADE"), (FIX / "adv_subframe_4.cfg", "IWR1843")]
+CASES = [(FIX / "s1_simo.cfg", "IWR6843"), (FIX / "s2_bpm.cfg", "IWR6843"), (RADAR / "IWR1443" / "demo" / "short_range_3D.cfg", "IWR6843"),
+         (RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg", "AWR2243_CASCADE"), (FIX / "adv_subframe_4.cfg", "IWR1843")]
 
 
 def fields():

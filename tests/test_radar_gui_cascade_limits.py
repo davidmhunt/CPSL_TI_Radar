@@ -10,8 +10,8 @@ from radar_gui.cfg import parse_cfg, validate
 
 generate = importlib.import_module("radar_gui.cfg.generate")
 
-RADAR = Path(__file__).resolve().parents[1] / "CPSL_TI_Radar_cpp" / "config" / "radar" / "cascade"
-BASE = (RADAR / "cascade_shortrange.cfg").read_text()
+RADAR = Path(__file__).resolve().parents[1] / "CPSL_TI_Radar_cpp" / "config" / "radar" / "AWR2243_CASCADE" / "cascade_ddm"
+BASE = (RADAR / "shortrange.cfg").read_text()
 
 
 def with_frame(loops, samples=None, text=BASE):

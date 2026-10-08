@@ -11,19 +11,30 @@ from radar_gui.cfg import BOARD_LIMITS, BOARDS, limits_dict, metrics, parse_cfg,
 ROOT = Path(__file__).resolve().parents[1]
 RADAR = ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar"
 VIEWER = ROOT / "tools" / "radar_viewer" / "configs"
-SHIPPED = sorted(RADAR.rglob("*.cfg")) + sorted(VIEWER.glob("*.cfg"))
+ARCHIVE = ROOT / "CPSL_TI_Radar_cpp" / "config" / "archive" / "radar"      # same <BOARD>/<firmware>/ layout
+SHIPPED = sorted(RADAR.rglob("*.cfg")) + sorted(ARCHIVE.rglob("*.cfg")) + sorted(VIEWER.glob("*.cfg"))
 
 
-# Shipped cfg dirs that predate the SDK 3.6 demo and still lack calibData (gui-33 follow-up: the 4 IWR1843 DCA cfgs
-# were fixed; these were not in scope). Only these dirs may skip missing_calibData; every other shipped cfg must have it.
-LEGACY_NO_CALIB_DIRS = (RADAR / "DCA1000" / "custom_configs", RADAR / "IWR_Demos")
+def _tree_parts(p: Path):
+    p = Path(p)
+    for base in (RADAR, ARCHIVE):
+        if base in p.parents:
+            return p.relative_to(base).parts
+    return None
 
 
-def is_legacy_no_calib(p: Path) -> bool:
-    return any(d in Path(p).parents for d in LEGACY_NO_CALIB_DIRS)
+def firmware_for(p: Path) -> str | None:
+    """Firmware id of a shipped driver cfg (its folder under the board); None for cfgs outside config/radar/."""
+    parts = _tree_parts(p)
+    return parts[1] if parts else None
 
 
 def board_for(p: Path) -> str:
+    """Shipped driver cfgs: the board is the folder (config/radar/<BOARD>/<firmware>/); viewer cfgs keep the heuristic."""
+    p = Path(p)
+    parts = _tree_parts(p)
+    if parts:
+        return parts[0]
     s = str(p)
     if "cascade" in s or "calibration_run" in s:
         return "AWR2243_CASCADE"
@@ -32,7 +43,7 @@ def board_for(p: Path) -> str:
     if "6843" in s:
         return "IWR6843"
     if re.search(r"^\s*cfarCfg(\s+\S+){7}\s*(%.*)?$", p.read_text(errors="replace"), re.M):
-        return "IWR1443"      # the SDK 2.x demo's 7-argument cfarCfg (IWR_Demos/indoor_scene.cfg ...)
+        return "IWR1443"      # the SDK 2.x demo's 7-argument cfarCfg
     return "IWR1843"
 
 
@@ -48,7 +59,7 @@ def test_parse_drops_comments_and_keeps_line_numbers():
 # --- metrics: hand-computed ----------------------------------------------------------------------
 
 def test_metrics_1843_radvel_10hz_tdm():
-    m = metrics(parse_cfg_file(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg"), "IWR1843")
+    m = metrics(parse_cfg_file(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg"), "IWR1843")
     # slope 80, 63 samples @ 2100 ksps -> 30 us, B = 2400 MHz; fc = 77 + (80*7 + 1200)/1e3 = 78.76 GHz
     assert m.mode == "tdm" and (m.n_rx, m.n_tx, m.n_virtual, m.n_az_virtual) == (4, 2, 8, 8)
     assert m.range_res_m == pytest.approx(0.0625, rel=1e-3)
@@ -65,7 +76,7 @@ def test_metrics_1843_radvel_10hz_tdm():
 
 
 def test_metrics_6843_ods_tdm_three_tx():
-    m = metrics(parse_cfg_file(RADAR / "nav_configs" / "6843_RadVel_ods_10Hz.cfg"), "IWR6843")
+    m = metrics(parse_cfg_file(RADAR / "IWR6843ODS" / "demo" / "RadVel_ods_10Hz.cfg"), "IWR6843")
     # fc = 60 + (80*7 + 1200)/1e3 = 61.76 GHz; Tc = 244 us; 3 chirps per loop -> 732 us; 100 loops -> 300 chirps
     assert (m.n_tx, m.n_virtual, m.chirps_per_loop, m.n_chirps) == (3, 12, 3, 300)
     assert m.max_velocity_ms == pytest.approx(1.658, rel=2e-3)
@@ -74,7 +85,7 @@ def test_metrics_6843_ods_tdm_three_tx():
 
 
 def test_metrics_cascade_ddma_matches_hand_and_cfggen():
-    p = RADAR / "cascade" / "cascade_shortrange.cfg"
+    p = RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"
     m = metrics(parse_cfg_file(p), "AWR2243_CASCADE")
     # 192 samples @ 5000 ksps = 38.4 us, slope 44.41 -> B = 1705.3 MHz; Tc = 5 + 45 = 50 us; 8 x 32 = 256 chirps
     assert m.mode == "ddma" and (m.n_rx, m.n_tx, m.n_virtual) == (8, 6, 48)
@@ -98,21 +109,21 @@ def test_metrics_cascade_ddma_matches_hand_and_cfggen():
 
 
 def test_board_none_infers_layout_and_cascade_is_ddma():
-    assert metrics(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg")).mode == "ddma"
-    assert metrics(parse_cfg_file(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg")).mode == "tdm"
+    assert metrics(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg")).mode == "ddma"
+    assert metrics(parse_cfg_file(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg")).mode == "tdm"
 
 
 def test_real_adc_halves_bytes_and_range():
-    base = parse_cfg_file(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg")
+    base = parse_cfg_file(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg")
     m_c = metrics(base, "IWR1843")
-    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text().replace("adcCfg 2 1", "adcCfg 2 0")
+    txt = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text().replace("adcCfg 2 1", "adcCfg 2 0")
     m_r = metrics(parse_cfg(txt), "IWR1843")
     assert m_r.bytes_per_chirp * 2 == m_c.bytes_per_chirp
     assert m_r.max_range_ideal_m == pytest.approx(m_c.max_range_ideal_m / 2)
 
 
 def test_lvds_dataformat2_adds_per_chirp_metadata():
-    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text().replace("lvdsStreamCfg -1 0 1 0", "lvdsStreamCfg -1 0 2 0")
+    txt = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text().replace("lvdsStreamCfg -1 0 1 0", "lvdsStreamCfg -1 0 2 0")
     m = metrics(parse_cfg(txt), "IWR1843")
     assert m.lvds_data_fmt == 2 and m.bytes_per_chirp == 63 * 16 + 64
 
@@ -130,61 +141,61 @@ def codes(rep, level=None):
 
 
 def test_clean_cfg_validates():
-    rep = validate(parse_cfg_file(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg"), "IWR1843")
+    rep = validate(parse_cfg_file(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg"), "IWR1843")
     assert rep.ok and not rep.errors and rep.metrics is not None
 
 
 def test_cascade_slope_error_above_silicon_warning_above_tested():
-    cfg = _mod(RADAR / "cascade" / "cascade_shortrange.cfg", "0 0 44.41 0 192", "0 0 300 0 192")
+    cfg = _mod(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg", "0 0 44.41 0 192", "0 0 300 0 192")
     rep = validate(cfg, "AWR2243_CASCADE")
     assert not rep.ok and "slope" in codes(rep, "error")            # 266 MHz/us silicon limit
-    rep = validate(_mod(RADAR / "cascade" / "cascade_shortrange.cfg", "0 0 44.41 0 192", "0 0 150 0 192"), "AWR2243_CASCADE")
+    rep = validate(_mod(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg", "0 0 44.41 0 192", "0 0 150 0 192"), "AWR2243_CASCADE")
     assert "slope_untested" in codes(rep, "warning") and "slope" not in codes(rep)   # beyond the tested 100
 
 
 def test_single_chip_slope_over_limit_is_error():
-    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "0 0 80.0 1 63", "0 0 120.0 1 63")
+    cfg = _mod(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "0 0 80.0 1 63", "0 0 120.0 1 63")
     rep = validate(cfg, "IWR1843")
     slope = [i for i in rep.issues if i.code == "slope"]
     assert slope and slope[0].level == "error" and slope[0].confidence == "high" and "100" in slope[0].message
-    cfg = _mod(RADAR / "nav_configs" / "6843_RadVel_ods_10Hz.cfg", "0 0 80.0 1 63", "0 0 240.0 1 63")
+    cfg = _mod(RADAR / "IWR6843ODS" / "demo" / "RadVel_ods_10Hz.cfg", "0 0 80.0 1 63", "0 0 240.0 1 63")
     assert "slope" not in codes(validate(cfg, "IWR6843"))   # IWR6843 allows 250
 
 
 def test_samples_beyond_adc_buffer_reported():
-    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "1 63 2100", "1 2000 2100")
+    cfg = _mod(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "1 63 2100", "1 2000 2100")
     rep = validate(cfg, "IWR1843")
     assert "adc_buffer_streaming" in codes(rep, "warning") and "sampling_outside_ramp" in codes(rep, "error")
-    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "1 63 2100", "1 2100 2100")   # 33600 B > 32 KB
+    cfg = _mod(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "1 63 2100", "1 2100 2100")   # 33600 B > 32 KB
     assert "adc_buffer" in codes(validate(cfg, "IWR1843"), "error")
 
 
 def test_cascade_untested_sample_count_warns():
-    cfg = _mod(RADAR / "cascade" / "cascade_shortrange.cfg", "0 192 5000", "0 256 5000")
+    cfg = _mod(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg", "0 192 5000", "0 256 5000")
     rep = validate(cfg, "AWR2243_CASCADE")
     assert "samples" in codes(rep, "warning")
 
 
 def test_idle_below_min_on_cascade_is_error():
-    cfg = _mod(RADAR / "cascade" / "cascade_shortrange.cfg", "profileCfg 0 77 5 6 45", "profileCfg 0 77 2 6 45")
+    cfg = _mod(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg", "profileCfg 0 77 5 6 45", "profileCfg 0 77 2 6 45")
     rep = validate(cfg, "AWR2243_CASCADE")
     assert "idle" in codes(rep, "warning") and "idle" not in codes(rep, "error")   # unverified limit: never an error
 
 
 def test_band_overshoot_beyond_tolerance_is_error():
-    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "profileCfg 0 77 293 7 44", "profileCfg 0 79 293 7 44")
+    cfg = _mod(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "profileCfg 0 77 293 7 44", "profileCfg 0 79 293 7 44")
     assert "band" in codes(validate(cfg, "IWR1843"), "error")   # 79 + 80*44 MHz = 82.52 GHz
 
 
 def test_frame_shorter_than_chirps_is_error():
-    cfg = _mod(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "frameCfg 0 1 115 0 100 1 0", "frameCfg 0 1 115 0 50 1 0")
+    cfg = _mod(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "frameCfg 0 1 115 0 100 1 0", "frameCfg 0 1 115 0 50 1 0")
     assert "frame_too_short" in codes(validate(cfg, "IWR1843"), "error")
 
 
 def test_wrong_dialect_for_board_is_error():
-    rep = validate(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "IWR1843")
+    rep = validate(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "IWR1843")
     assert not rep.ok and "frame_cfg_layout" in codes(rep)
-    rep = validate(parse_cfg_file(RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg"), "AWR2243_CASCADE")
+    rep = validate(parse_cfg_file(RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg"), "AWR2243_CASCADE")
     assert not rep.ok
 
 
@@ -195,15 +206,15 @@ def test_missing_command_and_unknown_board():
 
 
 def test_cascade_cfg_notes_once_per_boot_and_lvds():
-    rep = validate(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "AWR2243_CASCADE")
+    rep = validate(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "AWR2243_CASCADE")
     assert rep.ok and "once_per_boot" in codes(rep, "info")
-    cfg = parse_cfg((RADAR / "cascade" / "cascade_shortrange.cfg").read_text() + "\nlvdsStreamCfg -1 0 1 0\n")
+    cfg = parse_cfg((RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg").read_text() + "\nlvdsStreamCfg -1 0 1 0\n")
     assert "lvds_unsupported" in codes(validate(cfg, "AWR2243_CASCADE"), "warning")
 
 
 def test_dca_link_rate_error():
     # 600 samples x 4 RX x 4 B per 60 us chirp = 1280 Mbps > 2 lanes x 600 Mbps
-    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    txt = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     txt = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 5 7 55 0 0 20.0 1 600 12000")
     rep = validate(parse_cfg(txt), "IWR1843")
     assert "lvds_rate" in codes(rep, "error") and rep.metrics.chirp_avg_rate_mbps == pytest.approx(1280, rel=1e-6)
@@ -212,7 +223,7 @@ def test_dca_link_rate_error():
 # --- API shape -------------------------------------------------------------------------------------
 
 def test_report_and_limits_are_json_serialisable():
-    rep = validate(parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg"), "AWR2243_CASCADE")
+    rep = validate(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "AWR2243_CASCADE")
     d = json.loads(json.dumps(rep.to_dict()))
     assert d["board"] == "AWR2243_CASCADE" and d["metrics"]["mode"] == "ddma" and d["ok"] is True
     json.dumps(limits_dict())
@@ -238,12 +249,12 @@ def test_sweep_found_the_shipped_cfgs():
 @pytest.mark.parametrize("path", SHIPPED, ids=lambda p: str(p.relative_to(ROOT)))
 def test_shipped_cfg_parses_and_validates(path):
     board = board_for(path)
-    rep = validate(parse_cfg_file(path), board)
+    rep = validate(parse_cfg_file(path), board, firmware_for(path))
     json.dumps(rep.to_dict())
     assert rep.metrics is not None, [i.message for i in rep.issues]
     # shipped cfgs run on hardware: any error here is either a real cfg problem or a wrong rule (gui-33: every shipped
-    # IWR1843 cfg now carries calibData, which the stock SDK 3.6 demo requires).
-    errs = [i for i in rep.errors if not (i.code == "missing_calibData" and is_legacy_no_calib(path))]
+    # IWR1843 cfg now carries calibData, which the stock SDK 3.6 demo requires; gui-38: the SDK 2 cfgs live under IWR1443/).
+    errs = list(rep.errors)
     assert not errs, [i.message for i in errs]
 
 
@@ -405,7 +416,7 @@ def test_boards_list_their_firmwares_and_agree_with_the_descriptors():
     # inconsistency is caught in both directions
     descs = dict(fwmod.load_all())
     assert fwmod.check_boards({k: v for k, v in descs.items() if k != "dca1000_raw"})
-    extra = {**descs["dca1000_raw"]["templates"], "IWR1843": "radar/DCA1000/custom_configs/short_range.cfg"}
+    extra = {**descs["dca1000_raw"]["templates"], "IWR1843": "radar/IWR1443/dca1000_raw/short_range.cfg"}
     assert fwmod.check_boards({**descs, "dca1000_raw": {**descs["dca1000_raw"], "templates": extra}})
     # a driver board must exist and (when it is driver-only) must list the firmware
     assert fwmod.check_descriptor({**descs["iwr1843_sar_lvds"], "driver_board": {"IWR1843": "NOPE"}})
@@ -449,7 +460,7 @@ def test_mimo_block_on_every_descriptor():
 
 
 def test_validate_with_firmware_uses_its_limits_and_rejects_unsupported():
-    cfg = parse_cfg_file(RADAR / "cascade" / "cascade_shortrange.cfg")
+    cfg = parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg")
     assert validate(cfg, "AWR2243_CASCADE", "cascade_ddm").ok
     assert validate(cfg, "AWR2243_CASCADE", "demo").errors[0].code == "firmware_board_mismatch"
 
@@ -499,8 +510,8 @@ def test_generate_result_is_json_safe_and_fast():
 def test_generated_text_only_changes_what_depends_on_targets():
     """Boilerplate comes from the shipped template: same command set, only timing lines differ."""
     r = generate("AWR2243_CASCADE", max_range_m=15.2, max_velocity_ms=19.4, frame_rate_hz=20)
-    ship = parse_cfg_file(Path(__file__).resolve().parents[1] / "CPSL_TI_Radar_cpp/config/radar/cascade"
-                          / "cascade_shortrange.cfg")
+    ship = parse_cfg_file(Path(__file__).resolve().parents[1] / "CPSL_TI_Radar_cpp/config/radar/AWR2243_CASCADE"
+                          / "cascade_ddm" / "shortrange.cfg")
     assert [c.name for c in parse_cfg(r.text).commands] == [c.name for c in ship.commands]
     # reproduces TI's short-range design: 192 samples, ~5 Msps, ~44 MHz/us
     assert r.metrics.num_samples == 192 and r.metrics.sample_rate_ksps == 5000
@@ -526,7 +537,7 @@ def test_gui13_limits_come_from_descriptors_with_memo_values():
 
 
 def test_lowpower_sample_rate_cap_only_applies_in_low_power_mode():
-    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    txt = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     assert "lowPower 0 0" in txt
     fast = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 293 7 44 0 0 60.0 1 63 10000")
     rep = validate(parse_cfg(fast), "IWR1843")                  # regular ADC mode: 12500 cap
@@ -538,13 +549,13 @@ def test_lowpower_sample_rate_cap_only_applies_in_low_power_mode():
 
 
 def test_sweep_must_lie_in_one_subband():
-    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    txt = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     wide = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 76.5 293 7 44 0 0 60.0 1 63 2100")   # 76.5 + 60*44 MHz = 79.1 GHz
     assert "band_subrange" in codes(validate(parse_cfg(wide), "IWR1843"), "error")
 
 
 def test_chirp_cycle_below_minimum_is_error_and_6843_is_looser():
-    txt = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    txt = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     short = txt.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 5 7 8 0 0 80.0 1 20 2100")   # 5 + 8 = 13 us
     assert "chirp_cycle" in codes(validate(parse_cfg(short), "IWR1843"), "error")
     assert "chirp_cycle" not in codes(validate(parse_cfg(short), "IWR6843"))
@@ -583,7 +594,7 @@ def test_mimo_editable_flag():
 # --- gui-24: dataFmt set per firmware ------------------------------------------------------------
 
 def _fmt_cfg(fmt):
-    return parse_cfg((RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text().replace("lvdsStreamCfg -1 0 1 0", f"lvdsStreamCfg -1 0 {fmt} 0"))
+    return parse_cfg((RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text().replace("lvdsStreamCfg -1 0 1 0", f"lvdsStreamCfg -1 0 {fmt} 0"))
 
 
 def test_firmware_exposes_lvds_data_fmts():
@@ -641,7 +652,7 @@ def test_sar_generate_validates_and_has_no_demo_commands():
 
 def test_sar_shipped_cfg_validates_without_errors_and_driver_dialect_is_enforced():
     from radar_gui.cfg import firmware as fwmod
-    text = (fwmod.CONFIG_DIR / "radar/sar_configs/1843_SAR_2ms_fmt1.cfg").read_text()
+    text = (fwmod.CONFIG_DIR / "radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg").read_text()
     rep = validate(parse_cfg(text), "IWR1843", "iwr1843_sar_lvds")
     assert rep.ok and not rep.errors
     with_gui = text.replace("sensorStart", "guiMonitor -1 1 0 0 0 0 0\nsensorStart")
@@ -655,7 +666,7 @@ def test_sar_shipped_cfg_validates_without_errors_and_driver_dialect_is_enforced
 
 def test_studio_dca_cfg_validates_for_1843_demo():
     from radar_gui.cfg import firmware as fwmod
-    p = fwmod.CONFIG_DIR / "radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg"
+    p = fwmod.CONFIG_DIR / "radar/IWR1843/demo/mmstudio_original.cfg"
     rep = validate(parse_cfg(p.read_text()), "IWR1843", "demo")
     assert rep.ok and not rep.errors and not rep.warnings
 

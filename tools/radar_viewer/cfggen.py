@@ -35,7 +35,7 @@ USABLE_IF = 0.9
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.normpath(os.path.join(HERE, "..", "..", "CPSL_TI_Radar_cpp", "config", "radar",
-                                         "cascade", "cascade_shortrange.cfg"))
+                                         "AWR2243_CASCADE", "cascade_ddm", "shortrange.cfg"))
 CALIB_TEMPLATE = os.path.normpath(os.path.join(HERE, "..", "..", "firmware_dev", "firmware", "cascade",
                                                "src", "demo", "chirp_configs", "cascade_shortrange_calib.cfg"))
 OUT_DIR = os.path.join(HERE, "configs")

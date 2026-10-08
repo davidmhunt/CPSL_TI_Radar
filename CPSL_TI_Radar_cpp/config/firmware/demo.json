@@ -30,10 +30,10 @@
     "confidence": "high"
   },
   "templates": {
-    "IWR1443": "radar/IWR_Demos/1443config.cfg",
-    "IWR1843": "radar/nav_configs/1843_RadVel_10Hz.cfg",
-    "IWR6843": "radar/IWR_Demos/6843.cfg",
-    "IWR6843ODS": "radar/IWR_Demos/6843.cfg"
+    "IWR1443": "radar/IWR1443/demo/config.cfg",
+    "IWR1843": "radar/IWR1843/demo/RadVel_10Hz.cfg",
+    "IWR6843": "radar/IWR6843/demo/default.cfg",
+    "IWR6843ODS": "radar/IWR6843ODS/demo/lr_CFAR_7dB.cfg"
   },
   "system_enables": {
     "serial": true,

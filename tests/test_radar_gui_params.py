@@ -11,8 +11,8 @@ from radar_gui.cfg import CfgError, apply_params, metrics, params_from_cfg, pars
 ROOT = Path(__file__).resolve().parents[1]
 RADAR = ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar"
 CASES = [  # (path, board): single-chip 2-TX, 6843 3-TX, cascade DDMA
-    (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg", "IWR1843"),
-    (RADAR / "nav_configs" / "6843_RadVel_ods_10Hz.cfg", "IWR6843"),
+    (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "IWR1843"),
+    (RADAR / "IWR6843ODS" / "demo" / "RadVel_ods_10Hz.cfg", "IWR6843"),
     (ROOT / "tools" / "radar_viewer" / "configs" / "cascade_R15m_V5ms_20Hz.cfg", "AWR2243_CASCADE"),
 ]
 IDS = [p.name for p, _ in CASES]
@@ -34,7 +34,7 @@ def test_round_trip_is_identity(path, board):
 
 
 def test_params_schema_single_profile_list():
-    p = params_from_cfg(parse_cfg((RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()), "IWR1843")
+    p = params_from_cfg(parse_cfg((RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()), "IWR1843")
     assert len(p["profiles"]) == 1
     assert {"start_ghz", "slope_mhz_us", "idle_us", "adc_start_us", "ramp_us", "tx_start_us", "num_samples",
             "sample_rate_ksps", "hpf1", "hpf2", "rx_gain_db"} <= set(p["profiles"][0])
@@ -97,7 +97,7 @@ def test_only_the_four_commands_change():
                                  {"frame_period_ms": None}, {"chirp_tx_masks": []}])
 def test_bad_values_raise_cfgerror(bad):
     with pytest.raises(CfgError):
-        apply_params((RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text(), bad)
+        apply_params((RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text(), bad)
 
 
 # --- endpoint ---------------------------------------------------------------------------------------
@@ -166,7 +166,7 @@ def test_lvds_stream_round_trip_exact(path):
 
 
 def test_apply_lvds_hw_stream_changes_only_that_line():
-    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    t = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     assert "lvdsStreamCfg -1 0 1 0" in t
     out = apply_params(t, {"lvds_stream": {"data_fmt": 0}})
     a, b = t.splitlines(), out.splitlines()
@@ -176,7 +176,7 @@ def test_apply_lvds_hw_stream_changes_only_that_line():
 
 
 def test_lvds_stream_missing_line_or_bad_value():
-    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    t = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     no = "\n".join(l for l in t.splitlines() if "lvdsStreamCfg" not in l) + "\n"
     assert "lvds_stream" not in params_from_cfg(parse_cfg(no))
     with pytest.raises(CfgError):
@@ -209,7 +209,7 @@ def _lowpower_cfgs():
 def test_low_power_round_trip_exact(path):
     t = path.read_text(errors="replace")
     p = params_from_cfg(parse_cfg(t))
-    if "cascade" in path.name:
+    if "AWR2243_CASCADE" in path.parts or "cascade" in path.name:
         assert "low_power" not in p                 # cascade: not offered
         return
     assert p["low_power"] in (0, 1)
@@ -218,7 +218,7 @@ def test_low_power_round_trip_exact(path):
 
 def test_low_power_toggle_changes_one_line_and_warning_follows():
     from radar_gui.cfg import validate
-    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    t = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     t = t.replace("profileCfg 0 77 293 7 44 0 0 80.0 1 63 2100", "profileCfg 0 77 293 7 44 0 0 60.0 1 63 10000")
     assert params_from_cfg(parse_cfg(t), "IWR1843")["low_power"] == 0
     on = apply_params(t, {"low_power": 1}, board="IWR1843")
@@ -233,7 +233,7 @@ def test_low_power_toggle_changes_one_line_and_warning_follows():
 
 
 def test_low_power_bad_values():
-    t = (RADAR / "nav_configs" / "1843_RadVel_10Hz.cfg").read_text()
+    t = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     with pytest.raises(CfgError):
         apply_params(t, {"low_power": 2})
     cas = (ROOT / "tools" / "radar_viewer" / "configs" / "cascade_R15m_V5ms_20Hz.cfg").read_text()

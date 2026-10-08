@@ -9,7 +9,7 @@
     }
   },
   "templates": {
-    "AWR2243_CASCADE": "radar/cascade/cascade_shortrange.cfg"
+    "AWR2243_CASCADE": "radar/AWR2243_CASCADE/cascade_ddm/shortrange.cfg"
   },
   "system_enables": {
     "serial": true,

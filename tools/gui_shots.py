@@ -23,7 +23,7 @@ environment, e.g. FAKE_DRIVER_MODE, "run_files": {"<UTC>_<name>/driver.log": "te
 Actions (each followed by a short settle delay for the debounced re-analysis):
     {"mode": "direct"|"targets"}                  click the Targets/Chirp-parameters switch
     {"board": "IWR1843"}  {"firmware": "text"}    select by value or option text (substring)
-    {"load": "cascade_shortrange"}                pick a cfg in #cLoad (substring of text/value)
+    {"load": "cascade_ddm/shortrange"}              pick a cfg in #cLoad (substring of text/value)
     {"set": "#id", "value": "10000"}              set input/select, dispatch input+change
     {"click": "#id"}   {"wait": 1.5}
     ("set" values may use @PORT@ = an existing scratch file, @CLI@ = the pty link of a spec "helpers" fake board, e.g.

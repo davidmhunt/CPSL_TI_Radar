@@ -30,8 +30,19 @@ LOG_LEVELS = ["debug", "info", "warn", "error"]
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
 
 
+_RADAR_BOARDS = ("AWR2243_CASCADE", "IWR1443", "IWR1843", "IWR6843ODS", "IWR6843")   # config/radar/<BOARD>/<firmware>/
+
+
 def guess_board(rel: str) -> str:
-    p = rel.lower()
+    """Board of a cfg id path. Shipped driver cfgs sit at <BOARD>/<firmware>/<name>.cfg (the board is the first part
+    under config/radar/); `user:`/`viewer:` ids have no such folder and keep the name heuristic."""
+    parts = Path(str(rel)).parts
+    for i, part in enumerate(parts[:-1]):
+        if part == "radar" and parts[i + 1] in _RADAR_BOARDS:
+            return parts[i + 1]
+    if len(parts) > 1 and parts[0] in _RADAR_BOARDS:
+        return parts[0]
+    p = (Path(str(rel)).name if Path(str(rel)).is_absolute() else str(rel)).lower()
     if "cascade" in p or "2243" in p:
         return "AWR2243_CASCADE"
     if "1443" in p or "14xx" in p:

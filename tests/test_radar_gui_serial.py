@@ -478,7 +478,7 @@ def test_api_boards_listing(api):
 
 def test_cfg_hint_max_range_from_cfg_metrics(tmp_path):
     brd = FakeBoard()
-    shipped = Path(__file__).parent.parent / "CPSL_TI_Radar_cpp/config/radar/IWR_Demos/6843.cfg"
+    shipped = Path(__file__).parent.parent / "CPSL_TI_Radar_cpp/config/radar/IWR6843/demo/default.cfg"
     src = make_src("IWR6843", shipped, brd)
     assert src.info["max_range_m"] != 10 and src.info["max_range_m"] > 0 and src.info["fov"]
     assert make_src("IWR1843", cfg_file(tmp_path), brd).info["max_range_m"] == 10     # unanalysable cfg: default hint

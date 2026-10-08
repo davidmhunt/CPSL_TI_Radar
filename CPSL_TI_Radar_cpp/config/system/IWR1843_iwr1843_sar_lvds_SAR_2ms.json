@@ -1,0 +1,26 @@
+{
+    "schema_version": 2,
+    "board": "IWR1843_SAR",
+    "firmware": "iwr1843_sar_lvds",
+    "radar_cfg": "../radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg",
+    "cli": {
+        "port": "/dev/ttyACM0"
+    },
+    "serial_stream": {
+        "enabled": false
+    },
+    "dca1000": {
+        "enabled": true,
+        "fpga_ip": "192.168.33.180",
+        "host_ip": "192.168.33.30",
+        "cmd_port": 4096,
+        "data_port": 4098
+    },
+    "output": {
+        "save_adc_frames": false,
+        "save_raw_lvds": false
+    },
+    "runtime": {
+        "log_level": "info"
+    }
+}

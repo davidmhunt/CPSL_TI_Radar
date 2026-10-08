@@ -396,7 +396,7 @@ TEST_CASE(firmware_key_accepted) {
     // the SAR pair: board IWR1843_SAR + firmware iwr1843_sar_lvds (driver_board IWR1843 -> IWR1843_SAR)
     j["board"] = "IWR1843_SAR";
     j["firmware"] = "iwr1843_sar_lvds";
-    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg";
     SystemConfigReader sar(write_json("fw_sar.json", j));
     CHECK(sar.initialized);
     if (!sar.initialized) std::cout << sar.get_error() << std::endl;
@@ -430,7 +430,7 @@ TEST_CASE(sar_firmware_on_the_wrong_board_names_the_alias) {
     j = base_config();
     j["board"] = "IWR1843_SAR";
     j["firmware"] = "demo";
-    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/sar_configs/1843_SAR_2ms_fmt1.cfg";
+    j["radar_cfg"] = std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg";
     CHECK(has(reject_code("fw_sar_demo.json", j, "firmware_unsupported"), "supports: iwr1843_sar_lvds"));
 }
 

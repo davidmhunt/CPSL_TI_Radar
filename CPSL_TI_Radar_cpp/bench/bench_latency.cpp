@@ -88,7 +88,7 @@ double pct(std::vector<double> v, double q) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string cfg = std::string(CONFIG_DIR) + "/radar/nav_configs/1843_stress_test.cfg";
+    std::string cfg = std::string(CONFIG_DIR) + "/radar/IWR1843/demo/stress_test.cfg";
     size_t frames = 200;
     int period_ms = 20;
     for (int i = 1; i < argc; i++) {
