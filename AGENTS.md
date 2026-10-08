@@ -69,7 +69,7 @@ Work is on `release/v2.0`, a full rework toward a v2.0 release: clear out
 unused code, make the driver more efficient and customizable, add firmware
 generation (build → publish shipped images with provenance), add a
 single-process web GUI (Python backend + no-build-step `web/` frontend,
-growing out of `tools/radar_viewer/`), and add Docker support for firmware
+grown out of the retired v1 cascade viewer), and add Docker support for firmware
 builds and driver runs (native builds stay the default). The defining
 constraint is real hardware: boards, serial ports and the DCA1000 are
 single-user, flashing and power-cycling need a human at the bench, and the
@@ -120,7 +120,6 @@ shared, not private to one session.
 | `firmware_dev/` | Opt-in submodule (`CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`): firmware sources, Docker build env, download/build/flash scripts — Firmware role's namespace, see `docs/firmware.md` |
 | `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/` + `iwr_raw_rosnode` submodule); to be reorganized into the v2.0 shipped-firmware directory |
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |
-| `tools/radar_viewer/` | Cascade live point-cloud viewer (stdlib HTTP + pyserial) — seed of the v2.0 GUI |
 | `utilities/` | Notebooks for post-processing driver output (ADC cube, raw LVDS, `.cfg`), serial-port and DCA1000 network debugging, and a TI SDK LVDS parser example |
 | `tests/` | pytest suite (`uv run pytest`); C++ unit tests are in `CPSL_TI_Radar_cpp/tests/` and run via `ctest` (see "Running tests" below) |
 | `planning/` | Cascade plan and hardware bring-up notes |

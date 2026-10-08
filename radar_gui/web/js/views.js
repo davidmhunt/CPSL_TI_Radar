@@ -1,4 +1,4 @@
-// Canvas views: top, 3D, front, sparkline. Ported from tools/radar_viewer/index.html.
+// Canvas views: top, 3D, front, sparkline. Ported from the retired v1 cascade viewer.
 import { $, css, S } from './state.js';
 import { colorOf } from './colors.js';
 

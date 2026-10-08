@@ -1,5 +1,4 @@
 """radar_gui.cfg: parse, metrics and per-board validation (gui-02 Step 1). Hardware-free."""
-import importlib.util
 import json
 import re
 from pathlib import Path
@@ -10,9 +9,8 @@ from radar_gui.cfg import BOARD_LIMITS, BOARDS, limits_dict, metrics, parse_cfg,
 
 ROOT = Path(__file__).resolve().parents[1]
 RADAR = ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar"
-VIEWER = ROOT / "tools" / "radar_viewer" / "configs"
 ARCHIVE = ROOT / "CPSL_TI_Radar_cpp" / "config" / "archive" / "radar"      # same <BOARD>/<firmware>/ layout
-SHIPPED = sorted(RADAR.rglob("*.cfg")) + sorted(ARCHIVE.rglob("*.cfg")) + sorted(VIEWER.glob("*.cfg"))
+SHIPPED = sorted(RADAR.rglob("*.cfg")) + sorted(ARCHIVE.rglob("*.cfg"))
 
 
 def _tree_parts(p: Path):
@@ -30,7 +28,7 @@ def firmware_for(p: Path) -> str | None:
 
 
 def board_for(p: Path) -> str:
-    """Shipped driver cfgs: the board is the folder (config/radar/<BOARD>/<firmware>/); viewer cfgs keep the heuristic."""
+    """Shipped driver cfgs: the board is the folder (config/radar/<BOARD>/<firmware>/)."""
     p = Path(p)
     parts = _tree_parts(p)
     if parts:
@@ -84,7 +82,7 @@ def test_metrics_6843_ods_tdm_three_tx():
     assert m.range_res_m == pytest.approx(0.0625, rel=1e-3)
 
 
-def test_metrics_cascade_ddma_matches_hand_and_cfggen():
+def test_metrics_cascade_ddma_matches_hand():
     p = RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"
     m = metrics(parse_cfg_file(p), "AWR2243_CASCADE")
     # 192 samples @ 5000 ksps = 38.4 us, slope 44.41 -> B = 1705.3 MHz; Tc = 5 + 45 = 50 us; 8 x 32 = 256 chirps
@@ -95,17 +93,6 @@ def test_metrics_cascade_ddma_matches_hand_and_cfggen():
     assert m.velocity_res_ms == pytest.approx(0.1500, rel=2e-3)
     assert m.n_chirps == 256 and m.frame_period_ms == 50 and m.duty_cycle == pytest.approx(0.256, rel=1e-3)
     assert m.bytes_per_chirp == 192 * 8 * 4 and m.bytes_per_frame == 192 * 8 * 4 * 256
-    # cross-check against the existing generator's analyzer
-    spec = importlib.util.spec_from_file_location("cfggen", ROOT / "tools" / "radar_viewer" / "cfggen.py")
-    cfggen = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cfggen)
-    a = cfggen.analyze(cfggen.read_lines(p))
-    # cfggen uses c = 3e8 and we use 299792458 m/s: ~0.07 % apart
-    assert m.range_res_m == pytest.approx(a["range_res_m"], rel=2e-3)
-    assert m.max_range_m == pytest.approx(a["max_range_m"], rel=2e-3)
-    assert m.max_velocity_ms == pytest.approx(a["max_velocity"], rel=2e-3)
-    assert m.velocity_res_ms == pytest.approx(a["vel_res"], rel=2e-3)
-    assert m.active_ms == pytest.approx(a["active_ms"], rel=1e-6)
 
 
 def test_board_none_infers_layout_and_cascade_is_ddma():

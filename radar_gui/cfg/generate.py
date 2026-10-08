@@ -1,6 +1,6 @@
 """generate(board, targets): build a firmware-ready `.cfg` from high-level targets (gui-02 Step 2).
 
-Generalises the solver in `tools/radar_viewer/cfggen.py` (cascade DDMA only) to the single-chip TDM
+Generalises the solver of the retired v1 `cfggen.py` (git history, b416f61; cascade DDMA only) to the single-chip TDM
 boards. The boilerplate (everything that is not chirp/frame timing) comes from a shipped cfg of that
 board under `CPSL_TI_Radar_cpp/config/radar/`, so the firmware accepts it; only the lines that depend
 on the targets are rewritten. Maths (same as `metrics.py`):

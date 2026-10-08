@@ -44,7 +44,7 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 ## Where code and textbook differ (flagged, not reconciled)
 
 1. **Speed of light.** Code `C = 299_792_458.0` (exact). Hand calculations with `c = 3e8` differ by 0.07 % in `dR`, `Rmax`, `lambda`, `vmax`, `dv`.
-2. **0.9 factor (`USABLE_IF`).** Not derived. Textbook `Rmax = fs*c/(2*slope)`; code takes 90 % as "usable IF band", inherited from `tools/radar_viewer/cfggen.py` (empirical). Reported as `max_range_m`; un-derated is `max_range_ideal_m`. The solver applies it both ways, so a hand check against the ideal formula is off by exactly 0.9.
+2. **0.9 factor (`USABLE_IF`).** Not derived. Textbook `Rmax = fs*c/(2*slope)`; code takes 90 % as "usable IF band", inherited from the retired v1 `cfggen.py` (empirical). Reported as `max_range_m`; un-derated is `max_range_ideal_m`. The solver applies it both ways, so a hand check against the ideal formula is off by exactly 0.9.
 3. **Range resolution uses sampled bandwidth** `B = slope*N/fs`, not the swept `slope*ramp` (`sweep_mhz`).
 4. **TDM `n_TX` and `vmax`** use `n_TX*Tc` per `mimo_modes.md`, not `chirps_per_loop*Tc`. Solver still uses `popcount(tx_mask)`.
 5. **DDMA slow time.** `dv` uses `n_chirps = chirps_per_loop * loops` as the Doppler observation length (total active frame time; cascade: 8 chirps per loop). Confirmed by the cascade memo (M2 s4, `rfparserDDMA.c:786-807`).

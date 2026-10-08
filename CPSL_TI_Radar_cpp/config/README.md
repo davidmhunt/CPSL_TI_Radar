@@ -154,6 +154,8 @@ SDK 2 demo does not need it.
 |---|---|
 | `radar/cascade/cascade_shortrange.cfg` | `shortrange.cfg` |
 | `radar/cascade/cascade_shortrange_dense.cfg` | `shortrange_dense.cfg` |
+| `tools/radar_viewer/configs/calibration_run.cfg` | `calibration_run.cfg` |
+| `tools/radar_viewer/configs/cascade_R15m_V5ms_20Hz.cfg` | `cascade_R15m_V5ms_20Hz.cfg` |
 
 ### `radar/IWR1443/dca1000_raw/`
 

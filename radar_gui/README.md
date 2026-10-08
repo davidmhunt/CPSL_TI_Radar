@@ -1,8 +1,7 @@
 # radar_gui
 
 Single-process radar GUI prototype (gui-01): FastAPI + uvicorn backend, plain-JS ES-module frontend (no bundler,
-no build step). The look, layout and point-cloud views are ported from `tools/radar_viewer/`, which is left
-untouched as a reference; `tlv.py` loads its `parse_frame`.
+no build step). The look, layout and point-cloud views were ported from the retired v1 cascade viewer (removed in rel-02).
 
     uv run python -m radar_gui                      # http://127.0.0.1:8000/
     uv run python -m radar_gui --source replay --file tests/fixtures/sample_frames.bin
@@ -15,7 +14,7 @@ untouched as a reference; `tlv.py` loads its `parse_frame`.
 | `__main__.py` | CLI, starts uvicorn |
 | `app.py` | `create_app(source)`: `/api/health`, `/api/state`, WebSocket `/stream`, serves `web/`; `Hub` fans frames to clients |
 | `sources.py` | `Source` interface, `MockSource` (moving synthetic targets), `ReplaySource` (TLV byte dump, looped) |
-| `tlv.py` | frame parsing (reuses the viewer's `parse_frame`), `split_packets`, `build_packet` (fixtures) |
+| `tlv.py` | frame parsing (`parse_frame`), `split_packets`, `build_packet` (fixtures) |
 | `web/index.html`, `web/style.css` | page and styles |
 | `web/js/` | `main.js` (stream, controls), `state.js`, `colors.js`, `views.js` (top/3D/front/sparkline canvases) |
 
@@ -45,7 +44,7 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 | `POST /api/cfg/analyze` | `{board, cfg_text}` or `{board, targets}` -> `{ok, metrics, issues, text, ...}` |
 | `POST /api/cfg/generate` | `{board, targets, firmware?}` -> same shape (`targets`, `achieved`, `name` included); `firmware` = descriptor id, default the board's; `output_mode` in targets is a deprecated alias (backend only; the UI no longer sends it) |
 | `GET /api/cfg/firmware[?board=]` | firmware descriptors (id, boards, outputs, system_enables, pending), default first for a board. Descriptors: `CPSL_TI_Radar_cpp/config/firmware/<id>.json` (schema in `radar_gui/cfg/firmware.py`); limits are loaded from them |
-| `GET /api/cfgs`, `GET /api/cfg/file?id=` | shipped (`config/radar`, `tools/radar_viewer/configs`) + user cfgs; read one |
+| `GET /api/cfgs`, `GET /api/cfg/file?id=` | shipped (`config/radar`) + user cfgs; read one |
 | `POST /api/cfg/params` | `{board, base_cfg_text, params, firmware?}` -> analyze shape + `report`, `params` (gui-11): `params` (schema in `radar_gui/cfg/params.py`) is applied to the base cfg's profile/chirp/frame/channel lines, then validated; bad values are error issues, not 4xx/5xx |
 | `POST /api/cfg/save` | write the `.cfg` + system JSON (new names only) |
 

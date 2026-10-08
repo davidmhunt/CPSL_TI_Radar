@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RADAR = ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar"
 T6843 = (RADAR / "IWR6843ODS" / "demo" / "RadVel_ods_10Hz.cfg").read_text()     # 3-TX plain TDM, bpm off
 T1843 = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
-CAS = (ROOT / "tools" / "radar_viewer" / "configs" / "cascade_R15m_V5ms_20Hz.cfg").read_text()
+CAS = (RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "cascade_R15m_V5ms_20Hz.cfg").read_text()
 TARGETS = dict(max_range_m=20, max_velocity_ms=5)
 
 

@@ -1,6 +1,6 @@
 """Derived numbers for a cfg: resolutions, maxima, timing, ADC data volume.
 
-Maths (per the mmWave SDK demos; `tools/radar_viewer/cfggen.py` documents the cascade/DDMA case
+Maths (per the mmWave SDK demos; the retired v1 `cfggen.py` (see git history at b416f61) documented the cascade/DDMA case
 as implemented in the firmware's mmwdemo_rfparserDDMA.c):
 
     B (sampled)      = slope * N / fs

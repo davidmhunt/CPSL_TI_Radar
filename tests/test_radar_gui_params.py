@@ -13,7 +13,7 @@ RADAR = ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar"
 CASES = [  # (path, board): single-chip 2-TX, 6843 3-TX, cascade DDMA
     (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg", "IWR1843"),
     (RADAR / "IWR6843ODS" / "demo" / "RadVel_ods_10Hz.cfg", "IWR6843"),
-    (ROOT / "tools" / "radar_viewer" / "configs" / "cascade_R15m_V5ms_20Hz.cfg", "AWR2243_CASCADE"),
+    (RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "cascade_R15m_V5ms_20Hz.cfg", "AWR2243_CASCADE"),
 ]
 IDS = [p.name for p, _ in CASES]
 
@@ -236,6 +236,6 @@ def test_low_power_bad_values():
     t = (RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text()
     with pytest.raises(CfgError):
         apply_params(t, {"low_power": 2})
-    cas = (ROOT / "tools" / "radar_viewer" / "configs" / "cascade_R15m_V5ms_20Hz.cfg").read_text()
+    cas = (RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "cascade_R15m_V5ms_20Hz.cfg").read_text()
     with pytest.raises(CfgError):
         apply_params(cas, {"low_power": 1}, board="AWR2243_CASCADE")

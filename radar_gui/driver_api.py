@@ -118,7 +118,7 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
         return p
 
     def cfg_path(cfg_id: str) -> Path:
-        """A cfg id of GET /api/cfgs ("driver:...", "viewer:...", "user:...") -> its .cfg file, inside that tree only."""
+        """A cfg id of GET /api/cfgs ("driver:...", "user:...") -> its .cfg file, inside that tree only."""
         group, _, rel = cfg_id.partition(":")
         root = {**cfgapi.SHIPPED, "user": Path(user_dir)}.get(group)
         if root is None or not rel:

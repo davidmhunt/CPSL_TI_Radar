@@ -1649,7 +1649,7 @@
 "range_res_m": 0.04283361308758393,
 "velocity_res_ms": 0.0037193459747431245
 },
-"tools/radar_viewer/configs/calibration_run.cfg": {
+"CPSL_TI_Radar_cpp/config/radar/AWR2243_CASCADE/cascade_ddm/calibration_run.cfg": {
 "active_ms": 38.4,
 "avg_data_rate_mbps": 12.582912,
 "azimuth_res_deg": 2.38732414637843,
@@ -1671,7 +1671,7 @@
 "range_res_m": 0.08789794258519104,
 "velocity_res_ms": 0.04996916287047754
 },
-"tools/radar_viewer/configs/cascade_R15m_V5ms_20Hz.cfg": {
+"CPSL_TI_Radar_cpp/config/radar/AWR2243_CASCADE/cascade_ddm/cascade_R15m_V5ms_20Hz.cfg": {
 "active_ms": 24.573439999999998,
 "avg_data_rate_mbps": 125.82912,
 "azimuth_res_deg": 2.38732414637843,

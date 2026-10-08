@@ -19,8 +19,7 @@ from .cfg import BOARDS, CfgError, apply_params, generate, params_from_cfg, limi
 
 REPO = Path(__file__).resolve().parent.parent
 # Shipped cfg trees (read-only here) listed by GET /api/cfgs
-SHIPPED = {"driver": REPO / "CPSL_TI_Radar_cpp" / "config" / "radar",
-           "viewer": REPO / "tools" / "radar_viewer" / "configs"}
+SHIPPED = {"driver": REPO / "CPSL_TI_Radar_cpp" / "config" / "radar"}
 # Saved files go here. It is a sibling of config/boards, so a system JSON saved in it finds the board
 # descriptors through the driver's default "<JSON dir>/../boards" lookup.
 DEFAULT_USER_DIR = REPO / "CPSL_TI_Radar_cpp" / "config" / "user"
@@ -35,7 +34,7 @@ _RADAR_BOARDS = ("AWR2243_CASCADE", "IWR1443", "IWR1843", "IWR6843ODS", "IWR6843
 
 def guess_board(rel: str) -> str:
     """Board of a cfg id path. Shipped driver cfgs sit at <BOARD>/<firmware>/<name>.cfg (the board is the first part
-    under config/radar/); `user:`/`viewer:` ids have no such folder and keep the name heuristic."""
+    under config/radar/); `user:` ids have no such folder and keep the name heuristic."""
     parts = Path(str(rel)).parts
     for i, part in enumerate(parts[:-1]):
         if part == "radar" and parts[i + 1] in _RADAR_BOARDS:

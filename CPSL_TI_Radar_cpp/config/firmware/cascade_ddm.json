@@ -58,7 +58,7 @@
       "tested_max_slope_mhz_us": {
         "value": 100.0,
         "level": "warning",
-        "source": "tools/radar_viewer/cfggen.py MAX_SLOPE: repo-tested value, not a hardware bound (docs/research/gui_board_limits_cascade_multiprofile.md)",
+        "source": "tools/radar_viewer/cfggen.py @ b416f61 MAX_SLOPE: repo-tested value, not a hardware bound (docs/research/gui_board_limits_cascade_multiprofile.md)",
         "confidence": "repo"
       },
       "max_sample_rate_ksps": {
@@ -103,7 +103,7 @@
       "max_samples": {
         "value": 192,
         "level": "warning",
-        "source": "cfggen.py: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps') (docs/research/gui_board_limits_cascade_multiprofile.md: not firmware-enforced)",
+        "source": "tools/radar_viewer/cfggen.py @ b416f61: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps') (docs/research/gui_board_limits_cascade_multiprofile.md: not firmware-enforced)",
         "confidence": "repo"
       },
       "max_chirps": {

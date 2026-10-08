@@ -1,5 +1,7 @@
 {
  "radar": {
+  "tools/radar_viewer/configs/calibration_run.cfg": "radar/AWR2243_CASCADE/cascade_ddm/calibration_run.cfg",
+  "tools/radar_viewer/configs/cascade_R15m_V5ms_20Hz.cfg": "radar/AWR2243_CASCADE/cascade_ddm/cascade_R15m_V5ms_20Hz.cfg",
   "radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg": "radar/IWR1843/demo/demo_tlv_default.cfg",
   "radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_1rx_1chirp.cfg": "radar/IWR1843/demo/mmstudio_1rx_1chirp.cfg",
   "radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg": "radar/IWR1843/demo/mmstudio_original.cfg",
