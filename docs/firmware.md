@@ -42,13 +42,12 @@ One row per `fw` verb; arguments, flash modes and per-project details are in [`f
 | `./downloads/download.sh` · `docker compose build` | Once: fetch the TI installers (~3.6 GB, gitignored; includes UniFlash 9.6.0) and build image `cpsl-ti-radar-firmware-dev:latest` |
 | `./fw list` · `./fw ports` | Projects (status, board, SDK, baseline, build state); candidate by-id serial ports and who holds them |
 | `./fw new <p>` · `./fw deps [p]` | Copy `_template/`; check the installers a project needs |
-| `./fw build <p> [--variant V] [--dry-run]` | Build in the container as the host UID to `projects/<p>/build/` with `build_info.json`; `CCS_CONFIG`/`FW_*` pass through; `FW_COMMIT` = short `firmware_dev` HEAD, `-dirty` if `git status --porcelain` is non-empty. Long builds: `setsid nohup ./fw build <p> > log 2>&1 &` |
+| `./fw build <p> [--variant V] [--dry-run]` | Build in the container as the host UID to `projects/<p>/build/` with `build_info.json`; `CCS_CONFIG`/`FW_*` pass through; `FW_COMMIT` = short `firmware_dev` HEAD, `-dirty` if `git status --porcelain` is non-empty. |
 | `./fw test [p]` | Hardware-free checks (manifest, descriptors, cfgs, `[test].commands`, `build --dry-run`) |
 | `./fw flash <p> <by-id -if00 port> [image] [--dry-run \| --plan \| --confirm TOKEN]` | Gated flash: no process holds the port, typed `FLASH MODE CONFIRMED` on a TTY (a non-by-id port also needs `USE THIS PORT`; wrong phrase or no TTY exits 5; scripts use `--plan` then `--confirm`). Power-cycle before EVERY attempt. Exit 3 = no headless flasher, manual steps printed. Bench-confirmed projects and their jumper/power steps: project READMEs and `docs/bench_check.md` |
 | `./fw verify <p> [--port P]` | Descriptor identify probes, never a cfg (the cascade only listens: `once_safe` false) |
 | `./fw publish <p> [--dest D] [--dry-run]` | Clean builds only: images + provenance to `shipped_firmware/<BOARD>/<descriptor>/` |
 | Bench host tool | `picocom` for the CLI port (`sudo apt install picocom`); no-install fallback `uv run python -m serial.tools.miniterm <by-id port> 115200` (Ctrl-] exits) |
-| Cascade bring-up check (manual, sends a cfg) | `docker compose run --rm flash python3 /build_context/projects/awr2243_cascade_ddm/tools/cascade_serial_check.py --cli <CLI> --data <DATA> --cfg <cfg>` (`--skip-config` to only listen) |
 
 ## Boards (single-user: claim in `status.md` before use)
 
