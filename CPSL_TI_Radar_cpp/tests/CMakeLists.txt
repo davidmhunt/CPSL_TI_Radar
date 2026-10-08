@@ -42,6 +42,7 @@ add_driver_test(test_thread_placement    LIBS Log)
 add_driver_test(test_uart_parse          LIBS TLVProcessing Utilities)
 add_driver_test(test_radar_serial_fake   LIBS Radar)
 add_driver_test(test_live_tap            LIBS LiveTap)
+add_driver_test(test_sar_meta            LIBS Radar)
 # a handler that exits (even with status 0) must not count as a pass
 set_tests_properties(test_stop_signal PROPERTIES
                      PASS_REGULAR_EXPRESSION "cases, [0-9]+ checks, 0 failures")
