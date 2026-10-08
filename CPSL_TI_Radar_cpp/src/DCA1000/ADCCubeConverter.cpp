@@ -33,6 +33,13 @@ void ADCCubeConverter::configure(size_t num_rx, size_t samples_per_chirp,
     chirps_per_frame_  = chirps_per_frame;
     layout_            = layout;
     iq_order_          = iq_order;
+    packet_bytes_      = 0;
+    header_bytes_      = 0;
+}
+
+void ADCCubeConverter::configure_packets(size_t packet_bytes, size_t header_bytes) {
+    packet_bytes_ = packet_bytes;
+    header_bytes_ = header_bytes;
 }
 
 void ADCCubeConverter::shape(ADCCube& cube) const {
@@ -48,6 +55,10 @@ void ADCCubeConverter::shape(ADCCube& cube) const {
 void ADCCubeConverter::convert(const std::vector<uint8_t>& frame_bytes, ADCCube& out)
 {
     shape(out);
+    if (packet_bytes_ != 0) {  // adc_sar_meta (core-24): its own loop, the packed paths below are untouched
+        fill_packets(frame_bytes, out);
+        return;
+    }
     switch (layout_) {
         case LvdsLayout::lane_per_rx:
             fill_interleaved(frame_bytes, out);
@@ -67,6 +78,15 @@ ADCCubeConverter::ADCCube ADCCubeConverter::convert(
 }
 
 void ADCCubeConverter::file_order(const std::vector<uint8_t>& frame_bytes, std::vector<std::int16_t>& out) const
+{
+    if (packet_bytes_ != 0) {
+        file_order_packets(frame_bytes, out);
+    } else {
+        file_order_packed(frame_bytes, out);
+    }
+}
+
+void ADCCubeConverter::file_order_packed(const std::vector<uint8_t>& frame_bytes, std::vector<std::int16_t>& out) const
 {
     const size_t R = num_rx_channels_, S = samples_per_chirp_, C = chirps_per_frame_;
     const size_t total = R * S * C;  // samples
@@ -196,6 +216,67 @@ void ADCCubeConverter::fill_noninterleaved(const std::vector<uint8_t>& frame_byt
                     row[c] = q_first ? Cx(bb, a) : Cx(a, bb);
                 }
             }
+        }
+    }
+}
+
+// adc_sar_meta (core-24): chirp c's samples are packet c's ADC block, n = rx * samples + sample inside it,
+// starting at word c * B/2 + H/2. Inside the block the words pair as in fill_noninterleaved: group g = [A0 A1
+// B0 B1] holds samples 2g and 2g+1 (rx * samples is even, so no pair straddles a packet). Output order as
+// there: sequential writes along cube[rx][sample], reads stride by one packet.
+void ADCCubeConverter::fill_packets(const std::vector<uint8_t>& frame_bytes, ADCCube& cube) const
+{
+    const size_t R = num_rx_channels_, S = samples_per_chirp_, C = chirps_per_frame_;
+    const uint8_t* b = frame_bytes.data();
+    const size_t words = frame_bytes.size() / 2;
+    const bool q_first = iq_order_ == IqOrder::q_first;
+    const size_t stride = packet_bytes_ / 2;  // words per chirp packet
+    const size_t base = header_bytes_ / 2;
+    const bool whole = words >= C * stride;
+
+    for (size_t r = 0; r < R; r++) {
+        for (size_t s = 0; s < S; s++) {
+            Cx* row = cube[r][s].data();
+            const size_t n = r * S + s;
+            size_t w = base + 4 * (n >> 1) + (n & 1);
+            if (whole) {
+                if (q_first) {
+                    for (size_t c = 0; c < C; c++, w += stride) row[c] = Cx(word(b, w + 2), word(b, w));
+                } else {
+                    for (size_t c = 0; c < C; c++, w += stride) row[c] = Cx(word(b, w), word(b, w + 2));
+                }
+            } else {
+                for (size_t c = 0; c < C; c++, w += stride) {
+                    const std::int16_t a = word_or_0(b, words, w), bb = word_or_0(b, words, w + 2);
+                    row[c] = q_first ? Cx(bb, a) : Cx(a, bb);
+                }
+            }
+        }
+    }
+}
+
+// adc_data.bin order (for chirp, for rx, for sample: re, im) of an adc_sar_meta frame: each packet's ADC block
+// in wire order, header and record slots dropped. Equal to sar_parse.py's _adc.bin when lvds.iq_order matches
+// the cfg's SampleSwap (cross_check_radar_cfg).
+void ADCCubeConverter::file_order_packets(const std::vector<uint8_t>& frame_bytes, std::vector<std::int16_t>& out) const
+{
+    const size_t R = num_rx_channels_, S = samples_per_chirp_, C = chirps_per_frame_;
+    const size_t per_chirp = R * S;
+    out.resize(2 * per_chirp * C);
+    const uint8_t* b = frame_bytes.data();
+    const size_t words = frame_bytes.size() / 2;
+    const bool q_first = iq_order_ == IqOrder::q_first;
+    const size_t stride = packet_bytes_ / 2;
+    std::int16_t* o = out.data();
+    const bool whole = words >= C * stride;
+    for (size_t c = 0; c < C; c++) {
+        const size_t w0 = c * stride + header_bytes_ / 2;
+        for (size_t n = 0; n < per_chirp; n++, o += 2) {
+            const size_t w = w0 + 4 * (n >> 1) + (n & 1);
+            const std::int16_t a = whole ? word(b, w) : word_or_0(b, words, w);
+            const std::int16_t bb = whole ? word(b, w + 2) : word_or_0(b, words, w + 2);
+            o[0] = q_first ? bb : a;
+            o[1] = q_first ? a : bb;
         }
     }
 }

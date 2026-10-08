@@ -322,7 +322,8 @@ The GUI-only rules (MIMO / chirp pattern, LVDS data format, CFAR editing) are no
 Notes on the radar `.cfg` for DCA1000 streaming with the mmWave SDK demos (for example SDK 3.5 on
 the IWR1843): `lvdsStreamCfg -1 0 1 0` streams ADC samples only. `lvdsStreamCfg -1 1 1 1` also
 enables the LVDS header and SW data, which costs extra processing and streaming time. The
-load-time cross-check requires `dataFmt` (third field) to be 1, ADC.
+load-time cross-check requires `dataFmt` (third field) to be a format the firmware maps: 1 (ADC) everywhere,
+and on `iwr1843_sar_lvds` also 2 (ADC + per-chirp metadata, below).
 With SDK 3+ and a single Rx, use an even number of ADC samples, and use 1, 2 or 4 receivers.
 
 #### Board descriptors
@@ -353,8 +354,13 @@ For the `iwr1843_sar_lvds` firmware (see [`docs/firmware.md`](../docs/firmware.m
 DCA1000 on, `serial_stream` off) with
 [`IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg`](./config/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg). Set the CLI port
 for your EVM. The board requires `calibData` and rejects stock-demo commands such as `guiMonitor`, so a
-stock cfg fails the load naming the command. Only `lvdsStreamCfg ... dataFmt 1` is supported (`dataFmt 2`
-decoding is planned, core-24). There is no TLV point cloud on this firmware. Check without hardware:
+stock cfg fails the load naming the command. `lvdsStreamCfg ... dataFmt 1` (plain ADC) and, since core-24,
+`lvdsStreamCfg -1 <hdr> 2 0` (ADC + per-chirp metadata) are supported. With dataFmt 2 each `AdcFrame` also carries
+`meta` (record fields, validity, time, lag-aligned saturation per chirp), `--stats` adds `records_valid` /
+`records_invalid` / `records_other_run`, and with `save_adc_frames` the driver writes `chirp_meta.csv` beside
+`adc_data.bin`, in the format of the firmware project's `sar_parse.py` (`docs/ARCHITECTURE.md`, "LVDS stream
+formats"). dataFmt 2 has been tested on synthetic captures only; no shipped system JSON uses it yet. There is no TLV
+point cloud on this firmware. Check without hardware:
 `CPSL_TI_Radar_CPP --validate config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json`.
 
 ##### AWR2243 cascade notes

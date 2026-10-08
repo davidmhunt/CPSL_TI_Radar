@@ -41,7 +41,7 @@ sink.
 | `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets, data}` swaps in a fake CLI `ByteStream`, a `ReplayPacketSource` or a fake serial data `ByteStream` |
 | `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured`. With `runtime.skip_configure` (`--skip-configure`): the DCA1000 setup only, no radar cfg. Order (gui-33): the `already_configured` guard, then the firmware identity check (below), then the DCA1000 setup, then the cfg and the once-per-boot mark, so a fatal mismatch spends nothing |
 | `start()` | `recordStart` and the RX thread, the DCA worker and serial reader threads (CPUs and priorities from `runtime.*`, see "DCA1000 RX path"), then `sensorStart` (not with `skip_configure`) |
-| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
+| `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`, and `meta`, the per-chirp metadata of an `adc_sar_meta` stream, see "LVDS stream formats"); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
 | `stop()` | see below; the destructor calls it |
 | `set_log_sink(fn)`, `set_log_level(l)` | process-wide; default sink: one line per message to stderr, `warning: `/`error: ` prefixes |
@@ -147,6 +147,10 @@ renaming or removing a key needs a new version:
 stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n> duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n> stalls=<n> rcvbuf=<bytes> kernel_drops=<n> ring_full=<n> implausible=<n> resyncs=<n>
 stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
 ```
+
+On an `adc_sar_meta` run (core-24) the dca line also ends with
+`records_valid=<n> records_invalid=<n> records_other_run=<n>`: chirps with and without
+a valid metadata record, and records that carry another run's `runIdx`.
 
 `frames` counts completed frames (DCA: the frames in `adc_data.bin`;
 serial: valid TLV frames). `packets` … `skipped` are the `FrameAssembler`
@@ -378,13 +382,52 @@ converter makes one pass over the packed bytes in output order: for each
 the reads stride (0.19 ns/byte on an Intel N150, against 1.6 for the v1
 four-pass converter). A frame shorter than its shape reads as zeros.
 
+### LVDS stream formats (core-24)
+
+What an `lvdsStreamCfg` dataFmt carries is a firmware property: the firmware
+descriptor's optional `lvds_data_fmts.formats` (`{"<dataFmt>": "adc" | "adc_sar_meta"}`,
+absent = `{"1": "adc"}`) is copied by `apply_firmware_to_board` into
+`BoardDescriptor::Lvds::stream_formats`. It is a sub-key, not a new top-level key, so a
+driver built before core-24 still loads the file. Only `iwr1843_sar_lvds` maps 2, to
+`adc_sar_meta`. `RadarConfigReader` reads `hdr` and dataFmt from the cfg (last line
+wins); `FrameShape::lvds_format` and `chirp_packet_bytes` say what was chosen.
+
+`adc_sar_meta` follows `firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md`.
+One packet per chirp of B = H + 4·rx·samples + 64 bytes: an optional HSI header
+(H = 0, or 64 when rx·samples % 4 = 0, else 56), the ADC block, then two 32-byte
+record slots. Packets run back to back, so one driver frame is Nc·B bytes and
+`FrameAssembler`'s byte accounting is unchanged. `ADCCubeConverter::configure_packets`
+selects a separate loop that strides one packet per chirp and skips the header and
+records; the dataFmt 1 loops are untouched. H, M and B are multiples of 8, so the
+DCA1000's per-8-byte word order and the `two_lane_iq_pairs` pairing hold inside
+each chirp.
+
+`SarMetaDecoder` (`src/DCA1000/SarMeta.*`) reads, for chirp k = frame number·Nc + c,
+slot k mod 2. The record is valid only if all 32 of its bytes arrived, `magic` is SARM,
+`version` is 1, `globalChirpIdx` = k, and `runIdx` is the run's (the first record that
+matches the first three). For each chirp it fills `ChirpMeta`: the record fields,
+`adc_complete`, the time `t_s` (the record's, or interpolated per the format doc), and
+`sat_slices_aligned`, the saturation shifted by `satRefLag`. The last one or two
+chirps' saturation arrives in the next frame's records, in `prev_tail_sat`. The frame
+number comes before the resync bias, and a resync resets the run, because a DCA1000
+restart is a new recording. The end-of-run capture checks 3 and 4 (they need
+`sarStats`) are not in the driver. `test_sar_meta` replays `sar_synth.py` captures and
+compares the result with `sar_parse.py`'s output (`tests/data/sar_fmt2/`).
+
 ### Output files
 
 With `output.save_adc_frames`, every completed frame (including frames the
 consumer never took) is appended to `adc_data.bin` in `output.dir`: for
 chirp, for rx, for sample, the int16 real part then the int16 imaginary
 part, host byte order (little-endian on x86/ARM). That is
-`bytes_per_frame` per frame, no header; the layout is unchanged since v1.
+`bytes_per_frame` per frame, no header; the layout is unchanged since v1. On an
+`adc_sar_meta` stream the file holds the ADC samples only (4·rx·samples·chirps
+bytes per frame; header and records dropped) and equals `sar_parse.py`'s
+`_adc.bin` when `lvds.iq_order` matches the cfg's SampleSwap (the cross-check
+enforces this). Next to it `chirp_meta.csv` gets one row per chirp in
+`sar_parse.py`'s `_meta.csv` columns and number format (CRLF line ends). Each
+frame's rows are written when the next frame completes, so they include the
+carried saturation; the last frame's rows are written at `stop()`.
 The frame is written with **one** `write()` from a staging buffer that the
 converter fills in file order in one sequential pass (core-14 P9; v1 made
 two 2-byte writes per sample, about 252 000 per frame). The write happens
@@ -499,11 +542,13 @@ Three files describe a run (design §1, §2):
    `config/boards/README.md`.
 3. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): the TI chirp config. Shipped cfgs sit at `radar/<BOARD>/<firmware>/<name>.cfg` and system JSONs are named `<BOARD>_<fw>_<purpose>[_<mount>].json` (gui-38); `config/README.md` indexes every system JSON and maps the pre-reorganisation names to the new ones (`config/moved_paths.json`).
    DCA1000 streaming needs `lvdsStreamCfg -1 0 1 0` (ADC only) or
-   `lvdsStreamCfg -1 1 1 1` (all data).
+   `lvdsStreamCfg -1 1 1 1` (all data); on `iwr1843_sar_lvds` also
+   `lvdsStreamCfg -1 <hdr> 2 0` (ADC + per-chirp metadata, core-24).
 
 When the system config loads, `cross_check_radar_cfg` checks the radar .cfg
 against the board for the enabled streams (16-bit complex ADC, `adcbufCfg`
-interleave vs `lvds.layout`, `lvdsStreamCfg` ADC streaming, no DCA1000 on a
+interleave vs `lvds.layout`, `lvdsStreamCfg` dataFmt mapped by the firmware's
+`lvds.stream_formats` plus the `adc_sar_meta` constraints, no DCA1000 on a
 board without LVDS); an error fails the load. Loading a descriptor also
 checks that `data_uart.header_bytes` matches `tlv_dialect` (36 for `sdk2`,
 40 otherwise).
@@ -532,6 +577,7 @@ fields through `SystemConfigReader::getBoard()`:
 | Data UART | `data_uart.baud`, `timeout_ms`, `tlv_dialect` (and the matching `header_bytes`) | `SerialStreamer`, `parse_uart_frame` |
 | DCA1000 FPGA setup | `lvds.lanes`, `dca1000.packet_bytes`, `packet_delay_us`, `fpga_timer_s` | `UdpPacketSource` |
 | ADC decoder | `lvds.layout`, `lvds.iq_order` | `ADCCubeConverter` |
+| LVDS stream format (dataFmt) | `lvds.stream_formats`, from the firmware's `lvds_data_fmts.formats` | `RadarConfigReader`, `ADCCubeConverter`, `DCA1000Handler`, `cross_check_radar_cfg` |
 | One cfg per power-up | `lifecycle.config_once_per_boot` | `Radar` |
 
 `cfg_dialect.skip_commands` drops commands the board's firmware rejects
@@ -547,8 +593,13 @@ enabled `serial_stream` is refused.
 lanes/layout, but `calibData` is required (not skipped), the stock-demo
 commands the SAR image rejects (`guiMonitor`, `cfarCfg`, ...) are forbidden,
 there is no data UART, and `cli.stop_timeout_ms` is about 4000 (firmware
-`sensorStop` waits up to 3 s). Only LVDS `dataFmt 1` (plain ADC, one driver
-frame = Nc chirps) is supported; `dataFmt 2` (per-chirp metadata) is core-24.
+`sensorStop` waits up to 3 s). LVDS `dataFmt 1` (plain ADC, one driver frame =
+Nc chirps) and, since core-24, `dataFmt 2` (`adc_sar_meta`, see "LVDS stream
+formats") are supported. For `adc_sar_meta` the cross-check also requires an
+`adcbufCfg` with complex output, chanInterleave 1, and a sampleSwap that agrees
+with `lvds.iq_order` (1 = `q_first`). It also requires rx·samples even, one
+`profileCfg`, and enableSW 0. core-24 is checked on synthetic captures only; the
+bench comparison is Step 3.
 
 DCA1000 network defaults: FPGA `192.168.33.180`, host `192.168.33.30/24`,
 command port 4096, data port 4098.
@@ -557,7 +608,7 @@ Supported boards: `IWR1843`, `IWR6843` (2-lane, non-interleaved),
 `IWR1443` (4-lane, interleaved; serial `sdk2` confirmed from TI source but
 not yet run on the board), `AWR2243_CASCADE` (serial TLV only so far;
 data port 3,125,000 baud), `IWR1843_SAR` (SAR firmware, DCA1000 ADC capture
-only, `dataFmt 1`).
+only, `dataFmt 1` and `2`).
 
 ## Host prerequisites
 

@@ -26,8 +26,13 @@ struct FrameShape {
     uint32_t rx = 0;          // receive antennas
     uint32_t samples = 0;     // ADC samples per chirp
     uint32_t chirps = 0;      // chirps per frame
-    uint64_t bytes = 0;       // bytes per frame on the DCA1000 stream (4 * rx * samples * chirps)
+    uint64_t bytes = 0;       // bytes per frame on the DCA1000 stream: 4 * rx * samples * chirps, or
+                              // chirps * chirp_packet_bytes for adc_sar_meta
     float period_ms = 0.0f;   // frameCfg period
+    // what the LVDS stream carries (core-24): adc (lvdsStreamCfg dataFmt 1), or adc_sar_meta (iwr1843_sar_lvds
+    // dataFmt 2: per-chirp packet = HSI header + ADC + 64 B of metadata record slots; AdcFrame::meta is filled)
+    LvdsStreamFormat lvds_format = LvdsStreamFormat::adc;
+    uint32_t chirp_packet_bytes = 0;  // B: bytes one chirp takes on the stream (4 * rx * samples for adc)
 };
 
 // Where output.dir stands on this machine.

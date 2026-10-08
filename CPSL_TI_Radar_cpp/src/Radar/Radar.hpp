@@ -23,6 +23,7 @@
 #include "Log.hpp"
 #include "PacketSource.hpp"
 #include "RadarConfig.hpp"
+#include "SarMeta.hpp"
 #include "Status.hpp"
 #include "UartFrame.hpp"
 
@@ -40,6 +41,9 @@ struct AdcFrame {
     uint32_t missing_bytes = 0;                          // zero-filled bytes (lost packets)
     FrameShape shape;
     std::vector<std::vector<std::vector<std::complex<int16_t>>>> data;  // [rx][sample][chirp]
+    // shape.lvds_format adc_sar_meta (iwr1843_sar_lvds dataFmt 2, core-24): one ChirpMeta per chirp (record
+    // fields, validity, time, aligned saturation; SarMeta.hpp), swapped in like `data`. Empty for adc.
+    ChirpMetaFrame meta;
 };
 
 // One frame of the on-chip demo's TLV stream. Point (x, y, z, v, snr_db,
@@ -72,6 +76,10 @@ struct Stats {
     uint64_t frames = 0;              // frames completed (and saved, when saving)
     uint64_t frames_overwritten = 0;  // completed frames dropped from a full frame queue before next_adc_frame took them
     uint64_t rcvbuf_bytes = 0;        // SO_RCVBUF granted by the kernel
+    // adc_sar_meta streams only (core-24): chirps with / without a valid metadata record; records of another run
+    uint64_t records_valid = 0;
+    uint64_t records_invalid = 0;
+    uint64_t records_other_run = 0;
     // serial TLV path
     uint64_t serial_frames = 0;       // valid TLV frames received
     uint64_t serial_missed = 0;       // gaps in the demo's frame counter

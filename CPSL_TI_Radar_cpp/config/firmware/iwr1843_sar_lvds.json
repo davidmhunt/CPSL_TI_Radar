@@ -15,6 +15,10 @@
       2,
       4
     ],
+    "formats": {
+      "1": "adc",
+      "2": "adc_sar_meta"
+    },
     "source": "firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:626-631 (0 off, 1 ADC, 2 ADC + SAR metadata, 4 CP_ADC_CQ)",
     "confidence": "high"
   },

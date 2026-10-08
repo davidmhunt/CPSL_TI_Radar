@@ -98,7 +98,7 @@ TEST_CASE(gui_only_keys_are_accepted_and_listed_once) {
     const auto& keys = FirmwareDescriptor::gui_only_keys();
     CHECK(keys.count("identify") == 0);  // parsed strictly since gui-33 (test_firmware_identity)
     CHECK(keys.count("mimo") == 1);
-    CHECK(keys.count("lvds_data_fmts") == 1);
+    CHECK(keys.count("lvds_data_fmts") == 0);  // core-24: the driver reads its "formats" (still accepted)
     CHECK(keys.count("detection") == 1);       // gui-35: on-chip CFAR schema, GUI-only, never enforced here
     CHECK(keys.count("detection_note") == 1);
     // the cascade limit keys added in 3a032e0 are plain limit entries
@@ -242,6 +242,38 @@ TEST_CASE(apply_firmware_to_board_sets_rules_and_prompt) {
     fw.cfg_rules["IWR1443"].skip_commands = sv({"sensorStart"});
     CHECK(!cpsl::radar::apply_firmware_to_board(fw, "demo.json", false, b, err));
     CHECK(has(err, "demo.json: /cfg_rules/IWR1443/skip_commands: \"sensorStart\" is board IWR1443's start/stop command"));
+}
+
+// core-24: lvds_data_fmts.formats says what each dataFmt carries; the driver reads only that sub-key
+TEST_CASE(lvds_data_fmts_formats) {
+    FirmwareDescriptor sar, demo;
+    std::string err;
+    CHECK(FirmwareDescriptor::load_by_id(kFirmware, "iwr1843_sar_lvds", sar, err));
+    CHECK_EQ(sar.lvds_stream_formats.size(), size_t(2));
+    CHECK(sar.lvds_stream_formats.at(1) == cpsl::radar::LvdsStreamFormat::adc);
+    CHECK(sar.lvds_stream_formats.at(2) == cpsl::radar::LvdsStreamFormat::adc_sar_meta);
+    CHECK(FirmwareDescriptor::load_by_id(kFirmware, "demo", demo, err));
+    CHECK(demo.lvds_stream_formats.empty());  // no "formats": the board default {1: adc}
+    // applied to the driver board
+    BoardDescriptor b;
+    CHECK(BoardDescriptor::load_by_name(std::string(CONFIG_DIR) + "/boards", "IWR1843_SAR", b, err));
+    CHECK_EQ(b.lvds.stream_formats.size(), size_t(1));
+    CHECK(cpsl::radar::apply_firmware_to_board(sar, "iwr1843_sar_lvds.json", false, b, err));
+    CHECK(b.lvds.stream_formats.at(2) == cpsl::radar::LvdsStreamFormat::adc_sar_meta);
+    // rejections
+    CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_data_fmts"]["formats"]["2"] = "adc_meta"; }),
+              "/lvds_data_fmts/formats/2: \"adc_meta\" is not one of: adc, adc_sar_meta"));
+    CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_data_fmts"]["formats"]["3"] = "adc"; }),
+              "dataFmt 3 is not in /lvds_data_fmts/value"));
+    CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_data_fmts"]["formats"]["02"] = "adc"; }),
+              "key must be a dataFmt number"));
+    CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_data_fmts"]["formats"] = json::object(); }),
+              "expected a non-empty object"));
+    CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_data_fmts"]["formats"]["1"] = 1; }),
+              "/lvds_data_fmts/formats/1"));
+    // a new top-level key is still refused (formats is a sub-key so a pre-core-24 driver loads the file)
+    CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_stream_formats"] = json::object(); }),
+              "unknown key"));
 }
 
 TEST_CASE(cfg_rules_validation) {

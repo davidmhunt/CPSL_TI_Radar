@@ -486,7 +486,7 @@ bool Radar::next_adc_frame(AdcFrame& out, std::chrono::milliseconds timeout, Sta
         const steady::time_point wake = m.wake_for_stall(m.dca.last_frame_ns(), m.dca_stall_reported, deadline);
         uint64_t index = 0;
         size_t missing = 0;
-        if (m.dca.take_frame(out.data, index, missing, out.completed_at, wake)) {
+        if (m.dca.take_frame(out.data, index, missing, out.completed_at, wake, &out.meta)) {
             out.index = index;
             out.missing_bytes = static_cast<uint32_t>(missing);
             out.shape = m.cfg.frame_shape();
@@ -553,6 +553,9 @@ Stats Radar::stats() const {
         s.resyncs = d.assembler.resyncs;
         s.frames = d.frames;
         s.frames_overwritten = d.frames_overwritten;
+        s.records_valid = d.records_valid;
+        s.records_invalid = d.records_invalid;
+        s.records_other_run = d.records_other_run;
         if (m.packets) {
             s.rx_overrun = m.packets->overrun_count();
             s.rx_ring_full = m.packets->ring_full_count();

@@ -106,6 +106,13 @@ static int validate(const std::string& config_file){
     } else {
         std::cout << "dca1000:    off\n";
     }
+    if (shape.lvds_format == cpsl::radar::LvdsStreamFormat::adc_sar_meta) {
+        // core-24: only on dataFmt 2 SAR runs, so every other --validate output is unchanged
+        std::cout << "lvds:       adc_sar_meta (dataFmt " << rc.radar_cfg().get_lvds_data_fmt() << "): "
+                  << shape.chirp_packet_bytes << " B per chirp packet (header "
+                  << rc.radar_cfg().get_chirp_header_bytes() << " B + ADC + 64 B records); per-chirp metadata"
+                  << (cfg.get_save_adc_frames() ? ", chirp_meta.csv" : "") << "\n";
+    }
     std::cout << "frame:      " << shape.rx << " rx x " << shape.samples
               << " samples x " << shape.chirps << " chirps, " << shape.period_ms
               << " ms period (cfg fields: rx masks " << join(board.cfg_dialect.rx_mask_fields)
@@ -201,8 +208,13 @@ static void print_stats(const radar::Radar& r, double t, const radar::LiveTap* t
           << " skipped=" << s.skipped_frames << " overrun=" << s.rx_overrun
           << " overwritten=" << s.frames_overwritten << " stalls=" << s.stalls
           << " rcvbuf=" << s.rcvbuf_bytes << " kernel_drops=" << s.kernel_drops
-          << " ring_full=" << s.rx_ring_full << " implausible=" << s.implausible << " resyncs=" << s.resyncs
-          << "\n";
+          << " ring_full=" << s.rx_ring_full << " implausible=" << s.implausible << " resyncs=" << s.resyncs;
+        // core-24: appended keys (stats v1 allows it), only on adc_sar_meta runs so dataFmt 1 lines are unchanged
+        if (r.config().frame_shape().lvds_format == radar::LvdsStreamFormat::adc_sar_meta) {
+            o << " records_valid=" << s.records_valid << " records_invalid=" << s.records_invalid
+              << " records_other_run=" << s.records_other_run;
+        }
+        o << "\n";
     }
     if (r.serial_enabled()) {
         o << "stats v1 serial t=" << t << " frames=" << s.serial_frames << " missed=" << s.serial_missed

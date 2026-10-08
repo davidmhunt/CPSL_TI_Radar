@@ -27,6 +27,8 @@ void FrameAssembler::configure(size_t bytes_per_frame, size_t reorder_slack_byte
     }
     completed_frame_.assign(bytes_per_frame, 0);
     completed_index_ = 0;
+    completed_number_ = 0;
+    completed_have_.clear();
     started_         = false;
     base_            = 0;
     front_           = 0;
@@ -48,6 +50,14 @@ void FrameAssembler::configure(size_t bytes_per_frame, size_t reorder_slack_byte
 }
 
 void FrameAssembler::set_frame_sink(FrameSink sink) { sink_ = std::move(sink); }
+
+void FrameAssembler::set_keep_received(bool keep) {
+    keep_received_ = keep;
+    completed_have_.clear();
+    // allocated only when asked for: an extra allocation in configure() measurably moved the dataFmt 1 save
+    // path (core-24 Log, bench drv_save)
+    if (keep) completed_have_.reserve(16);
+}
 
 void FrameAssembler::reset_stats() {
     stats_ = Stats();
@@ -202,6 +212,13 @@ int FrameAssembler::close_base() {
 
         completed_frame_.swap(s.bytes);
         completed_index_ = base_ + index_bias_;
+        completed_number_ = base_;
+        // the received ranges, for the sink: only an incomplete frame has holes (core-24 reads them then);
+        // a whole frame leaves this empty, so the usual path costs one clear()
+        if (keep_received_) {
+            if (missing > 0) completed_have_.assign(s.have.begin(), s.have.end());
+            else completed_have_.clear();
+        }
         s.have.clear();
         if (sink_) sink_(completed_frame_, completed_index_, missing);
         emitted = 1;

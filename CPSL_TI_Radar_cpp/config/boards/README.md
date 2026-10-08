@@ -104,7 +104,7 @@ demo sources and mmWaveLink:
 | `adcCfg <bits> <fmt>` | bits = 2 (16-bit), because the DCA1000 is set to 16-bit (`DCA1000Handler.cpp:395-396`). fmt must be 1 or 2 (complex 1x or 2x): 0 is real and 3 is pseudo-real. | `rl_sensor.h:106-119` (`RL_ADC_DATA_16_BIT`, `RL_ADC_FORMAT_*`) |
 | `adcbufCfg [<subFrameIdx>] <fmt> <swap> <interleave> <thr>` | fmt = 0 (complex). interleave 0 (interleaved) needs `lane_per_rx`, and 1 (non-interleaved) needs `two_lane_iq_pairs`. | SDK 3.6 `mmw_cli.c:1377` (help string), `:812-815`; `mss_main.c:1867,1877-1884` |
 | `adcbufCfg` field count | 5 fields after the command on SDK 3 and MCU+ boards. 4 on `mmwave_sdk_2`, which has no subFrameIdx: this is inferred from the tracked IWR1443 cfgs (`adcbufCfg 0 1 0 1`), with no SDK 2 source checked. | |
-| `lvdsStreamCfg <subFrameIdx> <hdr> <dataFmt> <sw>` | dataFmt = 1 (ADC). 0 disables streaming, and 4 (CP_ADC_CQ) adds data the assembler does not expect. | SDK 3.6 `mmw_cli.c:1118-1119,1421`; `mmw_config.h:104-110` |
+| `lvdsStreamCfg <subFrameIdx> <hdr> <dataFmt> <sw>` | dataFmt must be one the firmware maps in `config/firmware/<fw>.json` `lvds_data_fmts.formats` (absent: 1 = ADC only). 0 disables streaming, and 4 (CP_ADC_CQ) adds data the assembler does not expect. `iwr1843_sar_lvds` maps 2 to `adc_sar_meta` (core-24), which also needs sw 0, `adcbufCfg` complex with interleave 1 and a sampleSwap that agrees with `lvds.iq_order` (1 = `q_first`), rx x samples even, and one `profileCfg`. | SDK 3.6 `mmw_cli.c:1118-1119,1421`; `mmw_config.h:104-110`; `firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md` |
 
 A missing `adcbufCfg` or `lvdsStreamCfg` is a note, not an error. The raw-capture cfgs in
 `config/radar/IWR1443/dca1000_raw/rosnode_*.cfg` have neither line.

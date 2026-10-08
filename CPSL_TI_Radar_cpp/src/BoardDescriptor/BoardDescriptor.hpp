@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <istream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -28,11 +29,19 @@ enum class Sdk { mmwave_sdk_2, mmwave_sdk_3, mmwave_mcuplus };
 enum class TlvDialect { sdk3, sdk2, mcuplus_cascade };
 enum class LvdsLayout { two_lane_iq_pairs, lane_per_rx };
 enum class IqOrder { i_first, q_first };
+// What one LVDS packet stream carries (core-24). adc: plain ADC samples, packets back to back, one driver frame =
+// 4 * rx * samples * chirps bytes (lvdsStreamCfg dataFmt 1 on every firmware). adc_sar_meta: the iwr1843_sar_lvds
+// firmware's dataFmt 2, one packet per chirp = optional HSI header + ADC samples + two 32-byte metadata record slots
+// (firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md).
+enum class LvdsStreamFormat { adc, adc_sar_meta };
 
 const char* to_string(Sdk v);
 const char* to_string(TlvDialect v);
 const char* to_string(LvdsLayout v);
 const char* to_string(IqOrder v);
+const char* to_string(LvdsStreamFormat v);
+// "adc" / "adc_sar_meta" -> the enum; false for anything else
+bool lvds_stream_format_from_string(const std::string& s, LvdsStreamFormat& out);
 
 struct BoardDescriptor {
     static constexpr int kSchema = 1;
@@ -83,6 +92,16 @@ struct BoardDescriptor {
         uint32_t lanes = 0;
         LvdsLayout layout = LvdsLayout::two_lane_iq_pairs;
         IqOrder iq_order = IqOrder::i_first;
+        // lvdsStreamCfg dataFmt -> what the stream carries. Not a board JSON key: a firmware property, set by
+        // apply_firmware_to_board from the firmware descriptor's lvds_stream_formats (core-24). Default {1: adc}.
+        std::map<int, LvdsStreamFormat> stream_formats{{1, LvdsStreamFormat::adc}};
+        // the format of dataFmt `data_fmt`; false if this firmware has none for it
+        bool stream_format_for(int data_fmt, LvdsStreamFormat& out) const {
+            auto it = stream_formats.find(data_fmt);
+            if (it == stream_formats.end()) return false;
+            out = it->second;
+            return true;
+        }
     };
     struct Dca1000 {
         bool present = false;  // block is required when lvds.supported, absent otherwise
@@ -166,8 +185,10 @@ struct CfgCheckResult {
 // Cross-check a TI radar .cfg against the board for the enabled streams:
 //   - DCA1000 requested on a board with lvds.supported == false
 //   - DCA1000: adcCfg must be 16-bit and complex; adcbufCfg must be complex
-//     and its chanInterleave must match lvds.layout; lvdsStreamCfg must
-//     stream ADC data only (dataFmt 1)
+//     and its chanInterleave must match lvds.layout; lvdsStreamCfg's dataFmt
+//     must be one lvds.stream_formats maps (default 1 = adc); for adc_sar_meta
+//     (core-24) also enableSW 0, an adcbufCfg with chanInterleave 1 and a
+//     sampleSwap matching lvds.iq_order, rx * samples even, one profileCfg
 CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& board, const std::string& cfg_path,
                                      const StreamSelection& streams);
 

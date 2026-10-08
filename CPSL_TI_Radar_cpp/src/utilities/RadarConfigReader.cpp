@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 
 #include "Log.hpp"
@@ -52,7 +53,13 @@ RadarConfigReader::RadarConfigReader(const RadarConfigReader & rhs):
     frameCfg_chirp_start_idx(rhs.frameCfg_chirp_start_idx),
     frameCfg_chirp_end_idx(rhs.frameCfg_chirp_end_idx),
     frameCfG_num_loops(rhs.frameCfG_num_loops),
-    frameCfg_frame_period(rhs.frameCfg_frame_period)
+    frameCfg_frame_period(rhs.frameCfg_frame_period),
+    lvds_data_fmt(rhs.lvds_data_fmt),
+    lvds_header_enabled(rhs.lvds_header_enabled),
+    lvds_stream_format(rhs.lvds_stream_format),
+    idle_ticks_10ns(rhs.idle_ticks_10ns),
+    ramp_end_ticks_10ns(rhs.ramp_end_ticks_10ns),
+    frame_period_ticks_5ns(rhs.frame_period_ticks_5ns)
 {}
 
 /**
@@ -89,6 +96,12 @@ RadarConfigReader & RadarConfigReader::operator=(const RadarConfigReader & rhs){
         frameCfg_chirp_end_idx = rhs.frameCfg_chirp_end_idx;
         frameCfG_num_loops = rhs.frameCfG_num_loops;
         frameCfg_frame_period = rhs.frameCfg_frame_period;
+        lvds_data_fmt = rhs.lvds_data_fmt;
+        lvds_header_enabled = rhs.lvds_header_enabled;
+        lvds_stream_format = rhs.lvds_stream_format;
+        idle_ticks_10ns = rhs.idle_ticks_10ns;
+        ramp_end_ticks_10ns = rhs.ramp_end_ticks_10ns;
+        frame_period_ticks_5ns = rhs.frame_period_ticks_5ns;
     }
 
     return *this;
@@ -153,6 +166,12 @@ void RadarConfigReader::initialize(const std::string & filename,
         frameCfg_chirp_end_idx = 0;
         frameCfG_num_loops = 0;
         frameCfg_frame_period = 0;
+        lvds_data_fmt = -1;
+        lvds_header_enabled = false;
+        lvds_stream_format = cpsl::radar::LvdsStreamFormat::adc;
+        idle_ticks_10ns = 0;
+        ramp_end_ticks_10ns = 0;
+        frame_period_ticks_5ns = 0;
 
         //process the configuration
         error.clear();
@@ -175,18 +194,50 @@ void RadarConfigReader::initialize(const std::string & filename,
  * @return size_t the number of bytes in a given frame
  */
 size_t RadarConfigReader::get_bytes_per_frame(){
-    
-    //number of bytes per sample (assuming complex samples)
-    size_t bytes_per_sample = 4;
 
     //number of chirps per frame
-    size_t chirps_per_frame = static_cast<size_t>(get_chirps_per_frame());
+    const size_t chirps_per_frame = static_cast<size_t>(get_chirps_per_frame());
+
+    //adc: 4 bytes per complex sample, packed; adc_sar_meta: one packet of B bytes per chirp (core-24)
+    if (lvds_stream_format == cpsl::radar::LvdsStreamFormat::adc_sar_meta) {
+        return get_chirp_packet_bytes() * chirps_per_frame;
+    }
+
+    //number of bytes per sample (assuming complex samples)
+    size_t bytes_per_sample = 4;
 
     return bytes_per_sample * 
         static_cast<size_t>(rx_antennas) * 
         static_cast<size_t>(profileCfg_adc_samples) * 
         chirps_per_frame;
 
+}
+
+size_t RadarConfigReader::get_chirp_header_bytes() const {
+    if (lvds_stream_format != cpsl::radar::LvdsStreamFormat::adc_sar_meta || !lvds_header_enabled) return 0;
+    const size_t rs = static_cast<size_t>(rx_antennas) * static_cast<size_t>(profileCfg_adc_samples);
+    return rs % 4 == 0 ? 64 : 56;
+}
+
+size_t RadarConfigReader::get_chirp_adc_end() const {
+    return get_chirp_header_bytes() +
+           4 * static_cast<size_t>(rx_antennas) * static_cast<size_t>(profileCfg_adc_samples);
+}
+
+size_t RadarConfigReader::get_chirp_packet_bytes() const {
+    return get_chirp_adc_end() + (lvds_stream_format == cpsl::radar::LvdsStreamFormat::adc_sar_meta ? 64 : 0);
+}
+
+double RadarConfigReader::get_chirp_cycle_s() const {
+    //sar_cfg_check: tc_us = tc_t / 100.0; tc_s = tc_us * 1e-6
+    return (static_cast<double>(get_chirp_cycle_ticks_10ns()) / 100.0) * 1e-6;
+}
+
+double RadarConfigReader::get_frame_blank_s() {
+    //sar_cfg_check: tb_us = period_t * 5 / 1000.0 - nc * tc_us; tb_s = tb_us * 1e-6
+    const double tc_us = static_cast<double>(get_chirp_cycle_ticks_10ns()) / 100.0;
+    const double period_us = static_cast<double>(frame_period_ticks_5ns) * 5 / 1000.0;
+    return (period_us - static_cast<double>(get_chirps_per_frame()) * tc_us) * 1e-6;
 }
 
 /**
@@ -240,7 +291,8 @@ bool RadarConfigReader::process_cfg() {
         std::istringstream iss(line);
         std::string key;
         if (!std::getline(iss, key, ' ')) continue;
-        if (key != "channelCfg" && key != "profileCfg" && key != "chirpCfg" && key != "frameCfg") continue;
+        if (key != "channelCfg" && key != "profileCfg" && key != "chirpCfg" && key != "frameCfg" &&
+            key != "lvdsStreamCfg") continue;
 
         const std::vector<std::string> values = get_vec_from_string(line);
         bool ok = false;
@@ -248,6 +300,7 @@ bool RadarConfigReader::process_cfg() {
             if (key == "channelCfg") ok = read_channel_cfg(values);
             else if (key == "profileCfg") ok = have_profile = read_profile_cfg(values);
             else if (key == "chirpCfg") ok = read_chirp_cfg(values);
+            else if (key == "lvdsStreamCfg") ok = read_lvds_stream_cfg(values);
             else ok = have_frame = read_frame_cfg(values);
         } catch (const std::exception&) {
             //std::stoi / std::stof: not a number, or out of range
@@ -299,6 +352,19 @@ bool RadarConfigReader::require_fields(const std::vector<std::string>& values, s
     return false;
 }
 
+namespace {
+
+//the TI CLI's us/ms -> LSB conversion, (uint32_t)((float)atof(x) * mult / div), in float32 (as
+//firmware_dev/projects/iwr1843_sar_lvds/tools/sar_cfg_check.py ticks())
+uint32_t cli_ticks(const std::string& tok, float mult, float div) {
+    const float v = static_cast<float>(std::atof(tok.c_str()));
+    const float a = v * mult;
+    const float b = a / div;
+    return b > 0.0f ? static_cast<uint32_t>(b) : 0u;
+}
+
+}  // namespace
+
 /**
  * @brief Decode the profile configuration from the profile cfg
  * 
@@ -312,6 +378,8 @@ bool RadarConfigReader::read_profile_cfg(const std::vector<std::string>& values)
     profileCfg_chirp_start_freq_GHz = std::stof(values[2]);
     profileCfg_idle_time_us = std::stof(values[3]);
     profileCfg_ramp_end_time_us = std::stof(values[5]);
+    idle_ticks_10ns = cli_ticks(values[3], 1000.0f, 10.0f);
+    ramp_end_ticks_10ns = cli_ticks(values[5], 1000.0f, 10.0f);
     const int samples = std::stoi(values[10]);
     if (samples < 1 || samples > INT16_MAX) {
         error = "profileCfg numAdcSamples " + values[10] + " is out of range";
@@ -370,6 +438,25 @@ bool RadarConfigReader::read_frame_cfg(const std::vector<std::string>& values){
     //<numAdcSamples> before it:
     //frameCfg <start> <end> <loops> <frames> <adcSamples> <periodMs> <trigger> <delay> <...>
     frameCfg_frame_period = std::stof(values[frame_period_field]);
+    frame_period_ticks_5ns = cli_ticks(values[frame_period_field], 1000000.0f, 5.0f);
+    return true;
+}
+
+/**
+ * @brief Decode lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW> (core-24); a later line
+ * replaces an earlier one, as on the CLI
+ */
+bool RadarConfigReader::read_lvds_stream_cfg(const std::vector<std::string>& values){
+    //never fails the load (it did not before core-24): a short or non-numeric line is left to
+    //cross_check_radar_cfg, which reports it when the DCA1000 stream is enabled
+    if (values.size() < 4) return true;
+    char* end1 = nullptr;
+    char* end2 = nullptr;
+    const long hdr = std::strtol(values[2].c_str(), &end1, 10);
+    const long fmt = std::strtol(values[3].c_str(), &end2, 10);
+    if (*end1 != '\0' || *end2 != '\0' || end1 == values[2].c_str() || end2 == values[3].c_str()) return true;
+    lvds_header_enabled = hdr != 0;
+    lvds_data_fmt = static_cast<int>(fmt);
     return true;
 }
 

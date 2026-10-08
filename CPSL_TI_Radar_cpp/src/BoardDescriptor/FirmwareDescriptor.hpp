@@ -29,6 +29,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "BoardDescriptor.hpp"  // LvdsStreamFormat
+
 namespace cpsl {
 namespace radar {
 
@@ -98,6 +100,9 @@ struct FirmwareDescriptor {
     // mimo.scheme ("tdm" | "ddma"; "" = no mimo block): the only part of the GUI-owned `mimo` block the driver reads,
     // because the TX count of the cfg limit checks depends on it. The rest of `mimo` stays GUI-only.
     std::string mimo_scheme;
+    // lvds_data_fmts.formats (core-24): lvdsStreamCfg dataFmt -> what the LVDS stream carries on this image.
+    // Empty = key absent = {1: adc}. apply_firmware_to_board copies it to BoardDescriptor::Lvds::stream_formats.
+    std::map<int, LvdsStreamFormat> lvds_stream_formats;
 
     // Load and validate a descriptor file. `id` must equal the file's stem.
     static bool load(const std::string& path, FirmwareDescriptor& out, std::string& error);
@@ -119,8 +124,6 @@ struct FirmwareDescriptor {
     // The driver board a system JSON names for `gui_board` (driver_board entry, else `gui_board`).
     std::string driver_board_for(const std::string& gui_board) const;
 };
-
-struct BoardDescriptor;
 
 // The default firmware id of a board: the first entry of its "firmwares" list ("" = the board lists none).
 // A system config without a "firmware" key is treated as this firmware for cfg rules / prompt.

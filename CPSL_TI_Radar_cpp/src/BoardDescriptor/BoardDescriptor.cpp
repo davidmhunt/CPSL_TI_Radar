@@ -43,6 +43,19 @@ const char* to_string(IqOrder v) {
     }
     return "?";
 }
+const char* to_string(LvdsStreamFormat v) {
+    switch (v) {
+        case LvdsStreamFormat::adc: return "adc";
+        case LvdsStreamFormat::adc_sar_meta: return "adc_sar_meta";
+    }
+    return "?";
+}
+bool lvds_stream_format_from_string(const std::string& s, LvdsStreamFormat& out) {
+    if (s == "adc") out = LvdsStreamFormat::adc;
+    else if (s == "adc_sar_meta") out = LvdsStreamFormat::adc_sar_meta;
+    else return false;
+    return true;
+}
 
 namespace {
 
@@ -532,7 +545,7 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
         return res;
     }
 
-    std::vector<CfgLine> adc_cfg, adcbuf_cfg, lvds_cfg;
+    std::vector<CfgLine> adc_cfg, adcbuf_cfg, lvds_cfg, profile_cfg, channel_cfg;
     std::set<std::string> seen_cmds;
     std::string text;
     int line_no = 0;
@@ -558,6 +571,8 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
         if (l.tok[0] == "adcCfg") adc_cfg.push_back(l);
         else if (l.tok[0] == "adcbufCfg") adcbuf_cfg.push_back(l);
         else if (l.tok[0] == "lvdsStreamCfg") lvds_cfg.push_back(l);
+        else if (l.tok[0] == "profileCfg") profile_cfg.push_back(l);
+        else if (l.tok[0] == "channelCfg") channel_cfg.push_back(l);
     }
 
     for (const std::string& cmd : b.cfg_dialect.required_commands) {
@@ -631,17 +646,97 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
         }
     }
 
-    // lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt 0:off 1:ADC ...> <enableSW>
+    // lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>. What a dataFmt carries is the firmware's
+    // (lvds.stream_formats, from the firmware descriptor; default {1: adc}); core-24 adds adc_sar_meta.
     if (lvds_cfg.empty()) {
         note("no lvdsStreamCfg line: LVDS ADC streaming not confirmed by the cfg");
     }
+    std::string fmt_list;
+    for (const auto& kv : b.lvds.stream_formats) {
+        fmt_list += (fmt_list.empty() ? "" : ", ") + std::to_string(kv.first) + " " + to_string(kv.second);
+    }
+    const bool only_adc = b.lvds.stream_formats.size() == 1 && b.lvds.stream_formats.count(1) &&
+                          b.lvds.stream_formats.at(1) == LvdsStreamFormat::adc;
+    bool sar_meta = false;  // the last lvdsStreamCfg line (the one the CLI keeps) selects adc_sar_meta
     for (const CfgLine& l : lvds_cfg) {
         const std::string where = "line " + std::to_string(l.line_no) + " lvdsStreamCfg";
         long fmt = 0;
-        if (field(l, 3, "dataFmt", fmt) && fmt != 1) {
+        sar_meta = false;
+        if (!field(l, 3, "dataFmt", fmt)) continue;
+        LvdsStreamFormat f = LvdsStreamFormat::adc;
+        if (fmt < 0 || fmt > 255 || !b.lvds.stream_format_for(static_cast<int>(fmt), f)) {
             err(where + ": dataFmt " + std::to_string(fmt) +
-                (fmt == 0 ? " disables LVDS streaming" : " is not ADC-only (1)") +
+                (fmt == 0 ? " disables LVDS streaming"
+                          : only_adc ? " is not ADC-only (1)"
+                                     : " is not a stream format of this firmware (" + fmt_list + ")") +
                 "; DCA1000 capture needs ADC data on LVDS");
+            continue;
+        }
+        if (f != LvdsStreamFormat::adc_sar_meta) continue;
+        sar_meta = true;
+        long hdr = 0, sw = 0;
+        if (field(l, 2, "enableHeader", hdr) && hdr != 0 && hdr != 1) {
+            err(where + ": enableHeader " + std::to_string(hdr) + " is not 0 or 1");
+        }
+        if (field(l, 4, "enableSW", sw) && sw != 0) {
+            err(where + ": enableSW " + std::to_string(sw) + ": dataFmt " + std::to_string(fmt) +
+                " (adc_sar_meta) needs enableSW 0 (a software session would add a per-frame packet the driver "
+                "cannot place)");
+        }
+    }
+
+    // adc_sar_meta (core-24; firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md section 1): the
+    // firmware takes it only with complex, non-interleaved ADC output and an even rx * samples; the driver also
+    // needs one profile (one packet size) and the I/Q order SampleSwap gives
+    if (sar_meta) {
+        const std::string what = "lvdsStreamCfg dataFmt adc_sar_meta";
+        if (b.lvds.layout != LvdsLayout::two_lane_iq_pairs) {
+            err(what + " needs lvds.layout two_lane_iq_pairs, board " + b.name + " has " + to_string(b.lvds.layout));
+        }
+        if (adcbuf_cfg.empty()) {
+            err(what + " needs an adcbufCfg line (complex output, chanInterleave 1, sampleSwap)");
+        }
+        for (const CfgLine& l : adcbuf_cfg) {
+            if (l.tok.size() != 5 + off) continue;  // reported above
+            const std::string where = "line " + std::to_string(l.line_no) + " adcbufCfg";
+            long swap = 0, interleave = 0;
+            if (field(l, 3 + off, "chanInterleave", interleave) && interleave != 1) {
+                err(where + ": " + what + " needs chanInterleave 1 (non-interleaved)");
+            }
+            if (field(l, 2 + off, "sampleSwap", swap)) {
+                // SampleSwap 0 = I in the low half-word (I first in device memory), 1 = Q first
+                const IqOrder want = swap == 1 ? IqOrder::q_first : IqOrder::i_first;
+                if (swap != 0 && swap != 1) {
+                    err(where + ": sampleSwap " + std::to_string(swap) + " is not 0 or 1");
+                } else if (want != b.lvds.iq_order) {
+                    err(where + ": sampleSwap " + std::to_string(swap) + " puts " + (swap == 1 ? "Q" : "I") +
+                        " first, but board " + b.name + " has lvds.iq_order " + to_string(b.lvds.iq_order) +
+                        "; with " + what + " they must agree (set sampleSwap " + (swap == 1 ? "0" : "1") +
+                        " or override lvds.iq_order)");
+                }
+            }
+        }
+        if (profile_cfg.size() != 1) {
+            err(what + " needs exactly one profileCfg line (one packet size), the cfg has " +
+                std::to_string(profile_cfg.size()));
+        }
+        long ns = 0;
+        if (!profile_cfg.empty() && field(profile_cfg.back(), 10, "numAdcSamples", ns)) {
+            long rx = 0;
+            bool have_rx = false;
+            if (!channel_cfg.empty()) {
+                for (uint32_t fi : b.cfg_dialect.rx_mask_fields) {
+                    long mask = 0;
+                    if (fi < channel_cfg.back().tok.size() && parse_long(channel_cfg.back().tok[fi], mask)) {
+                        rx += __builtin_popcountl(static_cast<unsigned long>(mask));
+                        have_rx = true;
+                    }
+                }
+            }
+            if (have_rx && (rx * ns) % 2 != 0) {
+                err(what + " needs rx channels x numAdcSamples even, the cfg has " + std::to_string(rx) + " x " +
+                    std::to_string(ns));
+            }
         }
     }
     return res;

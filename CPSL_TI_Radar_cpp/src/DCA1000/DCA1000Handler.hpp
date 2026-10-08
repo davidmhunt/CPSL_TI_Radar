@@ -19,6 +19,7 @@
 #include "ADCCubeConverter.hpp"
 #include "FrameAssembler.hpp"
 #include "PacketSource.hpp"
+#include "SarMeta.hpp"
 
 /**
  * @brief The DCA1000 raw-ADC path: packets from a cpsl::radar::PacketSource
@@ -52,6 +53,10 @@ public:
         FrameAssembler::Stats assembler;
         uint64_t frames = 0;              //frames completed (and written, when saving)
         uint64_t frames_overwritten = 0;  //published frames replaced before a consumer took them
+        //adc_sar_meta only (core-24): chirps with / without a valid metadata record, and records of another run
+        uint64_t records_valid = 0;
+        uint64_t records_invalid = 0;
+        uint64_t records_other_run = 0;
     };
 
 private:
@@ -91,6 +96,14 @@ private:
     bool save_raw_lvds;
     std::shared_ptr<std::ofstream> adc_cube_out_file;
     std::shared_ptr<std::ofstream> raw_lvds_out_file;
+    //chirp_meta.csv (save_adc_frames on an adc_sar_meta stream, core-24): sar_parse.py _meta.csv rows, written
+    //one frame late so the next frame's carried saturation results (prev_tail_sat) land in them
+    std::shared_ptr<std::ofstream> meta_csv_out_file;
+    cpsl::radar::ChirpMetaFrame meta_pending_;   //the latest frame's metadata, written when the next one arrives
+    cpsl::radar::ChirpMetaFrame meta_to_write_;  //the frame before it, written after the publish
+    bool meta_pending_valid_ = false;
+    uint32_t meta_pending_resyncs_ = 0;
+    std::string meta_row_;
     //the frame in adc_data.bin order, rebuilt per frame (worker thread only)
     std::vector<std::int16_t> file_frame_;
 
@@ -100,6 +113,7 @@ private:
         uint64_t index = 0;        //stream offset / bytes_per_frame (+ an offset after a resync)
         size_t missing = 0;        //zero-filled bytes
         std::chrono::steady_clock::time_point completed_at{};
+        cpsl::radar::ChirpMetaFrame meta;  //adc_sar_meta: per-chirp metadata (empty otherwise)
     };
     //the frame being converted (worker thread only)
     Slot work_;
@@ -120,6 +134,15 @@ private:
 
     //ADC cube conversion (interleaved / non-interleaved)
     ADCCubeConverter converter_;
+
+    //adc_sar_meta (core-24): the per-chirp metadata decoder, the resync count it has seen, the running totals
+    bool sar_meta_ = false;
+    cpsl::radar::SarMetaDecoder sar_decoder_;
+    uint32_t sar_resyncs_seen_ = 0;
+    uint64_t sar_records_valid_ = 0;
+    uint64_t sar_records_invalid_ = 0;
+    uint64_t sar_records_other_run_ = 0;
+    size_t sar_chirps_per_frame_ = 0;
 
     //frame assembly (sequence checking, drop detection, frame buffering)
     FrameAssembler assembler_;
@@ -173,6 +196,11 @@ public:
     bool take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                     std::chrono::steady_clock::time_point& completed_at,
                     std::chrono::steady_clock::time_point deadline);
+    //the same, also swapping the frame's chirp metadata into `meta` (adc_sar_meta; empty chirps otherwise)
+    bool take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
+                    std::chrono::steady_clock::time_point& completed_at,
+                    std::chrono::steady_clock::time_point deadline,
+                    cpsl::radar::ChirpMetaFrame* meta);
     //the same without waiting
     bool take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                     std::chrono::steady_clock::time_point& completed_at);
@@ -198,6 +226,9 @@ private:
     //append the completed frame to adc_data.bin with one write (design P9)
     void write_adc_frame_to_file();
     bool close_output_files();
+    //chirp_meta.csv (core-24)
+    bool open_meta_csv();
+    void write_meta_rows(const cpsl::radar::ChirpMetaFrame& meta);
 };
 
 #endif // DCA1000_H

@@ -105,6 +105,9 @@ public:
     void configure(size_t bytes_per_frame, size_t reorder_slack_bytes = 0);
 
     void set_frame_sink(FrameSink sink);
+    // keep the received ranges of each incomplete emitted frame for get_frame_received() (core-24); off by
+    // default. Call after configure().
+    void set_keep_received(bool keep);
 
     // Process one raw DCA1000 UDP packet (includes the 10-byte header).
     // Returns the number of frames emitted (usually 0 or 1), 0 for a packet
@@ -117,6 +120,15 @@ public:
     // The most recently emitted frame and its index.
     const std::vector<uint8_t>& get_frame_bytes() const;
     uint64_t get_frame_index() const;
+    // The most recently emitted frame's number in the current recording: its stream offset / bytes_per_frame
+    // (the index without the resync bias; it starts again at 0 after a resync). core-24 uses it for the chirp
+    // position k = number * chirps per frame.
+    uint64_t get_frame_number() const { return completed_number_; }
+    // With set_keep_received(true): the byte ranges [begin, end) of that frame that arrived (sorted, disjoint)
+    // when it was emitted with missing bytes; every other byte is a zero-filled hole. Empty for a frame emitted
+    // whole, and always empty without set_keep_received(true) (the dataFmt 1 path neither copies nor allocates).
+    // Valid like get_frame_bytes().
+    const std::vector<std::pair<size_t, size_t>>& get_frame_received() const { return completed_have_; }
 
     Stats get_stats() const;
     uint32_t resync_count() const { return stats_.resyncs; }
@@ -173,6 +185,12 @@ private:
     uint64_t max_payload_ = 0;   // largest payload placed (a short last packet must not shrink the allowance)
 
     Stats stats_;
+
+    // core-24, at the end so the members above keep their offsets: the emitted frame's number (no resync bias)
+    // and, for an incomplete frame, its received ranges
+    uint64_t completed_number_ = 0;
+    bool keep_received_ = false;
+    std::vector<std::pair<size_t, size_t>> completed_have_;
 
     static uint32_t parse_sequence_number(const uint8_t* data);
     static uint64_t parse_byte_count(const uint8_t* data);

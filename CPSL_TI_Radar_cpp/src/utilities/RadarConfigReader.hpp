@@ -9,6 +9,8 @@
 #include <memory>
 #include <cstdint>
 
+#include "BoardDescriptor.hpp"  // cpsl::radar::LvdsStreamFormat
+
 class RadarConfigReader{
     public:
         RadarConfigReader();
@@ -37,6 +39,33 @@ class RadarConfigReader{
         size_t get_num_rx_antennas();
         float get_frame_period_ms();
 
+        //LVDS stream format (core-24). lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>, last
+        //line wins; -1 / false when the cfg has none. The format a dataFmt carries depends on the firmware
+        //(BoardDescriptor::Lvds::stream_formats); the owner sets it, default adc (bytes per frame unchanged).
+        int get_lvds_data_fmt() const { return lvds_data_fmt; }
+        bool get_lvds_header_enabled() const { return lvds_header_enabled; }
+        void set_lvds_stream_format(cpsl::radar::LvdsStreamFormat f) { lvds_stream_format = f; }
+        //set the format from the board's (firmware-applied) dataFmt map; a dataFmt it does not map, or no
+        //lvdsStreamCfg line, leaves adc (cross_check_radar_cfg rejects an unmapped dataFmt for DCA1000 runs)
+        void apply_stream_formats(const cpsl::radar::BoardDescriptor::Lvds& lvds) {
+            cpsl::radar::LvdsStreamFormat f = cpsl::radar::LvdsStreamFormat::adc;
+            if (lvds_data_fmt < 0 || !lvds.stream_format_for(lvds_data_fmt, f)) f = cpsl::radar::LvdsStreamFormat::adc;
+            lvds_stream_format = f;
+        }
+        cpsl::radar::LvdsStreamFormat get_lvds_stream_format() const { return lvds_stream_format; }
+        //adc_sar_meta packet layout (firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md section 1):
+        //H = 0 (header off) | 64 (rx * samples % 4 == 0) | 56; M = H + 4 * rx * samples; B = M + 64.
+        //For adc they describe the plain stream: H = 0, B = M = 4 * rx * samples.
+        size_t get_chirp_header_bytes() const;
+        size_t get_chirp_adc_end() const;
+        size_t get_chirp_packet_bytes() const;
+        //realized timing (the CLI's float32 us/ms -> tick conversions, as sar_cfg_check.ticks): chirp cycle
+        //Tc = idle + rampEnd in 10 ns ticks, frame period in 5 ns ticks; Tc and Tb = period - Nc * Tc in seconds
+        uint32_t get_chirp_cycle_ticks_10ns() const { return idle_ticks_10ns + ramp_end_ticks_10ns; }
+        uint32_t get_frame_period_ticks_5ns() const { return frame_period_ticks_5ns; }
+        double get_chirp_cycle_s() const;
+        double get_frame_blank_s();
+
         //initialization status
         bool initialized;
 
@@ -59,6 +88,7 @@ class RadarConfigReader{
         bool read_profile_cfg(const std::vector<std::string>& values);
         bool read_chirp_cfg(const std::vector<std::string>& values);
         bool read_frame_cfg(const std::vector<std::string>& values);
+        bool read_lvds_stream_cfg(const std::vector<std::string>& values);
 
         //cfg dialect (board descriptor cfg_dialect)
         std::vector<uint32_t> rx_mask_fields{1};
@@ -83,6 +113,15 @@ class RadarConfigReader{
         int16_t frameCfg_chirp_end_idx = 0;
         int16_t frameCfG_num_loops = 0;
         float frameCfg_frame_period = 0;
+
+        //lvdsStreamCfg and the stream format (core-24)
+        int lvds_data_fmt = -1;
+        bool lvds_header_enabled = false;
+        cpsl::radar::LvdsStreamFormat lvds_stream_format = cpsl::radar::LvdsStreamFormat::adc;
+        //realized timing ticks (see get_chirp_cycle_ticks_10ns)
+        uint32_t idle_ticks_10ns = 0;
+        uint32_t ramp_end_ticks_10ns = 0;
+        uint32_t frame_period_ticks_5ns = 0;
 
 };
 

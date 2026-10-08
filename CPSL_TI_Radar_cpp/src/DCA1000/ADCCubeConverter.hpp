@@ -39,6 +39,14 @@ public:
                    size_t chirps_per_frame, cpsl::radar::LvdsLayout layout,
                    cpsl::radar::IqOrder iq_order);
 
+    // core-24, lvds stream format adc_sar_meta: the frame is chirps_per_frame packets of `packet_bytes` (B)
+    // each, chirp c's ADC samples starting at byte c * B + header_bytes (H); the rest of a packet (HSI header,
+    // metadata record slots) is skipped. B and H must be multiples of 8 (the DCA1000's byte order is per
+    // 8-byte group, so the two_lane_iq_pairs pairing then holds inside each chirp) and the layout
+    // two_lane_iq_pairs (cross_check_radar_cfg enforces both). packet_bytes 0 = the packed adc stream (the
+    // default; configure() resets it). Call after configure().
+    void configure_packets(size_t packet_bytes, size_t header_bytes);
+
     // Fill `out` (every element) with the given frame bytes.
     void convert(const std::vector<uint8_t>& frame_bytes, ADCCube& out);
 
@@ -63,7 +71,16 @@ private:
     size_t chirps_per_frame_ = 0;
     cpsl::radar::LvdsLayout layout_ = cpsl::radar::LvdsLayout::two_lane_iq_pairs;
     cpsl::radar::IqOrder iq_order_ = cpsl::radar::IqOrder::q_first;
+    size_t packet_bytes_ = 0;  // 0: packed adc stream
+    size_t header_bytes_ = 0;
 
+    // the adc_data.bin order of the packed (adc) stream: the pre-core-24 file_order() body
+    __attribute__((noinline)) void file_order_packed(const std::vector<uint8_t>& frame_bytes,
+                                                     std::vector<std::int16_t>& out) const;
+    // kept out of line so the packed (dataFmt 1) loops they sit beside compile as before core-24
+    __attribute__((noinline)) void fill_packets(const std::vector<uint8_t>& frame_bytes, ADCCube& cube) const;
+    __attribute__((noinline)) void file_order_packets(const std::vector<uint8_t>& frame_bytes,
+                                                      std::vector<std::int16_t>& out) const;
     void fill_interleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube);
     void fill_noninterleaved(const std::vector<uint8_t>& frame_bytes, ADCCube& cube);
 };

@@ -1,6 +1,7 @@
 #include "DCA1000Handler.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <sstream>
 
 #include "Log.hpp"
@@ -73,7 +74,17 @@ bool DCA1000Handler::stop(){
  */
 bool DCA1000Handler::close_output_files(){
     bool ok = true;
-    for (std::shared_ptr<std::ofstream>* f : {&adc_cube_out_file, &raw_lvds_out_file}) {
+    //the last frame's chirp_meta.csv rows wait for a next frame that will not come: write them now
+    try {
+        if (meta_pending_valid_ && meta_csv_out_file && meta_csv_out_file.use_count() == 1 && meta_csv_out_file->is_open()) {
+            write_meta_rows(meta_pending_);
+        }
+        meta_pending_valid_ = false;
+    } catch (const std::exception& e) {
+        cpsl::radar::log_error("DCA1000Handler: error writing chirp_meta.csv: ", e.what());
+        ok = false;
+    }
+    for (std::shared_ptr<std::ofstream>* f : {&adc_cube_out_file, &raw_lvds_out_file, &meta_csv_out_file}) {
         try {
             if (*f && f->use_count() == 1 && (*f)->is_open()) {
                 (*f)->flush();
@@ -123,7 +134,13 @@ bool DCA1000Handler::configure_pipeline(
     if(radar_config_reader.initialized == false){
         return false;
     }
+    //what the cfg's lvdsStreamCfg dataFmt carries on this firmware (core-24)
+    radar_config_reader.apply_stream_formats(system_config_reader.getBoard().lvds);
+    sar_meta_ = radar_config_reader.get_lvds_stream_format() == cpsl::radar::LvdsStreamFormat::adc_sar_meta;
     init_buffers();
+    if(sar_meta_ && save_adc_frames && !open_meta_csv()){
+        return false;
+    }
     return true;
 }
 
@@ -210,6 +227,13 @@ bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_byte
 bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
                                 std::chrono::steady_clock::time_point& completed_at,
                                 std::chrono::steady_clock::time_point deadline){
+    return take_frame(out, index, missing_bytes, completed_at, deadline, nullptr);
+}
+
+bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_bytes,
+                                std::chrono::steady_clock::time_point& completed_at,
+                                std::chrono::steady_clock::time_point deadline,
+                                cpsl::radar::ChirpMetaFrame* meta){
     //take the frame under the one lock the producer publishes with, so a
     //frame published in between is never lost or delivered stale. The wait
     //re-checks the queue under that lock, so a wake-up cannot be missed.
@@ -225,6 +249,9 @@ bool DCA1000Handler::take_frame(Cube& out, uint64_t& index, size_t& missing_byte
     index = s.index;
     missing_bytes = s.missing;
     completed_at = s.completed_at;
+    if(meta){
+        std::swap(*meta, s.meta);  //vectors swap: no copy; empty for the adc format
+    }
     head_ = (head_ + 1) % queue_.size();
     count_ -= 1;
     return true;
@@ -251,6 +278,10 @@ void DCA1000Handler::init_buffers()
         //the frame buffer pool, allocated once here: the work buffer and the
         //runtime.frame_queue_depth queue slots, each indexed by [Rx channel,
         //sample, chirp]
+        cpsl::radar::ChirpMetaFrame shaped_meta;
+        if(sar_meta_){
+            shaped_meta.chirps.resize(chirps_per_frame);
+        }
         const Cube shaped(
             num_rx_channels, std::vector<std::vector<std::complex<std::int16_t>>>(
                 samples_per_chirp, std::vector<std::complex<std::int16_t>>(
@@ -262,10 +293,12 @@ void DCA1000Handler::init_buffers()
             std::lock_guard<std::mutex> lock(frame_mutex);
             work_ = Slot();
             work_.cube = shaped;
+            work_.meta = shaped_meta;
             const size_t depth = std::max<size_t>(1, system_config_reader.get_frame_queue_depth());
             queue_.assign(depth, Slot());
             for(Slot& s : queue_){
                 s.cube = shaped;
+                s.meta = shaped_meta;
             }
             head_ = 0;
             count_ = 0;
@@ -275,6 +308,7 @@ void DCA1000Handler::init_buffers()
         //hold a frame open for a few packets past its end so a reordered packet can still land
         assembler_.configure(bytes_per_frame,
                              FrameAssembler::kDefaultReorderSlackPackets * (udp_packet_size - 10));
+        assembler_.set_keep_received(sar_meta_);  //the decoder reads the holes of incomplete frames
         assembler_.set_frame_sink([this](const std::vector<uint8_t>&, uint64_t index, size_t missing) {
             save_frame_byte_buffer(index, missing);
         });
@@ -288,6 +322,21 @@ void DCA1000Handler::init_buffers()
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
+        //adc_sar_meta (core-24): one packet of B bytes per chirp, ADC block at H, records after M
+        sar_resyncs_seen_ = 0;
+        sar_records_valid_ = sar_records_invalid_ = sar_records_other_run_ = 0;
+        sar_chirps_per_frame_ = chirps_per_frame;
+        meta_pending_valid_ = false;
+        if(sar_meta_){
+            converter_.configure_packets(radar_config_reader.get_chirp_packet_bytes(),
+                                         radar_config_reader.get_chirp_header_bytes());
+            sar_decoder_.configure(chirps_per_frame, radar_config_reader.get_chirp_packet_bytes(),
+                                   radar_config_reader.get_chirp_header_bytes(),
+                                   radar_config_reader.get_chirp_adc_end(),
+                                   radar_config_reader.get_chirp_cycle_s(), radar_config_reader.get_frame_blank_s());
+            meta_pending_ = shaped_meta;
+            meta_to_write_ = shaped_meta;
+        }
     }else{
         cpsl::radar::log_error("attempted to initialize DCA1000 Handler buffers, ",
                                "but radar_config_reader wasn't initialized");
@@ -348,6 +397,42 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
     //convert in place into the work buffer, outside the lock (only this
     //thread touches work_)
     converter_.convert(assembler_.get_frame_bytes(), work_.cube);
+    //adc_sar_meta (core-24): the per-chirp records; a resync starts a new recording (k from 0, a new run)
+    bool write_meta = false;
+    if(sar_meta_){
+        if(assembler_.resync_count() != sar_resyncs_seen_){
+            sar_resyncs_seen_ = assembler_.resync_count();
+            sar_decoder_.reset_run();
+        }
+        const std::vector<uint8_t>& fb = assembler_.get_frame_bytes();
+        sar_decoder_.decode(fb.data(), fb.size(), assembler_.get_frame_number(), assembler_.get_frame_received(),
+                            missing_bytes == 0, work_.meta);
+        sar_records_valid_ += work_.meta.records_valid;
+        sar_records_invalid_ += work_.meta.records_invalid;
+        sar_records_other_run_ += work_.meta.records_other_run;
+        if(meta_csv_out_file){
+            //the pending (previous) frame gets this frame's carried saturation results if it directly
+            //precedes it in the same recording, then goes out after the publish; this frame waits
+            if(meta_pending_valid_){
+                cpsl::radar::ChirpMetaFrame& p = meta_pending_;
+                if(meta_pending_resyncs_ == sar_resyncs_seen_ && !p.chirps.empty() && !work_.meta.chirps.empty() &&
+                   p.chirps.back().chirp + 1 == work_.meta.chirps.front().chirp){
+                    for(size_t t = 0; t < 2; t++){
+                        const int16_t v = work_.meta.prev_tail_sat[t];
+                        const size_t n = p.chirps.size();
+                        if(v >= 0 && n >= 2 - t){
+                            p.chirps[n - 2 + t].sat_slices_aligned = v;
+                        }
+                    }
+                }
+                std::swap(meta_to_write_, meta_pending_);
+                write_meta = true;
+            }
+            meta_pending_ = work_.meta;  //copy: the published one goes to the consumer
+            meta_pending_valid_ = true;
+            meta_pending_resyncs_ = sar_resyncs_seen_;
+        }
+    }
     const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     work_.index = index;
     work_.missing = missing_bytes;
@@ -375,8 +460,15 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
         count_ += 1;
         stats_.assembler = assembler_.get_stats();
         stats_.frames = received_frames;
+        stats_.records_valid = sar_records_valid_;
+        stats_.records_invalid = sar_records_invalid_;
+        stats_.records_other_run = sar_records_other_run_;
     }
     frame_cv_.notify_one();
+
+    if(write_meta){
+        write_meta_rows(meta_to_write_);
+    }
 
     //after the publish, so the consumer does not wait for the disk; built
     //from the frame bytes, not the published cube (the consumer owns that now)
@@ -435,4 +527,58 @@ void DCA1000Handler::write_adc_frame_to_file(){
     converter_.file_order(assembler_.get_frame_bytes(), file_frame_);
     adc_cube_out_file->write(reinterpret_cast<const char*>(file_frame_.data()),
                              static_cast<std::streamsize>(file_frame_.size() * sizeof(std::int16_t)));
+}
+
+// chirp_meta.csv: the columns and number format of sar_parse.py write_outputs() (_meta.csv), CRLF line ends as
+// Python's csv module writes them, so a capture parsed by both can be compared byte for byte (core-24 Step 3)
+static const char* const kMetaCsvHeader =
+    "chirp,frame,chirpInFrame,record_valid,adc_complete,version,flags,frameIdx,rec_chirpInFrame,"
+    "numChirpsPerFrame,globalChirpIdx,runIdx,satSlices,satRefLag,tsTicks,t_s,t_interpolated,late,"
+    "sat_slices_this_chirp\r\n";
+
+bool DCA1000Handler::open_meta_csv(){
+    const std::string path = system_config_reader.get_output_path("chirp_meta.csv");
+    meta_csv_out_file = std::make_shared<std::ofstream>(path, std::ios::out | std::ofstream::binary | std::ios::trunc);
+    if(!meta_csv_out_file->is_open()){
+        cpsl::radar::log_error("Failed to open or create ", path);
+        return false;
+    }
+    *meta_csv_out_file << kMetaCsvHeader;
+    return true;
+}
+
+void DCA1000Handler::write_meta_rows(const cpsl::radar::ChirpMetaFrame& meta){
+    if(!meta_csv_out_file || !meta_csv_out_file->is_open()) return;
+    const uint64_t nc = sar_chirps_per_frame_ == 0 ? 1 : sar_chirps_per_frame_;
+    std::string& o = meta_row_;
+    o.clear();
+    char buf[256];
+    for(const cpsl::radar::ChirpMeta& m : meta.chirps){
+        int n = std::snprintf(buf, sizeof buf, "%llu,%llu,%llu,%d,%d,",
+                              static_cast<unsigned long long>(m.chirp), static_cast<unsigned long long>(m.chirp / nc),
+                              static_cast<unsigned long long>(m.chirp % nc), m.record_valid ? 1 : 0,
+                              m.adc_complete ? 1 : 0);
+        o.append(buf, static_cast<size_t>(n));
+        if(m.record_valid){
+            n = std::snprintf(buf, sizeof buf, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%llu,", m.version, m.flags, m.frame_idx,
+                              m.chirp_in_frame, m.num_chirps_per_frame, m.global_chirp_idx, m.run_idx,
+                              m.sat_slices, m.sat_ref_lag, static_cast<unsigned long long>(m.ts_ticks));
+            o.append(buf, static_cast<size_t>(n));
+        }else{
+            o.append(",,,,,,,,,,");
+        }
+        if(m.has_time){
+            n = std::snprintf(buf, sizeof buf, "%.9f,%d,", m.t_s, m.time_interpolated ? 1 : 0);
+            o.append(buf, static_cast<size_t>(n));
+        }else{
+            o.append(",,");
+        }
+        o.append((m.record_valid && (m.flags & cpsl::radar::kSarFlagLate)) ? "1," : "0,");
+        if(m.sat_slices_aligned >= 0){
+            n = std::snprintf(buf, sizeof buf, "%d", m.sat_slices_aligned);
+            o.append(buf, static_cast<size_t>(n));
+        }
+        o.append("\r\n");
+    }
+    meta_csv_out_file->write(o.data(), static_cast<std::streamsize>(o.size()));
 }

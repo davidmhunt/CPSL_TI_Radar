@@ -10,6 +10,7 @@
 
 #include <fstream>
 #include <iterator>
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -17,6 +18,7 @@ using cpsl::radar::BoardDescriptor;
 using cpsl::radar::CfgCheckResult;
 using cpsl::radar::IqOrder;
 using cpsl::radar::LvdsLayout;
+using cpsl::radar::LvdsStreamFormat;
 using cpsl::radar::Sdk;
 using cpsl::radar::StreamSelection;
 using cpsl::radar::TlvDialect;
@@ -614,12 +616,70 @@ TEST_CASE(sar_cross_check_accepts_sar_cfg_and_rejects_others) {
     for (std::string line; std::getline(in, line);)
         if (line.rfind("calibData", 0) != 0) nocal += line + "\n";
     CHECK(any_has(check(d, write_cfg("sar_nocal.cfg", nocal), true, false).errors, "required command calibData is missing"));
-    // dataFmt 2 (core-24)
+    // dataFmt 2 (core-24): adc_sar_meta on this firmware, accepted
     std::string fmt2 = text;
     const std::string a = "lvdsStreamCfg -1 0 1 0";
     fmt2.replace(fmt2.find(a), a.size(), "lvdsStreamCfg -1 1 2 0");
-    CHECK(!check(d, write_cfg("sar_fmt2.cfg", fmt2), true, false).ok());
+    CfgCheckResult r2 = check(d, write_cfg("sar_fmt2.cfg", fmt2), true, false);
+    for (const auto& e : r2.errors) std::cerr << "    unexpected: " << e << "\n";
+    CHECK(r2.ok());
     // serial stream on this board is refused
     CHECK(!check(d, kSarCfg, false, true).ok());
     CHECK(!check(d, kSarCfg, true, true).ok());
+}
+
+// core-24: the firmware decides what a dataFmt carries; adc_sar_meta's constraints are enforced
+TEST_CASE(sar_fmt2_cross_check_constraints) {
+    BoardDescriptor d = with_firmware(must_load("IWR1843_SAR"), "iwr1843_sar_lvds");
+    CHECK(d.lvds.stream_formats.size() == 2);
+    CHECK(d.lvds.stream_formats.at(2) == LvdsStreamFormat::adc_sar_meta);
+    const std::string base = read_text(kSarCfg);
+    auto edit = [&](std::string t, const std::string& from, const std::string& to) {
+        const size_t at = t.find(from);
+        CHECK(at != std::string::npos);
+        if (at != std::string::npos) t.replace(at, from.size(), to);
+        return t;
+    };
+    const std::string fmt2 = edit(base, "lvdsStreamCfg -1 0 1 0", "lvdsStreamCfg -1 1 2 0");
+    // without the firmware's map (a board's default, {1: adc}) dataFmt 2 is refused with the old message
+    CHECK(any_has(check(must_load("IWR1843_SAR"), write_cfg("f2_nofw.cfg", fmt2), true, false).errors,
+                  "dataFmt 2 is not ADC-only (1)"));
+    // the stock demo on IWR1843 does not map 2 either
+    CHECK(!check(with_firmware(must_load("IWR1843"), "demo"), write_cfg("f2_demo.cfg", fmt2), true, false).ok());
+    // dataFmt 4 (CP_ADC_CQ) is listed by the firmware but not a driver format
+    CHECK(any_has(check(d, write_cfg("f4.cfg", edit(base, "lvdsStreamCfg -1 0 1 0", "lvdsStreamCfg -1 1 4 0")), true,
+                        false).errors,
+                  "dataFmt 4 is not a stream format of this firmware (1 adc, 2 adc_sar_meta)"));
+    // enableSW must be 0
+    CHECK(any_has(check(d, write_cfg("f2_sw.cfg", edit(fmt2, "lvdsStreamCfg -1 1 2 0", "lvdsStreamCfg -1 1 2 1")), true,
+                        false).errors,
+                  "needs enableSW 0"));
+    // SampleSwap 0 (I first) disagrees with the board's q_first
+    CHECK(any_has(check(d, write_cfg("f2_swap.cfg", edit(fmt2, "adcbufCfg -1 0 1 1 1", "adcbufCfg -1 0 0 1 1")), true,
+                        false).errors,
+                  "sampleSwap 0 puts I first, but board IWR1843_SAR has lvds.iq_order q_first"));
+    // ... and agrees with an i_first override
+    {
+        BoardDescriptor di = d;
+        di.lvds.iq_order = IqOrder::i_first;
+        CHECK(check(di, write_cfg("f2_swap0.cfg", edit(fmt2, "adcbufCfg -1 0 1 1 1", "adcbufCfg -1 0 0 1 1")), true,
+                    false).ok());
+    }
+    // interleaved output
+    CHECK(any_has(check(d, write_cfg("f2_il.cfg", edit(fmt2, "adcbufCfg -1 0 1 1 1", "adcbufCfg -1 0 1 0 1")), true,
+                        false).errors,
+                  "needs chanInterleave 1"));
+    // no adcbufCfg line
+    CHECK(any_has(check(d, write_cfg("f2_noadcbuf.cfg", edit(fmt2, "adcbufCfg -1 0 1 1 1\n", "")), true, false).errors,
+                  "needs an adcbufCfg line"));
+    // rx x samples odd (1 rx x 3301 samples)
+    CHECK(any_has(check(d, write_cfg("f2_odd.cfg", edit(fmt2, " 3300 2200 ", " 3301 2200 ")), true, false).errors,
+                  "needs rx channels x numAdcSamples even, the cfg has 1 x 3301"));
+    // two profiles
+    CHECK(any_has(check(d, write_cfg("f2_2prof.cfg", edit(fmt2, "chirpCfg 0 0", "profileCfg 1 77.25 480 10 1520 0 0 2.333 1 3300 2200 0 0 30\nchirpCfg 0 0")),
+                        true, false).errors,
+                  "needs exactly one profileCfg line"));
+    // the last lvdsStreamCfg line decides (the CLI keeps the last one)
+    CHECK(check(d, write_cfg("f2_last.cfg", edit(fmt2, "lvdsStreamCfg -1 1 2 0", "lvdsStreamCfg -1 1 2 0\nlvdsStreamCfg -1 0 1 0")),
+                true, false).ok());
 }

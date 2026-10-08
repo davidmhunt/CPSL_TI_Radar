@@ -103,6 +103,8 @@ Result<RadarConfig> RadarConfig::load(const std::string& system_json) {
         if (!c.radar_.initialized) {
             return Status(Code::invalid_config, "radar cfg " + cfg_path + ": " + c.radar_.get_error());
         }
+        // what the cfg's lvdsStreamCfg dataFmt carries on this firmware (core-24)
+        c.radar_.apply_stream_formats(board.lvds);
         if (c.radar_.get_bytes_per_frame() == 0) {
             return Status(Code::invalid_config, "radar cfg " + cfg_path + ": no usable frame shape");
         }
@@ -111,6 +113,8 @@ Result<RadarConfig> RadarConfig::load(const std::string& system_json) {
         c.shape_.chirps = static_cast<uint32_t>(c.radar_.get_chirps_per_frame());
         c.shape_.bytes = static_cast<uint64_t>(c.radar_.get_bytes_per_frame());
         c.shape_.period_ms = c.radar_.get_frame_period_ms();
+        c.shape_.lvds_format = c.radar_.get_lvds_stream_format();
+        c.shape_.chirp_packet_bytes = static_cast<uint32_t>(c.radar_.get_chirp_packet_bytes());
 
         std::ifstream f(cfg_path);
         std::vector<std::string> lines;

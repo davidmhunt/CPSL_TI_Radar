@@ -12,7 +12,7 @@ namespace cpsl {
 namespace radar {
 
 const std::set<std::string>& FirmwareDescriptor::gui_only_keys() {
-    static const std::set<std::string> keys = {"lvds_data_fmts", "mimo", "pending", "detection", "detection_note"};
+    static const std::set<std::string> keys = {"mimo", "pending", "detection", "detection_note"};
     return keys;
 }
 
@@ -92,6 +92,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
     optional.insert("identify");    // parsed strictly since gui-33 (no longer GUI-only)
     optional.insert("cfg_rules");   // gui-33 Step 4
     optional.insert("cli_overrides");
+    optional.insert("lvds_data_fmts");  // GUI-owned list; the driver reads its optional "formats" (core-24)
     if (!check_object(fail, j, "", {"schema", "id", "description", "outputs", "templates", "system_enables", "limits"},
                       optional)) {
         return false;
@@ -356,6 +357,43 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
+    // lvds_data_fmts (gui-24 list, GUI-checked) + its optional "formats" (core-24):
+    // {value: [dataFmt...], formats: {"<dataFmt>": "adc" | "adc_sar_meta"}, source, confidence}. The driver reads
+    // only "formats" (each key must be in value); the rest stays the GUI's. Sub-key, not a new top-level key, so a
+    // driver built before core-24 (which rejects unknown top-level keys) still loads the file.
+    if (j.contains("lvds_data_fmts") && j.at("lvds_data_fmts").is_object() &&
+        j.at("lvds_data_fmts").contains("formats")) {
+        const std::string p = "/lvds_data_fmts/formats";
+        const json& e = j.at("lvds_data_fmts");
+        const json& v = e.at("formats");
+        if (!v.is_object() || v.empty()) {
+            return fail(p, "expected a non-empty object (lvdsStreamCfg dataFmt -> adc | adc_sar_meta)");
+        }
+        std::set<int> listed;
+        if (e.contains("value") && e.at("value").is_array()) {
+            for (const json& x : e.at("value")) {
+                if (x.is_number_integer()) listed.insert(static_cast<int>(x.get<int64_t>()));
+            }
+        }
+        for (auto it = v.begin(); it != v.end(); ++it) {
+            const std::string kp = p + "/" + it.key();
+            const std::string& k = it.key();
+            if (k.empty() || k.size() > 3 || k.find_first_not_of("0123456789") != std::string::npos ||
+                (k.size() > 1 && k[0] == '0') || std::stoi(k) > 255) {
+                return fail(kp, "key must be a dataFmt number (0-255, no sign or leading zero)");
+            }
+            const int fmt = std::stoi(k);
+            if (!listed.count(fmt)) return fail(kp, "dataFmt " + k + " is not in /lvds_data_fmts/value");
+            std::string name;
+            if (!read_string(fail, it.value(), kp, name)) return false;
+            LvdsStreamFormat f;
+            if (!lvds_stream_format_from_string(name, f)) {
+                return fail(kp, "\"" + name + "\" is not one of: adc, adc_sar_meta");
+            }
+            d.lvds_stream_formats[fmt] = f;
+        }
+    }
+
     out = d;
     return true;
 }
@@ -389,6 +427,8 @@ bool apply_firmware_to_board(const FirmwareDescriptor& fw, const std::string& fw
     board.cfg_dialect.forbidden_commands = rules.forbidden_commands;
     const std::string prompt = fw.cli_prompt_for(board.name);
     if (!prompt.empty() && !keep_prompt) board.cli.prompt = prompt;
+    // what each lvdsStreamCfg dataFmt carries is a property of the image (core-24); absent = {1: adc}
+    if (!fw.lvds_stream_formats.empty()) board.lvds.stream_formats = fw.lvds_stream_formats;
     return true;
 }
 
