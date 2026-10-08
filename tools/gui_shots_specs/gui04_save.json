@@ -1,6 +1,6 @@
 {
  "env": {
-  "RADAR_GUI_DRIVER": "CPSL_TI_Radar_cpp/build-gui04/CPSL_TI_Radar_CPP"
+  "RADAR_GUI_DRIVER": "CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP"
  },
  "user_cfgs": {
   "placeholder.cfg": "% fake\n"

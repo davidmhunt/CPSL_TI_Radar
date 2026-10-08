@@ -1,7 +1,8 @@
 """gui-04 Step 4: the real driver's `--validate --json` against the GUI's Python validate(): the same `ok` and the same
 error-code set for every shipped system config and for the seeded-bad corpus (tests/fixtures/parity/).
-Skipped when no driver binary (build-gui04 first, else build/) supports `--json`."""
+Skipped when no driver binary (build/, or $RADAR_GUI_DRIVER) supports `--json`."""
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -28,8 +29,7 @@ def gui_only(code: str) -> bool:
 
 
 def _driver():
-    for d in ("build-gui04", "build"):
-        b = CPP / d / "CPSL_TI_Radar_CPP"
+    for b in (Path(os.environ.get("RADAR_GUI_DRIVER") or CPP / "build" / "CPSL_TI_Radar_CPP"),):
         if b.is_file():
             try:
                 p = subprocess.run([str(b), "--help"], capture_output=True, text=True, timeout=10)
