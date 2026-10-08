@@ -17,7 +17,7 @@ Open `http://127.0.0.1:8090/`. With a board, drop the demo flags:
 uv run python -m radar_gui               # http://127.0.0.1:8000/; the Radar tab runs CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP
 ```
 
-Other flags: `--port N`, `--driver-bin PATH`, `--tailscale` (also listen on the tailnet IP). The GUI has no authentication: keep it on loopback or behind Tailscale ACLs, and never `tailscale funnel`. The Docker demo does the same on port 8090 ([`docs/docker.md`](../docker.md)).
+Other flags: `--port N`, `--driver-bin PATH`, `--tailscale` (also listen on the tailnet IP). The GUI has no authentication: keep it on loopback or behind Tailscale ACLs, and never `tailscale funnel`.
 
 ## The tabs
 
@@ -46,8 +46,6 @@ Other flags: `--port N`, `--driver-bin PATH`, `--tailscale` (also listen on the 
 **Logs.** Every Start writes `runs/gui/<UTC>_<name>/` (gitignored, never pruned automatically). This tab lists runs, shows `driver.log`, `session.json` and `radar.cfg`, and deletes selected folders after a confirm. Only `runs/gui/` is ever touched.
 
 ![Logs tab](../images/gui/logs.png)
-
-These shots come from the hardware-free demo setup; see [`docs/images/gui/README.md`](../images/gui/README.md).
 
 ## A real session: IWR1843 + DCA1000
 

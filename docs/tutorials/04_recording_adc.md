@@ -44,7 +44,7 @@ ADC_DATA_FILE=../runs/cli/adc_data.bin \
 uv run --group notebooks jupyter nbconvert --to html --execute process_adc_data.ipynb --output-dir ../runs/cli --output adc_report
 ```
 
-The executed notebook lands in `runs/cli/adc_report.html`; open it in a browser. The source notebook is not modified. A 2-frame real capture to try the notebook on without a board is `tests/fixtures/adc/iwr1843_bench_dca_2frames.bin` with `tests/fixtures/adc/bench_1843_dca.cfg` (4 rx x 128 samples x 256 chirps).
+The executed notebook lands in `runs/cli/adc_report.html`; open it in a browser. A 2-frame real capture to try the notebook on without a board is `tests/fixtures/adc/iwr1843_bench_dca_2frames.bin` with `tests/fixtures/adc/bench_1843_dca.cfg` (4 rx x 128 samples x 256 chirps).
 
 `utilities/process_raw_lbds_data.ipynb` decodes `LVDS_Raw_0.bin` (`output.save_raw_lvds`, for debugging packet loss), and `utilities/test_ethernet_traffic.ipynb` helps debug the DCA1000 network link.
 

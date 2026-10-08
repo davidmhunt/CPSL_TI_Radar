@@ -40,7 +40,7 @@ uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # show the e
 uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (it calls sudo itself)
 ```
 
-Do not put `sudo` in front of it. Add `--udev` to also write stable `/dev/radar/<serial>-cli` and `-data` port names. The settings are per machine, so a rebuild needs no re-run.
+Do not put `sudo` in front of it. Add `--udev` to also write stable `/dev/radar/<serial>-cli` and `-data` port names.
 
 On a loaded host, pin the driver's two threads to cores your own pipeline does not use with `runtime.rx_cpu` and `runtime.worker_cpu` (driver Readme, "Choosing CPUs").
 
@@ -51,6 +51,6 @@ git pull && git submodule update --init CPSL_TI_Radar_cpp/include/json
 cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-For a debug crash hunt, `cd CPSL_TI_Radar_cpp && cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan` builds under AddressSanitizer in `build-asan-ubsan/` and leaves `build/` alone (presets need CMake 3.25 or newer). Bench tools expect a Release `build/`.
+For a debug crash hunt, `cd CPSL_TI_Radar_cpp && cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan` builds under AddressSanitizer in `build-asan-ubsan/` and leaves `build/` alone (presets need CMake 3.25 or newer).
 
 Next: [tutorial 2, the GUI](02_first_run_gui.md).

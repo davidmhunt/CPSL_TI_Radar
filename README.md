@@ -4,7 +4,7 @@ Host-side software for TI mmWave radars, from the Collaborative Perception and S
 
 ![The GUI's Radar tab](docs/images/gui/radar.png)
 
-*The GUI's Radar tab (a hardware-free demo run). Screenshots of every tab are in [tutorial 2](docs/tutorials/02_first_run_gui.md).*
+*The GUI's Radar tab. Every tab is shown in [tutorial 2](docs/tutorials/02_first_run_gui.md).*
 
 ## Supported boards
 
