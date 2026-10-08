@@ -6,7 +6,7 @@ Prebuilt firmware images that ship with the repo, laid out as
 of a descriptor in `CPSL_TI_Radar_cpp/config/firmware/<firmware>.json`.
 Images that no descriptor uses sit in `legacy/`.
 
-These are the v1 images moved here from `Firmware/` (rel-03); every file is
+These are the v1 images moved here from the old top-level v1 firmware folder (rel-03); every file is
 byte-identical to its old path (sha256 recorded in the rel-03 directive log).
 
 | Image | Board | Firmware descriptor | Provenance | Flashing |
