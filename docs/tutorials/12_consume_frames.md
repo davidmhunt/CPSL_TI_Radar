@@ -1,6 +1,6 @@
 # 12. Consume frames in your own program
 
-Write a program that links the driver and reads ADC frames as they complete. Without a radar it still builds and fails cleanly. Prerequisite: [tutorial 1](01_build_and_host_setup.md).
+Write a program that links the driver and reads ADC frames as they complete. Without a radar it still builds and fails cleanly. Prerequisite: [tutorial 1](01_install.md).
 
 ## Install the driver and build a consumer
 

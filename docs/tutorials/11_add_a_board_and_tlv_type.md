@@ -1,6 +1,6 @@
 # 11. Add a board, add a TLV type
 
-Two small changes, each with a test; the last section undoes both. Run from the repository root, with the build from [tutorial 1](01_build_and_host_setup.md).
+Two small changes, each with a test; the last section undoes both. Run from the repository root, with the build from [tutorial 1](01_install.md).
 
 ## Add or tune a board (no rebuild of the driver)
 

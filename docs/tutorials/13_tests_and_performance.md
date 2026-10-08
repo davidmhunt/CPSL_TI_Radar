@@ -1,6 +1,6 @@
 # 13. Write a test, measure performance
 
-Run from the repository root, with the build from [tutorial 1](01_build_and_host_setup.md).
+Run from the repository root, with the build from [tutorial 1](01_install.md).
 
 ## Write a test
 
@@ -94,4 +94,4 @@ uv run tools/bench/pipeline_gate.py /tmp/perf/p_*.txt
 
 Exit 0 passes; a regression in one build only is printed as layout noise.
 
-**On a board** (needs the board and a DCA1000): follow [`bench_validation.md`](bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`.
+**On a board** (needs the board and a DCA1000): follow [`14_bench_validation.md`](14_bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`.

@@ -1,6 +1,6 @@
 # 10. Code map: where things live
 
-Entry point of the "extending" track. All driver code is in `CPSL_TI_Radar_cpp/` (built per [tutorial 1](01_build_and_host_setup.md)); reference detail is in `docs/ARCHITECTURE.md`.
+Entry point of the "extending" track. All driver code is in `CPSL_TI_Radar_cpp/` (built per [tutorial 1](01_install.md)); reference detail is in `docs/ARCHITECTURE.md`.
 
 ## How data moves
 

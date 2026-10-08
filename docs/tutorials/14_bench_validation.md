@@ -6,7 +6,7 @@ Run every command from the repository root. Only one person at a time may hold t
 
 ## 1. Prerequisites
 
-1. Build the driver (Release; the harness refuses other builds) and check the host by following [`rebuild_driver.md`](rebuild_driver.md); repeat after every rebuild. Nothing may show MISSING; the host needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
+1. Build the driver (Release; the harness refuses other builds) and check the host by following [tutorial 1](01_install.md); repeat after every rebuild. Nothing may show MISSING; the host needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
 2. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
 
 ## 2. Hardware setup (IWR1843 + DCA1000)

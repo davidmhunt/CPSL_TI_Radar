@@ -1,6 +1,8 @@
-# 4. Troubleshooting: messages, `stats v1`, drops
+# 5. Troubleshooting: messages, `stats v1`, drops
 
 The executable prints each failure as `error: <message>` and exits 1 (2 for a bad command line). `runtime.log_level: "debug"` shows every CLI command and reply.
+
+In the GUI, the same text is in the run's `driver.log` (Logs tab) and the Radar tab cards show the counters below. **If the DCA1000 drops packets, go straight to [Reading `--stats`](#reading---stats).** Host-side causes (receive buffer, NIC, CPU pinning) are set up in [tutorial 1](01_install.md); thresholds are in [`14_bench_validation.md`](14_bench_validation.md) section 7.
 
 ## It failed before or at start
 
@@ -34,4 +36,4 @@ A healthy DCA run has `dropped`, `kernel_drops`, `resyncs` and `implausible` at 
 | `overwritten` > 0 | Your consumer was slower than the radar: the oldest frame in a full queue was dropped (still in `adc_data.bin`). | See [tutorial 12](12_consume_frames.md). |
 | serial `missed` > 0 | Gaps in the demo's frame counter. | Check the data cable and baud. |
 
-To survive longer stalls, raise `dca1000.rcvbuf_bytes` and `rmem_max`. Pass/fail thresholds per counter on a real board: [`bench_validation.md`](bench_validation.md) section 7.
+To survive longer stalls, raise `dca1000.rcvbuf_bytes` and `rmem_max`. Pass/fail thresholds per counter on a real board: [`14_bench_validation.md`](14_bench_validation.md) section 7.
