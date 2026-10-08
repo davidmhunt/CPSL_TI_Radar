@@ -1,6 +1,6 @@
 # Firmware project contract — requirements
 
-**Status:** draft (decisions settled 2026-10-08; awaiting sign-off)
+**Status:** signed off 2026-10-08 (user)
 **Owner:** fwstd loop · **Sponsor:** user · **Serves:** firmware standardisation (fwstd-03..08) and the later GUI build/flash/verify directive
 
 Every project in `firmware_dev/projects/` (`ti_stock_demos`, `iwr1843_sar_lvds`,
