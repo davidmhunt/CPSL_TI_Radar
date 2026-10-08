@@ -757,7 +757,7 @@
       "timeout_ms": 3000,
       "once_safe": true,
       "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
-      "note": "version: bench-recorded 2026-10-07 (SDK 3.6 demo, xWR18xx, 03.06.02.00; gui-09 Log, bench_flash_iwr1843_demo.md s6). sarStats 'not recognized': source-derived (SDK cli.c:223), not yet bench-recorded.",
+      "note": "version: bench-recorded 2026-10-07 (SDK 3.6 demo, xWR18xx, 03.06.02.00; gui-09 Log, bench_flash_iwr1843_demo.md s6). sarStats \"'sarStats' is not recognized as a CLI command\": bench-recorded 2026-10-08 (runs/gui/20261008T021450Z_overnight_mismatch/); version also bench-recorded there with device string 'IWR18xx non-secure ES 02.00' (the show regexes match it).",
       "probes": [
         {
           "cmd": "version",
