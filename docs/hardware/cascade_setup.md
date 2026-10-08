@@ -191,4 +191,4 @@ This is the same as Steps 2 and 3, but **leave off the word `prebuilt`**:
 - [x] Step 4: Our firmware flashed and streams the same (20.02 Hz, 0 gaps, 0 framing errors)
 - [ ] Step 5: C++ driver prints points for several minutes with no errors (75 s clean on TI firmware 2026-10-01: 1479 frames, 0 gaps; full multi-minute soak still to do)
 
-When everything is ticked, the hardware part of `CASCADE_PLAN.md` (Phases 2–4) is done.
+When everything is ticked, the hardware part of `docs/archive/CASCADE_PLAN.md` (Phases 2–4) is done.

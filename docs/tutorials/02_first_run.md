@@ -31,7 +31,7 @@ Enable one or both; at least one is required. Which `Point` fields are filled de
 
 ## Run
 
-Edit `cli.port` (and `serial_stream.port`) in your config to your board's ports: `utilities/determine_serial_ports.ipynb` lists them, and the lower-numbered `/dev/ttyACM*` is the CLI. Power the board in functional mode (`bench_validation.md` section 2 shows the switches), then:
+Edit `cli.port` (and `serial_stream.port`) in your config to your board's ports: `ls /dev/serial/by-id` and the GUI Devices tab list them, and the lower-numbered `/dev/ttyACM*` is the CLI. Power the board in functional mode (`bench_validation.md` section 2 shows the switches), then:
 
 ```bash
 ./CPSL_TI_Radar_CPP ../config/system/IWR1843_demo_tlv_default.json --frames 100 --stats

@@ -189,15 +189,15 @@ To stream samples from the DCA1000, the following steps must be completed
 To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads). Next, follow the instructions below corresponding to the board that you are using.
 
 #### [IWR1443] DCA Streaming
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../readme_images/IWR_SOP_modes.png)
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../docs/images/boot_modes/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/DCA1000_Streaming). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
 
 #### [IWR1443] IWR Streaming
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../readme_images/IWR_SOP_modes.png)
+1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../docs/images/boot_modes/IWR_SOP_modes.png)
 3. Use the Uniflash tool to install the mmWave SDK found as part of the [TI mmWave SDK 2.01.00.04](https://www.ti.com/tool/download/MMWAVE-SDK/02.01.00.04)
 
 #### [IWR1843] DCA Streaming and IWR Demos
-1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../readme_images/IWR1843_SOP_nodes.png)
+1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../docs/images/boot_modes/IWR1843_SOP_nodes.png)
 2. For the IWR1843 (or any radar that can run the mmWave SDK demo), you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.
 
     a.We developed this pipeline using mmWave 3.6. Using a different pipeline may require slight changes in the code.
@@ -296,7 +296,7 @@ The tracked configs are in [`config/`](./config/README.md): system JSONs are nam
 | `firmware` | yes | The firmware id the radar runs, a file in `config/firmware/` (`demo`, `dca1000_raw`, `iwr1843_sar_lvds`, `cascade_ddm`); it must be in the board descriptor's `firmwares` list. The driver applies that descriptor's error-level limits (TX/RX counts, band, slope, sample rate, chirp cycle, frame period, ADC buffer, L3 cube, LVDS rate, required/forbidden commands) and refuses a stream the firmware does not produce. `board: IWR1843` with `iwr1843_sar_lvds` is an error: use `"board": "IWR1843_SAR"`. A missing key is an error naming the board's list. A `config/user/*.json` without it is refused; fix it with the Radar tab's Add firmware button or `uv run tools/migrate_config_v1_to_v2.py --add-firmware --in-place <file>`. |
 | `board_overrides` | no | Deep-merged over the descriptor, then validated like it. Baud rates and timeouts live here, for example `{"cli": {"cmd_timeout_ms": 300}, "data_uart": {"baud": 3125000, "timeout_ms": 5000}}`. `cli.stop_timeout_ms` sets how long `sensorStop` waits for `Done`; by default it is `max(cmd_timeout_ms, frame period + 200 ms)`, because the demo answers only after the current frame. |
 | `radar_cfg` | yes | The TI `.cfg` sent to the radar. Relative paths resolve against the JSON file's directory; the tracked configs use `../radar/<subdir>/<file>.cfg`. |
-| `cli.port` | yes | CLI serial port (usually the lower-numbered `/dev/ttyACM*`; [determine_serial_ports.ipynb](../utilities/determine_serial_ports.ipynb) lists them). |
+| `cli.port` | yes | CLI serial port (usually the lower-numbered `/dev/ttyACM*`; `ls /dev/serial/by-id` and the GUI Devices tab list them). |
 | `serial_stream.enabled`, `.port` | no | TLV point cloud from the demo over the data UART. `port` is required when enabled. The section may be omitted when off. |
 | `dca1000.enabled`, `.fpga_ip`, `.host_ip`, `.cmd_port`, `.data_port` | no | Raw ADC through the DCA1000. The four address fields are required when enabled; the section may be omitted when off. |
 | `dca1000.rcvbuf_bytes` | no | `SO_RCVBUF` requested for the data socket (default 67108864; see the host settings above). |
@@ -381,7 +381,7 @@ point cloud on this firmware. Check without hardware:
 ### 2. Radar .cfg file
 
 Several sample .cfg files are located in the [config/radar](./config/radar/) folder. For generating additional configurations, we recommend using the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/). There, you can specify settings, and then use the "Save config to PC" button to download a configuration. To fully understand the configurations, please refer to the mmWave sdk documentation. 
-* To understand a particular configuration, there are a few helpful notebooks located in the [utilities](../utilities/) folder including the [print_config](../utilities/print_config.ipynb) notebook which will parse the config and print its commands. 
+* To understand a particular configuration, the GUI's Configure tab (`radar_gui/`) parses a `.cfg` and reports its derived numbers. Post-processing notebooks for captured data are in the [utilities](../utilities/) folder. 
 
 
 ### 3. Run the project

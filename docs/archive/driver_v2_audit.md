@@ -1,5 +1,7 @@
 # Driver v2 audit
 
+> **Historical; see [docs/ARCHITECTURE.md](../ARCHITECTURE.md) for the current design.**
+
 Audit of `CPSL_TI_Radar_cpp/` at commit `d3d7aa5` (`release/v2.0`, after
 core-01 and core-02), written for directive core-03 (issue #18). Paths are
 relative to `CPSL_TI_Radar_cpp/`; `file:line` refers to that commit. The

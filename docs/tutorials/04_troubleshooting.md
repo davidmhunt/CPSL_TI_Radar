@@ -6,7 +6,7 @@ The executable prints each failure as `error: <message>` and exits 1 (2 for a ba
 
 | Message (code) | Meaning and fix |
 |---|---|
-| `cannot open the CLI port ...` / `... serial data port ...` (`open_failed`) | Wrong port, board not powered, or you are not in `dialout`. Check `ls /dev/ttyACM*` and `utilities/determine_serial_ports.ipynb`. |
+| `cannot open the CLI port ...` / `... serial data port ...` (`open_failed`) | Wrong port, board not powered, or you are not in `dialout`. Check `ls /dev/ttyACM*` and `ls /dev/serial/by-id` (or the GUI Devices tab). |
 | `cannot open the DCA1000 sockets ...` (`open_failed`) | The host NIC does not have `dca1000.host_ip`, or another process holds the ports. `host_setup.py` checks the address. |
 | `DCA1000 did not answer ...` (`device_error`) | The capture card is unpowered, unplugged, or on another subnet. |
 | `not every config command was acknowledged with 'Done'` (`config_rejected`) | A cfg command got no `Done`: an older IWR1843 image rejects `calibData` (skip it with `board_overrides`); otherwise the firmware does not know the command, or the board is in flashing mode or wrong firmware. |

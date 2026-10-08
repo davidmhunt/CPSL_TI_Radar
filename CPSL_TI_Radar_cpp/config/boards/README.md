@@ -1,7 +1,7 @@
 # Board descriptors
 
 One JSON file per board, read by `BoardDescriptor::load` (`src/BoardDescriptor/`).
-The schema is in [`docs/design/driver_v2_design.md`](../../../docs/design/driver_v2_design.md) §1.
+The schema is in [`docs/archive/driver_v2_design.md`](../../../docs/archive/driver_v2_design.md) §1.
 Loading is strict: an unknown key, a wrong type, an unknown enum string, or a `lanes`/`layout`
 mismatch is an error, and so is a key repeated in one object. `name` must equal the file name. `dca1000` is required when
 `lvds.supported` is true and not allowed when it is false.
@@ -22,7 +22,7 @@ layout and I/Q order, and the once-per-boot rule.
 ## Where each value comes from
 
 Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
-`docs/design/driver_v2_audit.md` (b).
+`docs/archive/driver_v2_audit.md` (b).
 
 | Field | Value(s) | Evidence |
 |-------|----------|----------|
@@ -62,7 +62,7 @@ dialect starts a frame with the same 8-byte magic word, has a `{type, length}` T
 | Dialect | Boards | Header | Detected points (TLV 1) | SNR / noise (TLV 7) | Status |
 |---------|--------|--------|-------------------------|---------------------|--------|
 | `sdk3` | IWR1843, IWR6843 (mmWave SDK 3.x demo) | 40 B | float x, y, z (m), v (m/s); 16 B per point | int16 per point, 0.1 dB steps | in use since v1 |
-| `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade (CASCADE_PLAN). TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
+| `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade (`docs/archive/CASCADE_PLAN.md`). TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
 | `sdk2` | IWR1443 (mmWave SDK 1.x/2.x xWR14xx demo) | 36 B (no `subFrameNumber`) | `{u16 count, u16 xyzQFormat}`, then 12 B per point: int16 x, y, z in meters x 2^xyzQFormat (decoded per frame), plus range/Doppler bin indices and peak value | not sent | format confirmed from TI's SDK 2.1 source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); **not yet run against a real IWR1443** |
 
 **Documented compromise (`sdk2`), approved by the user 2026-10-06 for now; to be improved (compute velocity from the radar .cfg, SNR/noise from firmware if it exposes them):** the SDK 2 demo sends no velocity, SNR or noise per point.

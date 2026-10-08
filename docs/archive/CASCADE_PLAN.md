@@ -1,5 +1,7 @@
 # AWR2243 2-Chip Cascade: Demo Bring-up + C++ Serial Integration Plan
 
+> **Historical; see [docs/ARCHITECTURE.md](../ARCHITECTURE.md) for the current design.**
+
 **Goal:** (1) build and flash the stock AM273x + AWR2243 cascade DDM demo from Docker, and
 (2) stream its UART TLV point cloud into the `CPSL_TI_Radar` C++ driver.
 Raw ADC capture over the DCA1000 is out of scope here (see "Later").

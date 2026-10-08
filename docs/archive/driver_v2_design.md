@@ -1,5 +1,7 @@
 # Driver v2 design
 
+> **Historical; see [docs/ARCHITECTURE.md](../ARCHITECTURE.md) for the current design.**
+
 Design for reworking `CPSL_TI_Radar_cpp/` into a faster, config-driven v2.0
 driver. Written for directive core-03 (issue #18). The evidence behind each
 item is in [`driver_v2_audit.md`](driver_v2_audit.md), cited below as

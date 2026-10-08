@@ -11,14 +11,14 @@ Run every command from the repository root. Only one person at a time may hold t
 
 ## 2. Hardware setup (IWR1843 + DCA1000)
 
-1. Power the board off. Set the S1 switch to **functional mode**: SOP2 = 0, SOP1 = 0, SOP0 = 1 (SOP mode 4); flashing mode is 101. The board reads the switch only at power-up. See [`readme_images/IWR1843_SOP_nodes.png`](../../readme_images/IWR1843_SOP_nodes.png), which labels the ON side of S1.
+1. Power the board off. Set the S1 switch to **functional mode**: SOP2 = 0, SOP1 = 0, SOP0 = 1 (SOP mode 4); flashing mode is 101. The board reads the switch only at power-up. See [`docs/images/boot_modes/IWR1843_SOP_nodes.png`](../images/boot_modes/IWR1843_SOP_nodes.png), which labels the ON side of S1.
 2. Connect the board by USB. `ls /dev/ttyACM*` should show `/dev/ttyACM0` (CLI) and `/dev/ttyACM1` (data), the ports in the config below; otherwise edit `cli.port` and `serial_stream.port`.
 3. For raw ADC, connect the DCA1000 to the LVDS connector and by Ethernet to the host NIC, then power both. `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` pings `192.168.33.180` (report only). A working DCA1000 may not answer ping (the IWR1843 bench's does not), so the real check is the first run in section 5.
 4. Power-cycle the board before a run if the firmware was just flashed or the last run crashed.
 
 ## 3. Firmware
 
-The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. For flashing and building see [`../firmware.md`](../firmware.md) and `firmware_dev/projects/README.md`. For the cascade, `planning/CASCADE_HARDWARE_SETUP.md` Steps 2 to 4.
+The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. For flashing and building see [`../firmware.md`](../firmware.md) and `firmware_dev/projects/README.md`. For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
 
 ## 4. Choose a config
 
@@ -98,7 +98,7 @@ A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, 
 
 Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
-Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from `planning/CASCADE_HARDWARE_SETUP.md`. Its config ships with `log_level: "info"`, which the harness accepts. Expect 20 Hz (50 ms period) and no missed TLV frames.
+Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md). Its config ships with `log_level: "info"`, which the harness accepts. Expect 20 Hz (50 ms period) and no missed TLV frames.
 
 ## 10. Troubleshooting
 

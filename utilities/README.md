@@ -1,6 +1,6 @@
 # Utilities
 
-Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Radar_cpp/`). The notebooks need `numpy` and `matplotlib` (plus `pyserial` for `determine_serial_ports`). `numpy`, `matplotlib`, `nbconvert` and `ipykernel` are in the optional uv `notebooks` group (`uv run --group notebooks jupyter lab`); the default and `dev` environments do not install them. Run notebooks from this directory.
+Python notebooks for analyzing output from the C++ radar streamer (`CPSL_TI_Radar_cpp/`). The notebooks need `numpy` and `matplotlib`. `numpy`, `matplotlib`, `nbconvert` and `ipykernel` are in the optional uv `notebooks` group (`uv run --group notebooks jupyter lab`); the default and `dev` environments do not install them. Run notebooks from this directory.
 
 `process_adc_data.ipynb` works on numpy 2. It derives chirps per loop, loops per frame and the TDM-MIMO TX split from the `.cfg` (`frameCfg`, `chirpCfg`, `channelCfg`, `profileCfg`), so the range-Doppler plot has one velocity bin per loop (63 for the baseline cfg, per TX), not one per chirp. Point it at a capture non-interactively with `CFG_FILE` (full cfg path) and `ADC_DATA_FILE` (the `adc_data.bin`):
 
@@ -17,10 +17,7 @@ uv run --group notebooks jupyter nbconvert --to notebook --execute process_adc_d
 |---|---|---|
 | `process_adc_data.ipynb` | `adc_data.bin` | Load ADC cube, convert to complex, range/Doppler/azimuth FFT analysis |
 | `process_raw_lbds_data.ipynb` | `LVDS_Raw_0.bin` | Decode raw LVDS packet stream, reconstruct complex samples |
-| `print_config.ipynb` | `.cfg` file | Parse a radar `.cfg` and print its commands |
-| `determine_serial_ports.ipynb` | — | List available serial/COM ports on the host |
 | `test_ethernet_traffic.ipynb` | — | DCA1000 network debugging |
-| `ti_mmwavesdk_parser_scripts/lvds_example.ipynb` | LVDS capture | Example use of TI's SDK LVDS parser (`parser_lvds_demo_captured_file.py`, not tracked: copy it from the TI mmWave SDK into that folder) |
 
 ---
 

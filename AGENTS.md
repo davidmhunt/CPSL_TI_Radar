@@ -32,7 +32,7 @@ your task needs, per this index:**
 | Change driver internals (DCA1000 RX, serial TLV, configs, ADC cube layout) | `docs/ARCHITECTURE.md` |
 | Build, flash, or bring up firmware; touch `firmware_dev/` or a board | `docs/firmware.md` (Firmware role's facts) |
 | Configure a host for DCA1000 streaming or serial ports | `CPSL_TI_Radar_cpp/Readme.md` (system prerequisites) |
-| Plan v2.0 work on the cascade | `planning/CASCADE_PLAN.md`, `planning/CASCADE_HARDWARE_SETUP.md` |
+| Plan v2.0 work on the cascade | `docs/hardware/cascade_setup.md` (bring-up); `docs/archive/CASCADE_PLAN.md` (historical plan) |
 | Open, comment on, or close a tracker issue (rule 13) | AGENTS.md "Tracker credentials" below |
 | Drive the harness (as the user) | `.friday/active/harness/USER_GUIDE.md` |
 | Act as an assigned agent role | `.friday/active/harness/harness.md` (core rules) + `.friday/active/harness/roles/<your-role>.md` only |
@@ -122,9 +122,7 @@ shared, not private to one session.
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |
 | `utilities/` | Notebooks for post-processing driver output (ADC cube, raw LVDS, `.cfg`), serial-port and DCA1000 network debugging, and a TI SDK LVDS parser example |
 | `tests/` | pytest suite (`uv run pytest`); C++ unit tests are in `CPSL_TI_Radar_cpp/tests/` and run via `ctest` (see "Running tests" below) |
-| `planning/` | Cascade plan and hardware bring-up notes |
-| `docs/` | `ARCHITECTURE.md`, `RESULTS.md`, `firmware.md` |
-| `readme_images/` | IWR boot-mode (SOP) diagrams linked from `CPSL_TI_Radar_cpp/Readme.md` |
+| `docs/` | `ARCHITECTURE.md`, `RESULTS.md`, `firmware.md`, `docker.md`; `hardware/` (cascade bring-up), `images/` (GUI and boot-mode figures), `archive/` (historical plans/designs) |
 | `.friday/active/harness/` | Multi-agent harness: core rules, role definitions, per-rule detail docs, the live dashboard (`status.md` + `status_history.md`, unless `.friday/active/harness/status_history.md` points elsewhere), goals and directives (`plans/`), and the Reviewer/Runner working folders (`review/`, `running/`). |
 | `.friday-project/` | Project-owned harness extensions, tracked in this repo: `roles/<role>.md` for each project specialist (linked into `.friday/active/harness/roles/` by `init_harness.py`). Omit if the project has none. |
 | `docs/research/` | The Researcher's memos — tracked project content, not part of the `.friday/` submodule's generated output. |
