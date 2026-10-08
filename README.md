@@ -1,163 +1,78 @@
 # CPSL TI Radar
 
-Tools for capturing raw ADC data from TI IWR mmWave radar sensors using the TI DCA1000 data capture card.
+Host-side software for TI mmWave radars, from the Collaborative Perception and Sensing Lab (CPSL). It configures a radar over its CLI serial port, then streams either **raw ADC data** through a TI DCA1000 capture card (UDP, high rate, real-time threads) or the on-chip demo's **TLV point cloud** over a serial data port. A web GUI builds radar configs, runs the driver and shows the data live; a firmware build environment and prebuilt images cover the boards themselves. This is branch `release/v2.0`, a rework of the v1 code ([what changed](docs/migration_v1_to_v2.md)).
 
-## Primary Implementation: C++ Driver
+![The GUI's Radar tab](docs/images/gui/radar.png)
 
-The C++ implementation in [`CPSL_TI_Radar_cpp/`](./CPSL_TI_Radar_cpp/) is the primary entry point. It provides reliable high-rate DCA1000 streaming via a dedicated RX thread, lock-free ring buffer, and tuned UDP socket buffers.
+*The GUI's Radar tab (a hardware-free demo run). Screenshots of every tab are in [tutorial 2](docs/tutorials/02_first_run_gui.md).*
 
-See **[`CPSL_TI_Radar_cpp/Readme.md`](./CPSL_TI_Radar_cpp/Readme.md)** for:
-- Prerequisites and build instructions
-- System settings required for high-rate streaming (`SO_RCVBUF`, SCHED_RR, `rmem_max`)
-- The system config format (JSON, schema v2) and the board descriptors
-- How to run the executable, and `--validate` to check a config without hardware
+## Supported boards
 
-## Repository Layout
+Each board is a descriptor in [`CPSL_TI_Radar_cpp/config/boards/`](CPSL_TI_Radar_cpp/config/boards/); the firmware a board runs is a descriptor in [`config/firmware/`](CPSL_TI_Radar_cpp/config/firmware/) and is a mandatory `"firmware"` key in every system config.
 
-- [`CPSL_TI_Radar_cpp/`](./CPSL_TI_Radar_cpp/) — the C++ driver, radar `.cfg` files, system JSON configs and board descriptors (`config/boards/`)
-- [`tools/radar_viewer/`](./tools/radar_viewer/) — live point-cloud viewer for the AWR2243 cascade (seed of the v2.0 GUI)
-- [`utilities/`](./utilities/) — analysis notebooks (see below)
-- [`DCA_Programming/`](./DCA_Programming/) — DCA1000 FPGA reprogramming
-- [`planning/`](./planning/) — cascade plan and hardware bring-up notes
-- [`docs/`](./docs/) — architecture, results and firmware notes; [tutorials](./docs/tutorials/README.md) for using and extending the driver, including [bench validation](./docs/tutorials/bench_validation.md) and the [rebuild runbook](./docs/tutorials/rebuild_driver.md)
-- [`tests/`](./tests/) — pytest suite (`uv run pytest`)
-- [`readme_images/`](./readme_images/) — IWR boot-mode (SOP) diagrams used by the C++ Readme's flashing instructions
+| Board | Firmware (`"firmware"`) | Output |
+|---|---|---|
+| IWR1443 | `demo` | serial TLV point cloud |
+| IWR1443 | `dca1000_raw` | raw ADC via DCA1000 (4 LVDS lanes) |
+| IWR1843 | `demo` | serial TLV; raw ADC via DCA1000 when the cfg has `lvdsStreamCfg` (2 lanes) |
+| IWR1843 (`"board": "IWR1843_SAR"`) | `iwr1843_sar_lvds` | raw ADC via DCA1000, no serial data |
+| IWR6843, IWR6843ODS | `demo` | serial TLV; raw ADC via DCA1000 as for the IWR1843 |
+| AWR2243 2-chip cascade (AM273x) | `cascade_ddm` | serial TLV only; accepts a cfg once per power-up |
 
-## DCA1000 Setup
+The IWR1843 SAR firmware's `dataFmt` 2 mode has not yet been benched on a board. Radar `.cfg` files live in `config/radar/<BOARD>/<firmware>/`, ready-made system configs in `config/system/<BOARD>_<firmware>_<purpose>[_<mount>].json` (index: [`config/README.md`](CPSL_TI_Radar_cpp/config/README.md)), and your own in `config/user/` (gitignored).
 
-To program or reconfigure the DCA1000 FPGA's network settings (required when running multiple radars simultaneously), see **[`DCA_Programming/README.md`](./DCA_Programming/README.md)**.
+## Quick start
 
-Default DCA1000 network configuration:
-- FPGA IP: `192.168.33.180`
-- Host IP (static): `192.168.33.30`, subnet `255.255.255.0`
-- Command port: `4096`, Data port: `4098`
-
-## Radar Configurations
-
-Sample `.cfg` files for each supported board are in [`CPSL_TI_Radar_cpp/config/radar/`](./CPSL_TI_Radar_cpp/config/radar/). Use the [TI mmWave Demo Visualizer](https://dev.ti.com/gallery/view/mmwave/mmWave_Demo_Visualizer/ver/2.1.0/) to generate additional configurations.
-
-Supported boards:
-
-| Board | LVDS lanes | ADC format | `"board"` in the system config |
-|---|---|---|---|
-| IWR1843 | 2-lane | non-interleaved (SDK 3+) | `"IWR1843"` |
-| IWR6843 | 2-lane | non-interleaved (SDK 3+) | `"IWR6843"` |
-| IWR1443 | 4-lane | interleaved (SDK 2) | `"IWR1443"` |
-| AWR2243 2-chip cascade (AM273x) | — (serial TLV only for now) | — | `"AWR2243_CASCADE"` |
-
-Each name is a board descriptor in [`CPSL_TI_Radar_cpp/config/boards/`](./CPSL_TI_Radar_cpp/config/boards/), which holds everything board-specific (CLI handshake, cfg layout, UART and LVDS formats, DCA1000 settings).
-
-The AWR2243 cascade runs TI's 2-chip cascade DDM demo, built and flashed from the companion
-[`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo. Only the
-UART point cloud is supported (data port at 3,125,000 baud); raw ADC capture through the DCA1000 is not yet supported.
-See `CPSL_TI_Radar_cpp/config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json`.
-
-## Firmware
-
-Pre-built firmware binaries for flashing via TI UniFlash are in [`Firmware/`](./Firmware/):
-- `Firmware/DCA1000_Streaming/` — use when streaming to the DCA1000
-- `Firmware/IWR_Demos/` — use when streaming TLV data directly from the IWR serial port
-
-## Data Analysis Notebooks
-
-Python notebooks for analyzing C++ output files are in [`utilities/`](./utilities/):
-
-| Notebook | Purpose |
-|---|---|
-| `process_adc_data.ipynb` | Load and analyze `adc_data.bin` files written by the C++ driver with `output.save_adc_frames` |
-| `process_raw_lbds_data.ipynb` | Load and decode raw LVDS packet streams (`LVDS_Raw_0.bin`, written with `output.save_raw_lvds`) |
-| `print_config.ipynb` | Parse a radar `.cfg` file and print its commands |
-| `determine_serial_ports.ipynb` | List available serial ports on the host |
-| `test_ethernet_traffic.ipynb` | DCA1000 network debugging utility |
-
-## v1 -> v2 migration
-
-v2.0 is a rework and may break v1 interfaces. Removed from the tree (all recoverable from git history; the last commit that contained `archived_code/` is `4cc80474927025ff7935ddb1bb1f09ed78e0ca2d`):
-
-- `archived_code/` — the v1 Python DCA1000/serial driver (`CPSL_TI_Radar_py`, `ConfigManager`, conda environments), early C++ prototypes, and the superseded `DCA1000Runner`. Use the C++ driver in `CPSL_TI_Radar_cpp/`; `cpsl::radar::Radar` replaces `DCA1000Runner` (see "Library" below).
-- `MAIN_NO_RUNNER` executable (`main_no_runner.cpp`) — only `CPSL_TI_Radar_CPP` is built now.
-- `utilities/Postprocess_adc_data.py` and `utilities/bartlet.ipynb` — depended on removed v1 modules or v1 capture files. The remaining notebooks no longer import `ConfigManager`; they parse the `.cfg` directly.
-- CMake package renamed: `find_package(CPSL_TI_Radar_CPP)` / `CPSL_TI_Radar_CPP::<target>` is now `find_package(CPSL_TI_Radar)` / `CPSL_TI_Radar::driver`. A deprecated `CPSL_TI_Radar_CPP` compatibility package (old target names as aliases, with a deprecation message) is installed for one release and then removed. See `CPSL_TI_Radar_cpp/Readme.md`.
-- Generated/stray files: `generated_config.json`, `config/radar/IWR_Demos/generated_config.{cfg,json}` and `jsonconfig.json` (outputs of the v1 `ConfigManager`), the empty root `build/`, and the tracked `CPSL_TI_Radar_cpp/.vscode/`.
-- `planning/current_plan.md` — all phases done or superseded; the cascade plans remain in `planning/`.
-
-### System configs (schema v2)
-
-v2 system configs carry `"schema_version": 2` and name a board descriptor (`"board": "IWR1843"`,
-from `CPSL_TI_Radar_cpp/config/boards/`) and the firmware it runs (`"firmware": "demo"`, from
-`CPSL_TI_Radar_cpp/config/firmware/`; required, see the key table in `CPSL_TI_Radar_cpp/Readme.md`). The driver rejects a v1 file (no `schema_version`) and
-names the script that converts it. All tracked configs in `CPSL_TI_Radar_cpp/config/system/` are
-already converted. To convert your own:
+**Native** (Linux; needs `git`, `git-lfs`, `g++` 7+, `cmake`, [`uv`](https://docs.astral.sh/uv/)):
 
 ```bash
-uv run tools/migrate_config_v1_to_v2.py my_config.json              # print the v2 JSON, write nothing
-uv run tools/migrate_config_v1_to_v2.py my_configs/ --in-place      # rewrite every v1 *.json in a directory
-uv run tools/migrate_config_v1_to_v2.py my_configs/ --check         # exit 1 if any file is still v1
+git clone --recurse-submodules https://github.com/davidmhunt/CPSL_TI_Radar && cd CPSL_TI_Radar
+git lfs install && git lfs pull
+cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j
+ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
+# GUI in demo mode, no hardware: open http://127.0.0.1:8090/
+RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 8090 \
+    --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin
+# the driver CLI: check a shipped config without a radar
+CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json --validate
 ```
 
-A v2 file without `firmware` (every `config/user/*.json` made before it was required) is refused by the driver; add it with
-`uv run tools/migrate_config_v1_to_v2.py my_config.json --add-firmware --in-place` (`--check` lists files still missing it), or with the
-GUI Radar tab's **Add firmware** button.
+With a board, run `uv run python -m radar_gui` (port 8000) and follow the tutorials; DCA1000 runs also need host setup (`uv run tools/setup/host_setup.py --nic <nic>`, [tutorial 1](docs/tutorials/01_install.md)).
 
-The script is idempotent (v2 files are left alone) and reports any key it cannot map instead of
-converting that file.
+**Docker** (the driver and GUI in one image, no toolchain on the host):
 
-| v1 key | v2 key | Note |
-|---|---|---|
-| `verbose` | `runtime.log_level` | `true` -> `"debug"`, `false` -> `"info"`; optional in v2 |
-| `TI_Radar_Config_Management.TI_Radar_config_path` | `radar_cfg` | same relative path |
-| `CLI_Controller.CLI_port` | `cli.port` | |
-| `CLI_Controller.baud_rate`, `.cmd_timeout_ms` | `board_overrides.cli.baud`, `.cmd_timeout_ms` | default from the board descriptor |
-| `Streamer.serial_streaming.enabled`, `.data_port` | `serial_stream.enabled`, `.port` | section optional when disabled |
-| `Streamer.serial_streaming.baud_rate`, `.timeout_ms` | `board_overrides.data_uart.baud`, `.timeout_ms` | default from the board descriptor |
-| `Streamer.DCA1000_streaming` | `dca1000` | `FPGA_IP` -> `fpga_ip`, `system_IP` -> `host_ip`; `cmd_port`, `data_port` unchanged; section optional when disabled |
-| — | `dca1000.rcvbuf_bytes` | new, default 64 MB (was fixed) |
-| `Streamer.save_to_file` | `output.save_adc_frames` + `output.save_raw_lvds` | the script sets `save_raw_lvds` to `false`: the raw LVDS file is now opt-in |
-| — | `output.dir` | new; output files were always written to the current directory, which is still the default |
-| `Streamer.board_type` | `board` | names a descriptor; the v1 `SDK_version` fallback (2.x -> IWR1443, 3.x -> IWR1843) is applied by the script |
-| `Streamer.SDK_version` | removed | the descriptor carries the SDK |
-| `Processor`, `ROS`, `Listeners` | removed | never read by the driver |
-| — | `runtime.*` | new; `log_level`, `stall_timeout_ms`, `frame_queue_depth`, and the affinity/priority keys `rx_cpu`, `worker_cpu`, `rx_priority`, `worker_priority` (core-15) |
+```bash
+docker compose -f docker/app/compose.yaml build demo
+docker compose -f docker/app/compose.yaml up demo      # http://127.0.0.1:8090/
+```
 
-Behaviour changes that come with v2 configs:
+The `hw` profile for real boards is described in [`docs/docker.md`](docs/docker.md) but not yet verified on a real board.
 
-- **`calibData` is sent on every board, including the IWR1843.** The stock SDK 3.6 demo needs it
-  as part of the "full configuration": without it `sensorStart` fails with `Error -1` and no
-  frames stream. An older flashed IWR1843 image answered `'calibData' is not recognized`; on such
-  a board a config can drop the command with
-  `"board_overrides": {"cfg_dialect": {"skip_commands": ["calibData"]}}`
-  (`cfg_dialect.skip_commands`).
-- The radar `.cfg` is cross-checked against the board when the config loads (16-bit complex ADC,
-  `adcbufCfg` interleave vs the LVDS layout, `lvdsStreamCfg` ADC streaming), and a mismatch stops
-  the driver with a message.
+**Tests:** `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs the whole suite (about 1085 tests, about 1 minute); the C++ tests run through `ctest` as above. None need hardware.
 
-### Command line
+## Documentation
 
-`CPSL_TI_Radar_CPP <system.json>` now requires the config path; the built-in default config is
-gone. Add `--validate` to check a config without hardware: it prints the board, ports, frame
-shape, bytes per frame, `output.dir` and skipped commands, and exits 0 or 1 without opening any
-port or socket. `--frames N` and `--duration S` end a run; `--stats` prints a versioned
-`stats v1` counter line per stream every second (see `CPSL_TI_Radar_cpp/Readme.md`).
+- **Tutorials** ([index](docs/tutorials/README.md)): [1 install](docs/tutorials/01_install.md) · [2 GUI](docs/tutorials/02_first_run_gui.md) · [3 driver CLI](docs/tutorials/03_first_run_driver_cli.md) · [4 recording ADC](docs/tutorials/04_recording_adc.md) · [5 troubleshooting](docs/tutorials/05_troubleshooting.md); then 10 to 14 for changing the driver and for bench validation.
+- [`CPSL_TI_Radar_cpp/Readme.md`](CPSL_TI_Radar_cpp/Readme.md): the driver reference (config keys, flags, library API, host prerequisites).
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the driver works. [`radar_gui/README.md`](radar_gui/README.md): the GUI's API and layout.
+- [`docs/RESULTS.md`](docs/RESULTS.md): measured streaming rates and on-board checks (all numbers live there).
+- Firmware: [`docs/firmware.md`](docs/firmware.md) (build and flash), [`shipped_firmware/README.md`](shipped_firmware/README.md) (prebuilt images).
+- Hardware: [`docs/hardware/cascade_setup.md`](docs/hardware/cascade_setup.md), [`DCA_Programming/README.md`](DCA_Programming/README.md) (reprogram a DCA1000's address to run several radars), [boot-mode diagrams](docs/images/boot_modes/).
+- [`docs/migration_v1_to_v2.md`](docs/migration_v1_to_v2.md): for anyone coming from v1.
 
-### Library
+## Repository map
 
-`Runner` is replaced by `cpsl::radar::Radar` (`RadarConfig::load` → `Radar::open` → `configure` →
-`start` → `next_adc_frame` / `next_point_cloud` → `stop`). Calls return a `Status` instead of
-printing or throwing; messages go to a log sink filtered by `runtime.log_level`. The ADC frame
-layout is unchanged (`[rx][sample][chirp]`, the same nested `std::vector` type). Delivery changed:
-`next_adc_frame` swaps a pooled buffer into your `AdcFrame` (no copy) and hands out every frame in
-order from a queue of `runtime.frame_queue_depth` (default 4; `1` keeps only the newest frame,
-as v1 did); frames dropped from a full queue are counted in `frames_overwritten`. Points are `Point{x,y,z,v,snr_db,noise_db}`, and a
-point cloud is now handed over as soon as its frame has arrived (v1 delivered it one frame period late). Link
-`CPSL_TI_Radar::driver`. [`CPSL_TI_Radar_ROS`](https://github.com/davidmhunt/CPSL_TI_Radar_ROS)
-still uses `Runner` and does not build against v2.0 until it moves to `Radar`.
+| Path | Contents |
+|------|----------|
+| `CPSL_TI_Radar_cpp/` | C++ driver: `Radar` API, DCA1000 and serial streaming, tests, and `config/` (boards, firmware, radar `.cfg`, system JSONs, `user/`) |
+| `radar_gui/` | the web GUI: Python backend plus a no-build `web/` frontend |
+| `firmware_dev/` | opt-in submodule: firmware sources and a Docker build environment (not fetched by the clone) |
+| `shipped_firmware/` | prebuilt firmware images, `<BOARD>/<firmware>/` |
+| `DCA_Programming/` | DCA1000 FPGA network reprogramming |
+| `docker/app/` | image and compose file for the driver and GUI |
+| `tools/` | host setup (`setup/`), bench harness (`bench/`), config migration, GUI screenshot tool |
+| `utilities/` | notebooks for ADC cubes (`process_adc_data`), raw LVDS (`process_raw_lbds_data`) and DCA1000 network debugging (`test_ethernet_traffic`) |
+| `tests/` | pytest suite and fixtures |
+| `docs/` | tutorials, architecture, results, firmware notes, `hardware/`, `images/` (GUI shots via git LFS, boot modes), `archive/` (finished design notes), `research/` |
 
-### Output files
-
-`adc_data.bin` keeps its byte layout (for chirp, rx, sample: int16 real then imaginary; see
-`docs/ARCHITECTURE.md` "Output files") and is written to `output.dir` (the current directory when
-unset), which the driver creates if it does not exist. The raw LVDS file `LVDS_Raw_0.bin` is only written with `output.save_raw_lvds: true`.
-
-## ROS Integration
-
-A companion ROS package for consuming streamed data is available at [CPSL_TI_Radar_ROS](https://github.com/davidmhunt/CPSL_TI_Radar_ROS).
+A companion ROS package for consuming the streams is [CPSL_TI_Radar_ROS](https://github.com/davidmhunt/CPSL_TI_Radar_ROS); it still uses the v1 `Runner` API and does not build against v2.0 yet.

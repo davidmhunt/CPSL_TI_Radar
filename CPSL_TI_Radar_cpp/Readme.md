@@ -270,8 +270,8 @@ To run the cpp code, perform the following:
 The driver reads a **system config** (JSON, schema v2) that names a **board descriptor** and a
 **radar `.cfg`**. The tracked system configs are in [config/system](./config/system/). Loading is
 strict: an unknown key, a wrong type or a repeated key is an error that names the JSON path. A v1
-file (no `"schema_version"`) is rejected with the command that converts it (see the README's
-v1 -> v2 migration section).
+file (no `"schema_version"`) is rejected with the command that converts it (see
+[`docs/migration_v1_to_v2.md`](../docs/migration_v1_to_v2.md)).
 
 The tracked configs are in [`config/`](./config/README.md): system JSONs are named `<BOARD>_<fw>_<purpose>[_<mount>].json` and radar cfgs sit at `radar/<BOARD>/<firmware>/`; that README indexes every file and maps the pre-v2.0 names to the new ones.
 

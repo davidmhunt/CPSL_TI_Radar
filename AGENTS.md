@@ -116,13 +116,16 @@ shared, not private to one session.
 
 | Dir | Contents |
 |-----|----------|
-| `CPSL_TI_Radar_cpp/` | C++ driver (primary): `CLIController`, `SerialStreamer`, DCA1000 streaming, the `Radar` API; configs in `config/radar/` and `config/system/`; `include/json` submodule. Build: `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j` |
+| `CPSL_TI_Radar_cpp/` | C++ driver (primary): `CLIController`, `SerialStreamer`, DCA1000 streaming, the `Radar` API; configs in `config/` (`boards/`, `firmware/`, `radar/<BOARD>/<fw>/`, flat `system/`, gitignored `user/`); `include/json` submodule. Build: `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j` |
+| `radar_gui/` | The v2.0 web GUI: Python backend (`python -m radar_gui`) and a no-build `web/` frontend |
 | `firmware_dev/` | Opt-in submodule (`CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`): firmware sources, Docker build env, download/build/flash scripts — Firmware role's namespace, see `docs/firmware.md` |
-| `shipped_firmware/` | Prebuilt firmware images keyed `<BOARD>/<firmware>/` (`IWR1443/demo/`, `IWR1443/dca1000_raw/` with the `iwr_raw_rosnode` submodule, `legacy/`); its README maps each image to a board and firmware descriptor |
+| `shipped_firmware/` | Prebuilt firmware images, `<BOARD>/<fw>/` (+ `legacy/`); see its `README.md` |
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |
-| `utilities/` | Notebooks for post-processing driver output (ADC cube, raw LVDS, `.cfg`), serial-port and DCA1000 network debugging, and a TI SDK LVDS parser example |
-| `tests/` | pytest suite (`uv run pytest`); C++ unit tests are in `CPSL_TI_Radar_cpp/tests/` and run via `ctest` (see "Running tests" below) |
-| `docs/` | `ARCHITECTURE.md`, `RESULTS.md`, `firmware.md`, `docker.md`; `hardware/` (cascade bring-up), `images/` (GUI and boot-mode figures), `archive/` (historical plans/designs) |
+| `docker/app/` | Image and compose file (profiles `demo`, `hw`) for the driver and GUI; see `docs/docker.md` |
+| `tools/` | `setup/host_setup.py`, `bench/` harness, `migrate_config_v1_to_v2.py`, `gui_shots.py` + `gui_shots_specs/` |
+| `utilities/` | Notebooks for post-processing driver output (`process_adc_data`, `process_raw_lbds_data`) and DCA1000 network debugging (`test_ethernet_traffic`) |
+| `tests/` | pytest suite (`uv run pytest`; fast loop `-m "not slow"`); C++ unit tests are in `CPSL_TI_Radar_cpp/tests/` and run via `ctest` (see "Running tests" below) |
+| `docs/` | `ARCHITECTURE.md`, `RESULTS.md`, `firmware.md`, `docker.md`, `migration_v1_to_v2.md`, `tutorials/`, `hardware/` (cascade setup), `images/` (`gui/` shots and `boot_modes/` diagrams, git LFS), `archive/` (finished design and plan notes), `research/`, `design/`, `references/`, `results/` |
 | `.friday/active/harness/` | Multi-agent harness: core rules, role definitions, per-rule detail docs, the live dashboard (`status.md` + `status_history.md`, unless `.friday/active/harness/status_history.md` points elsewhere), goals and directives (`plans/`), and the Reviewer/Runner working folders (`review/`, `running/`). |
 | `.friday-project/` | Project-owned harness extensions, tracked in this repo: `roles/<role>.md` for each project specialist (linked into `.friday/active/harness/roles/` by `init_harness.py`). Omit if the project has none. |
 | `docs/research/` | The Researcher's memos — tracked project content, not part of the `.friday/` submodule's generated output. |
