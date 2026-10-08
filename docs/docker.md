@@ -18,7 +18,7 @@ Both services use the same image, and each is in a compose profile, so the servi
 docker compose -f docker/app/compose.yaml up demo
 ```
 
-Open `http://127.0.0.1:8090/`. The GUI replays `tests/fixtures/replay/iwr1843_sdk3_20frames.bin` and the Run tab uses `tests/fakes/fake_driver.py` instead of the real driver. The port is published on loopback only. Stop with `docker compose -f docker/app/compose.yaml --profile demo down` (`down` ignores profiled services unless you name the profile; use `--profile hw` for mode (b)).
+Open `http://127.0.0.1:8090/`. The GUI replays `tests/fixtures/replay/iwr1843_sdk3_20frames.bin` and the Radar tab uses `tests/fakes/fake_driver.py` instead of the real driver. The port is published on loopback only. Stop with `docker compose -f docker/app/compose.yaml --profile demo down` (`down` ignores profiled services unless you name the profile; use `--profile hw` for mode (b)).
 
 ## Mode (b): real boards (Linux host only)
 

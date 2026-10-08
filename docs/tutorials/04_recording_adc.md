@@ -66,7 +66,7 @@ Those two shipped configs show what must differ between radars:
 |---------|-----|
 | `cli.port`, `serial_stream.port` | one board each (`/dev/ttyACM0,1` and `/dev/ttyACM2,3` in the example) |
 | `dca1000.fpga_ip`, `cmd_port`, `data_port` | each DCA1000 needs its own address and ports; `host_ip` is your NIC's address |
-| `output.dir` | otherwise both write `adc_data.bin` into the launch folder |
+| `output.dir` | neither shipped config sets it: add your own per radar, or both write `adc_data.bin` into the launch folder |
 
 The DCA1000's network address is programmed into its FPGA: to change it, see [`DCA_Programming/README.md`](../../DCA_Programming/README.md). Pin each radar's two threads to different cores with `runtime.rx_cpu` / `worker_cpu`. USB port numbers can change across reboots; `host_setup.py --udev` gives stable port names ([tutorial 1](01_install.md)).
 

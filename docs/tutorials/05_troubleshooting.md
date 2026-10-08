@@ -13,7 +13,7 @@ In the GUI, the same text is in the run's `driver.log` (Logs tab) and the Radar 
 | `DCA1000 did not answer ...` (`device_error`) | The capture card is unpowered, unplugged, or on another subnet. |
 | `not every config command was acknowledged with 'Done'` (`config_rejected`) | A cfg command got no `Done`: an older IWR1843 image rejects `calibData` (skip it with `board_overrides`); otherwise the firmware does not know the command, or the board is in flashing mode or wrong firmware. |
 | `... can only be configured once per boot: power-cycle the EVM` (`config_rejected`) | Cascade board: power-cycle (12 V off and on) before **every** run. |
-| `no frame for 2 s, stopping` | Configured and started, but no data arrived. DCA1000: check the `.cfg` has `lvdsStreamCfg`, the LVDS cable, and that `--stats` shows `packets` rising. Serial: the data port, `data_uart` baud, and that the firmware matches the board's `tlv_dialect`. |
+| `no frame for 2 s, stopping` (or `no frame for N ms (runtime.stall_timeout_ms), stopping` when that key is set) | Configured and started, but no data arrived. DCA1000: check the `.cfg` has `lvdsStreamCfg`, the LVDS cable, and that `--stats` shows `packets` rising. Serial: the data port, `data_uart` baud, and that the firmware matches the board's `tlv_dialect`. |
 | `sensorStop was not acknowledged` (warning) | The demo answers only after the current frame. Harmless if the exit status is 0. |
 | `could not set SCHED_RR` (warning) | Your config sets `runtime.rx_priority` or `worker_priority` and the process lacks `cap_sys_nice` or an `rtprio` limit. Remove the key (the default 0 needs neither) or grant it (Readme). |
 

@@ -49,6 +49,8 @@ All flags: `uv run python -m radar_gui --help`. This tutorial uses `--port`, `--
 
 ## A real session: IWR1843 + DCA1000
 
+The board steps below (header Start/Stop with an IWR1843 + DCA1000, the serial-only Point cloud Board path, and the cascade Restart) have not yet been confirmed on hardware with this GUI; report any step that differs.
+
 1. Board on the SDK 3.6 demo image (SOP mode 4, see [`docs/images/boot_modes/`](../images/boot_modes/)), DCA1000 powered and cabled, host set up (Devices shows nothing missing).
 2. Configure: board `IWR1843`, firmware `demo`, targets (for example 10 m / 3 m/s / 10 Hz), tick "Stream raw ADC over LVDS". Save as `my_1843_dca` with the by-id CLI and data ports (`ls -l /dev/serial/by-id/`), Serial TLV on, DCA1000 on, Save ADC frames on.
 3. The **Open in Run** button opens it in the Radar tab. **Validate** (expect OK; the DCA1000 line shows 192.168.33.180), then **Start**.
