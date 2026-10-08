@@ -1,6 +1,6 @@
 # Firmware project contract — requirements
 
-**Status:** signed off 2026-10-08 (user)
+**Status:** signed off 2026-10-08 (user); amended 2026-10-08 (user)
 **Owner:** fwstd loop · **Sponsor:** user · **Serves:** firmware standardisation (fwstd-03..08) and the later GUI build/flash/verify directive
 
 Every project in `firmware_dev/projects/` (`ti_stock_demos`, `iwr1843_sar_lvds`,
@@ -87,3 +87,6 @@ Decided 2026-10-08 (user): `--confirm` needs no typed phrase (TTY path keeps it)
 **A7 Dirty and stale**: *dirty* = `git status --porcelain -- projects/<p> fw tools` in `firmware_dev` is non-empty (`build/` is gitignored); the commit is firmware_dev HEAD. *Stale* = an artifact sha256 differs from the record, only legacy `build_info.txt` exists, or `git diff --quiet <commit> HEAD -- projects/<p> fw tools` fails.
 
 ## Amendments
+
+1. 2026-10-08 (user): the descriptor back-reference lives per board entry as `identify.<board>.source = {fw_project, artifact}` (a descriptor such as `demo` covers several boards with different images).
+2. 2026-10-08 (user): `publish` provenance `chirp_cfg` lists every `[test].cfgs` file of the project with its sha256.
