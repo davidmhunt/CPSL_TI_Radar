@@ -13,6 +13,9 @@ import bench_lib as lib  # noqa: E402
 import bench_run  # noqa: E402
 import host_setup  # noqa: E402  (on sys.path via bench_run)
 
+# Slow loop: subprocess / driver / live-server tests; skip with `uv run pytest -m "not slow"`.
+pytestmark = pytest.mark.slow
+
 STRESS_JSON = REPO / "CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json"
 STRESS_CFG = REPO / "CPSL_TI_Radar_cpp/config/radar/IWR1843/demo/stress_test.cfg"
 

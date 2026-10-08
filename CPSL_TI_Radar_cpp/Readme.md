@@ -128,6 +128,8 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
+The Python suite (`uv run pytest`, from the repo root) has a quick loop that skips the subprocess/driver/server tests: `uv run pytest -m "not slow"`.
+
 Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering and the frame queue, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); `test_radar_serial_fake` runs one on a fake serial data port, and `test_uart_parse` checks the serial frame parser on golden and malformed frames (fixtures in `tests/uart_test_frames.hpp`). No test opens a real serial port; `test_cli_stop` and `test_serial_latency_pty` use a pseudo-terminal. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
 
 To run the same suite under AddressSanitizer and UndefinedBehaviorSanitizer (any report fails the test), use the `asan-ubsan` preset from `CPSL_TI_Radar_cpp/` (it builds in `build-asan-ubsan/`):
@@ -190,7 +192,7 @@ To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool 
 
 #### [IWR1443] DCA Streaming
 1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../docs/images/boot_modes/IWR_SOP_modes.png)
-3. Use the Uniflash tool to install the binary located in the [firmware folder](../Firmware/DCA1000_Streaming). Make sure you use the firmware in the IWR_Demos folder if streaming data directly from the IWR
+3. Use the Uniflash tool to install the binary in [`shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode/firmware`](../shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode/firmware) (`xwr14xx_lvds_stream.bin`; see the [shipped_firmware README](../shipped_firmware/README.md)). Make sure you use the firmware in [`shipped_firmware/IWR1443/demo`](../shipped_firmware/IWR1443/demo) if streaming data directly from the IWR
 
 #### [IWR1443] IWR Streaming
 1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../docs/images/boot_modes/IWR_SOP_modes.png)

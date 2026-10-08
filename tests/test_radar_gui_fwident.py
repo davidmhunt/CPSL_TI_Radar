@@ -148,6 +148,7 @@ def test_no_reply_warns_and_continues(tmp_path):
     assert any(s == "configuring" and "firmware not verified" in m for s, m in states)
 
 
+@pytest.mark.slow
 def test_cascade_not_queried(tmp_path):
     brd = AnswerBoard({"version": "Platform : wrong\nDone\n"})
     src, _ = src_for("AWR2243_CASCADE", brd, tmp_path)

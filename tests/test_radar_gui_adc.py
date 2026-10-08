@@ -216,6 +216,7 @@ def test_options_rerender_last_frame(geom):
     assert h["profile_peak_bin"] == 60 and h["diag"]["chirp"] == 5
 
 
+@pytest.mark.slow
 def test_timing_bench_shape(geom, record_property):
     """Median processing time for the bench 4x128x256 cube. Default: gross-regression guard (< 250 ms), tolerant of host
     load (idle ~35-39 ms, loaded 54-145 ms). The gui-07 Verify bar (< 50 ms) is opt-in on an idle host:

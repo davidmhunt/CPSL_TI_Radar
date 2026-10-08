@@ -15,6 +15,7 @@ pytestmark = pytest.mark.skipif(not (TOOLS / "sar_synth.py").is_file() or not (T
                                 reason="firmware_dev (iwr1843_sar_lvds tools) not checked out")
 
 
+@pytest.mark.slow
 def test_fixtures_match_the_firmware_tools(tmp_path):
     p = subprocess.run([sys.executable, "-I", str(FIX / "make_fixtures.py"), str(tmp_path)], capture_output=True,
                        text=True, timeout=120)

@@ -119,6 +119,7 @@ def test_save_without_dca_refused(env):
 
 
 # ---- caps gate the optional keys ----------------------------------------------------------------------------
+@pytest.mark.slow
 def test_caps_new_build_vs_rebuild_1(env, monkeypatch):
     make, cfg, _ = env
     with make() as c:

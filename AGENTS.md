@@ -118,7 +118,7 @@ shared, not private to one session.
 |-----|----------|
 | `CPSL_TI_Radar_cpp/` | C++ driver (primary): `CLIController`, `SerialStreamer`, DCA1000 streaming, the `Radar` API; configs in `config/radar/` and `config/system/`; `include/json` submodule. Build: `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j` |
 | `firmware_dev/` | Opt-in submodule (`CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`): firmware sources, Docker build env, download/build/flash scripts — Firmware role's namespace, see `docs/firmware.md` |
-| `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/` + `iwr_raw_rosnode` submodule); to be reorganized into the v2.0 shipped-firmware directory |
+| `shipped_firmware/` | Prebuilt firmware images keyed `<BOARD>/<firmware>/` (`IWR1443/demo/`, `IWR1443/dca1000_raw/` with the `iwr_raw_rosnode` submodule, `legacy/`); its README maps each image to a board and firmware descriptor |
 | `DCA_Programming/` | DCA1000 FPGA network reprogramming: docs and source |
 | `utilities/` | Notebooks for post-processing driver output (ADC cube, raw LVDS, `.cfg`), serial-port and DCA1000 network debugging, and a TI SDK LVDS parser example |
 | `tests/` | pytest suite (`uv run pytest`); C++ unit tests are in `CPSL_TI_Radar_cpp/tests/` and run via `ctest` (see "Running tests" below) |
@@ -167,6 +167,7 @@ are read only when a rule's trigger matches your next action.
   Add a test as `CPSL_TI_Radar_cpp/tests/test_<name>.cpp` plus an `add_driver_test` line in `tests/CMakeLists.txt`; details in `CPSL_TI_Radar_cpp/Readme.md`. Tests pin current behaviour; a bug found is recorded with `KNOWN_BUG(...)`, not fixed in the test pass.
 - C++ replay benchmark (not part of the plain `ctest` run): build with `-DCMAKE_BUILD_TYPE=Release`, then `ctest --test-dir <build> -C bench -L bench --verbose` (`bench_pipeline`; see `CPSL_TI_Radar_cpp/Readme.md`).
 - Python: `uv run pytest` (`pyproject.toml` disables ROS's `launch_testing`/`launch_ros` plugins, so it passes with ROS sourced or not).
+  Quick loop: `uv run pytest -m "not slow"` skips the subprocess/driver/server tests tagged `slow`.
 
 ## Command Execution & Approval Policy
 

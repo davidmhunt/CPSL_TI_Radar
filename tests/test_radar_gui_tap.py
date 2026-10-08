@@ -13,6 +13,9 @@ from radar_gui import ports, tap
 from radar_gui.app import create_app
 from radar_gui.sources import MockSource
 
+# Slow loop: subprocess / driver / live-server tests; skip with `uv run pytest -m "not slow"`.
+pytestmark = pytest.mark.slow
+
 FAKE = str(Path(__file__).parent / "fakes" / "fake_driver.py")
 
 
