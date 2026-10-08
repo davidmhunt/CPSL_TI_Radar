@@ -30,14 +30,14 @@ git clone --recurse-submodules https://github.com/davidmhunt/CPSL_TI_Radar && cd
 git lfs install && git lfs pull
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
-# GUI in demo mode, no hardware: open http://127.0.0.1:8090/
+# GUI in demo mode, no hardware (a stand-in driver, a recorded capture): open http://127.0.0.1:8090/
 RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 8090 \
     --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin
 # the driver CLI: check a shipped config without a radar
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json --validate
 ```
 
-With a board, run `uv run python -m radar_gui` (port 8000) and follow the tutorials; DCA1000 runs also need host setup (`uv run tools/setup/host_setup.py --nic <nic>`, [tutorial 1](docs/tutorials/01_install.md)).
+With a board, flash the right firmware ([tutorial 1](docs/tutorials/01_install.md)), run `uv run python -m radar_gui` (port 8000) and follow the tutorials; DCA1000 runs also need host setup (`uv run tools/setup/host_setup.py --nic <nic>`, [tutorial 1](docs/tutorials/01_install.md)).
 
 **Docker** (the driver and GUI in one image, no toolchain on the host):
 
@@ -48,11 +48,11 @@ docker compose -f docker/app/compose.yaml up demo      # http://127.0.0.1:8090/
 
 The `hw` profile for real boards is described in [`docs/docker.md`](docs/docker.md) but not yet verified on a real board.
 
-**Tests:** `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs the whole suite (about 1085 tests, about 1 minute); the C++ tests run through `ctest` as above. None need hardware.
+**Tests:** `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs the whole suite (about a minute); the C++ tests run through `ctest` as above. None need hardware.
 
 ## Documentation
 
-- **Tutorials** ([index](docs/tutorials/README.md)): [1 install](docs/tutorials/01_install.md) · [2 GUI](docs/tutorials/02_first_run_gui.md) · [3 driver CLI](docs/tutorials/03_first_run_driver_cli.md) · [4 recording ADC](docs/tutorials/04_recording_adc.md) · [5 troubleshooting](docs/tutorials/05_troubleshooting.md); then 10 to 14 for changing the driver and for bench validation.
+- **Tutorials** ([index](docs/tutorials/README.md)): [1 install](docs/tutorials/01_install.md) · [2 GUI](docs/tutorials/02_first_run_gui.md) · [3 driver CLI](docs/tutorials/03_first_run_driver_cli.md) · [4 recording ADC](docs/tutorials/04_recording_adc.md) · [5 troubleshooting](docs/tutorials/05_troubleshooting.md); then 10 to 14 for changing the driver and for bench validation. New to the jargon? See the [terms list](docs/tutorials/README.md#terms).
 - [`CPSL_TI_Radar_cpp/Readme.md`](CPSL_TI_Radar_cpp/Readme.md): the driver reference (config keys, flags, library API, host prerequisites).
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the driver works. [`radar_gui/README.md`](radar_gui/README.md): the GUI's API and layout.
 - [`docs/RESULTS.md`](docs/RESULTS.md): measured streaming rates and on-board checks (all numbers live there).

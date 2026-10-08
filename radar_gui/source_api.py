@@ -147,7 +147,7 @@ def make_router(hub, user_dir=None, serial_factory=None, run_root=None) -> APIRo
 
     def refuse_while_following():
         if hub.following_run:
-            raise HTTPException(409, "Live is following a driver run: stop it in the Run tab first")
+            raise HTTPException(409, "Point cloud is following a driver run: stop it in the Radar tab first")
 
     @r.post("/api/source")
     async def set_source(req: SourceReq):

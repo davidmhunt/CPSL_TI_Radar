@@ -4,16 +4,19 @@ Needs a board running the demo firmware with a DCA1000 cabled, and the host set 
 
 ## Capture from the CLI
 
-Copy the DCA1000 example config into `config/user/` and set its ports as in [tutorial 3](03_first_run_driver_cli.md); the serial demo config of tutorial 3 writes no `adc_data.bin`. Run from a scratch folder under `runs/` (gitignored), because with no `output.dir` the file goes to the launch folder:
+Copy the DCA1000 example config into `config/user/`, then edit the copy ([tutorial 3](03_first_run_driver_cli.md) shows how to find ports; the serial demo config there writes no `adc_data.bin`):
 
 ```bash
 cp CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json CPSL_TI_Radar_cpp/config/user/my_1843_dca.json
-mkdir -p runs/cli && cd runs/cli
-../../CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP ../../CPSL_TI_Radar_cpp/config/user/my_1843_dca.json --frames 20 --stats
-cd ../..
 ```
 
-N = 20 is below the cfg's `numFrames` 30, so the driver ends the run, not the radar. To choose the folder, add `"dir": "..."` to the config's `output` block (relative to the JSON file, created for you).
+In `my_1843_dca.json` set `cli.port`; leave `serial_stream.enabled` false; check `dca1000.host_ip` is your NIC's address (`192.168.33.30`) and `dca1000.fpga_ip` your DCA1000's (`192.168.33.180`); and add an output folder so captures stay out of the repo root, `"output": {"save_adc_frames": true, "save_raw_lvds": false, "dir": "../../../runs/cli"}` (relative to the JSON file, created for you; unset, the file lands in the launch folder). Then run, with `--stats` so you can watch for drops:
+
+```bash
+CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/user/my_1843_dca.json --frames 20 --stats
+```
+
+N = 20 is below the cfg's `numFrames` 30, so the driver ends the run, not the radar.
 
 The file has no header: per frame, for chirp, for rx, for sample, an int16 real part then an int16 imaginary part, little-endian. Lost packets stay as zeros, so after a clean stop the size is a whole multiple of `bytes/frame` (printed by `--validate`; 504000 for this config). Anything else means a killed process.
 
@@ -67,4 +70,4 @@ Those two shipped configs show what must differ between radars:
 
 The DCA1000's network address is programmed into its FPGA: to change it, see [`DCA_Programming/README.md`](../../DCA_Programming/README.md). Pin each radar's two threads to different cores with `runtime.rx_cpu` / `worker_cpu`. USB port numbers can change across reboots; `host_setup.py --udev` gives stable port names ([tutorial 1](01_install.md)).
 
-If packets drop, go to [tutorial 5](05_troubleshooting.md).
+If packets drop, run again with `--stats` and read the counters with [tutorial 5](05_troubleshooting.md).

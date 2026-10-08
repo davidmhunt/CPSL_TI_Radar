@@ -34,7 +34,13 @@ Enable one or both; at least one is required. Which `Point` fields are filled de
 
 ## Run
 
-Set `cli.port` (and `serial_stream.port`) in your copy to your board's ports: `ls /dev/serial/by-id` and the GUI Devices tab list them, and the lower-numbered `/dev/ttyACM*` is the CLI. Power the board in functional mode (SOP switches: [`14_bench_validation.md`](14_bench_validation.md) section 2), then:
+Make your copy and set the ports. `ls /dev/serial/by-id` and the GUI Devices tab list them; the lower-numbered `/dev/ttyACM*` is the CLI port.
+
+```bash
+cp CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json CPSL_TI_Radar_cpp/config/user/my_1843.json
+```
+
+Edit `my_1843.json`: `cli.port` (the CLI port) and `serial_stream.port` (the data port). Check with `--validate` (the same command as above on your copy). Power the board in functional mode (SOP switches: [`14_bench_validation.md`](14_bench_validation.md) section 2), then:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/user/my_1843.json --frames 100 --stats

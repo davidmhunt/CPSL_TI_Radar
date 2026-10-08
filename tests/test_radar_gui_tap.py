@@ -106,7 +106,7 @@ def test_source_card_read_only_while_following(env):
         # the fake installs its SIGINT handler before its first tap frame; an earlier SIGINT kills it (died, not ended)
         wait(lambda: src(c).get("frames_in", 0) > 0, what="driver is streaming (handler installed)")
         r = c.post("/api/source", json={"kind": "mock"})
-        assert r.status_code == 409 and "Run tab" in r.json()["detail"]
+        assert r.status_code == 409 and "Radar tab" in r.json()["detail"]
         assert c.post("/api/source/stop").status_code == 409
         c.post("/api/driver/stop")
         wait(lambda: src(c)["source_state"] == "ended", what="ended after stop")
@@ -186,7 +186,7 @@ def test_run_refused_while_serial_source_holds_the_board(env):
     with make() as c:
         r = c.post("/api/driver/start", json={"config": cfgp(user)})
         assert r.status_code == 409 and "Live serial source holds the radar" in r.json()["detail"]
-        assert "stop it in the Live tab" in r.json()["detail"]
+        assert "stop it in the Point cloud tab" in r.json()["detail"]
         assert src(c)["kind"] == "mock"
 
 

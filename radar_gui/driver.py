@@ -241,7 +241,7 @@ class DriverManager:
         return self._caps_cache[key]
 
     def caps(self) -> dict:
-        """What the configured binary can do (False for a missing binary): the Run tab greys options out with it.
+        """What the configured binary can do (False for a missing binary): the Radar tab greys options out with it.
         `setup` is this backend's own capability (start accepts a quick setup / overrides), not the binary's."""
         try:
             b = driver_bin(self.bin_override)
@@ -289,7 +289,7 @@ class DriverManager:
                     ports.append(eff["serial_stream"].get("port"))
                 ports = [p for p in ports if p]
                 if not self.lock.acquire("driver"):
-                    raise DriverError(f"Live serial source holds the radar{self.owner_detail()}; stop it in the Live tab"
+                    raise DriverError(f"Live serial source holds the radar{self.owner_detail()}; stop it in the Point cloud tab"
                                       if self.lock.owner == "serial source" else f"radar in use by {self.lock.owner}")
                 try:
                     if (why := check_ports(ports)):

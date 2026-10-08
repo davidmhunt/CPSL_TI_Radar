@@ -12,7 +12,7 @@ function setPorts(id, cli, data, where) {
 }
 function renderPorts(j) {
   const box = $('setPorts'); box.innerHTML = '';
-  if (!j) { box.append(el('div', 'runmsg bad', 'Could not read /api/settings/ports (this backend is older than the Settings tab).')); return; }
+  if (!j) { box.append(el('div', 'runmsg bad', 'Could not read /api/settings/ports (this backend is older than the Devices tab).')); return; }
   if (!j.boards.length) { box.append(el('div', 'runmsg warn', j.present ? `No serial devices in ${j.by_id_dir}: is a radar plugged in?` : `${j.by_id_dir} does not exist: no USB serial devices on this host.`)); return; }
   for (const b of j.boards) {
     const d = el('div', 'setboard'); d.append(el('h3', '', `${b.label} · serial ${b.serial}`));
@@ -36,7 +36,7 @@ function renderPorts(j) {
 }
 function renderDca(j, ok) {
   const box = $('setDca'); box.innerHTML = '';
-  if (!j || !ok) { box.append(el('div', 'runmsg bad', (j && typeof j.detail === 'string') ? j.detail : 'DCA check unavailable (backend older than the Settings tab).')); return; }
+  if (!j || !ok) { box.append(el('div', 'runmsg bad', (j && typeof j.detail === 'string') ? j.detail : 'DCA check unavailable (backend older than the Devices tab).')); return; }
   const sel = $('setNic'), keep = sel.value; sel.innerHTML = ''; sel.append(new Option('(auto: sole candidate)', ''));
   for (const n of j.candidates || []) sel.append(new Option(n, n));
   sel.value = [...sel.options].some(o => o.value === keep) ? keep : '';

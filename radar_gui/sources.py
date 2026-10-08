@@ -29,10 +29,10 @@ class Source:
 
 
 class NoSource(Source):
-    """No source yet (the default since gui-36 Step 3b): the Live tab waits for Serial, Replay or a driver run."""
+    """No source yet (the default since gui-36 Step 3b): the Point cloud tab waits for Serial, Replay or a driver run."""
     name = "none"
     drives_status = True
-    MSG = "pick Serial or Replay, or start a driver run in the Run tab"
+    MSG = "pick Serial or Replay, or start a driver run in the Radar tab"
 
     def __init__(self):
         self.on_status = lambda s, m: None
@@ -115,7 +115,7 @@ class ReplaySource(Source):
 
 class DriverSource(Source):
     """Follows a GUI-started driver run (gui-36): the point cloud comes off the run's tap pipe (radar_gui/tap.py), so the
-    Live tab shows the board the driver owns without a second connection. Holds no radar lock (the run does). `state`:
+    Point cloud tab shows the board the driver owns without a second connection. Holds no radar lock (the run does). `state`:
     running -> ended | died, decided from the DriverManager status once the pipe hits EOF. Never falls back to a serial
     source by itself. `tapped` False = the binary has no `--tap-fd` (nothing to read; status says to rebuild)."""
     name = "driver"

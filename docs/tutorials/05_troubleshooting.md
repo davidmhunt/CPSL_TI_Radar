@@ -19,7 +19,7 @@ In the GUI, the same text is in the run's `driver.log` (Logs tab) and the Radar 
 
 ## Reading `--stats`
 
-One line per stream per second, cumulative since start, and one more after the stop:
+One line per stream per second (needs `--stats`), cumulative since start, and one more after the stop. What matters is **growth between lines**: a counter that is non-zero but constant is old news; one that keeps rising is happening now.
 
 ```
 stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n> duplicate=<n> incomplete=<n> skipped=<n> overrun=<n> overwritten=<n> stalls=<n> rcvbuf=<bytes> kernel_drops=<n> ring_full=<n> implausible=<n> resyncs=<n>
@@ -31,7 +31,7 @@ A healthy DCA run has `dropped`, `kernel_drops`, `resyncs` and `implausible` at 
 | You see | Meaning | Fix |
 |---|---|---|
 | `kernel_drops` > 0 | The socket buffer overflowed: the consumer or worker stalled longer than `rcvbuf` holds. `ring_full` > 0 says the driver's own ring filled first. | Check `rcvbuf=` (134217728 expected; a low `rmem_max` lowers it), CPU load, a slow consumer; pin the threads. |
-| `dropped` > 0, `kernel_drops` = 0 | Lost before the host socket: NIC, cable or the DCA1000 (no retransmission). `drop_events` counts the bursts, `incomplete` the frames zero-filled. | `ethtool -S <dca-nic>` for rx drops; check link speed and cable. |
+| `dropped` > 0, `kernel_drops` = 0 | Lost before the host socket: NIC, cable or the DCA1000 (no retransmission). `drop_events` counts the bursts, `incomplete` the frames zero-filled. | `ethtool -S <dca-nic>` for rx drops (`<dca-nic>` is the interface from `uv run tools/setup/host_setup.py`, or `ip -br addr` and look for `192.168.33.30`); check link speed and cable. |
 | `resyncs` > 0 (`implausible` alone is harmless) | The DCA1000 restarted its byte count mid-capture (power glitch, a second tool sending `recordStart`), or sent a corrupt header. | The frames open at that moment are dropped (`skipped`); if a late burst triggered it, `dropped` jumps by the sequence distance. The stream recovers by itself; find what restarted the card. |
 | `overwritten` > 0 | Your consumer was slower than the radar: the oldest frame in a full queue was dropped (still in `adc_data.bin`). | See [tutorial 12](12_consume_frames.md). |
 | serial `missed` > 0 | Gaps in the demo's frame counter. | Check the data cable and baud. |

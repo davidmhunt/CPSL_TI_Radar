@@ -50,7 +50,7 @@ MAX_PROFILE = 1024
 MAX_SERIES = 512
 LAYOUT = "rx,sample,chirp"
 
-MSG_NO_RUN = "ADC views need a driver run with the DCA1000 (Run tab)"
+MSG_NO_RUN = "ADC views need a driver run with the DCA1000 (Radar tab)"
 MSG_NO_TAP = "driver has no live tap / no ADC tap (rebuild the driver)"
 MSG_NO_DCA = "this run has no DCA1000 stream"
 MSG_OFF = "ADC views off for this run"

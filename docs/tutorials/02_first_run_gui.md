@@ -7,17 +7,17 @@ The radar GUI (`radar_gui/`) is one process: a Python backend plus a no-build we
 Demo mode, no hardware (replays a recorded IWR1843 capture and uses a fake driver):
 
 ```bash
-RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui \
-    --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin --port 8090
+RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 8090 \
+    --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin
 ```
 
-Open `http://127.0.0.1:8090/`. With a board, drop the demo flags:
+`RADAR_GUI_DRIVER` points the Radar tab at a stand-in driver, so no board or built driver is needed. Open `http://127.0.0.1:8090/` (8090 is the port the Docker demo uses; a real run uses the default 8000). With a board, drop the demo settings:
 
 ```bash
 uv run python -m radar_gui               # http://127.0.0.1:8000/; the Radar tab runs CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP
 ```
 
-Other flags: `--port N`, `--driver-bin PATH`, `--tailscale` (also listen on the tailnet IP). The GUI has no authentication: keep it on loopback or behind Tailscale ACLs, and never `tailscale funnel`.
+All flags: `uv run python -m radar_gui --help`. This tutorial uses `--port`, `--source`, `--file`. The GUI has no authentication: keep it on loopback, or reach it over Tailscale (`--tailscale`) with ACLs, and never `tailscale funnel`.
 
 ## The tabs
 

@@ -15,12 +15,24 @@ cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-- The configure step prints `Build type: Release` (the default); `ctest` (about 20 s) must end with `100% tests passed`. It reads the repo-root `tests/fixtures/`, so run it from a full checkout.
+- The configure step prints `Build type: Release` (the default); `ctest` (a short run) must end with `100% tests passed`. It reads the repo-root `tests/fixtures/`, so run it from a full checkout.
 - If the build cannot find the JSON library, run `git submodule update --init CPSL_TI_Radar_cpp/include/json`.
 - `firmware_dev/` is an opt-in submodule and is not fetched by the clone. You only need it to build firmware ([`docs/firmware.md`](../firmware.md)).
-- Check the Python side: `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs everything (about 1085 tests, about 1 minute). Neither needs hardware.
+- Check the Python side: `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs everything (about a minute). Neither needs hardware.
 
 Prefer a container? [`docs/docker.md`](../docker.md) builds the driver and GUI into one image: `docker compose -f docker/app/compose.yaml build demo`, then `up demo` serves a hardware-free demo on `http://127.0.0.1:8090/`. Its `hw` profile (real boards) is built to the design in that page but is **not yet verified on a real board**.
+
+## Board firmware
+
+The board must run the image that matches the `"firmware"` key of the config you use (tutorial 3), or the run fails or shows nothing.
+
+| Board | Image | Where |
+|---|---|---|
+| IWR1443 | `demo` (serial) or `dca1000_raw` (DCA1000) | prebuilt in [`shipped_firmware/`](../../shipped_firmware/README.md) |
+| IWR1843, IWR6843, IWR6843ODS | TI SDK 3.6 mmWave demo (`demo`); `iwr1843_sar_lvds` for SAR | built from `firmware_dev/` ([`docs/firmware.md`](../firmware.md)) |
+| AWR2243 cascade | `cascade_ddm` | [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) |
+
+Flash with TI UniFlash with the board in flashing mode, then return it to functional mode (switch diagrams: [`docs/images/boot_modes/`](../images/boot_modes/)). Steps: driver Readme, [Flash the correct firmware](../../CPSL_TI_Radar_cpp/Readme.md#2flash-the-correct-firmware-onto-the-device). Many boards already carry the demo, so you may skip this and see tutorial 5 if a run fails.
 
 ## Prepare the host (DCA1000 and serial)
 
@@ -32,15 +44,16 @@ Serial-only runs need just the first row. DCA1000 runs need all three.
 | DCA1000 NIC at `192.168.33.30/24` | the DCA1000 FPGA is `192.168.33.180` | static address on the wired NIC |
 | `net.core.rmem_max` >= `dca1000.rcvbuf_bytes` | the kernel caps the socket buffer at `rmem_max` | `sudo sysctl -w net.core.rmem_max=134217728` |
 
-One tool checks all three and applies the fixes. `<dca-nic>` is the wired interface cabled to the DCA1000 (run without `--nic` to list them):
+The `Fix` column is the manual route. `host_setup.py` checks all three and applies the same fixes for you, so use either, not both. First run it without `--nic`: it checks everything else and lists the wired interfaces. `<dca-nic>` is the one cabled to the DCA1000 (it is never auto-picked):
 
 ```bash
+uv run tools/setup/host_setup.py                                    # list candidate NICs, check the rest
 uv run tools/setup/host_setup.py --nic <dca-nic>                    # report: OK / MISSING / WARN
 uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # show the exact commands
 uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (it calls sudo itself)
 ```
 
-Do not put `sudo` in front of it. Add `--udev` to also write stable `/dev/radar/<serial>-cli` and `-data` port names.
+`--apply` also sets the `192.168.33.30/24` address: it adds it to the NIC's NetworkManager profile (keeping the other addresses), and prints the manual `nmcli` command if the NIC is not NetworkManager-managed. Do not put `sudo` in front of the tool; it calls `sudo` itself, one confirmation per fix. Add `--udev` to also write stable `/dev/radar/<serial>-cli` and `-data` port names.
 
 On a loaded host, pin the driver's two threads to cores your own pipeline does not use with `runtime.rx_cpu` and `runtime.worker_cpu` (driver Readme, "Choosing CPUs").
 

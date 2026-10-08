@@ -28,7 +28,7 @@ function header(m) {
     $('sFrame').textContent = m.frame; $('sPts').textContent = m.pts.length; $('sRate').textContent = m.rate.toFixed(1) + ' Hz';
   }
   $('sFrame').previousElementSibling.textContent = d ? 'Driver run' : 'Frame';
-  $('sFrame').parentElement.title = d ? 'Driver run in progress: frames and rate are from the Run tab, not the Live source' : '';
+  $('sFrame').parentElement.title = d ? 'Driver run in progress: frames and rate are from the Radar tab, not the Point cloud source' : '';
 }
 function onMessage(m) {
   if (m.type === 'status') setStatus(m.state, m.msg);
