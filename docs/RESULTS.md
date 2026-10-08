@@ -176,3 +176,47 @@ Bench session 2026-10-07 (host `cpsl-gmk-6`, Release driver sha256 `f34182371d0b
 - **"No points" during cascade driver runs was display-only.** During a driver run the GUI did not display driver point clouds at all (header Points showed "-"); the replay fixture shows the cascade capture does contain points. The live tap (gui-36, `41bc977`) is now bench-verified **qualitatively**: Live auto-followed the IWR1843 + DCA1000 run and the capture holds exact whole frames. No final dropped / kernel-drop / tap counters were recorded for that run (the GUI keeps the driver log in memory only and the user did not quote them), so the tap's `sent` / `skipped` counts and zero-drop behaviour under tapping are not established. Live following of a cascade driver run was not separately reported.
 - **Cascade firmware check is off.** The Source card shows "cascade_ddm (not checked)" because the cascade identify probe is not yet safe; it stays off until gui-33 Step 7. The IWR1843 firmware check (gui-33 Step 1, `272e017`) showed "demo" in B1.
 - **Not run:** a 60 s soak of A1/A3/B1 (shorter runs were used), a bench check of the ADC tab itself beyond the two-frame fixture analysis above, the optional 384-chirp cascade check, and any reflector-based measurement. The B1/B2 "points visible" judgements are user observations; the Log has no screenshot paths for them.
+
+## Firmware key, driver limits and identity check (gui-04, gui-33), 2026-10-08
+
+Closed by the Reviewer at `ced49f7` (trackers #70 and #75). Values are read from the gui-04, gui-33, gui-37 and core-24 directive Logs (`.friday/active/harness/plans/directives/`) and the run directories named below under `runs/gui/` (gitignored, not in the repo).
+
+### What the driver now enforces
+
+- **Mandatory `firmware` key** in every system JSON (schema version stays 2). A file without it is refused, naming the key, the board's firmware list and the fix; `tools/migrate_config_v1_to_v2.py --add-firmware [--in-place|--check]` adds it (inferred from the board). All 40 shipped `config/system/*.json` carry it. A firmware the board does not list, or `IWR1843` + `iwr1843_sar_lvds` (needs board `IWR1843_SAR`), is an error.
+- **Error-level limit checks** (gui-04 Step 3b), read from `config/firmware/<fw>.json` `limits.<board>` and `config/limits/host.json`, with the same rule `code` as the GUI validator (`radar_gui/cfg/validate.py`): TX/RX counts, band, slope, sample rate, chirp cycle, loops, frame period, ADC buffer, L3 cube, LVDS rate, required/forbidden commands, and others. `--validate --json` prints one JSON object (`ok`, `errors`, `warnings`, `notes`, `frame`, a `metrics` subset), exit 0 or 1. **GUI-only exclusions:** the MIMO / chirp-pattern rules (`subframes_unsupported`, `chirps_span_profiles`, `bpm_unsupported`, `tx_pattern_invalid`, `tx_not_in_channelcfg`), `lvds_fmt_unsupported` and the `cfar_*` rules are not in the driver, so the GUI may reject a config the driver accepts.
+- **Identity probe** (gui-33): before any cfg is sent, `Radar::configure` queries the board (`version`, and `sarStats` to tell demo from SAR) and compares the reply with the named firmware, per `runtime.firmware_check`: `auto` (default; a mismatch is fatal, nothing is sent, status `firmware_mismatch` with a flash hint), `warn` (mismatch is a warning), `off` (nothing sent). No reply is a warning and the run continues; a once-per-power-up board without `once_safe` (the cascade) is skipped. `--validate` never opens a port.
+
+### Test evidence
+
+| Check | Result | Source |
+|---|---|---|
+| ctest | 27/27 passed at `ced49f7`, driver sha256 `8f6d611d...ab922` | Reviewer close-out, gui-04 Log |
+| pytest | 1086 passed, 0 skipped (parity test ran) | same |
+| Driver vs GUI validator parity (`tests/test_validate_parity.py`) | `ok` and error-code sets equal on all 40 shipped system configs and the 33 seeded-bad cases (`tests/fixtures/parity/`), excluding the GUI-only codes above | gui-04 Log, Steps 3b and 4 |
+| Missing key | Copy of a shipped JSON without `firmware` -> exit 1, message names the key, `Board AWR2243_CASCADE supports: cascade_ddm`, and the migration command | Reviewer, gui-04 Log |
+| Migration check | `--add-firmware --check` on `config/system`: nothing missing | Rebuild 2, gui-04 Log |
+
+### Bench evidence (IWR1843, stock SDK 3.6 demo, unattended Runner)
+
+| Run | What was run | Recorded result |
+|---|---|---|
+| `runs/gui/20261008T021409Z_overnight_tlv/` | Driver, 30 s serial TLV, identity `auto` | `firmware: match expected=demo found=platform=xWR18xx sdk=03.06.02.00 device=IWR18xx non-secure ES 02.00`; 299 frames, 0 missed, ~10 Hz; `serial_data.bin` 150048 B replays to 299 frames, 16-20 points each (mean 18.0) |
+| `runs/gui/20261008T021450Z_overnight_mismatch/` | Shipped SAR system JSON copy (expects `iwr1843_sar_lvds`) against the demo image | Exit 1 after only the `version` and `sarStats` queries; `firmware: mismatch expected=iwr1843_sar_lvds ...`; no cfg line sent. Board fine afterwards (`..._overnight_tlv_after/`, 10 s, match, ~98 frames) |
+| `runs/gui/20261008T021530Z_IWR1843_demo_tlv_default/` (GUI `runs/gui/20261008T021516Z_overnight_gui/`) | GUI-started 20 s run, **before** the fix | 202 frames but missed = 4294967196: a backward frame-number jump (100 to 1; the board counter restarted after `sensorStart`, stale bytes from the previous run at port open) was counted as a u32 wrap |
+| `runs/gui/20261008T025223Z_IWR1843_demo_tlv_default/`, `runs/gui/20261008T025240Z_IWR1843_demo_tlv_default/` | Two back-to-back GUI-started 15 s runs at `ced49f7` (fix `a638392`: a backward jump is a restart, 0 missed; stale input flushed at init) | Both exit 0, 151 frames each, `serial.missed` 0, no "jumped"/"restart" lines, `firmware_check` verdict `match`; `serial_data.bin` 72680 and 71336 B |
+
+Context line only (core-24 Rebuild 2b, replay benchmark `ctest -C bench -L bench` at `ced49f7`, median ns/byte): converter 0.187, `drv_clean` 0.303, `drv_drop_1pct` 0.303, `drv_save` 0.608. This is a software replay benchmark, not a hardware streaming rate, and it is not an A/B of this milestone.
+
+### Interpretation
+
+The driver and the GUI validator now agree on every error code they share, on the shipped configs and on the seeded-bad corpus, and a wrong image on the IWR1843 is caught before any cfg is sent. The backward-jump counter bug was real (one GUI-started run reported 4294967196 missed) and did not recur in the two runs after the fix. The same bug was not seen in the direct driver runs, so it appears tied to a run starting right after another on the same port.
+
+### Honest caveats
+
+- The bench runs were **unattended** (Runner overnight), not a human at the bench, and each is one run. The two post-fix runs are a pair, not a statistical sample.
+- Only the **IWR1843 demo** identity is bench-recorded. `iwr1843_sar_lvds`, IWR6843/ODS and IWR1443 entries are derived from firmware source. The cascade `once_safe` stays **false** (its version-reply capture, gui-33 Step 7, was not done), so the cascade check is skipped.
+- The **DCA1000 was not reachable** (192.168.33.180 did not answer ping and the board ran the stock demo without LVDS), so there was no ADC run in this session.
+- The GUI Live source (gui-33 Step 6c) was accepted through the GUI-backend run (it drives the same C++ driver), not as a separate serial-source session.
+- **core-24 dataFmt 2** (`adc_sar_meta`) is verified on synthetic captures only (`tests/data/sar_fmt2/`, golden compare against `sar_parse`); the core-23 SAR bench has not run.
+- The driver checks error-level rules only; warnings stay in the GUI (user ruling, 2026-10-07).
