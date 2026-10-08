@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # CPSL TI Radar: C++ driver + web GUI. Build from the repo root:
-#   docker compose -f docker/app/compose.yaml build
+#   docker compose -f docker/app/compose.yaml build demo   (both services share the image; each is profiled, so name one)
 # Separate from firmware_dev's build image and from the harness dev container.
 
 ARG UV_VERSION=0.12.23

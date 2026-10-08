@@ -7,10 +7,10 @@ One image (`cpsl-ti-radar:dev`) holds the C++ driver (Release), the web GUI and 
 From the repo root:
 
 ```
-docker compose -f docker/app/compose.yaml build
+docker compose -f docker/app/compose.yaml build demo
 ```
 
-The build compiles the driver and runs `ctest` inside the image; a failing test fails the build. The host `build/`, `config/user/` and `runs/` never enter the image.
+Both services use the same image, and each is in a compose profile, so the service is named (a bare `build` says "No services to build"). The build compiles the driver and runs `ctest` inside the image; a failing test fails the build. The host `build/`, `config/user/` and `runs/` never enter the image.
 
 ## Mode (a): demo, no hardware
 
@@ -25,6 +25,7 @@ Open `http://127.0.0.1:8090/`. The GUI replays `tests/fixtures/replay/iwr1843_sd
 ```
 export HOST_UID=$(id -u) HOST_GID=$(id -g) DIALOUT_GID=$(getent group dialout | cut -d: -f3)
 export RADAR_CLI=/dev/ttyACM0 RADAR_DATA=/dev/ttyACM1   # your boards' ports
+mkdir -p runs CPSL_TI_Radar_cpp/config/user   # gitignored; Docker would create them root-owned
 docker compose -f docker/app/compose.yaml --profile hw up hw
 ```
 
@@ -55,4 +56,4 @@ Re-plugging a board can give it a new `/dev/ttyACM*` number. A device passed int
 
 ## Not covered
 
-Publishing the image to a registry, and macOS/Windows hardware mode. Mode (b) is built to the above design but has not yet been checked against a real board (see the rel-05 directive Log).
+Publishing the image to a registry, and macOS/Windows hardware mode. Mode (b) is built to the above design but has not yet been checked against a real board; confirm it on your hardware before relying on it.
