@@ -97,7 +97,8 @@ class DriverError(Exception):
 
 
 def driver_bin(override: str | None = None) -> Path:
-    return Path(override or os.environ.get("RADAR_GUI_DRIVER") or DEFAULT_BIN)
+    # absolute: the probes and the run launch use another cwd, where a relative path would not resolve
+    return Path(override or os.environ.get("RADAR_GUI_DRIVER") or DEFAULT_BIN).absolute()
 
 
 def run_root(override: str | os.PathLike | None = None) -> Path:

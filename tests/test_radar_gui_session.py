@@ -1,6 +1,7 @@
 """gui-37 Step 1: the effective session.json of a driver start (saved config + overrides, or a quick setup), the caps
 that gate its optional keys, /api/driver/boards and driver.log in the run folder. Fake driver, no hardware."""
 import json
+import os
 import time
 from pathlib import Path
 
@@ -267,3 +268,21 @@ def test_run_folders_do_not_collide(env):
             runs.append(r.json()["run_dir"])
             wait_for(c, ("exited", "failed"))
         assert runs[0] != runs[1]
+
+
+def test_probe_caps_relative_binary_path(env, monkeypatch):
+    """A relative driver path gives the same caps as the absolute one (the probe runs in a temp cwd)."""
+    from radar_gui import driver
+    rel = Path(os.path.relpath(FAKE, Path.cwd()))
+    assert not rel.is_absolute()
+    want = session_cfg.probe_caps(Path(FAKE).absolute())
+    assert want["firmware_key"] and want["firmware_check"] and want["save_serial_bytes"]
+    assert session_cfg.probe_caps(rel) == want
+    monkeypatch.setenv("FAKE_DRIVER_KEYS", "firmware")
+    assert session_cfg.probe_caps(rel) == session_cfg.probe_caps(Path(FAKE).absolute())
+    assert driver.driver_bin(str(rel)).is_absolute()
+    real = Path(driver.DEFAULT_BIN)
+    if real.exists():
+        monkeypatch.undo()
+        r = Path(os.path.relpath(real, Path.cwd()))
+        assert session_cfg.probe_caps(r) == session_cfg.probe_caps(real)

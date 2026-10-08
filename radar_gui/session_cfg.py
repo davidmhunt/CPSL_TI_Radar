@@ -83,6 +83,7 @@ def _accepts_key(binary: Path, mutate) -> bool:
 
 def probe_caps(binary: Path) -> dict:
     """{"firmware_key", "firmware_check", "save_serial_bytes"}: which optional system-JSON keys `binary` accepts."""
+    binary = Path(binary).absolute()   # the probe runs in a temp cwd: a relative path would not launch
     return {
         "firmware_key": _accepts_key(binary, lambda d: d.update(firmware="demo")),
         "firmware_check": _accepts_key(binary, lambda d: d.update(runtime={"firmware_check": "auto"})),
