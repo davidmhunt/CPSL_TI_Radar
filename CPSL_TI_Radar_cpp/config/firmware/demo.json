@@ -756,7 +756,8 @@
       "level": "bench",
       "timeout_ms": 3000,
       "once_safe": true,
-      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "flash_hint": "./fw flash ti_stock_demos <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "source": {"fw_project": "ti_stock_demos", "artifact": "iwr1843_demo.bin"},
       "note": "version: bench-recorded 2026-10-07 (SDK 3.6 demo, xWR18xx, 03.06.02.00; gui-09 Log, bench_flash_iwr1843_demo.md s6). sarStats \"'sarStats' is not recognized as a CLI command\": bench-recorded 2026-10-08 (runs/gui/20261008T021450Z_overnight_mismatch/); version also bench-recorded there with device string 'IWR18xx non-secure ES 02.00' (the show regexes match it).",
       "probes": [
         {
@@ -786,7 +787,8 @@
       "level": "source",
       "timeout_ms": 3000,
       "once_safe": true,
-      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "flash_hint": "./fw flash ti_stock_demos <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "source": {"fw_project": "ti_stock_demos", "artifact": "iwr6843_demo.bin"},
       "note": "source-derived (SDK 3.6 cli_mmwave.c:330-332, xwr68xx demo overridePlatformString); not bench-recorded",
       "probes": [
         {
@@ -808,7 +810,8 @@
       "level": "source",
       "timeout_ms": 3000,
       "once_safe": true,
-      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "flash_hint": "./fw flash ti_stock_demos <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "source": {"fw_project": "ti_stock_demos", "artifact": "iwr6843_demo.bin"},
       "note": "source-derived (SDK 3.6 cli_mmwave.c:330-332); not bench-recorded",
       "probes": [
         {
@@ -830,7 +833,8 @@
       "level": "source",
       "timeout_ms": 3000,
       "once_safe": true,
-      "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "flash_hint": "no firmware_dev project: prebuilt image, flash manually per shipped_firmware/README.md (SOP 101, flash, SOP 001, power-cycle)",
+      "source": null,
       "note": "source-derived (cli_mmwave.c:326); SDK version of shipped_firmware/IWR1443/demo/xwr14xx_mmw_demo.bin unknown, so no SDK regex; the demo prompt mmwDemo:/> is required in the reply",
       "probes": [
         {

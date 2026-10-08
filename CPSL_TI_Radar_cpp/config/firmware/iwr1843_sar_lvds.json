@@ -229,6 +229,7 @@
       "timeout_ms": 3000,
       "once_safe": true,
       "flash_hint": "./fw flash iwr1843_sar_lvds <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "source": {"fw_project": "iwr1843_sar_lvds", "artifact": "iwr1843_sar_lvds.bin"},
       "note": "source-derived: version same as the demo (mmw_cli.c:761 overridePlatformString xWR18xx); sarStats answers Done on the SAR image only (mmw_cli.c:804); not bench-recorded",
       "probes": [
         {

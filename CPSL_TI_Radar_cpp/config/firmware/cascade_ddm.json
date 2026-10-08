@@ -170,7 +170,8 @@
       "level": "unverified",
       "timeout_ms": 5000,
       "once_safe": false,
-      "flash_hint": "./fw flash cascade_ddm <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "flash_hint": "./fw flash awr2243_cascade_ddm <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "source": {"fw_project": "awr2243_cascade_ddm", "artifact": "am273x_cascade.appimage"},
       "note": "HYPOTHESIS: overridePlatformString AM273X (cascade mmw_cli.c:2228); mcuplus CLI source not on this host; the cascade takes a cfg once per power-up, so it is not queried until bench-checked (gui-33 Step 7)",
       "probes": [
         {

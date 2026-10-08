@@ -211,7 +211,7 @@ TEST_CASE(mismatch_is_fatal_and_no_cfg_line_is_written) {
     std::cout << "    " << s.message << std::endl;
     CHECK(has(s.message, "firmware mismatch on /dev/null-not-opened: system JSON expects demo (IWR1843), "
                          "board answered platform=xWR68xx"));
-    CHECK(has(s.message, "Flash it: ./fw flash demo"));
+    CHECK(has(s.message, "Flash it: ./fw flash ti_stock_demos"));
     CHECK(has(s.message, "or set runtime.firmware_check \"warn\""));
     CHECK(!rig.cfg_written());
     CHECK(log.has_line("firmware: mismatch expected=demo found=platform=xWR68xx sdk=03.06.02.00 device=IWR68xx ES 02.00"));

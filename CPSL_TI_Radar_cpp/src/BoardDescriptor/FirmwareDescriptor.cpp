@@ -225,7 +225,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
             const std::string bp = "/identify/" + bt.key();
             if (!d.templates.count(bt.key())) return fail(bp, "board is not in templates");
             if (!check_object(fail, bt.value(), bp, {"level", "probes", "flash_hint"},
-                              {"timeout_ms", "once_safe", "note"})) {
+                              {"timeout_ms", "once_safe", "note", "source"})) {
                 return false;
             }
             const json& e = bt.value();
@@ -247,6 +247,16 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
             }
             if (!read_string(fail, e.at("flash_hint"), bp + "/flash_hint", ent.flash_hint)) return false;
             if (e.contains("note") && !read_string(fail, e.at("note"), bp + "/note", ent.note)) return false;
+            // source (fwstd-03): back-reference to the firmware_dev project; null for prebuilt-only images.
+            // Validated for shape only, not stored: the driver does not use it (parent pytest cross-checks it).
+            if (e.contains("source") && !e.at("source").is_null()) {
+                std::string ignored;
+                if (!check_object(fail, e.at("source"), bp + "/source", {"fw_project", "artifact"}, {}) ||
+                    !read_string(fail, e.at("source").at("fw_project"), bp + "/source/fw_project", ignored) ||
+                    !read_string(fail, e.at("source").at("artifact"), bp + "/source/artifact", ignored)) {
+                    return false;
+                }
+            }
             const json& pr = e.at("probes");
             if (!pr.is_array() || pr.empty()) return fail(bp + "/probes", "expected a non-empty array");
             bool can_fail = false;

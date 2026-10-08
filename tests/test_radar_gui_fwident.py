@@ -129,7 +129,7 @@ def test_mismatch_sends_no_cfg(tmp_path):
     assert configure(src) is False
     assert brd.cli_log == ["version", "sarStats"]
     st, msg = states[-1]
-    assert st == "wrong_firmware" and "expects demo (IWR1843)" in msg and "./fw flash demo" in msg and "Skip firmware check" in msg
+    assert st == "wrong_firmware" and "expects demo (IWR1843)" in msg and "./fw flash ti_stock_demos" in msg and "Skip firmware check" in msg
     assert src.firmware["verdict"] == "mismatch"
 
 

@@ -195,7 +195,8 @@
       "level": "source",
       "timeout_ms": 3000,
       "once_safe": true,
-      "flash_hint": "./fw flash dca1000_raw <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
+      "flash_hint": "no firmware_dev project: prebuilt image, flash manually per shipped_firmware/README.md (SOP 101, flash, SOP 001, power-cycle)",
+      "source": null,
       "note": "source-derived (iwr_raw_rosnode lvds_stream/xwr14xx/cli.c:351, SDK 2.1 per binary strings); prompt LVDS Stream:/> required in the reply",
       "probes": [
         {

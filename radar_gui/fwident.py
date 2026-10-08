@@ -19,7 +19,7 @@ import re
 
 LEVELS = ("bench", "source", "unverified")
 PROBE_KEYS = {"cmd", "require", "reject", "show"}
-ENTRY_KEYS = {"level", "timeout_ms", "once_safe", "probes", "flash_hint", "note"}
+ENTRY_KEYS = {"level", "timeout_ms", "once_safe", "probes", "flash_hint", "note", "source"}
 DEFAULT_TIMEOUT_MS = 1000
 
 
@@ -50,6 +50,10 @@ def check_identify(ident, boards=None) -> list[str]:
             bad.append(f"{w}: timeout_ms must be a positive int")
         if "once_safe" in e and not isinstance(e["once_safe"], bool):
             bad.append(f"{w}: once_safe must be a bool")
+        src = e.get("source")
+        if src is not None and not (isinstance(src, dict) and set(src) == {"fw_project", "artifact"}
+                                    and all(isinstance(v, str) and v for v in src.values())):
+            bad.append(f"{w}: source must be null or {{fw_project, artifact}} strings")
         if not isinstance(e.get("flash_hint"), str) or not e.get("flash_hint"):
             bad.append(f"{w}: flash_hint missing")
         pr = e.get("probes")

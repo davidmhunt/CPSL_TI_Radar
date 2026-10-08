@@ -20,8 +20,9 @@ files via include/json; gui-04) holds, schema 2:
                     "source", "confidence", optional "note", optional "boards": {board: {overrides of the above}}}
                    the MIMO scheme is a property of the firmware, not inferred from the board (gui-10 ruling);
                    confidence: "high" | "medium" | "low" | "unverified"
-  identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note}}  (gui-33) what the board answers
+  identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note, source}}  (gui-33) what the board answers
                    to `version` / `sarStats` when this firmware runs; matched by radar_gui/fwident.py (schema checked there).
+                   source: null (prebuilt only) | {fw_project, artifact} back-reference to firmware_dev/projects (fwstd-03).
                    level: "bench" (reply recorded on hardware) | "source" (derived from firmware source) | "unverified".
   cfg_rules        optional {board: {"skip_commands": [str], "required_commands": [str], "forbidden_commands": [str]}}  (gui-33 Step 4)
                    cfg commands this firmware on that board rejects (left in the cfg, never sent) / needs / does not implement.
