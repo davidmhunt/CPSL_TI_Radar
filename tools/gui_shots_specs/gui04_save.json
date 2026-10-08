@@ -1,0 +1,22 @@
+{
+ "env": {
+  "RADAR_GUI_DRIVER": "CPSL_TI_Radar_cpp/build-gui04/CPSL_TI_Radar_CPP"
+ },
+ "user_cfgs": {
+  "placeholder.cfg": "% fake\n"
+ },
+ "scenarios": [
+  {
+   "name": "a_configure_save_driver_verdict",
+   "window": [1400, 1400],
+   "actions": [
+    {"wait": 1.5},
+    {"set": "#sName", "value": "shot_save"},
+    {"click": "#sSave"},
+    {"wait": 3}
+   ],
+   "shots": [{"file": "save.png", "selector": "#sMsg"}],
+   "dumps": [{"file": "save_msg.txt", "selector": "#sMsg", "what": "text"}]
+  }
+ ]
+}

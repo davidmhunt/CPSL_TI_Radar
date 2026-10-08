@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from . import driver as drv
 from .cfg import detection
 from .cfg import firmware as fwmod
 from .cfg import BOARDS, CfgError, apply_params, generate, params_from_cfg, limits_dict, metrics, parse_cfg, validate
@@ -169,7 +170,24 @@ def lvds_mismatch_warnings(req: SaveReq, dca: bool) -> list[str]:
     return []
 
 
-def make_router(user_dir: Path | None = None) -> APIRouter:
+def driver_verdict(driver_bin, json_path: Path) -> dict | None:
+    """gui-04: what the real driver says about the saved system JSON (`--validate --json`), trimmed for the Save
+    message; None when no driver binary is available (the Python verdict above still stands)."""
+    b = drv.driver_bin(driver_bin)
+    try:
+        if not (b.is_file() and os.access(b, os.X_OK)):
+            raise drv.DriverError(f"driver binary not found: {b}", 503)
+        env = None
+        if not (json_path.parent.parent / "boards").is_dir():   # a user dir outside config/: point the driver at the repo's descriptors
+            env = {**os.environ, "CPSL_TI_RADAR_BOARDS_DIR": str(REPO / "CPSL_TI_Radar_cpp" / "config" / "boards")}
+        v = drv.validate_config(b, json_path, env)
+    except drv.DriverError as e:
+        return {"available": False, "message": str(e)}
+    return {"available": True, "ok": v["ok"], "json": bool(v.get("json")), "errors": v.get("errors", []),
+            "warnings": v.get("warnings", []), "text": v["text"]}
+
+
+def make_router(user_dir: Path | None = None, driver_bin=None) -> APIRouter:
     udir = Path(user_dir) if user_dir else Path(os.environ.get("RADAR_GUI_USER_CFG_DIR") or DEFAULT_USER_DIR)
     r = APIRouter()
 
@@ -306,7 +324,7 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
         except FileExistsError:
             raise HTTPException(409, f"{req.name}.cfg / {req.name}.json already exists in {udir}; pick a new name") from None
         sysj = system_json(req, cfg_path.name)
-        return {"ok": True, "cfg_path": str(cfg_path), "json_path": str(json_path), "issues": res["issues"],
+        return {"ok": True, "driver": driver_verdict(driver_bin, json_path), "cfg_path": str(cfg_path), "json_path": str(json_path), "issues": res["issues"],
                 "warnings": lvds_mismatch_warnings(req, sysj["dca1000"]["enabled"]),
                 "validate_cmd": f"CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP {json_path} --validate"}
 

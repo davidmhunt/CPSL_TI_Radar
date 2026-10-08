@@ -94,6 +94,51 @@ def parse_validate(text: str, exit_code: int) -> dict:
     return out
 
 
+def parse_validate_json(text: str, exit_code: int) -> dict | None:
+    """The driver's `--validate --json` object as the validate() dict (None when `text` is not that object, i.e. a
+    driver without --json). Keeps every key parse_validate gives (`text` is rebuilt from the errors/warnings/notes)
+    and adds `json`, `errors`, `warnings`, `board`, `firmware`, `metrics`."""
+    try:
+        d = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(d, dict) or "ok" not in d or "errors" not in d:
+        return None
+    errs, warns = d.get("errors") or [], d.get("warnings") or []
+    lines = [f"error [{e.get('code', '')}]: {e.get('message', '')}" for e in errs]
+    lines += [f"warning [{w.get('code', '')}]: {w.get('message', '')}" for w in warns]
+    lines += [f"note: {n}" for n in d.get("notes") or []]
+    fr = d.get("frame")
+    if fr:
+        fr = dict(fr, line=f"frame: {fr['rx']} rx x {fr['samples']} samples x {fr['chirps']} chirps, {fr['period_ms']} ms period")
+        lines.append(fr["line"])
+    if d.get("bytes_per_frame") is not None:
+        lines.append(f"bytes/frame: {d['bytes_per_frame']}")
+    ok = bool(d["ok"]) and exit_code == 0
+    if ok:
+        lines.append(f"OK: {d.get('config', '')}")
+    return {"ok": ok, "exit": exit_code, "text": "\n".join(lines) + "\n", "bytes_per_frame": d.get("bytes_per_frame"),
+            "frame": fr, "notes": list(d.get("notes") or []), "json": True, "errors": errs, "warnings": warns,
+            "board": d.get("board"), "firmware": d.get("firmware"), "metrics": d.get("metrics") or {}}
+
+
+def validate_config(binary: Path, config: str | os.PathLike, env: dict | None = None) -> dict:
+    """Run `<binary> <config> --validate --json` (gui-04) and return the validate() dict; a driver without --json
+    (exit 2 / non-JSON output) falls back to the plain-text `--validate` and parse_validate."""
+    def run(*flags):
+        try:
+            return subprocess.run([str(binary), str(config), "--validate", *flags], capture_output=True, text=True,
+                                  timeout=30, stdin=subprocess.DEVNULL, env=env)
+        except subprocess.TimeoutExpired:
+            raise DriverError("--validate timed out after 30 s", 503)
+    p = run("--json")
+    v = parse_validate_json(p.stdout, p.returncode)
+    if v is not None:
+        return v
+    p = run()
+    return parse_validate(p.stdout + p.stderr, p.returncode)
+
+
 def load_system_json(path: Path) -> dict:
     try:
         d = json.loads(Path(path).read_text())
@@ -148,13 +193,7 @@ class DriverManager:
         return b
 
     def validate(self, config: str | os.PathLike) -> dict:
-        b = self._bin()
-        try:
-            p = subprocess.run([str(b), str(config), "--validate"], capture_output=True, text=True, timeout=30,
-                               stdin=subprocess.DEVNULL)
-        except subprocess.TimeoutExpired:
-            raise DriverError("--validate timed out after 30 s", 503)
-        return parse_validate(p.stdout + p.stderr, p.returncode)
+        return validate_config(self._bin(), config)
 
     def _usage(self, b: Path) -> str:
         """The binary's usage text, once per binary (path + mtime): feature flags are detected from it, so an older

@@ -177,7 +177,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
 
     app = FastAPI(title="CPSL radar GUI", lifespan=lifespan)
     app.state.hub, app.state.driver = hub, driver
-    app.include_router(make_router(user_cfg_dir))
+    app.include_router(make_router(user_cfg_dir, driver_bin))
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
     app.include_router(make_source_router(hub, user_cfg_dir, serial_factory, run_root))
     app.include_router(make_logs_router(driver, run_root))
