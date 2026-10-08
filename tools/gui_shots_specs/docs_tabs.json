@@ -8,12 +8,6 @@
  "server": [
   "tests/fakes/gui_fake_serial.py"
  ],
- "source_args": [
-  "--source",
-  "replay",
-  "--file",
-  "tests/fixtures/replay/iwr1843_sdk3_20frames.bin"
- ],
  "user_cfgs": {
   "adc_run.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"bench.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"dca1000\": {\"enabled\": true}}",
   "adc_nodca.json": "{\"schema_version\": 2, \"board\": \"IWR1843\", \"firmware\": \"demo\", \"radar_cfg\": \"bench.cfg\", \"cli\": {\"port\": \"@PORT@\"}, \"dca1000\": {\"enabled\": false}}",
@@ -62,6 +56,13 @@
    ],
    "actions": [
     {
+     "click": "#srcKind button[data-k=replay]"
+    },
+    {
+     "set": "#srcFile",
+     "value": "iwr1843_sdk3_20frames"
+    },
+    {
      "click": "#srcStart"
     },
     {
@@ -80,7 +81,7 @@
    "tab": "run",
    "window": [
     1400,
-    900
+    1150
    ],
    "actions": [
     {
@@ -99,6 +100,12 @@
     },
     {
      "wait": 4
+    },
+    {
+     "js": "\nconst R = [[/\\/tmp\\/[^\\s]*?_usercfg\\//g,'CPSL_TI_Radar_cpp/config/user/'],[/\\/tmp\\/gui_shots_runs_\\w+\\/runs/g,'runs/gui'],\n [/192\\.168\\.1\\.\\d+\\/24, /g,''],[/enp3s0/g,'eth0'],[/Wired connection 1/g,'radar-dca1000'],[/R2101050/g,'R0000000']];\nfunction mask(){ const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); let n;\n while((n=w.nextNode())){ let t=n.nodeValue,o=t; for(const [a,b] of R) t=t.replace(a,b); if(t!==o) n.nodeValue=t; } }\nwindow.__mask=mask; mask(); new MutationObserver(mask).observe(document.body,{subtree:true,childList:true,characterData:true}); return 'ok';\n"
+    },
+    {
+     "wait": 1
     }
    ],
    "shots": [
@@ -143,7 +150,7 @@
      "wait": 2.5
     },
     {
-     "js": "document.querySelectorAll('#setMain *').forEach(e=>{if(e.children.length===0&&e.textContent.includes('R2101050'))e.textContent=e.textContent.split('R2101050').join('R0000000')});return 'ok'"
+     "js": "\nconst R = [[/\\/tmp\\/[^\\s]*?_usercfg\\//g,'CPSL_TI_Radar_cpp/config/user/'],[/\\/tmp\\/gui_shots_runs_\\w+\\/runs/g,'runs/gui'],\n [/192\\.168\\.1\\.\\d+\\/24, /g,''],[/enp3s0/g,'eth0'],[/Wired connection 1/g,'radar-dca1000'],[/R2101050/g,'R0000000']];\nfunction mask(){ const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); let n;\n while((n=w.nextNode())){ let t=n.nodeValue,o=t; for(const [a,b] of R) t=t.replace(a,b); if(t!==o) n.nodeValue=t; } }\nwindow.__mask=mask; mask(); new MutationObserver(mask).observe(document.body,{subtree:true,childList:true,characterData:true}); return 'ok';\n"
     },
     {
      "wait": 0.5
@@ -171,6 +178,9 @@
     900
    ],
    "actions": [
+    {
+     "js": "\nconst R = [[/\\/tmp\\/[^\\s]*?_usercfg\\//g,'CPSL_TI_Radar_cpp/config/user/'],[/\\/tmp\\/gui_shots_runs_\\w+\\/runs/g,'runs/gui'],\n [/192\\.168\\.1\\.\\d+\\/24, /g,''],[/enp3s0/g,'eth0'],[/Wired connection 1/g,'radar-dca1000'],[/R2101050/g,'R0000000']];\nfunction mask(){ const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); let n;\n while((n=w.nextNode())){ let t=n.nodeValue,o=t; for(const [a,b] of R) t=t.replace(a,b); if(t!==o) n.nodeValue=t; } }\nwindow.__mask=mask; mask(); new MutationObserver(mask).observe(document.body,{subtree:true,childList:true,characterData:true}); return 'ok';\n"
+    },
     {
      "wait": 1
     },

@@ -10,7 +10,7 @@ Configure tab, runs scenarios and saves PNGs.
 
 Spec: a JSON list of scenarios, or {"user_cfgs": {"name.cfg": "<text>"}, "env": {...}, "scenarios": [...]}
 (user_cfgs appear in the picker as saved cfgs, for cfgs not shipped; a name.json is a system JSON for the Run tab, and
-"@PORT@" in any user_cfgs text becomes a scratch file that exists, for "cli.port"; "source_args" replaces "--source mock" (e.g. a replay .bin), "env" is added to the server's
+"@PORT@" in any user_cfgs text becomes a scratch file that exists, for "cli.port"; "env" is added to the server's
 environment, e.g. FAKE_DRIVER_MODE, "run_files": {"<UTC>_<name>/driver.log": "text"} seeds the scratch run root, RADAR_GUI_DRIVER=tests/fakes/fake_driver.py; or pass --driver-bin); each scenario (optional "tab":
 "run" opens the Run tab instead of Configure):
     {"name": "x", "window": [1400, 2400],           # optional; "fresh": false keeps the previous page state;
@@ -303,10 +303,7 @@ def main(argv=None):
             server = ["-m", "radar_gui"]   # optional spec "server": ["tests/fakes/gui_fake_serial.py"] = a script run instead (fake serial ports)
             if a.scenarios != "builtin" and isinstance(sp, dict) and sp.get("server"):
                 server = [os.path.join(ROOT, x) if x.endswith(".py") and not os.path.isabs(x) else x for x in sp["server"]]
-            src = ["--source", "mock"]   # optional spec "source_args": ["--source", "replay", "--file", "<repo-relative .bin>"]
-            if a.scenarios != "builtin" and isinstance(sp, dict) and sp.get("source_args"):
-                src = [os.path.join(ROOT, x) if x.endswith(".bin") and not os.path.isabs(x) else x for x in sp["source_args"]]
-            cmd = ["uv", "run", "python", *server, *src, "--port", str(port)]
+            cmd = ["uv", "run", "python", *server, "--source", "mock", "--port", str(port)]
             if a.driver_bin:
                 cmd += ["--driver-bin", os.path.abspath(a.driver_bin)]
             procs.append(subprocess.Popen(
