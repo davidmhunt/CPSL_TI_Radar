@@ -20,7 +20,7 @@ flashable project (cascade verify reports `skipped`).
 | R1 | `projects/<p>/project.toml` replaces `project.env` (stdlib `tomllib`); `project.env` is read only during migration, with a stderr deprecation line. | `fw test` schema check | 0 invalid; 0 `.env`-only at fwstd-08 |
 | R2 | Tables: `[project]` name, summary, `status` (`stub\|source\|built\|bench`); `[deps]` sdk, sdk_version, toolchain, `download_items`; `[source]` baseline, baseline_commit; `[build]` script, `variants` (selected by `--variant`), est_minutes. Required tables by status: A5. | Validator: missing/unknown key, wrong type, bad enum | Exit 1 naming the key path |
 | R3 | `[[artifact]]` (first = default image): file, board, `descriptor` (id in `../CPSL_TI_Radar_cpp/config/firmware/`, or `""`), `flashable`. | `fw test`; parent pytest, both directions | 0 mismatches |
-| R4 | `[flash]`: method (`dslite\|uart_uniflash\|manual`), gate (`sop\|j6`), port_glob, `mode_steps`, `after_steps`, success_marker, optional `manual_images` (artifact files whose `flash.sh` prints manual steps and exits 3; `--plan`/`--dry-run` then show those steps instead of `mode_steps`, and no token is issued; any exit 3 from `flash.sh` carries its output in `data.checklist`). The gate comes from the manifest, not `*.ccxml` presence. | Ccxml added/removed; `--dry-run` per project | Same gate; exit 0; checklist, command, sha256 shown |
+| R4 | `[flash]`: method (`dslite\|uart_uniflash\|manual`), gate (`sop\|j6`), port_glob, `mode_steps`, `after_steps`, success_marker, optional `manual_images` (see Amendment 4). The gate comes from the manifest, not `*.ccxml` presence. | Ccxml added/removed; `--dry-run` per project | Same gate; exit 0; checklist, command, sha256 shown |
 | R5 | `[verify]` holds only cli_port_glob, baud, descriptor. Probes, timeout, `once_safe` live only in the descriptor `identify` block, which wins on conflict. | `fw test` | 0 probe keys in manifest; `identify` exists |
 | R6 | `[test]`: host `commands`, `cfgs` (tracked cfg globs, never `build/`; parent tests use them, not `rglob`), `bench_doc` (default `docs/bench_check.md`). | Stray `build/x.cfg` | Exit 0; stray cfg ignored |
 | R7 | Verbs `fw list \| ports [<p>] \| new \| deps \| build \| test \| flash \| verify \| publish \| help`, each with `--help` and `--json`; `build` first runs `deps`. `fw flash <p> <port> [image]` stays accepted, plus `--dry-run`, `--plan`, `--confirm`. | Table test; SAR `--dry-run` golden | Golden has checklist, command, sha256 |
@@ -84,9 +84,11 @@ Decided 2026-10-08 (user): `--confirm` needs no typed phrase (TTY path keeps it)
 
 **A6 Gates**: G1 image inside `firmware_dev/`; G2 port exists; G3 port not held; G4 by-id `-if00` port, else extra acknowledgement; G5 checklist for the manifest gate (SOP or J6); G6 typed phrase `FLASH MODE CONFIRMED` (TTY); G7 `--dry-run` flashes nothing.
 
-**A7 Dirty and stale**: *dirty* = `git status --porcelain -- projects/<p> fw tools` in `firmware_dev` is non-empty (`build/` is gitignored); the commit is firmware_dev HEAD. *Stale* = an artifact sha256 differs from the record, only legacy `build_info.txt` exists, or `git diff --quiet <commit> HEAD -- projects/<p> fw tools` fails.
+**A7 Dirty and stale**: *dirty* = `git status --porcelain -- projects/<p> fw tools` in `firmware_dev` is non-empty (`build/` is gitignored); the commit is firmware_dev HEAD. *Stale* = an artifact sha256 differs from the record, only legacy `build_info.txt` exists, or `git diff --quiet <commit> HEAD -- projects/<p> fw tools` fails. (see Amendment 3)
 
 ## Amendments
 
 1. 2026-10-08 (user): the descriptor back-reference lives per board entry as `identify.<board>.source = {fw_project, artifact}` (a descriptor such as `demo` covers several boards with different images).
 2. 2026-10-08 (user): `publish` provenance `chirp_cfg` lists every `[test].cfgs` file of the project with its sha256.
+3. 2026-10-08 (user): commits that change only `[[bench]]` entries and/or `project.status` in `project.toml` do not make a build dirty or stale (A7). Any other change under the project still does.
+4. 2026-10-08 (user, ratified): R4 gains an optional `[flash].manual_images` list naming images that must be flashed by hand; `--plan`/`--dry-run` on such an image return the manual steps in `result.data.checklist` with exit 3 and issue no token.
