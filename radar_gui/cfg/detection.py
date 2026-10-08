@@ -7,7 +7,7 @@ descriptor picks which rules a variant uses (and their severity/params).
     detection: null  +  detection_note: str                     firmware without on-chip detection (SAR, raw)
     detection: {
       "boards":   {board: variant id | null},                    null / absent = no detection on that board
-      "notes":    [str],                                         shown under the card
+      "notes":    [str],                                         shown under the card (also per variant: "notes")
       "variants": {id: {
           "level": "bench"|"source"|"unverified", "source": str,
           "commands": {name: {"per_direction": bool,             a cfg command line per direction (range 0, Doppler 1)
@@ -61,7 +61,8 @@ def variant(firmware, board: str) -> dict | None:
     if v is None:
         return None
     out = copy.deepcopy(v)
-    out["id"], out["notes"], out["firmware"] = vid, list(det.get("notes") or []), d["id"]
+    out["id"], out["firmware"] = vid, d["id"]
+    out["notes"] = list(det.get("notes") or []) + list(v.get("notes") or [])
     return out
 
 

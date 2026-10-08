@@ -857,7 +857,7 @@
       "IWR6843ODS": "sdk3_dsp"
     },
     "notes": [
-      "Source-derived limits (no bench record yet); the IWR6843/ODS DSP CFAR differs from the IWR1843 HWA CFAR: it ignores Cyclic and the Doppler mode."
+      "Source-derived limits (no bench record yet)."
     ],
     "variants": {
       "sdk2_14xx": {
@@ -1356,6 +1356,9 @@
               ]
             }
           }
+        ],
+        "notes": [
+          "The IWR6843/ODS DSP CFAR ignores Cyclic and the Doppler mode (source-read; bench check pending)."
         ]
       }
     }

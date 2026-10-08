@@ -116,6 +116,17 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 #mDiagram .lane { stroke: var(--grid-strong); stroke-width: .5; }
 #mDiagram .loop { stroke: var(--warn); stroke-width: 1; fill: none; }
 #mDiagram text.lp { fill: var(--warn); }
+/* Detection (CFAR) card (gui-35) */
+.detgrid { display: grid; gap: 4px 8px; align-items: center; }
+.detgrid .dh { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+.detgrid .dl { font-size: 12px; color: var(--muted); } .detgrid .dl small { opacity: .8; }
+.detgrid input[type=number], .detgrid select { width: 100%; min-width: 0; box-sizing: border-box; }
+.detgrid input[type=checkbox] { justify-self: start; }
+.dhelp { display: inline-block; margin-left: 4px; width: 14px; height: 14px; line-height: 14px; text-align: center; font-size: 10px;
+  border: 1px solid var(--line); border-radius: 50%; color: var(--muted); cursor: help; }
+.detfov { margin-top: 8px; display: grid; gap: 6px; }
+.detfovrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.detnotes { margin: 6px 0 0; padding-left: 16px; font-size: 12px; } .dbnote { color: var(--muted); }
 #mBadge { color: var(--accent); border-color: var(--accent); }
 .mlist { display: grid; gap: 6px; }
 .mrow { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; }

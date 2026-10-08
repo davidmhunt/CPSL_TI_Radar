@@ -139,8 +139,6 @@
             <label>Loops (chirps/frame) <input type="number" id="t_num_loops" step="1" min="1"></label>
             <label>TX mask <input type="number" id="t_tx_mask" step="1" min="1" placeholder="5"></label>
             <label>RX mask <input type="number" id="t_rx_mask" step="1" min="1" placeholder="15"></label>
-            <label>CFAR range (dB) <input type="number" id="t_cfar_range_db" step="any"></label>
-            <label>CFAR doppler (dB) <input type="number" id="t_cfar_doppler_db" step="any"></label>
           </div>
         </details>
       </div>
@@ -163,6 +161,11 @@
         <div class="muted lvdshint">SW stream: default off; the software session always sends the HSI header, so the header must be on whenever both streams are on.</div>
         <div class="muted lvdshint">DCA1000 capture is enabled separately, in the Save step's system settings.</div>
       </div>
+    </section>
+    <section class="card" id="detCard" hidden>
+      <h2>Detection (CFAR) <span class="badge" id="detBadge"></span><span class="muted sub" id="detSub"></span></h2>
+      <div class="mnote" id="detNote" hidden></div>
+      <div class="controls" id="detBody"></div>
     </section>
     <section class="card" id="mimoCard">
       <h2>MIMO <span class="badge" id="mBadge"></span><span class="muted sub" id="mNote"></span></h2>

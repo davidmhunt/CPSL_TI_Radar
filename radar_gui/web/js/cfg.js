@@ -1,10 +1,14 @@
 // Configure tab: targets (or a loaded cfg) -> live metrics + constraint check -> save cfg + system JSON.
 import { $ } from './state.js';
 import { renderProfile, TX_COLORS } from './profile.js';
+import { renderDetection, resetDetectionUi } from './detection.js';
 
-const C = { mode: 'targets', base: '', seed: null, fw: [], source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
+const C = { det: {}, detDirty: {}, mode: 'targets', base: '', seed: null, fw: [], source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
 const TARGETS = ['max_range_m', 'max_velocity_ms', 'range_res_m', 'velocity_res_ms', 'frame_rate_hz',
-  'num_samples', 'num_loops', 'tx_mask', 'rx_mask', 'cfar_range_db', 'cfar_doppler_db'];
+  'num_samples', 'num_loops', 'tx_mask', 'rx_mask'];
+// On-chip CFAR edits (gui-35): C.det = every edit since the cfg was loaded / the board changed (sent with the targets or
+// the direct-mode params, so regenerating keeps them); C.detDirty = edits not yet written into a loaded cfg's text.
+const hasEdits = e => !!e && Object.keys(e).length > 0;
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
@@ -19,6 +23,7 @@ function targets() {
   const t = {};
   for (const k of TARGETS) { const v = $('t_' + k).value; if (v !== '') t[k] = +v; }
   if ($('t_lvds').dataset.touched && !$('lvdsTargets').hidden) t.lvds = $('t_lvds').checked;   // untouched = the firmware template
+  if (hasEdits(C.det)) t.detection = C.det;
   return t;
 }
 
@@ -117,6 +122,7 @@ function collectParams() {
   }
   if (Object.keys(prof).length) out.profiles = [prof];
   Object.assign(out, tableParams(sd));
+  if (hasEdits(C.det)) out.detection = C.det;
   if (sd.low_power != null && +$('p_low_power').value !== sd.low_power) out.low_power = +$('p_low_power').value;
   const slv = sd.lvds_stream;
   if (slv && !$('lvdsParams').hidden) {
@@ -188,11 +194,23 @@ async function analyze() {
   const seq = ++C.seq, board = $('cBoard').value;
   if (C.mode === 'direct') return analyzeDirect(seq);
   const body = C.source === 'cfg' ? { board, firmware: $('cFw').value, cfg_text: C.text } : { board, firmware: $('cFw').value, targets: targets() };
-  const { ok, j } = await api('/api/cfg/analyze', body);
+  let res;
+  if (C.source === 'cfg' && hasEdits(C.detDirty)) {      // write the CFAR edits into the loaded cfg's text, then analyse that
+    res = await api('/api/cfg/detection', { board, firmware: $('cFw').value, base_cfg_text: C.text, values: C.detDirty });
+    if (res.ok && res.j && res.j.ok !== undefined && res.j.text && res.j.issues.every(i => i.code !== 'detection')) C.detDirty = {};
+  } else res = await api('/api/cfg/analyze', body);
+  const { ok, j } = res;
   if (seq !== C.seq) return;   // a newer request is in flight
   if (!ok) { render({ ok: false, metrics: null, issues: [{ level: 'error', code: 'api', message: JSON.stringify(j && j.detail || j), confidence: '' }], text: C.text }); return; }
   C.text = j.text; C.name = j.name || C.name; C.metrics = j.metrics; C.ok = j.ok;
   render(j);
+}
+
+function onDetEdit(group, key, value) {
+  for (const store of [C.det, C.detDirty]) {
+    if (group === 'fov') store.fov = value; else (store[group] = store[group] || {})[key] = value;
+  }
+  schedule();
 }
 
 function tile(label, value, unit, sub, big) {
@@ -235,6 +253,7 @@ function render(j) {
   }
   C.profM = m; drawProfile(); renderMimo(m); flagTable(); lvdsWarn();
   $('cText').textContent = j.text || '';
+  if ('detection' in j) renderDetection(j.detection, issues, onDetEdit);
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
 
@@ -502,7 +521,7 @@ async function onLoad() {
   const id = $('cLoad').value; if (!id) return;
   const { ok, j } = await api('/api/cfg/file?id=' + encodeURIComponent(id));
   if (!ok) return;
-  $('cBoard').value = j.board; C.text = j.text; setSource('cfg', j.name);
+  $('cBoard').value = j.board; C.text = j.text; C.det = {}; C.detDirty = {}; resetDetectionUi(); setSource('cfg', j.name);
   $('t_lvds').checked = cfgLvdsOn(j.text); $('t_lvds').dataset.touched = '1';   // a loaded cfg's LVDS choice survives regenerating
   await loadFirmware(j.board); const fw = inferFirmware(j.text); if (fw) { $('cFw').value = fw; showFirmware(); }
   $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + '_copy';
@@ -536,6 +555,13 @@ async function save() {
   msg.className = 'ok';
   msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
     (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span><br><a href="#run" id="sOpenRun">Open in Run</a>`;
+  const dv = j.driver;   // gui-04: the real driver's verdict on the saved system JSON (absent from an older server)
+  if (dv) {
+    const line = !dv.available ? `Driver check unavailable: ${esc(dv.message)}`
+      : dv.ok ? `Driver check: OK${dv.warnings.length ? ` (${dv.warnings.length} warning${dv.warnings.length > 1 ? 's' : ''})` : ''}`
+        : `Driver check: INVALID<br>${(dv.errors.length ? dv.errors.map(e => `${e.code}: ${e.message}`) : [dv.text]).map(esc).join('<br>')}`;
+    $('sMsg').insertAdjacentHTML('beforeend', `<br><span class="${dv.available && !dv.ok ? 'bad' : 'muted'}" id="sDriver">${line}</span>`);
+  }
   $('sOpenRun').onclick = e => { e.preventDefault(); dispatchEvent(new CustomEvent('open-in-run', { detail: j.json_path })); };
   loadList();
 }
@@ -548,8 +574,8 @@ async function init() {
   await loadFirmware('IWR1843');
   await loadList();
   for (const k of TARGETS) $('t_' + k).addEventListener('input', () => { setSource('targets'); schedule(); });
-  $('cFw').addEventListener('change', () => { showFirmware(); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
-  $('cBoard').addEventListener('change', async () => { await loadFirmware($('cBoard').value, $('cFw').value); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
+  $('cFw').addEventListener('change', () => { C.det = {}; C.detDirty = {}; resetDetectionUi(); showFirmware(); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
+  $('cBoard').addEventListener('change', async () => { C.det = {}; C.detDirty = {}; resetDetectionUi(); await loadFirmware($('cBoard').value, $('cFw').value); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
   $('cLoad').addEventListener('change', onLoad);
   $('cToTargets').onclick = toTargets;
   buildParams();

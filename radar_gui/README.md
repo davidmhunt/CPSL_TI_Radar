@@ -52,6 +52,33 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 Tests: `uv run pytest tests/test_radar_gui_skeleton.py tests/test_radar_gui_cfgapi.py` (the driver `--validate` test
 skips when `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` is absent).
 
+## Detection (CFAR) card (gui-35)
+
+The Configure tab's "Detection (CFAR)" card edits the on-chip detector: `cfarCfg`, `cfarFovCfg` (FOV) and, on the IWR1443,
+`peakGrouping`. It is drawn only from the firmware descriptor, `CPSL_TI_Radar_cpp/config/firmware/<fw>.json` -> `detection`
+(variants `sdk2_14xx`, `sdk3_hwa` = IWR1843, `sdk3_dsp` = IWR6843/ODS in `demo.json`; `ddm` in `cascade_ddm.json`;
+`detection: null` + `detection_note` for `iwr1843_sar_lvds` and `dca1000_raw`, where the card shows why it is off).
+Per-direction fields have a Range and a Doppler column; every field carries `help` and a `cite` (tooltip) and the variant a
+`level` (`bench` / `source` / `unverified`; all are `source` until the Step 5 bench run). The 1443 threshold is the raw log2-Q9
+value with the dB it means for the cfg's antenna count next to it. The FOV is **auto** (follows max range and +-max velocity)
+until "Manual field of view" is ticked; the cascade DDM build has no `cfarFovCfg`, so no FOV controls.
+
+- Backend: `radar_gui/cfg/detection.py` (`schema`, `from_cfg`, `apply`, `issues`, `describe`). `apply` rewrites only the lines
+  whose numbers change (comments and every other byte kept) and inserts a missing line before `sensorStart`, only when you
+  gave values for it. A cfg whose detection lines address a subframe (`subFrameIdx != -1`) or do not fit the firmware's argument
+  layout is read-only here ("edit the cfg text").
+- API: `/api/cfg/analyze`, `/params`, `/generate` results carry `detection: {schema, values, editable, note, context}`;
+  `POST /api/cfg/detection {board, firmware, base_cfg_text, values}` returns the `/params` shape. The same `values` go in
+  `targets.detection` (Targets mode) and `params.detection` (Chirp parameters mode). `cfar_range_db` / `cfar_doppler_db`
+  target keys still work as threshold aliases.
+- Checks (`cfar_*` codes, GUI-only: the C++ driver does not enforce them; the firmware answers `Done`/errors itself): argument
+  count and ranges, unknown enum, threshold above 100 dB, FOV min >= max, a missing direction line, cascade Doppler mode /
+  guard / enable, and as warnings `2*(noiseWin+guardLen)` against the FFT bins (the shipped `1843_RadarHD.cfg` violates it,
+  so it is not an error until a bench run settles it) and the TI `divShift` formula. FOV beyond the cfg's range or velocity is info.
+- Live re-tune while streaming is not part of this card.
+- Screenshots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui35.json` (1843, 1443, cascade, SAR note,
+  an error state, Chirp-parameters mode with a manual FOV; each at 1400 and 800 px).
+
 ## MIMO panel and chirp table (gui-16)
 
 The Configure tab's MIMO card shows the scheme badge (TDM / TDM+BPM / DDMA), a loop timing diagram and each derived number with its

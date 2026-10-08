@@ -1,0 +1,536 @@
+[
+ {
+  "name": "a_1843_1400",
+  "window": [
+   1400,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "a_1843_1400_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "b_1443_1400",
+  "window": [
+   1400,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1443"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "b_1443_1400_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "c_cascade_1400",
+  "window": [
+   1400,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "AWR2243_CASCADE"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "c_cascade_1400_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "d_sar_note_1400",
+  "window": [
+   1400,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "firmware": "iwr1843_sar_lvds"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "d_sar_note_1400_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "e_error_1400",
+  "window": [
+   1400,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "set": "#detBody input[data-group=range][data-key=thresholdDb]",
+    "value": "150"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "e_error_1400_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "f_direct_manual_fov_1400",
+  "window": [
+   1400,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "mode": "direct"
+   },
+   {
+    "click": "#detFovManual"
+   },
+   {
+    "set": "#detFov_range_max",
+    "value": "6"
+   },
+   {
+    "set": "#detBody select[data-group=doppler][data-key=mode]",
+    "value": "1"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "f_direct_manual_fov_1400_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "a_1843_800",
+  "window": [
+   800,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "a_1843_800_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "b_1443_800",
+  "window": [
+   800,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1443"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "b_1443_800_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "c_cascade_800",
+  "window": [
+   800,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "AWR2243_CASCADE"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "c_cascade_800_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "d_sar_note_800",
+  "window": [
+   800,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "firmware": "iwr1843_sar_lvds"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "d_sar_note_800_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "e_error_800",
+  "window": [
+   800,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "set": "#detBody input[data-group=range][data-key=thresholdDb]",
+    "value": "150"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "e_error_800_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ },
+ {
+  "name": "f_direct_manual_fov_800",
+  "window": [
+   800,
+   2000
+  ],
+  "actions": [
+   {
+    "wait": 1.5
+   },
+   {
+    "board": "IWR1843"
+   },
+   {
+    "mode": "direct"
+   },
+   {
+    "click": "#detFovManual"
+   },
+   {
+    "set": "#detFov_range_max",
+    "value": "6"
+   },
+   {
+    "set": "#detBody select[data-group=doppler][data-key=mode]",
+    "value": "1"
+   },
+   {
+    "wait": 1.5
+   }
+  ],
+  "shots": [
+   {
+    "file": "f_direct_manual_fov_800_card.png",
+    "selector": "#detCard"
+   }
+  ],
+  "dumps": [
+   {
+    "file": "values.txt",
+    "selector": "#detCard",
+    "what": "values"
+   },
+   {
+    "file": "card.txt",
+    "selector": "#detCard",
+    "what": "text"
+   },
+   {
+    "file": "overflow.txt",
+    "selector": "#detCard",
+    "what": "overflow"
+   }
+  ]
+ }
+]
