@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "id": "dca1000_raw",
-  "description": "DCA1000 raw-ADC streaming firmware (Firmware/DCA1000_Streaming): no on-chip processing, ADC over LVDS only. IWR1443 only (gui-30): prebuilt image xwr14xx_lvds_stream.bin; the 1843/6843 demos stream LVDS natively (lvdsStreamCfg).",
+  "description": "DCA1000 raw-ADC streaming firmware (shipped_firmware/IWR1443/dca1000_raw): no on-chip processing, ADC over LVDS only. IWR1443 only (gui-30): prebuilt image xwr14xx_lvds_stream.bin; the 1843/6843 demos stream LVDS natively (lvdsStreamCfg).",
   "outputs": {
     "IWR1443": {
       "tlv": false,
@@ -13,7 +13,7 @@
       0,
       1
     ],
-    "source": "Firmware/DCA1000_Streaming/iwr_raw_rosnode/firmware/xwr14xx_lvds_stream.bin is a prebuilt image with no source or doc in this repo; only dataFmt 0/1 are known (the shipped cfgs use 1); 4 not verified",
+    "source": "shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode/firmware/xwr14xx_lvds_stream.bin is a prebuilt image with no source or doc in this repo; only dataFmt 0/1 are known (the shipped cfgs use 1); 4 not verified",
     "confidence": "unverified"
   },
   "templates": {

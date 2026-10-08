@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "id": "demo",
-  "description": "TI mmw demo, one binary per board (Firmware/IWR_Demos; firmware_dev ti_stock_demos for 1843/6843): TLV point cloud over the serial data port; on 1843/6843 raw ADC over LVDS to a DCA1000 is enabled by the cfg (lvdsStreamCfg), not by a separate firmware. The 1443 demo has no LVDS output.",
+  "description": "TI mmw demo, one binary per board (shipped_firmware/IWR1443/demo; firmware_dev ti_stock_demos for 1843/6843): TLV point cloud over the serial data port; on 1843/6843 raw ADC over LVDS to a DCA1000 is enabled by the cfg (lvdsStreamCfg), not by a separate firmware. The 1443 demo has no LVDS output.",
   "outputs": {
     "IWR1443": {
       "tlv": true,
@@ -831,7 +831,7 @@
       "timeout_ms": 3000,
       "once_safe": true,
       "flash_hint": "./fw flash demo <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
-      "note": "source-derived (cli_mmwave.c:326); SDK version of Firmware/IWR_Demos/xwr14xx_mmw_demo.bin unknown, so no SDK regex; the demo prompt mmwDemo:/> is required in the reply",
+      "note": "source-derived (cli_mmwave.c:326); SDK version of shipped_firmware/IWR1443/demo/xwr14xx_mmw_demo.bin unknown, so no SDK regex; the demo prompt mmwDemo:/> is required in the reply",
       "probes": [
         {
           "cmd": "version",

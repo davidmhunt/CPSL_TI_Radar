@@ -16,7 +16,7 @@ Firmware role's source of project facts
 | `firmware_dev/projects/ti_stock_demos/` | Stock SDK 3.6 IWR1843/IWR6843 mmw demos, built out of tree (overlay in `build/sdk/`; no TI source tracked) | ″ |
 | `firmware_dev/projects/iwr1843_sar_lvds/` | IWR1843 SAR/LVDS raw-ADC firmware from the SDK 3.6 `xwr18xx/mmw` demo (pristine baseline `bb3a348` in `firmware_dev`), built out of tree. Since firmware-07: MSS-only metaimage (DSS `NULL`, DSP halted), DSP chain/TLV/SW session removed, CBUFF HW session streams ADC per chirp, `sensorStop` -> `flushCfg` + cfg -> `sensorStart` without a power cycle (`channelCfg`/`adcCfg`/`lowPower` changes rejected), periodic runtime calibration off. Since firmware-08: `lvdsStreamCfg` dataFmt 2 = ADC + two 32-byte per-chirp metadata record slots (counters, RTI 100 MHz timestamp, lag-1 saturation), CLI `sarStats`, SDK CBUFF platform table compiled with `ENABLE_ALL_NON_INTERLEAVED`; format in its `docs/lvds_data_format.md`; see its README | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
-| `Firmware/` | v1 prebuilt images (`IWR_Demos/`, `DCA1000_Streaming/`) | this repo — to be reorganized into the v2.0 shipped-firmware directory |
+| `shipped_firmware/` | v1 prebuilt images keyed `<BOARD>/<firmware>/` (`IWR1443/demo/`, `IWR1443/dca1000_raw/iwr_raw_rosnode` submodule, `legacy/`); README lists board, descriptor, provenance; future home of published `firmware_dev` images | this repo |
 
 ## Toolchain (in the Docker image, under `/opt/ti/`)
 
