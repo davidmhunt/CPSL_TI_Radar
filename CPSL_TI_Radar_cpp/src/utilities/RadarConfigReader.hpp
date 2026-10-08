@@ -43,7 +43,6 @@ class RadarConfigReader{
         //line wins; -1 / false when the cfg has none. The format a dataFmt carries depends on the firmware
         //(BoardDescriptor::Lvds::stream_formats); the owner sets it, default adc (bytes per frame unchanged).
         int get_lvds_data_fmt() const { return lvds_data_fmt; }
-        bool get_lvds_header_enabled() const { return lvds_header_enabled; }
         void set_lvds_stream_format(cpsl::radar::LvdsStreamFormat f) { lvds_stream_format = f; }
         //set the format from the board's (firmware-applied) dataFmt map; a dataFmt it does not map, or no
         //lvdsStreamCfg line, leaves adc (cross_check_radar_cfg rejects an unmapped dataFmt for DCA1000 runs)

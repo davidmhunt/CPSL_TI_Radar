@@ -128,7 +128,6 @@ class SystemConfigReader {
         void set_skip_configure(bool v) { skip_configure = v; }
         // runtime.firmware_check (gui-33): auto (default) | warn | off; see Radar::configure
         cpsl::radar::FirmwareCheck get_firmware_check() const { return firmware_check; }
-        void set_firmware_check(cpsl::radar::FirmwareCheck v) { firmware_check = v; }
         int get_rx_cpu() const { return rx_cpu; }          // -1 = null (not pinned)
         int get_worker_cpu() const { return worker_cpu; }  // -1 = null (not pinned)
         uint32_t get_rx_priority() const { return rx_priority; }

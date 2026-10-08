@@ -165,16 +165,6 @@ def validate_config(binary: Path, config: str | os.PathLike, env: dict | None = 
     return parse_validate(p.stdout + p.stderr, p.returncode)
 
 
-def load_system_json(path: Path) -> dict:
-    try:
-        d = json.loads(Path(path).read_text())
-    except (OSError, ValueError) as e:
-        raise DriverError(f"cannot read system config {path}: {e}", 422)
-    if not isinstance(d, dict):
-        raise DriverError(f"system config {path} is not a JSON object", 422)
-    return d
-
-
 class DriverManager:
     """At most one driver run at a time; thread-safe. `emit(msg_dict)` receives driver_* messages (any thread)."""
 
