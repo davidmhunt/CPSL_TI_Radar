@@ -28,6 +28,8 @@ files via include/json; gui-04) holds, schema 2:
                    Read through `cfg_rules(board, firmware)`; the C++ driver reads the same block. Absent board = no rules.
   cli_overrides    optional {board: {"prompt": str}}  the CLI prompt this firmware prints on that board; overrides the board
                    descriptor's `cli.prompt` (the prompt of the board's default firmware). Read through `cfg_rules(...)["prompt"]`.
+  detection        optional (gui-35) null (+ `detection_note`) or {boards, variants, notes}: the on-chip CFAR command schema per board;
+                   format and rules in radar_gui/cfg/detection.py. GUI-only: the C++ driver ignores it and never enforces its rules.
   pending          optional string; present = stub (no cfg generation/validation yet)
   driver_board     optional {gui board: driver board}  (gui-30) the C++ driver board (config/boards/<name>.json) a system JSON
                    writes for this firmware on that GUI board, and whose cfg_dialect (required/forbidden commands) the cfg is
@@ -156,6 +158,9 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
 
     bad += fwident.check_identify(d.get("identify"), boards)
     bad += _check_rules(d.get("cfg_rules"), d.get("cli_overrides"), boards)
+    from . import detection
+
+    bad += detection.check_detection(d, boards)
     fm = d.get("lvds_data_fmts")
     if fm is None:
         if isinstance(out, dict) and any(isinstance(o, dict) and o.get("lvds") for o in out.values()):

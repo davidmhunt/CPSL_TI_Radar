@@ -99,6 +99,8 @@ TEST_CASE(gui_only_keys_are_accepted_and_listed_once) {
     CHECK(keys.count("identify") == 0);  // parsed strictly since gui-33 (test_firmware_identity)
     CHECK(keys.count("mimo") == 1);
     CHECK(keys.count("lvds_data_fmts") == 1);
+    CHECK(keys.count("detection") == 1);       // gui-35: on-chip CFAR schema, GUI-only, never enforced here
+    CHECK(keys.count("detection_note") == 1);
     // the cascade limit keys added in 3a032e0 are plain limit entries
     FirmwareDescriptor fw;
     std::string err;
@@ -106,7 +108,15 @@ TEST_CASE(gui_only_keys_are_accepted_and_listed_once) {
     CHECK(fw.limits.at("AWR2243_CASCADE").count("l2_heap_bytes") == 1);
     CHECK(fw.limits.at("AWR2243_CASCADE").count("l3_cube_bytes") == 1);
     // an unlisted extra key is not a GUI key: rejected
-    CHECK(has(load_mutated("demo", [](json& j) { j["detection"] = 1; }), "/detection: unknown key"));
+    CHECK(has(load_mutated("demo", [](json& j) { j["detection_extra"] = 1; }), "/detection_extra: unknown key"));
+}
+
+TEST_CASE(shipped_descriptors_with_detection_blocks_load) {
+    for (const char* id : {"demo", "cascade_ddm", "iwr1843_sar_lvds", "dca1000_raw"}) {
+        FirmwareDescriptor fw;
+        std::string err;
+        CHECK(FirmwareDescriptor::load_by_id(kFirmware, id, fw, err));
+    }
 }
 
 TEST_CASE(rejections) {

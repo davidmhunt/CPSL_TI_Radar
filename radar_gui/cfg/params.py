@@ -18,6 +18,7 @@ Schema (single profile; the profile fields live in `profiles[0]`, so gui-14..16 
                                 line. data_fmt 0 = HW (ADC) stream off, 1 = ADC data, 2 = ADC + metadata (SAR firmware)
     low_power                   0 = regular ADC, 1 = low-power ADC = `lowPower 0 <adcMode>` (gui-26); single chip only, and
                                 only when the cfg has the line (the cascade cfgs carry `lowPower 0 0` but it is not offered)
+    detection                   optional on-chip CFAR values (gui-35, radar_gui/cfg/detection.py), applied last with `detection.apply`
     derived                     read-only (ignored by apply_params): metrics-derived bandwidth, ramp, sample window ...
 
 Coupling (gui-15, docs/design/mimo_modes.md s4): single chip -> channelCfg tx_mask = OR(chirp_tx_masks) whenever
@@ -34,6 +35,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping
 
+from . import detection
 from . import firmware as fwmod
 from .metrics import infer_board_kind, metrics
 from .parse import Cfg, CfgError, parse_cfg
@@ -306,4 +308,9 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any], *, board: str | 
                 out.append(new[n] + (f" %{comment}" if comment is not None else ""))
         else:
             out.append(raw)
-    return "\n".join(out) + "\n"
+    text = "\n".join(out) + "\n"
+    if params.get("detection") is not None:       # gui-35: on-chip CFAR values, see radar_gui/cfg/detection.py
+        if not board:
+            raise ParamsError("detection: needs a board")
+        text = detection.apply(text, params["detection"], firmware, board)
+    return text

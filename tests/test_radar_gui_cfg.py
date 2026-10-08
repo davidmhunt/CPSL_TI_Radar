@@ -1,6 +1,7 @@
 """radar_gui.cfg: parse, metrics and per-board validation (gui-02 Step 1). Hardware-free."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,8 @@ def board_for(p: Path) -> str:
         return "IWR1443"
     if "6843" in s:
         return "IWR6843"
+    if re.search(r"^\s*cfarCfg(\s+\S+){7}\s*(%.*)?$", p.read_text(errors="replace"), re.M):
+        return "IWR1443"      # the SDK 2.x demo's 7-argument cfarCfg (IWR_Demos/indoor_scene.cfg ...)
     return "IWR1843"
 
 

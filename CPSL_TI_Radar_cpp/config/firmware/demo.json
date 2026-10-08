@@ -848,5 +848,516 @@
         }
       ]
     }
+  },
+  "detection": {
+    "boards": {
+      "IWR1443": "sdk2_14xx",
+      "IWR1843": "sdk3_hwa",
+      "IWR6843": "sdk3_dsp",
+      "IWR6843ODS": "sdk3_dsp"
+    },
+    "notes": [
+      "Source-derived limits (no bench record yet); the IWR6843/ODS DSP CFAR differs from the IWR1843 HWA CFAR: it ignores Cyclic and the Doppler mode."
+    ],
+    "variants": {
+      "sdk2_14xx": {
+        "level": "source",
+        "source": "SDK 2.1.0.4 xwr14xx mmw_cli.c:162-236 (shipped binary byte-identical); docs/research/gui_cfar_detection_2026-10-07.md",
+        "commands": {
+          "cfarCfg": {
+            "per_direction": false,
+            "lead": [
+              "0"
+            ],
+            "args": [
+              "mode",
+              "noiseWin",
+              "guardLen",
+              "divShift",
+              "cyclic",
+              "thresholdRaw"
+            ]
+          },
+          "peakGrouping": {
+            "per_direction": false,
+            "lead": [],
+            "fixed": {
+              "scheme": 1
+            },
+            "args": [
+              "scheme",
+              "pgRange",
+              "pgDoppler",
+              "pgStartIdx",
+              "pgEndIdx"
+            ]
+          }
+        },
+        "fields": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "enum",
+            "options": {
+              "0": "CA (cell averaging)",
+              "1": "CAGO (greatest-of)",
+              "2": "CASO (smallest-of)"
+            },
+            "default": 2,
+            "help": "CFAR averaging: CA, CAGO (greatest-of) or CASO (smallest-of).",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "noiseWin",
+            "label": "Noise window",
+            "type": "int",
+            "min": 1,
+            "max": 255,
+            "unit": "cells",
+            "default": 8,
+            "help": "Noise cells averaged next to the cell under test.",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "guardLen",
+            "label": "Guard cells",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "unit": "cells",
+            "default": 4,
+            "help": "Cells skipped next to the cell under test.",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "divShift",
+            "label": "Divisor shift",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "default": 3,
+            "help": "log2 of the noise-sum divisor (UG p.20: CA log2(2*window), CAGO/CASO log2(window)).",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "cyclic",
+            "label": "Cyclic",
+            "type": "bool",
+            "default": 0,
+            "help": "Wrap the window around the FFT edge.",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "thresholdRaw",
+            "label": "Threshold (raw)",
+            "type": "int",
+            "min": 0,
+            "max": 65535,
+            "unit": "log2 Q9",
+            "db_conversion": "q9_virtual",
+            "default": 1280,
+            "help": "Raw log2 Q9 value written to the HWA, not dB: dB = raw * 6 / 512 * N'/N with N = RX x TX virtual antennas and N' the next power of two (the shipped 1280 is 15 dB for N = 8). Larger = fewer detections.",
+            "cite": "SDK 2.1 UG p.20; mmw_cli.c:183; data_path.c:1511"
+          },
+          {
+            "key": "pgRange",
+            "label": "Peak grouping, range",
+            "type": "bool",
+            "default": 1,
+            "help": "Group neighbouring range detections (HWA).",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "pgDoppler",
+            "label": "Peak grouping, Doppler",
+            "type": "bool",
+            "default": 1,
+            "help": "Group neighbouring Doppler detections (software).",
+            "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
+          },
+          {
+            "key": "pgStartIdx",
+            "label": "Keep from range bin",
+            "type": "int",
+            "min": 0,
+            "max": 65535,
+            "default": 1,
+            "help": "First range-bin index whose detections are kept (the filter applies even with grouping off).",
+            "cite": "SDK 2.1 UG p.20; post_processing.c:117-128"
+          },
+          {
+            "key": "pgEndIdx",
+            "label": "Keep to range bin",
+            "type": "int",
+            "min": 0,
+            "max": 65535,
+            "default": 229,
+            "help": "Last range-bin index whose detections are kept; the shipped value tracks the cfg's range FFT size.",
+            "cite": "SDK 2.1 UG p.20; post_processing.c:117-128"
+          }
+        ],
+        "rules": [
+          {
+            "code": "cfar_args"
+          },
+          {
+            "code": "cfar_enum"
+          },
+          {
+            "code": "cfar_guard_vs_bins",
+            "severity": "warning"
+          },
+          {
+            "code": "cfar_divshift_formula",
+            "severity": "warning"
+          }
+        ]
+      },
+      "sdk3_hwa": {
+        "level": "source",
+        "source": "SDK 3.6 xwr18xx mmw_cli.c:454-557; cfarcaprochwa.c:832-858 (HWA DPU); docs/research/gui_cfar_detection_2026-10-07.md",
+        "commands": {
+          "cfarCfg": {
+            "per_direction": true,
+            "lead": [
+              "$sf",
+              "$dir"
+            ],
+            "args": [
+              "mode",
+              "noiseWin",
+              "guardLen",
+              "divShift",
+              "cyclic",
+              "thresholdDb",
+              "peakGrouping"
+            ]
+          }
+        },
+        "fields": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "enum",
+            "options": {
+              "0": "CA (cell averaging)",
+              "1": "CAGO (greatest-of)",
+              "2": "CASO (smallest-of)"
+            },
+            "default": {
+              "range": 2,
+              "doppler": 0
+            },
+            "help": "CFAR averaging: CA averages both sides, CAGO takes the greater side, CASO the smaller (better for adjacent targets).",
+            "cite": "SDK 3.6 UG p.27-29; mmw_cli.c:454-510"
+          },
+          {
+            "key": "noiseWin",
+            "label": "Noise window",
+            "type": "int",
+            "min": 1,
+            "max": 255,
+            "unit": "cells",
+            "default": {
+              "range": 8,
+              "doppler": 4
+            },
+            "help": "Noise cells averaged on each side of the cell under test (the UG calls it one-sided). 2*(window+guard) must stay below the number of FFT bins in that direction.",
+            "cite": "SDK 3.6 UG p.27-29; mmw_cli.c:454-510; cfarcaprochwa.c:832-843"
+          },
+          {
+            "key": "guardLen",
+            "label": "Guard cells",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "unit": "cells",
+            "default": {
+              "range": 4,
+              "doppler": 2
+            },
+            "help": "Cells skipped on each side of the cell under test so a target's own leakage does not raise the noise estimate.",
+            "cite": "SDK 3.6 UG p.27-29; mmw_cli.c:454-510"
+          },
+          {
+            "key": "divShift",
+            "label": "Divisor shift",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "default": {
+              "range": 3,
+              "doppler": 3
+            },
+            "help": "log2 of the noise-sum divisor: ceil(log2(2*window)) for CA, ceil(log2(window)) for CAGO/CASO. A mismatch is accepted by the firmware but rescales the threshold.",
+            "cite": "SDK 3.6 UG p.27"
+          },
+          {
+            "key": "cyclic",
+            "label": "Cyclic",
+            "type": "bool",
+            "default": {
+              "range": 0,
+              "doppler": 1
+            },
+            "help": "Wrap the window around the FFT edge. The DSP CFAR (IWR6843/ODS) ignores this (source-read, bench check pending).",
+            "cite": "SDK 3.6 UG p.27; cfarcaprocdsp.c"
+          },
+          {
+            "key": "thresholdDb",
+            "label": "Threshold",
+            "type": "float",
+            "min": 0,
+            "max": 100,
+            "step": 0.5,
+            "decimals": 2,
+            "unit": "dB",
+            "max_code": "cfar_threshold_max",
+            "default": {
+              "range": 15,
+              "doppler": 15
+            },
+            "help": "Detection threshold above the noise estimate in dB (0-100; the CLI rejects more, two decimals are kept). 0 switches the Doppler CFAR off on the IWR1843 HWA (source-read).",
+            "cite": "SDK 3.6 UG p.28; mmw_cli.c:480-483"
+          },
+          {
+            "key": "peakGrouping",
+            "label": "Peak grouping",
+            "type": "bool",
+            "default": {
+              "range": 1,
+              "doppler": 1
+            },
+            "help": "Keep only the local maximum among neighbouring detections in this direction.",
+            "cite": "SDK 3.6 UG p.28"
+          }
+        ],
+        "fov": {
+          "command": "cfarFovCfg",
+          "lead": [
+            "$sf",
+            "$dir"
+          ],
+          "units": {
+            "range": "m",
+            "doppler": "m/s"
+          },
+          "help": "Detections outside this window are dropped after CFAR. Auto follows the cfg's max range and +-max velocity; manual sets the window. Mandatory on this firmware (sensorStart fails without both directions).",
+          "cite": "SDK 3.6 UG p.29; mmw_cli.c:526-557"
+        },
+        "rules": [
+          {
+            "code": "cfar_args"
+          },
+          {
+            "code": "cfar_enum"
+          },
+          {
+            "code": "cfar_threshold_max",
+            "params": {
+              "max": 100
+            }
+          },
+          {
+            "code": "cfar_guard_vs_bins",
+            "severity": "warning"
+          },
+          {
+            "code": "cfar_divshift_formula",
+            "severity": "warning"
+          },
+          {
+            "code": "cfar_fov_order"
+          },
+          {
+            "code": "cfar_fov_noop",
+            "severity": "info"
+          },
+          {
+            "code": "cfar_missing_direction",
+            "params": {
+              "commands": [
+                "cfarCfg",
+                "cfarFovCfg"
+              ]
+            }
+          },
+          {
+            "code": "cfar_win2_invalid"
+          }
+        ]
+      },
+      "sdk3_dsp": {
+        "level": "source",
+        "source": "SDK 3.6 xwr18xx mmw_cli.c:454-557; cfarcaprocdsp.c:1115-1126 (DSP DPU); docs/research/gui_cfar_detection_2026-10-07.md",
+        "commands": {
+          "cfarCfg": {
+            "per_direction": true,
+            "lead": [
+              "$sf",
+              "$dir"
+            ],
+            "args": [
+              "mode",
+              "noiseWin",
+              "guardLen",
+              "divShift",
+              "cyclic",
+              "thresholdDb",
+              "peakGrouping"
+            ]
+          }
+        },
+        "fields": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "enum",
+            "options": {
+              "0": "CA (cell averaging)",
+              "1": "CAGO (greatest-of)",
+              "2": "CASO (smallest-of)"
+            },
+            "default": {
+              "range": 2,
+              "doppler": 0
+            },
+            "help": "CFAR averaging: CA averages both sides, CAGO takes the greater side, CASO the smaller (better for adjacent targets).",
+            "cite": "SDK 3.6 UG p.27-29; mmw_cli.c:454-510"
+          },
+          {
+            "key": "noiseWin",
+            "label": "Noise window",
+            "type": "int",
+            "min": 1,
+            "max": 255,
+            "unit": "cells",
+            "default": {
+              "range": 8,
+              "doppler": 4
+            },
+            "help": "Noise cells averaged on each side of the cell under test (the UG calls it one-sided). 2*(window+guard) must stay below the number of FFT bins in that direction.",
+            "cite": "SDK 3.6 UG p.27-29; mmw_cli.c:454-510; cfarcaprochwa.c:832-843"
+          },
+          {
+            "key": "guardLen",
+            "label": "Guard cells",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "unit": "cells",
+            "default": {
+              "range": 4,
+              "doppler": 2
+            },
+            "help": "Cells skipped on each side of the cell under test so a target's own leakage does not raise the noise estimate.",
+            "cite": "SDK 3.6 UG p.27-29; mmw_cli.c:454-510"
+          },
+          {
+            "key": "divShift",
+            "label": "Divisor shift",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "default": {
+              "range": 3,
+              "doppler": 3
+            },
+            "help": "log2 of the noise-sum divisor: ceil(log2(2*window)) for CA, ceil(log2(window)) for CAGO/CASO. A mismatch is accepted by the firmware but rescales the threshold.",
+            "cite": "SDK 3.6 UG p.27"
+          },
+          {
+            "key": "cyclic",
+            "label": "Cyclic",
+            "type": "bool",
+            "default": {
+              "range": 0,
+              "doppler": 1
+            },
+            "help": "Wrap the window around the FFT edge. The DSP CFAR (IWR6843/ODS) ignores this (source-read, bench check pending).",
+            "cite": "SDK 3.6 UG p.27; cfarcaprocdsp.c"
+          },
+          {
+            "key": "thresholdDb",
+            "label": "Threshold",
+            "type": "float",
+            "min": 0,
+            "max": 100,
+            "step": 0.5,
+            "decimals": 2,
+            "unit": "dB",
+            "max_code": "cfar_threshold_max",
+            "default": {
+              "range": 15,
+              "doppler": 15
+            },
+            "help": "Detection threshold above the noise estimate in dB (0-100; the CLI rejects more, two decimals are kept). 0 switches the Doppler CFAR off on the IWR1843 HWA (source-read).",
+            "cite": "SDK 3.6 UG p.28; mmw_cli.c:480-483"
+          },
+          {
+            "key": "peakGrouping",
+            "label": "Peak grouping",
+            "type": "bool",
+            "default": {
+              "range": 1,
+              "doppler": 1
+            },
+            "help": "Keep only the local maximum among neighbouring detections in this direction.",
+            "cite": "SDK 3.6 UG p.28"
+          }
+        ],
+        "fov": {
+          "command": "cfarFovCfg",
+          "lead": [
+            "$sf",
+            "$dir"
+          ],
+          "units": {
+            "range": "m",
+            "doppler": "m/s"
+          },
+          "help": "Detections outside this window are dropped after CFAR. Auto follows the cfg's max range and +-max velocity; manual sets the window. Mandatory on this firmware (sensorStart fails without both directions).",
+          "cite": "SDK 3.6 UG p.29; mmw_cli.c:526-557"
+        },
+        "rules": [
+          {
+            "code": "cfar_args"
+          },
+          {
+            "code": "cfar_enum"
+          },
+          {
+            "code": "cfar_threshold_max",
+            "params": {
+              "max": 100
+            }
+          },
+          {
+            "code": "cfar_guard_vs_bins",
+            "severity": "warning"
+          },
+          {
+            "code": "cfar_divshift_formula",
+            "severity": "warning"
+          },
+          {
+            "code": "cfar_fov_order"
+          },
+          {
+            "code": "cfar_fov_noop",
+            "severity": "info"
+          },
+          {
+            "code": "cfar_missing_direction",
+            "params": {
+              "commands": [
+                "cfarCfg",
+                "cfarFovCfg"
+              ]
+            }
+          }
+        ]
+      }
+    }
   }
 }

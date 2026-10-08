@@ -251,5 +251,7 @@
         }
       ]
     }
-  }
+  },
+  "detection": null,
+  "detection_note": "The SAR firmware has no on-chip detection: the build removes the CFAR chain and the demo CLI refuses cfarCfg / cfarFovCfg."
 }

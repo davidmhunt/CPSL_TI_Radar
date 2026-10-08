@@ -24,6 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
 
+from . import detection
 from . import firmware as fwmod
 from .limits import CAS, firmware_limits
 from .metrics import BOARDS, C, USABLE_IF, Metrics, az_tx_mask, tdm_slots
@@ -240,6 +241,9 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
         n_given = _num(t_in, "num_samples")
         loops_given = _num(t_in, "num_loops")
         cfar_r, cfar_d = _num(t_in, "cfar_range_db"), _num(t_in, "cfar_doppler_db")
+        det = t_in.get("detection")        # gui-35: full CFAR values, applied after the aliases above
+        if det is not None and not isinstance(det, dict):
+            raise CfgError("detection: expected an object")
         sar = mode == "sar"
         tx_mask = int(t_in["tx_mask"]) if t_in.get("tx_mask") not in (None, "") else \
             (0b001 if sar else az_tx_mask(fwmod.elevation_tx_bit(board)))
@@ -341,8 +345,12 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
     # Try each feasible sample rate (lowest first) and a few loop counts; keep the first clean design.
     best = None
     for cand in feasible[:12]:
-        design = _assemble_candidate(board, fw["id"], mode, tpl_rel, template, cand, n, rng, vmax, rate, cpl, tx_mask, rx_mask,
-                                     loops_given, vres, cfar_r, cfar_d, cascade, lim, chirp_masks, factor, want_bpm, data_fmt)
+        try:
+            design = _assemble_candidate(board, fw["id"], mode, tpl_rel, template, cand, n, rng, vmax, rate, cpl, tx_mask,
+                                         rx_mask, loops_given, vres, cfar_r, cfar_d, cascade, lim, chirp_masks, factor,
+                                         want_bpm, data_fmt, det)
+        except detection.DetectionError as e:
+            return _fail(board, t_in, issues + [Issue("error", "bad_detection", str(e))])
         if best is None:
             best = design
         if design["clean"]:
@@ -373,7 +381,8 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
     report.ok = not any(i.level == "error" for i in report.issues)
     resolved = dict(board=board, bpm=want_bpm, max_range_m=rng, max_velocity_ms=vmax, frame_rate_hz=rate, range_res_m=res,
                     velocity_res_ms=vres, num_samples=n, num_loops=loops, tx_mask=tx_mask, rx_mask=rx_mask,
-                    firmware=fw["id"], template=tpl_rel, lvds_data_fmt=data_fmt, cfar_range_db=cfar_r, cfar_doppler_db=cfar_d)
+                    firmware=fw["id"], template=tpl_rel, lvds_data_fmt=data_fmt, cfar_range_db=cfar_r, cfar_doppler_db=cfar_d,
+                    detection=det)
     name = _safe_name(str(t_in.get("name") or ""), f"{board.lower().replace('awr2243_', '')}_R{rng:g}m_V{vmax:g}ms_"
                                                    f"{rate:g}Hz".replace(".", "p"))
     return GenResult(board, report.ok, text, name, resolved, report, m, achieved)
@@ -393,7 +402,8 @@ def _loop_options(loops_given, vres, cand, cpl, cascade):
 
 
 def _assemble_candidate(board, fw_id, mode, tpl_rel, template, cand, n, rng, vmax, rate, cpl, tx_mask, rx_mask, loops_given,
-                        vres, cfar_r, cfar_d, cascade, lim, chirp_masks=(), factor=1, bpm=False, data_fmt=None) -> dict:
+                        vres, cfar_r, cfar_d, cascade, lim, chirp_masks=(), factor=1, bpm=False, data_fmt=None,
+                        det=None) -> dict:
     options, auto = _loop_options(loops_given, vres, cand, cpl, cascade)
     last = None
     for loops in options:
@@ -402,6 +412,8 @@ def _assemble_candidate(board, fw_id, mode, tpl_rel, template, cand, n, rng, vma
         else:
             text = _single_text(board, mode, tpl_rel, template, cand, n, rng, vmax, rate, loops, cpl, tx_mask, rx_mask,
                                 cfar_r, cfar_d, chirp_masks, factor, bpm, data_fmt)
+        if det:
+            text = detection.apply(text, det, fw_id, board)
         check = text
         if mode == "raw":     # the raw firmware always streams ADC data over LVDS; validate its data rate
             check = text + "\nlvdsStreamCfg -1 0 1 0\n"

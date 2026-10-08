@@ -187,5 +187,206 @@
         }
       ]
     }
+  },
+  "detection": {
+    "boards": {
+      "AWR2243_CASCADE": "ddm"
+    },
+    "notes": [
+      "cfarFovCfg is not registered in the cascade DDM build, so no FOV filter is offered.",
+      "The cascade accepts a cfg once per power-up."
+    ],
+    "variants": {
+      "ddm": {
+        "level": "source",
+        "source": "mcuplus 4.4 awr2243_cascade_ddm mmw_cli.c:643-704; docs/research/gui_cfar_detection_2026-10-07.md",
+        "commands": {
+          "cfarCfg": {
+            "per_direction": true,
+            "lead": [
+              "$sf",
+              "$dir"
+            ],
+            "args": [
+              "mode",
+              "winLen",
+              "guardLen",
+              "divShift",
+              "cyclic",
+              "thresholdDb",
+              "peakGrouping",
+              "osKvalue",
+              "osEdgeKscaleEn",
+              "isEnabled"
+            ]
+          }
+        },
+        "fields": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "enum",
+            "options": {
+              "0": "CA (cell averaging)",
+              "1": "CAGO (greatest-of)",
+              "2": "CASO (smallest-of)",
+              "3": "CFAR-OS (ordered statistic)"
+            },
+            "default": {
+              "range": 3,
+              "doppler": 3
+            },
+            "help": "CFAR type. The Doppler direction must be CFAR-OS (3); range may use 0-3. CFAR-OS ranks the K-th smallest cell instead of averaging.",
+            "cite": "mcuplus 4.4 DDM mmw_cli.c:643-704, 2255-2262; dopplerprochwaDDMA.h:630"
+          },
+          {
+            "key": "winLen",
+            "label": "Window",
+            "type": "int",
+            "min": 1,
+            "max": 255,
+            "unit": "cells",
+            "default": {
+              "range": 16,
+              "doppler": 16
+            },
+            "help": "Noise cells on each side of the cell under test (one-sided).",
+            "cite": "mcuplus 4.4 DDM mmw_cli.c:643-704, 2255-2262; dopplerprochwaDDMA.c:2052"
+          },
+          {
+            "key": "guardLen",
+            "label": "Guard cells",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "unit": "cells",
+            "default": {
+              "range": 0,
+              "doppler": 0
+            },
+            "help": "Guard cells; must be 0 for the Doppler direction (CFAR-OS). The range limit is not readable from the repo.",
+            "cite": "dopplerprochwaDDMA.c:3993-4003"
+          },
+          {
+            "key": "divShift",
+            "label": "Divisor shift",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "default": {
+              "range": 0,
+              "doppler": 0
+            },
+            "help": "Not applicable in CFAR-OS mode (shipped 0).",
+            "cite": "dopplerprochwaDDMA.c:2065"
+          },
+          {
+            "key": "cyclic",
+            "label": "Cyclic",
+            "type": "bool",
+            "default": {
+              "range": 1,
+              "doppler": 1
+            },
+            "help": "Wrap the window around the FFT edge.",
+            "cite": "mcuplus 4.4 DDM mmw_cli.c:643-704, 2255-2262"
+          },
+          {
+            "key": "thresholdDb",
+            "label": "Threshold",
+            "type": "float",
+            "min": 0,
+            "max": 100,
+            "step": 0.5,
+            "decimals": 2,
+            "unit": "dB",
+            "max_code": "cfar_threshold_max",
+            "default": {
+              "range": 10,
+              "doppler": 12
+            },
+            "help": "Detection threshold in dB (0-100; the CLI rejects more).",
+            "cite": "mcuplus 4.4 DDM mmw_cli.c:643-704, 2255-2262; mmw_cli.c:672-675"
+          },
+          {
+            "key": "peakGrouping",
+            "label": "Peak grouping",
+            "type": "bool",
+            "default": {
+              "range": 0,
+              "doppler": 0
+            },
+            "help": "Keep only the local maximum among neighbouring detections.",
+            "cite": "mcuplus 4.4 DDM mmw_cli.c:643-704, 2255-2262"
+          },
+          {
+            "key": "osKvalue",
+            "label": "OS K value",
+            "type": "int",
+            "min": 0,
+            "max": 255,
+            "default": {
+              "range": 7,
+              "doppler": 7
+            },
+            "help": "K of the ordered-statistic CFAR (the K-th ranked noise cell sets the level). Valid range against the window is not documented in the repo.",
+            "cite": "unverified (precompiled library; memo not-settled b)"
+          },
+          {
+            "key": "osEdgeKscaleEn",
+            "label": "OS edge K scaling",
+            "type": "bool",
+            "default": {
+              "range": 0,
+              "doppler": 0
+            },
+            "help": "Scale K for edge samples in non-cyclic CFAR-OS.",
+            "cite": "dopplerprochwaDDMA.h:652-660"
+          },
+          {
+            "key": "isEnabled",
+            "label": "Enabled",
+            "type": "bool",
+            "default": {
+              "range": 1,
+              "doppler": 1
+            },
+            "help": "Switch the direction's CFAR on. Doppler CFAR cannot be disabled (the board prints an error and ignores it).",
+            "cite": "mmw_cli.c:697-700"
+          }
+        ],
+        "rules": [
+          {
+            "code": "cfar_args"
+          },
+          {
+            "code": "cfar_enum"
+          },
+          {
+            "code": "cfar_threshold_max",
+            "params": {
+              "max": 100
+            }
+          },
+          {
+            "code": "cfar_missing_direction",
+            "params": {
+              "commands": [
+                "cfarCfg"
+              ]
+            }
+          },
+          {
+            "code": "cfar_doppler_enabled"
+          },
+          {
+            "code": "cfar_doppler_os_mode"
+          },
+          {
+            "code": "cfar_doppler_os_guard0"
+          }
+        ]
+      }
+    }
   }
 }

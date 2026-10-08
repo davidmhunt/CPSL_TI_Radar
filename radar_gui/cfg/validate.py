@@ -506,6 +506,11 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
                                 + (" [unverified set]" if _fm["confidence"] in ("unverified", "low") else ""),
                                 _fm["source"], _fm["confidence"]))
 
+    from . import detection   # gui-35: on-chip CFAR rules from the firmware descriptor (GUI-only, no C++ twin)
+
+    for lv, code, msg, src, conf in detection.issues(cfg, board, _fw0, m):
+        issues.append(Issue(lv, code, msg, src, conf))
+
     if lim["config_once_per_boot"].value:
         add(lim["config_once_per_boot"], "once_per_boot",
             f"{board} accepts a cfg only once per power-up; power-cycle before sending this one", "info")

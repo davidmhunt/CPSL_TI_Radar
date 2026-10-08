@@ -12,7 +12,7 @@ namespace cpsl {
 namespace radar {
 
 const std::set<std::string>& FirmwareDescriptor::gui_only_keys() {
-    static const std::set<std::string> keys = {"lvds_data_fmts", "mimo", "pending"};
+    static const std::set<std::string> keys = {"lvds_data_fmts", "mimo", "pending", "detection", "detection_note"};
     return keys;
 }
 

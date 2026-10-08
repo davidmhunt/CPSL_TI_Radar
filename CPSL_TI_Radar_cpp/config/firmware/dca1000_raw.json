@@ -213,5 +213,7 @@
         }
       ]
     }
-  }
+  },
+  "detection": null,
+  "detection_note": "Raw-ADC capture firmware: it streams ADC data and runs no on-chip detection."
 }

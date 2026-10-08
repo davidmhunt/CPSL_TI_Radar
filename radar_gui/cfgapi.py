@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .cfg import detection
 from .cfg import firmware as fwmod
 from .cfg import BOARDS, CfgError, apply_params, generate, params_from_cfg, limits_dict, metrics, parse_cfg, validate
 
@@ -52,6 +53,13 @@ class ParamsReq(BaseModel):
     board: str
     base_cfg_text: str                     # the cfg whose profile/chirp/frame/channel lines are rewritten
     params: dict | None = None             # radar_gui.cfg.params schema; partial is fine, None = just read the base
+    firmware: str | None = None
+
+
+class DetectionReq(BaseModel):
+    board: str
+    base_cfg_text: str                     # the cfg whose cfarCfg / cfarFovCfg / peakGrouping lines are rewritten
+    values: dict | None = None             # radar_gui.cfg.detection values; partial is fine, None = just read the base
     firmware: str | None = None
 
 
@@ -105,11 +113,12 @@ def _analyze_text(board: str, text: str, firmware: str | None = None) -> dict:
         rep = validate(cfg, board, None if pre else firmware)
     except CfgError as e:
         return {"board": board, "ok": False, "source": "cfg", "text": text, "metrics": None,
-                "issues": [{"level": "error", "code": "parse", "message": str(e), "source": "", "confidence": ""}]}
+                "issues": [{"level": "error", "code": "parse", "message": str(e), "source": "", "confidence": ""}],
+                "detection": detection.describe("", board, firmware)}
     d = rep.to_dict()
     issues = ([pre] if pre else []) + d["issues"]
     return {"board": board, "ok": d["ok"] and not pre, "source": "cfg", "text": text, "metrics": d["metrics"],
-            "issues": issues}
+            "issues": issues, "detection": detection.describe(text, board, firmware)}
 
 
 def system_json(req: SaveReq, cfg_name: str) -> dict:
@@ -214,11 +223,32 @@ def make_router(user_dir: Path | None = None) -> APIRouter:
         res["report"] = {"ok": res["ok"], "issues": res["issues"]}
         return res
 
+    @r.post("/api/cfg/detection")
+    def detection_edit(req: DetectionReq):
+        """On-chip CFAR editing (gui-35): apply `values` to `base_cfg_text`, then analyse. Same shape as /api/cfg/params;
+        bad values come back as error issues (ok false), never as a 5xx."""
+        _bad_board(req.board)
+        try:
+            text = detection.apply(req.base_cfg_text, req.values or {}, req.firmware, req.board)
+        except CfgError as e:
+            msg = {"level": "error", "code": "detection", "message": str(e), "source": "", "confidence": ""}
+            return {"board": req.board, "ok": False, "source": "detection", "text": req.base_cfg_text, "metrics": None,
+                    "issues": [msg], "params": None, "report": {"ok": False, "issues": [msg]},
+                    "detection": detection.describe(req.base_cfg_text, req.board, req.firmware)}
+        res = _analyze_text(req.board, text, req.firmware)
+        res["source"] = "detection"
+        try:
+            res["params"] = params_from_cfg(parse_cfg(text), req.board)
+        except CfgError:
+            res["params"] = None
+        res["report"] = {"ok": res["ok"], "issues": res["issues"]}
+        return res
+
     def _generated(board, targets, firmware=None):
         g = generate(board, targets, firmware=firmware).to_dict()
         return {"board": board, "ok": g["ok"], "source": "targets", "text": g["text"], "name": g["name"],
                 "metrics": g["metrics"], "issues": g["report"]["issues"], "achieved": g["achieved"],
-                "targets": g["targets"]}
+                "targets": g["targets"], "detection": detection.describe(g["text"], board, firmware)}
 
     @r.post("/api/cfg/generate")
     def gen(req: AnalyzeReq):

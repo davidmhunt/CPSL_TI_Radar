@@ -14,7 +14,7 @@ from radar_gui.sources import MockSource
 
 REPO = Path(__file__).resolve().parent.parent
 # a driver that knows the `firmware` key (gui-04): a build-gui04 tree if present (until `build/` is rebuilt), else build/
-DRIVER = next((d for d in (REPO / "CPSL_TI_Radar_cpp" / b / "CPSL_TI_Radar_CPP" for b in ("build-gui04", "build")) if d.exists()),
+DRIVER = next((d for d in (REPO / "CPSL_TI_Radar_cpp" / b / "CPSL_TI_Radar_CPP" for b in ("build-gui35", "build-gui04", "build")) if d.exists()),
               REPO / "CPSL_TI_Radar_cpp" / "build" / "CPSL_TI_Radar_CPP")
 T = {"max_range_m": 10, "max_velocity_ms": 3}
 
