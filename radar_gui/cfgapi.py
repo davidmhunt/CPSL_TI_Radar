@@ -91,6 +91,7 @@ class SaveReq(BaseModel):
     save_adc_frames: bool = False
     save_raw_lvds: bool = False
     log_level: str = "info"
+    overwrite: bool = False                # gui-39: replace the existing user .cfg (the system JSON is kept); default = refuse with 409
 
 
 def _bad_board(board):
@@ -197,7 +198,7 @@ def driver_verdict(driver_bin, json_path: Path) -> dict | None:
             "warnings": v.get("warnings", []), "text": v["text"]}
 
 
-def make_router(user_dir: Path | None = None, driver_bin=None) -> APIRouter:
+def make_router(user_dir: Path | None = None, driver_bin=None, driver_mgr=None) -> APIRouter:
     udir = Path(user_dir) if user_dir else Path(os.environ.get("RADAR_GUI_USER_CFG_DIR") or DEFAULT_USER_DIR)
     r = APIRouter()
 
@@ -320,6 +321,8 @@ def make_router(user_dir: Path | None = None, driver_bin=None) -> APIRouter:
         cfg_path, json_path = udir / f"{req.name}.cfg", udir / f"{req.name}.json"
         udir.mkdir(parents=True, exist_ok=True)
         text = req.cfg_text if req.cfg_text.endswith("\n") else req.cfg_text + "\n"
+        if req.overwrite:
+            return _overwrite(req, cfg_path, json_path, text, res)
         try:   # "x" = fail if present: a new name is the only way to write, shipped or user file alike
             with open(cfg_path, "x") as f:
                 try:
@@ -336,6 +339,59 @@ def make_router(user_dir: Path | None = None, driver_bin=None) -> APIRouter:
         sysj = system_json(req, cfg_path.name)
         return {"ok": True, "driver": driver_verdict(driver_bin, json_path), "cfg_path": str(cfg_path), "json_path": str(json_path), "issues": res["issues"],
                 "warnings": lvds_mismatch_warnings(req, sysj["dca1000"]["enabled"]),
+                "validate_cmd": f"CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP {json_path} --validate"}
+
+    def _live_uses(json_path: Path) -> bool:
+        """A driver session that is starting/running/stopping on this system JSON (gui-39)."""
+        if driver_mgr is None:
+            return False
+        st = driver_mgr.status(log=False)
+        if st.get("state") in (None, "idle", "exited", "failed"):
+            return False
+        mine = json_path.resolve()
+        return any(c and Path(c).resolve() == mine for c in (st.get("config"), getattr(driver_mgr, "session_json", None)))
+
+    def _overwrite(req: SaveReq, cfg_path: Path, json_path: Path, text: str, res: dict):
+        """gui-39 Q2: replace the user .cfg only; an existing system JSON (ports, DCA, saves) is kept, a missing one is
+        created from the form. The target must already exist in config/user/ and no live session may use its JSON."""
+        root = udir.resolve()
+        if cfg_path.is_symlink() or cfg_path.resolve().parent != root or json_path.resolve().parent != root:
+            raise HTTPException(422, "overwrite only writes plain files directly inside config/user/")
+        if not cfg_path.is_file():
+            raise HTTPException(409, f"{req.name}.cfg does not exist in {udir}; nothing to overwrite (save it as a new name)")
+        if _live_uses(json_path):
+            raise HTTPException(409, f"{req.name}.json is in use by a running driver session; stop it before overwriting")
+        warnings = []
+        kept = json_path.is_file()
+        if kept:
+            try:
+                sysj = json.loads(json_path.read_text())
+            except (OSError, ValueError):
+                raise HTTPException(409, f"{json_path.name} exists but is not valid JSON; fix or remove it first") from None
+            want = system_json(req, cfg_path.name).get("firmware")
+            have = sysj.get("firmware") if isinstance(sysj, dict) else None
+            if want and have != want:
+                warnings.append(f"firmware differs: the kept {json_path.name} says {have!r}, this form says {want!r}; "
+                                f"the JSON was not changed (edit it, or save under a new name)")
+        else:
+            sysj = system_json(req, cfg_path.name)
+            try:
+                with open(json_path, "x") as j:
+                    json.dump(sysj, j, indent=4)
+                    j.write("\n")
+            except FileExistsError:
+                raise HTTPException(409, f"{json_path.name} appeared meanwhile; retry") from None
+        tmp = cfg_path.with_name(cfg_path.name + ".tmp")
+        try:
+            tmp.write_text(text)
+            os.replace(tmp, cfg_path)
+        finally:
+            if tmp.exists():
+                tmp.unlink()
+        dca = bool((sysj.get("dca1000") or {}).get("enabled")) if isinstance(sysj, dict) else False
+        return {"ok": True, "overwritten": True, "json_kept": kept, "driver": driver_verdict(driver_bin, json_path),
+                "cfg_path": str(cfg_path), "json_path": str(json_path), "issues": res["issues"],
+                "warnings": warnings + lvds_mismatch_warnings(req, dca),
                 "validate_cmd": f"CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP {json_path} --validate"}
 
     return r

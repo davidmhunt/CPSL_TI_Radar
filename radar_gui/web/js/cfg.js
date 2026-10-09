@@ -524,7 +524,7 @@ async function onLoad() {
   $('cBoard').value = j.board; C.text = j.text; C.det = {}; C.detDirty = {}; resetDetectionUi(); setSource('cfg', j.name);
   $('t_lvds').checked = cfgLvdsOn(j.text); $('t_lvds').dataset.touched = '1';   // a loaded cfg's LVDS choice survives regenerating
   await loadFirmware(j.board); const fw = inferFirmware(j.text); if (fw) { $('cFw').value = fw; showFirmware(); }
-  $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + '_copy';
+  $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + (id.startsWith('user:') ? '' : '_copy');   // gui-39 Q3: a user cfg keeps its name (Save -> Overwrite), a shipped one is saved as a copy
   if (C.mode === 'direct') seedDirect(); else analyze();
 }
 function toTargets() {
@@ -537,23 +537,30 @@ function toTargets() {
 }
 
 // ---------- save ----------
-async function save() {
+async function save(overwrite = false) {
   const msg = $('sMsg'); msg.className = 'muted'; msg.textContent = 'Saving...';
   const body = {
     board: $('cBoard').value, firmware: $('cFw').value, name: $('sName').value.trim(), cfg_text: C.text, force: $('sForce').checked,
     cli_port: $('sCli').value, data_port: $('sData').value, serial_enabled: $('sSerial').checked,
     dca1000_enabled: $('sDca').checked, fpga_ip: $('sFpga').value, host_ip: $('sHost').value,
     cmd_port: +$('sCmd').value, data_udp_port: +$('sUdp').value,
-    save_adc_frames: $('sAdc').checked, save_raw_lvds: $('sLvds').checked, log_level: 'info',
+    save_adc_frames: $('sAdc').checked, save_raw_lvds: $('sLvds').checked, log_level: 'info', overwrite,
   };
   const { ok, j } = await api('/api/cfg/save', body);
   if (!ok) {
     const d = j && j.detail; msg.className = 'bad';
     msg.textContent = typeof d === 'string' ? d : d && d.message ? d.message : Array.isArray(d) ? d.map(x => x.msg).join('; ') : 'save failed';
+    if (!overwrite && typeof d === 'string' && /already exists/.test(d)) {   // gui-39: offer to replace the .cfg (the system JSON is kept)
+      const name = body.name;
+      msg.insertAdjacentHTML('beforeend', '<br><button class="btn" id="sOverwrite" type="button">Overwrite</button>');
+      $('sOverwrite').onclick = () => {
+        if (confirm(`Overwrite config/user/${name}.cfg with this cfg?\nThe existing ${name}.json (ports, DCA1000, saves) is kept unchanged; the previous .cfg is lost.`)) save(true);
+      };
+    }
     return;
   }
   msg.className = 'ok';
-  msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
+  msg.innerHTML = `${j.overwritten ? `Overwritten (.cfg replaced; ${j.json_kept ? 'system JSON kept unchanged' : 'no system JSON existed, created'})` : 'Saved'}<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
     (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span><br><a href="#run" id="sOpenRun">Open in Radar</a>`;
   const dv = j.driver;   // gui-04: the real driver's verdict on the saved system JSON (absent from an older server)
   if (dv) {

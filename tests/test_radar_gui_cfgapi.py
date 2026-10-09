@@ -313,3 +313,83 @@ def test_save_sar_writes_the_driver_board_and_matches_the_shipped_system_json(cl
     assert s["serial_stream"]["enabled"] is False and s["dca1000"]["enabled"] is True
     d = client.post("/api/cfg/analyze", json={"board": "IWR1843", "cfg_text": text, "firmware": "iwr1843_sar_lvds"}).json()
     assert d["ok"] and d["board"] == "IWR1843"                    # the GUI board stays IWR1843 everywhere but the saved JSON
+
+
+# ---- gui-39 Step 2: overwrite of user configs ----
+
+def _put_json(client, name="t1", **kw):
+    doc = {"schema_version": 2, "board": "IWR1843", "firmware": "demo", "radar_cfg": f"{name}.cfg",
+           "cli": {"port": "/dev/ttyACM9"}, "serial_stream": {"enabled": True, "port": "/dev/ttyACM8"}}
+    doc.update(kw)
+    (client.udir / f"{name}.json").write_text(json.dumps(doc, indent=4))
+    return doc
+
+
+def test_overwrite_replaces_cfg_only_and_keeps_json(client):
+    assert client.post("/api/cfg/save", json=_save_body(client)).status_code == 200
+    kept = _put_json(client)                                   # hand-tuned ports that the Configure form does not load
+    raw_before = (client.udir / "t1.json").read_text()
+    body = _save_body(client)
+    body["cfg_text"] = body["cfg_text"] + "% tuned\n"
+    assert client.post("/api/cfg/save", json=body).status_code == 409        # default still refuses
+    r = client.post("/api/cfg/save", json={**body, "overwrite": True})
+    assert r.status_code == 200 and r.json()["overwritten"] and r.json()["json_kept"]
+    assert "% tuned" in (client.udir / "t1.cfg").read_text()
+    assert (client.udir / "t1.json").read_text() == raw_before and json.loads(raw_before) == kept
+    assert not list(client.udir.glob("*.tmp"))                                # atomic: no temp file left
+
+
+def test_overwrite_warns_when_firmware_differs(client):
+    client.post("/api/cfg/save", json=_save_body(client))
+    _put_json(client, firmware="iwr1843_sar_lvds")
+    body = {**_save_body(client), "firmware": "demo", "overwrite": True}
+    r = client.post("/api/cfg/save", json=body).json()
+    assert any("firmware differs" in w for w in r["warnings"])
+    assert json.loads((client.udir / "t1.json").read_text())["firmware"] == "iwr1843_sar_lvds"
+
+
+def test_overwrite_creates_json_for_a_cfg_only_file(client):
+    client.udir.mkdir()
+    (client.udir / "lonely.cfg").write_text("% old\n")
+    r = client.post("/api/cfg/save", json={**_save_body(client, "lonely"), "overwrite": True})
+    assert r.status_code == 200 and r.json()["json_kept"] is False
+    assert json.loads((client.udir / "lonely.json").read_text())["radar_cfg"] == "lonely.cfg"
+    assert "% old" not in (client.udir / "lonely.cfg").read_text()
+
+
+def test_overwrite_of_a_missing_file_is_refused(client):
+    r = client.post("/api/cfg/save", json={**_save_body(client, "ghost"), "overwrite": True})
+    assert r.status_code == 409 and not (client.udir / "ghost.cfg").exists() and not (client.udir / "ghost.json").exists()
+    client.udir.mkdir(exist_ok=True)
+    (client.udir / "stray.json").write_text("{}")                             # a JSON alone is not an overwrite target
+    assert client.post("/api/cfg/save", json={**_save_body(client, "stray"), "overwrite": True}).status_code == 409
+
+
+def test_overwrite_while_the_session_uses_the_json_is_refused(client):
+    client.post("/api/cfg/save", json=_save_body(client))
+    before = (client.udir / "t1.cfg").read_text()
+    mgr = client.app.state.driver
+    mgr.state, mgr.config = "running", str(client.udir / "t1.json")
+    try:
+        r = client.post("/api/cfg/save", json={**_save_body(client), "cfg_text": "% other\n", "force": True, "overwrite": True})
+    finally:
+        mgr.state, mgr.config = "idle", None
+    assert r.status_code == 409 and "running driver session" in r.json()["detail"]
+    assert (client.udir / "t1.cfg").read_text() == before
+
+
+def test_overwrite_cannot_escape_config_user(client, tmp_path):
+    client.udir.mkdir()
+    outside = tmp_path / "outside.cfg"
+    outside.write_text("% precious\n")
+    (client.udir / "link.cfg").symlink_to(outside)                            # a symlink in config/user must not be followed out
+    r = client.post("/api/cfg/save", json={**_save_body(client, "link"), "overwrite": True})
+    assert r.status_code == 422 and outside.read_text() == "% precious\n"
+    for bad in ("../evil", "a/b", ".hidden"):
+        assert client.post("/api/cfg/save", json={**_save_body(client, bad), "overwrite": True}).status_code == 422
+
+
+def test_overwrite_ui_wiring():
+    src = (Path(__file__).resolve().parent.parent / "radar_gui" / "web" / "js" / "cfg.js").read_text()
+    assert "sOverwrite" in src and "confirm(" in src and "overwrite" in src
+    assert "(id.startsWith('user:') ? '' : '_copy')" in src                    # Q3
