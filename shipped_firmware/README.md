@@ -6,8 +6,8 @@ Prebuilt firmware images that ship with the repo, laid out as
 of a descriptor in `CPSL_TI_Radar_cpp/config/firmware/<firmware>.json`.
 Images that no descriptor uses sit in `legacy/`.
 
-These are the v1 images moved here from the old top-level v1 firmware folder (rel-03); every file is
-byte-identical to its old path (sha256 recorded in the rel-03 directive log).
+These are the v1 images moved here from the old top-level v1 firmware folder; every file is
+byte-identical to its old path.
 
 | Image | Board | Firmware descriptor | Provenance | Flashing |
 |-------|-------|---------------------|------------|----------|
@@ -30,8 +30,9 @@ The submodule is initialised with `git submodule update --init shipped_firmware/
 
 `fw publish` (from `firmware_dev/`, clean builds only) fills this directory from `firmware_dev` builds:
 `./fw publish <project> [--dry-run]` copies each flashable image to `<BOARD>/<descriptor>/` with an
-`<image>.provenance.json` (`firmware_dev` commit, variant, toolchain, image sha256, chirp cfgs). See
-`firmware_dev/docs/tutorials/04_publish.md`. Nothing from it is tracked here yet.
+`<image>.provenance.json` (`firmware_dev` commit, variant, toolchain, image sha256, chirp cfgs). Add a
+row to the table above for each published image, and commit it with the image, its provenance and the
+bumped `firmware_dev` pointer. See `firmware_dev/docs/tutorials/04_publish.md`. No published image is tracked yet.
 
 ## Licensing
 
