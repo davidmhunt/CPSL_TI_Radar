@@ -1,23 +1,23 @@
 # Firmware project contract — requirements
 
 **Status:** signed off 2026-10-08 (user); amended 2026-10-08 (user)
-**Owner:** fwstd loop · **Sponsor:** user · **Serves:** firmware standardisation (fwstd-03..08) and the later GUI build/flash/verify directive
+**Owner:** firmware-standardisation work · **Sponsor:** user · **Serves:** firmware standardisation and the later GUI build/flash/verify work
 
 Every project in `firmware_dev/projects/` (`ti_stock_demos`, `iwr1843_sar_lvds`,
 `awr2243_cascade_ddm`, `_template`) follows one manifest, one set of `fw` verbs,
 one machine interface and one set of flash gates. A person and a future GUI
 drive the same verbs; the GUI reads only `fw` JSON (Appendix A).
 
-**Done when:** (a) hardware-free, fwstd-03: every R passes on a fake board and
+**Done when:** (a) hardware-free: every R passes on a fake board and
 fake `docker`, `fw test` passes per project, `publish` targets a scratch dir only;
-(b) user bench, fwstd-09: a no-TTY script builds, flashes (token) and verifies each
+(b) user bench: a no-TTY script builds, flashes (token) and verifies each
 flashable project (cascade verify reports `skipped`).
 
 ## Requirements
 
 | ID | Requirement | Verification | Threshold |
 |----|-------------|--------------|-----------|
-| R1 | `projects/<p>/project.toml` replaces `project.env` (stdlib `tomllib`); `project.env` is read only during migration, with a stderr deprecation line. | `fw test` schema check | 0 invalid; 0 `.env`-only at fwstd-08 |
+| R1 | `projects/<p>/project.toml` replaces `project.env` (stdlib `tomllib`); `project.env` is read only during migration, with a stderr deprecation line. | `fw test` schema check | 0 invalid; 0 `.env`-only once migration is done |
 | R2 | Tables: `[project]` name, summary, `status` (`stub\|source\|built\|bench`); `[deps]` sdk, sdk_version, toolchain, `download_items`; `[source]` baseline, baseline_commit; `[build]` script, `variants` (selected by `--variant`), est_minutes. Required tables by status: A5. | Validator: missing/unknown key, wrong type, bad enum | Exit 1 naming the key path |
 | R3 | `[[artifact]]` (first = default image): file, board, `descriptor` (id in `../CPSL_TI_Radar_cpp/config/firmware/`, or `""`), `flashable`. | `fw test`; parent pytest, both directions | 0 mismatches |
 | R4 | `[flash]`: method (`dslite\|uart_uniflash\|manual`), gate (`sop\|j6`), port_glob, `mode_steps`, `after_steps`, success_marker, optional `manual_images` (see Amendment 4). The gate comes from the manifest, not `*.ccxml` presence. | Ccxml added/removed; `--dry-run` per project | Same gate; exit 0; checklist, command, sha256 shown |
@@ -43,7 +43,7 @@ flashable project (cascade verify reports `skipped`).
 ## Constraints and interfaces
 
 - `fw` stays bash; logic is stdlib Python 3.11+.
-- Descriptors gain `source: {fw_project, artifact}` (`null` for prebuilts `dca1000_raw`, IWR1443 `demo`); `flash_hint` names a real project.
+- Each descriptor board entry gains `identify.<board>.source = {fw_project, artifact}` (`null` for prebuilts `dca1000_raw`, IWR1443 `demo`); `flash_hint` names a real project.
 - `tools/cascade_serial_check.py` moves into `awr2243_cascade_ddm`; `verify` replaces it.
 - The cascade takes a cfg once per power-up; `fw` never sends one.
 
@@ -53,11 +53,11 @@ The GUI; real publishing of TI-derived binaries (pending a ruling); multi-board 
 
 ## Decisions
 
-Decided 2026-10-08 (user): `--confirm` needs no typed phrase (TTY path keeps it); `status` levels (R2) and README sections (R21) as written; descriptor `source` as in Constraints. Changed from today by the Architect: a wrong typed phrase exits 5 (was 1). No open decisions.
+Decided 2026-10-08 (user): `--confirm` needs no typed phrase (TTY path keeps it); `status` levels (R2) and README sections (R21) as written; per-board descriptor `identify.<board>.source` as in Constraints. Changed from today by the Architect: a wrong typed phrase exits 5 (was 1). No open decisions.
 
 ## Pointers
 
-`firmware_dev/fw`; `projects/README.md` §3-4; `iwr1843_sar_lvds`; fwstd-01 Evaluation.
+`firmware_dev/fw`; `projects/README.md` §3-4; `iwr1843_sar_lvds`.
 
 ## Appendix A — Machine interface
 
