@@ -24,16 +24,20 @@ services:
     image: cpsl-ti-radar:dev
     build: *build
     profiles: ["hw"]
-    # Host networking reaches the DCA1000 on 192.168.33.x; the GUI listens on loopback only
-    # (no authentication, so it must not be on the LAN).
+    # Host networking reaches the DCA1000 on 192.168.33.x. The GUI binds GUI_HOST (default loopback):
+    # it has no authentication, so a LAN/tailnet address lets anyone who can reach it start the radar.
+    # Settings come from docker/app/.env (written by setup_env.sh; see .env.example).
     network_mode: host
-    command: ["python", "-m", "radar_gui", "--host", "127.0.0.1", "--port", "8090"]
+    command: ["python", "-m", "radar_gui", "--host", "${GUI_HOST:-127.0.0.1}", "--port", "${GUI_PORT:-8090}"]
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    group_add: ["${DIALOUT_GID:-20}"]          # host `getent group dialout | cut -d: -f3`
-    # Serial ports by env var (restart the container after a re-plug changes the node).
+    # SERIAL_GID = the group that owns the serial nodes (not always dialout: plugdev, gid 46, on some hosts).
+    # DIALOUT_GID is the old name, kept as a fallback.
+    group_add: ["${SERIAL_GID:-${DIALOUT_GID:-20}}"]
+    # Host port (RADAR_CLI, e.g. a /dev/serial/by-id path) -> fixed path in the container (RADAR_CLI_IN), which is
+    # what the shipped system JSONs name. Restart with --force-recreate after a re-plug.
     devices:
-      - "${RADAR_CLI:-/dev/ttyACM0}:${RADAR_CLI:-/dev/ttyACM0}"
-      - "${RADAR_DATA:-/dev/ttyACM1}:${RADAR_DATA:-/dev/ttyACM1}"
+      - "${RADAR_CLI:-/dev/ttyACM0}:${RADAR_CLI_IN:-/dev/ttyACM0}"
+      - "${RADAR_DATA:-/dev/ttyACM1}:${RADAR_DATA_IN:-/dev/ttyACM1}"
     # Real-time priority is optional: needed only for runtime.rx_priority / worker_priority > 0.
     cap_add: [SYS_NICE]
     ulimits:
