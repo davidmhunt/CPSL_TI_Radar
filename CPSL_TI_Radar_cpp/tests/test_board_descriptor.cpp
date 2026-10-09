@@ -579,6 +579,7 @@ TEST_CASE(sar_descriptor_differs_from_iwr1843_only_as_intended) {
     base["firmwares"] = sar["firmwares"];   // host-GUI metadata (gui-10), differs per board
     base["cli"]["stop_timeout_ms"] = 4000;
     base["data_uart"] = json{{"supported", false}};
+    base["cli"]["cmd_timeout_ms"] = 500;     // core-23 Step 4: first sensorStart ack measured 74 ms
     CHECK(base == sar);
 
     BoardDescriptor d = with_firmware(must_load("IWR1843_SAR"), "iwr1843_sar_lvds");

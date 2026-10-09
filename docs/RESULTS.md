@@ -149,7 +149,7 @@ Bench 2026-10-09, IWR1843BOOST + DCA1000, driver `build/CPSL_TI_Radar_CPP` sha25
 |---|---|
 | dataFmt 1, 60 s (`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`) | `firmware: match expected=iwr1843_sar_lvds`; 117 frames, 272,324 packets; 0 dropped, late, incomplete, stalls, kernel drops, resyncs; 3,366,000 B/frame (3300 x 4 B x 255 chirps x 1 Rx); cpu mean 8.5% |
 | CLI latency | cfg commands 1-6 ms each (no 500 ms prompt stall) |
-| `sensorStart` ack | 74 ms on the first start after power-up, 5 ms on later starts; the hard `cli.cmd_timeout_ms` is 100 ms (26 ms margin on the first start) |
+| `sensorStart` ack | 74 ms on the first start after power-up, 5 ms on later starts; the hard `cli.cmd_timeout_ms` was 100 ms (26 ms margin on the first start), raised to 500 ms in `IWR1843_SAR.json` (core-23 Step 4) |
 | `sensorStop` ack | 102 ms (60 s run) and 204 ms (restarts), about one frame-end wait; the limit is `cli.stop_timeout_ms` = 4000 ms in `IWR1843_SAR.json`, not `cmd_timeout_ms` |
 | Restarts | two more 15 s driver processes in the same power-up: cfg accepted every time, 29 frames each, 0 drops |
 | dataFmt 2 replay (`SAR_2ms_fmt2.cfg`, 20 s `dca_capture.py` capture, 92,920 datagrams) | driver `adc_data.bin` byte-equal to `sar_parse.py` `_adc.bin` over all 39 complete frames (131,274,000 B); `chirp_meta.csv` rows 0-9943 equal to `_meta.csv`; records_valid 9945, invalid 0, other_run 0. Same result on a second capture |
@@ -157,7 +157,7 @@ Bench 2026-10-09, IWR1843BOOST + DCA1000, driver `build/CPSL_TI_Radar_CPP` sha25
 
 ### Interpretation
 
-The core driver configures the SAR image, passes the identity check, and streams dataFmt 1 and dataFmt 2 without loss on the bench, and the SAR descriptor restarts without a power cycle. The sensorStop times are normal: the firmware acks after the current frame ends, and the descriptor's stop timeout (4000 ms) is about 20 times larger than the measured wait. The one thin margin is the first `sensorStart` after power-up (74 ms against the hard 100 ms), which passed but is closer to its limit than every later start.
+The core driver configures the SAR image, passes the identity check, and streams dataFmt 1 and dataFmt 2 without loss on the bench, and the SAR descriptor restarts without a power cycle. The sensorStop times are normal: the firmware acks after the current frame ends, and the descriptor's stop timeout (4000 ms) is about 20 times larger than the measured wait. The one thin margin was the first `sensorStart` after power-up (74 ms against the then-hard 100 ms); `cmd_timeout_ms` was raised to 500 ms afterwards (not re-benched).
 
 ### Honest caveats
 

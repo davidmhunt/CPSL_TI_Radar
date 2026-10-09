@@ -12,7 +12,7 @@
     ],
     "prompt": ":/>",
     "prompt_wait_ms": 500,
-    "cmd_timeout_ms": 100,
+    "cmd_timeout_ms": 500,
     "stop_timeout_ms": 4000,
     "start_cmd": "sensorStart",
     "stop_cmd": "sensorStop",
