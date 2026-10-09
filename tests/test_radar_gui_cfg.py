@@ -431,7 +431,7 @@ def test_mimo_block_on_every_descriptor():
             assert m["scheme"] in ("tdm", "ddma") and isinstance(m["bpm"], bool) and m["source"] and m["confidence"], (fw["id"], b)
             assert {"max_chirps_per_loop", "subframes"} <= set(m)
             assert m["scheme"] == ("ddma" if fw["id"] == "cascade_ddm" else "tdm")
-    assert fwmod.mimo("IWR1843", "demo")["bpm"] and fwmod.mimo("IWR6843", "demo")["bpm"]
+    assert not fwmod.mimo("IWR1843", "demo")["bpm"] and fwmod.mimo("IWR6843", "demo")["bpm"]   # gui-39: the xwr18xx demo has no bpmCfg
     assert fwmod.mimo("IWR1443", "demo")["bpm"] is False                    # memo: unestablished -> false
     d = fwmod.mimo("IWR1843", "demo")
     assert (d["max_chirps_per_loop"], d["subframes"]) == (32, 4)
@@ -441,7 +441,7 @@ def test_mimo_block_on_every_descriptor():
     assert r["max_chirps_per_loop"] is None and r["subframes"] is None and r["confidence"] == "unverified"
     c = fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")
     assert c["bpm"] is False and c["subframes"] == 0 and "8" in c["note"]
-    assert "gui_multichirp_tdm.md" in d["source"]
+    assert "gui_multichirp_tdm.md" in fwmod.mimo("IWR6843", "demo")["source"] and "mmw_cli.c" in d["source"]   # gui-39: 1843 override cites the SDK file
     with pytest.raises(KeyError):
         fwmod.mimo("IWR1843", "nope")
 

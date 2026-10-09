@@ -326,6 +326,9 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     for name in rules["required_commands"]:
         if not cfg.has(name):
             issues.append(Issue("error", "missing_" + name, f"cfg has no {name}, which the {rules['firmware']} firmware requires on {board}", dsrc, "repo"))
+    for name in rules["skip_commands"]:   # gui-39: the driver drops these lines (`cli [skip] ...`); say so rather than let it look like a rejected command
+        if cfg.has(name):
+            issues.append(Issue("warning", "skipped_" + name, f"{name}: not sent; the {board} {rules['firmware']} firmware has no such command (the driver skips the line)", dsrc, "repo"))
     for name in rules["forbidden_commands"]:
         if cfg.has(name):
             issues.append(Issue("error", "forbidden_" + name, f"cfg has {name}, which the {rules['firmware']} firmware rejects on {board}", dsrc, "repo"))

@@ -137,7 +137,8 @@ TEST_CASE(board_overrides_merge_over_descriptor) {
     CHECK_EQ(r.getRadarCliBaudRate(), 115200u);  // untouched sibling from the descriptor
     CHECK_EQ(r.getRadarDataBaudRate(), 460800u);
     CHECK_EQ(r.getRadarDataTimeoutMs(), 2500);
-    CHECK(r.getBoard().cfg_dialect.skip_commands.empty());
+    // the IWR1843 stock demo has no bpmCfg (gui-39): the firmware skips it
+    CHECK(r.getBoard().cfg_dialect.skip_commands == std::vector<std::string>({"bpmCfg"}));
     // the cfg command rules come from the firmware (gui-33 Step 4): no firmware key -> the board's default (demo)
     CHECK(r.getBoard().cfg_dialect.required_commands == std::vector<std::string>({"calibData"}));
     // ... and are no longer valid board_overrides: the error names the new place

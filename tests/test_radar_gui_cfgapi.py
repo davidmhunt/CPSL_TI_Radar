@@ -277,7 +277,7 @@ def test_chirp_table_payloads(client):
     def post(board, fw, base, params):
         return client.post("/api/cfg/params", json={"board": board, "firmware": fw, "base_cfg_text": base, "params": params}).json()
 
-    for board, bpm_ok in (("IWR1443", False), ("IWR1843", True)):
+    for board, bpm_ok in (("IWR1443", False), ("IWR1843", False), ("IWR6843", True)):   # gui-39: the xwr18xx demo has no bpmCfg
         fw = client.get("/api/cfg/firmware", params={"board": board}).json()["firmware"][0]
         assert fw["mimo"]["bpm"] is bpm_ok and fw["mimo"]["max_chirps_per_loop"] != 0   # table shows the BPM preset only when true
     base = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T, "firmware": "demo"}).json()["text"]
@@ -287,10 +287,13 @@ def test_chirp_table_payloads(client):
         r = post("IWR1843", "demo", base, {"chirp_tx_masks": masks})
         assert r["metrics"] and [c["tx_mask"] for c in r["metrics"]["chirp_sequence"]] == masks
         assert r["params"]["chirp_tx_masks"] == masks and r["metrics"]["scheme"] == "tdm" and not r["metrics"]["bpm_enabled"]
-    r = post("IWR1843", "demo", base, {"bpm": True})                  # BPM preset: only the flag is sent
+    rej18 = post("IWR1843", "demo", base, {"bpm": True})              # gui-39: not on the IWR1843 stock demo
+    assert any(i["code"] == "params" and i["level"] == "error" for i in rej18["issues"])
+    base68 = client.post("/api/cfg/generate", json={"board": "IWR6843", "targets": T, "firmware": "demo"}).json()["text"]
+    r = post("IWR6843", "demo", base68, {"bpm": True})                  # BPM preset: only the flag is sent
     assert r["metrics"]["bpm_enabled"] and r["params"]["bpm"] is True and r["params"]["chirp_tx_masks"] == [5, 5]
     assert not any(i["level"] == "error" for i in r["issues"] if i["code"] == "params")
-    back = post("IWR1843", "demo", r["text"], {"bpm": False, "chirp_tx_masks": [1, 4]})
+    back = post("IWR6843", "demo", r["text"], {"bpm": False, "chirp_tx_masks": [1, 4]})
     assert back["params"]["bpm"] is False and back["params"]["chirp_tx_masks"] == [1, 4]
     b14 = client.post("/api/cfg/generate", json={"board": "IWR1443", "targets": T}).json()["text"]
     rej = post("IWR1443", "demo", b14, {"bpm": True})

@@ -120,7 +120,8 @@ def test_bpm_on_a_bpm_false_firmware_is_error():
         mp.setattr(fwmod, "mimo", lambda b, f: {**real(b, f), "bpm": False, "confidence": "medium"})
         r = rep(BPM, "IWR1843", "demo")
     assert lv(r, "bpm_unsupported") == ["error"] and not r.ok
-    assert not lv(rep(BPM, "IWR1843", "demo"), "bpm_unsupported")        # the real demo allows it
+    assert not lv(rep(BPM, "IWR6843", "demo"), "bpm_unsupported")        # the real xwr68xx demo allows it
+    assert lv(rep(BPM, "IWR1843", "demo"), "bpm_unsupported") == ["error"]   # gui-39: the xwr18xx demo has no bpmCfg
 
 
 def test_bpm_on_unverified_firmware_is_only_a_warning():

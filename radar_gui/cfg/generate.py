@@ -412,6 +412,9 @@ def _assemble_candidate(board, fw_id, mode, tpl_rel, template, cand, n, rng, vma
         else:
             text = _single_text(board, mode, tpl_rel, template, cand, n, rng, vmax, rate, loops, cpl, tx_mask, rx_mask,
                                 cfar_r, cfar_d, chirp_masks, factor, bpm, data_fmt)
+        skip = set(fwmod.cfg_rules(board, fw_id)["skip_commands"])   # gui-39: lines the firmware has no command for (the driver would skip them anyway)
+        if skip:
+            text = "\n".join(ln for ln in text.split("\n") if not (ln.split() and ln.split()[0] in skip))
         if det:
             text = detection.apply(text, det, fw_id, board)
         check = text

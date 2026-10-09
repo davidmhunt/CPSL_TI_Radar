@@ -735,6 +735,11 @@
     "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) sections 1-2: SDK 3.6 rfparser (RP:586-660, 774-778), one binary for 1843/6843",
     "confidence": "high",
     "boards": {
+      "IWR1843": {
+        "bpm": false,
+        "confidence": "high",
+        "source": "SDK 3.6 xwr18xx demo mmw_cli.c registers no bpmCfg (the xwr68xx demo does, mmw_cli.c:1473): firmware_dev/projects/ti_stock_demos/build/sdk/packages/ti/demo/. Source-derived; bench session 1 saw the board reject the line (gui-39)"
+      },
       "IWR1443": {
         "bpm": false,
         "max_chirps_per_loop": null,
@@ -746,6 +751,9 @@
   },
   "cfg_rules": {
     "IWR1843": {
+      "skip_commands": [
+        "bpmCfg"
+      ],
       "required_commands": [
         "calibData"
       ]

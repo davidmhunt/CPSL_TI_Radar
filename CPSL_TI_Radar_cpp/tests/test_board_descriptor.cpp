@@ -427,9 +427,9 @@ static std::vector<std::string> v(std::initializer_list<const char*> l) {
 }
 
 TEST_CASE(skip_commands_per_firmware) {
-    // No shipped firmware skips anything. The stock SDK 3.6 IWR1843 demo needs calibData for sensorStart
-    // (gui-09 bench); only an older image rejected it. The rules live in config/firmware (gui-33 Step 4).
-    CHECK(with_firmware(must_load("IWR1843"), "demo").cfg_dialect.skip_commands.empty());
+    // The only skip is bpmCfg on the IWR1843 stock demo (SDK 3.6 xwr18xx mmw_cli.c has no such command; gui-39).
+    // The stock IWR1843 demo needs calibData for sensorStart (gui-09 bench). The rules live in config/firmware (gui-33 Step 4).
+    CHECK(with_firmware(must_load("IWR1843"), "demo").cfg_dialect.skip_commands == v({"bpmCfg"}));
     CHECK(with_firmware(must_load("IWR6843"), "demo").cfg_dialect.skip_commands.empty());
     CHECK(with_firmware(must_load("IWR1443"), "demo").cfg_dialect.skip_commands.empty());
     CHECK(with_firmware(must_load("AWR2243_CASCADE"), "cascade_ddm").cfg_dialect.skip_commands.empty());
