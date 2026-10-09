@@ -90,7 +90,7 @@ One row per `fw` verb; arguments, flash modes and per-project details are in [`f
 
 ## Bench status (iwr1843_sar_lvds)
 
-- Image sha256 `53948f4d20ca501490dd3d1dbe48229622af5346914dfe33daec33980864267a` flashed 2026-10-06 via `./fw flash` (bench-confirmed).
+- Image sha256 `a06ee615b56b12282f2fe9b4a02bb556ceaa81a1b72176e2060cd9209a070924` (firmware-17, prompt `mm_sar_lvds:/>`) flashed 2026-10-10 via TTY `./fw flash`; `fw verify` pass; bench_check capture ACCEPTED (bench-confirmed). The earlier 53948f4d image below was the 2026-10-06 Set A / soak image.
 - Verified at the bench: Set A + 10 min no-reflector soak, 299,880 chirps, 0 gaps, 0 missing, 6.66 MB/s.
 - NOT yet verified (firmware-18, needs reflector + GUI): phase continuity, tuned gain/HPF point, boundary steps/Tb, ADC full scale, I/Q order, saturation-vs-gain.
 - Tools (`./bench`, from `firmware_dev/`): long, restart, chan, finite, start0, adc, fmt4, fmt1, bsize, bytes, late, irq, tune, sat, soak, endurance, tb.
