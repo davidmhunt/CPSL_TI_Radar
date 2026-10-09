@@ -147,7 +147,7 @@ Bench 2026-10-09, IWR1843BOOST + DCA1000, driver `build/CPSL_TI_Radar_CPP` sha25
 
 | Item | Result |
 |---|---|
-| dataFmt 1, 60 s (`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`) | `firmware: match expected=iwr1843_sar_lvds`; 117 frames, 272,324 packets; 0 dropped, late, incomplete, stalls, kernel drops, resyncs; 3,366,000 B/frame (3300 x 4 B x 255 chirps x 1 Rx); cpu mean 8.5% |
+| dataFmt 1, 60 s (`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`) | `firmware: match expected=iwr1843_sar_lvds`; 117 frames, 272,324 packets; 0 dropped, late, incomplete, stalls, kernel drops, resyncs; 3,366,000 B/frame (3300 x 4 B x 255 chirps x 1 Rx) |
 | CLI latency | cfg commands 1-6 ms each (no 500 ms prompt stall) |
 | `sensorStart` ack | 74 ms on the first start after power-up, 5 ms on later starts; the hard `cli.cmd_timeout_ms` was 100 ms (26 ms margin on the first start), raised to 500 ms in `IWR1843_SAR.json` (core-23 Step 4) |
 | `sensorStop` ack | 102 ms (60 s run) and 204 ms (restarts), about one frame-end wait; the limit is `cli.stop_timeout_ms` = 4000 ms in `IWR1843_SAR.json`, not `cmd_timeout_ms` |
