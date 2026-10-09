@@ -77,10 +77,10 @@ Start with TI's own firmware. If this works, you know the board, cable, and port
 1. Turn the 12 V **off**.
 2. Put the J6 jumper on the **bottom two pins** (FLASH mode).
 3. Make sure USB is connected, then turn the 12 V **on**.
-4. Run this, replacing `/dev/ttyACM0` with **your CLI port**:
+4. Run this, replacing the `usb-Texas_Instruments_XDS110_...-if00` placeholder with **your CLI port's full by-id path** (the `-if00` entry from `./fw ports`):
    ```bash
    cd ~/Documents/radar_dev/CPSL_TI_Radar/firmware_dev
-   ./fw flash awr2243_cascade_ddm /dev/ttyACM0 prebuilt
+   ./fw flash awr2243_cascade_ddm /dev/serial/by-id/usb-Texas_Instruments_XDS110_...-if00 prebuilt
    ```
 5. Wait about a minute. ✅ **Success** looks like this:
    ```
@@ -122,7 +122,7 @@ This is the same as Steps 2 and 3, but **leave off the word `prebuilt`**:
 2. Flash:
    ```bash
    cd ~/Documents/radar_dev/CPSL_TI_Radar/firmware_dev
-   ./fw flash awr2243_cascade_ddm /dev/ttyACM0
+   ./fw flash awr2243_cascade_ddm /dev/serial/by-id/usb-Texas_Instruments_XDS110_...-if00
    ```
 3. 12 V **off**, jumper on the **top** pins, 12 V **on**.
 4. Run the same check command as in Step 3. The results should look the same as with TI's firmware.
