@@ -64,8 +64,7 @@ One row per `fw` verb; arguments, flash modes and per-project details are in [`f
   see "Possible Flashing Issues" in the cascade user guide (rebuild
   `sbl_uart_uniflash` with "Quad Enable Type" = 6).
 - Containers run fine as the host UID (`--user $(id -u):$(id -g)`, `HOME=/tmp/fwhome`):
-  both the CCS headless cascade build and the SDK 3.6 make flow were verified unprivileged
- . The SDK 3.6 demo makefiles include everything via
+  both the CCS headless cascade build and the SDK 3.6 make flow were verified unprivileged. The SDK 3.6 demo makefiles include everything via
   `$(MMWAVE_SDK_INSTALL_PATH)`, so a demo builds from a copy outside `/opt/ti`; TI's
   `setenv.sh` must be sourced from its own folder (it sources `./checkenv.sh`).
 - The SDK 3.6 make flow uses the SDK-bundled `ti-cgt-arm_16.9.6.LTS` and
