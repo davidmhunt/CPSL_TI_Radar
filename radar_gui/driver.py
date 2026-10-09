@@ -46,6 +46,7 @@ _CLI_SKIP_RE = re.compile(r"^\s*cli \[skip\] (?P<cmd>.+?)(?: \([^)]*\))?\s*$")
 _DBG_SKIP_RE = re.compile(r"^Skipped command \([^)]*\): (?P<cmd>.+?)\s*$")
 _DBG_SENT_RE = re.compile(r"^Sent command: (?P<cmd>.+?)\s*$")
 _DBG_WARN_RE = re.compile(r"^warning: CLIController: no '[^']*' for '(?P<cmd>.+?)' within (?P<ms>\d+) ms")
+_OPEN_FAIL_RE = re.compile(r"cannot open the (?:CLI|serial data) port (?P<port>/\S+)")
 _PROMPT_END = ":/>"
 _ERR_TOKENS = ("Error", "not recognized")
 _STOP_PENDING = ("stats v1", "warning:", "error:", "SerialStreamer", "Received ", "no frame")
@@ -84,8 +85,33 @@ def clean_reply(lines, drop_done: bool) -> str:
 
 
 def first_fail(cli) -> int | None:
-    """1-based position (seq) of the first ERROR/TIMEOUT entry, else None."""
-    return next((e["seq"] for e in cli if e["verdict"] in ("ERROR", "TIMEOUT")), None)
+    """1-based position (seq) of the first ERROR/TIMEOUT entry, else None. Firmware-identify probes (tag `id`, gui-39) are
+    questions to the board, not cfg commands: an ERROR reply there is an expected answer and never counts."""
+    return next((e["seq"] for e in cli if e["verdict"] in ("ERROR", "TIMEOUT") and not e.get("probe")), None)
+
+
+def serial_permission_hint(lines) -> str | None:
+    """gui-40: a driver `cannot open the ... port <p>` line whose port exists but is not readable/writable by this
+    process -> a hint naming the owning group (the usual Docker cause: the container lacks the device's gid)."""
+    for ln in lines:
+        m = _OPEN_FAIL_RE.search(ln)
+        if not m:
+            continue
+        port = m.group("port")
+        try:
+            st = os.stat(port)
+        except OSError:
+            continue
+        if os.access(port, os.R_OK | os.W_OK):
+            continue
+        try:
+            import grp
+            name = f"group {grp.getgrgid(st.st_gid).gr_name} (gid {st.st_gid})"
+        except (KeyError, ImportError):
+            name = f"gid {st.st_gid}"
+        return (f"permission denied on {port}: owned by {name}; add that gid to the container (SERIAL_GID in "
+                f"docker/app/.env, see setup_env.sh) or add your user to the group")
+    return None
 
 
 class DriverError(Exception):
@@ -508,6 +534,7 @@ class DriverManager:
         self._cli_seq += 1
         entry = {"seq": self._cli_seq, "i": None, "n": None, "tag": None, "cmd": "", "ok": False, "verdict": "ERROR",
                  "reply": "", "ms": None, **e}
+        entry["probe"] = entry.get("tag") == "id"   # gui-39: `cli [id] sarStats -> ERROR` is a firmware probe, not a failed command
         if len(self.cli) < CLI_MAX:
             self.cli.append(entry)
         return {"type": "driver_cli", "run": self.run_id, "entry": entry, "first_fail": first_fail(self.cli)}
@@ -580,6 +607,9 @@ class DriverManager:
             self.error = "driver did not stop after SIGINT; killed (SIGKILL)"
         elif not clean:
             self.error = f"driver exited with code {code}"
+            hint = serial_permission_hint(self.log)
+            if hint:
+                self.error += f" - {hint}"
         self.files = self._list_files()
         dca = self.stats.get("dca")
         adc = next((f for f in self.files if f["name"] == "adc_data.bin"), None)
