@@ -414,6 +414,11 @@ restart is a new recording. The end-of-run capture checks 3 and 4 (they need
 `sarStats`) are not in the driver. `test_sar_meta` replays `sar_synth.py` captures and
 compares the result with `sar_parse.py`'s output (`tests/data/sar_fmt2/`).
 
+The result equals `sar_parse.py`'s on complete frames only. `FrameAssembler` drops a trailing
+partial frame by design, and a frame's rows are written one frame late, so the last chirp of
+a recording keeps an empty carried-saturation field where `sar_parse.py` writes `0`.
+`records_valid` on a clean run equals frames × chirps per frame (600 s bench: 1175 × 255).
+
 ### Output files
 
 With `output.save_adc_frames`, every completed frame (including frames the
@@ -598,8 +603,9 @@ Nc chirps) and, since core-24, `dataFmt 2` (`adc_sar_meta`, see "LVDS stream
 formats") are supported. For `adc_sar_meta` the cross-check also requires an
 `adcbufCfg` with complex output, chanInterleave 1, and a sampleSwap that agrees
 with `lvds.iq_order` (1 = `q_first`). It also requires rx·samples even, one
-`profileCfg`, and enableSW 0. core-24 is checked on synthetic captures only; the
-bench comparison is Step 3.
+`profileCfg`, and enableSW 0. The bench confirmed it (2026-10-09, see `docs/RESULTS.md`): a replayed
+SARCAP1 capture gives an `adc_data.bin` byte-equal to `sar_parse.py`'s `_adc.bin` on every complete
+frame, and a 600 s live run had 0 loss with `records_valid` equal to the chirp count.
 
 DCA1000 network defaults: FPGA `192.168.33.180`, host `192.168.33.30/24`,
 command port 4096, data port 4098.

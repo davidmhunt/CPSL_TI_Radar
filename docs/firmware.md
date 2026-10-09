@@ -95,7 +95,7 @@ One row per `fw` verb; arguments, flash modes and per-project details are in [`f
 - NOT yet verified (firmware-18, needs reflector + GUI): phase continuity, tuned gain/HPF point, boundary steps/Tb, ADC full scale, I/Q order, saturation-vs-gain.
 - Tools (`./bench`, from `firmware_dev/`): long, restart, chan, finite, start0, adc, fmt4, fmt1, bsize, bytes, late, irq, tune, sat, soak, endurance, tb.
 
-Driver support (core-22): the `IWR1843_SAR` board descriptor and `config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json` capture this image in `lvdsStreamCfg` dataFmt 1; the image has no TLV/data UART. dataFmt 2 decoding is core-24.
+Driver support (core-22): the `IWR1843_SAR` board descriptor and `config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json` capture this image in `lvdsStreamCfg` dataFmt 1; the image has no TLV/data UART. The driver also decodes `lvdsStreamCfg` dataFmt 2 (`adc_sar_meta`: per-chirp metadata, `SAR_2ms_fmt2.cfg`); bench-verified 2026-10-09 against `sar_parse.py` and in a 600 s live soak (see `docs/RESULTS.md`).
 
 ## Open v2.0 items
 

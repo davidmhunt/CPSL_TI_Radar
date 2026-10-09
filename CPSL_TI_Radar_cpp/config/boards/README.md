@@ -15,6 +15,7 @@ layout and I/Q order, and the once-per-boot rule.
 |------|-----|----------------|------------|
 | `IWR1443.json` | `mmwave_sdk_2` | 4 lanes, `lane_per_rx`, `i_first` | `sdk2`: format confirmed from TI source (D7, [memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); not yet run on the bench |
 | `IWR1843.json` | `mmwave_sdk_3` | 2 lanes, `two_lane_iq_pairs`, `q_first` | `sdk3` |
+| `IWR1843_SAR.json` | `mmwave_sdk_3` | 2 lanes, `two_lane_iq_pairs`, `q_first`; `iwr1843_sar_lvds` image only. Bench-verified 2026-10-09 (driver sha256 `751621f1...7390c4`, image sha256 `a06ee615...070924`): dataFmt 1, 60 s, 117 frames of 3,366,000 B, 0 dropped; two restarts without a power cycle; `sensorStart` ack 74 ms first start (hard `cmd_timeout_ms` 100) then 5 ms; `sensorStop` 102-204 ms against `stop_timeout_ms` 4000. dataFmt 2: replay byte-equal to `sar_parse.py` on all complete frames, 600 s live soak 1175 frames, 0 loss, `records_valid` 299,625. Details in `docs/RESULTS.md` | none (no data UART) |
 | `IWR6843.json` | `mmwave_sdk_3` | same as IWR1843 | `sdk3` |
 | `IWR6843ODS.json` | `mmwave_sdk_3` | same as IWR1843 (copy of `IWR6843.json`; differs only in `elevation_tx_bit`) | `sdk3` |
 | `AWR2243_CASCADE.json` | `mmwave_mcuplus` | `supported: false` (D4) | `mcuplus_cascade`, 3,125,000 baud |

@@ -141,6 +141,31 @@ Not measured (firmware-18, needs a placed reflector): tuned gain/HPF point; clip
 - Phase-like numbers taken from reflector-less data are indicative only and are not reported here.
 - The `dataFmt 4` block contents (CP, sigImg, satMon) are not parsed; only packet size, HSI id, gaps and counters were checked.
 
+## Core driver on the SAR image, dataFmt 1 and dataFmt 2 (IWR1843_SAR), 2026-10-09
+
+Bench 2026-10-09, IWR1843BOOST + DCA1000, driver `build/CPSL_TI_Radar_CPP` sha256 `751621f1b18a973081ca3d64a372e33fbda62c212b199e1b63f462c40f7390c4` (unchanged between rebuilds 3 and 4), firmware image `iwr1843_sar_lvds` sha256 `a06ee615b56b12282f2fe9b4a02bb556ceaa81a1b72176e2060cd9209a070924`. Board `IWR1843_SAR`, shipped system JSONs, no power cycle between the runs below. Values come from the raw driver logs under `tools/bench/runs/` (`core23_fmt1__...60s...`, `core23_fmt1_restart__...rep1/rep2...`, `core24_fmt2_soak__...600s...`) and the bench record `docs/bench_tests/2026-10-10_session1_iwr1843.md` (tests 5 to 7).
+
+| Item | Result |
+|---|---|
+| dataFmt 1, 60 s (`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`) | `firmware: match expected=iwr1843_sar_lvds`; 117 frames, 272,324 packets; 0 dropped, late, incomplete, stalls, kernel drops, resyncs; 3,366,000 B/frame (3300 x 4 B x 255 chirps x 1 Rx); cpu mean 8.5% |
+| CLI latency | cfg commands 1-6 ms each (no 500 ms prompt stall) |
+| `sensorStart` ack | 74 ms on the first start after power-up, 5 ms on later starts; the hard `cli.cmd_timeout_ms` is 100 ms (26 ms margin on the first start) |
+| `sensorStop` ack | 102 ms (60 s run) and 204 ms (restarts), about one frame-end wait; the limit is `cli.stop_timeout_ms` = 4000 ms in `IWR1843_SAR.json`, not `cmd_timeout_ms` |
+| Restarts | two more 15 s driver processes in the same power-up: cfg accepted every time, 29 frames each, 0 drops |
+| dataFmt 2 replay (`SAR_2ms_fmt2.cfg`, 20 s `dca_capture.py` capture, 92,920 datagrams) | driver `adc_data.bin` byte-equal to `sar_parse.py` `_adc.bin` over all 39 complete frames (131,274,000 B); `chirp_meta.csv` rows 0-9943 equal to `_meta.csv`; records_valid 9945, invalid 0, other_run 0. Same result on a second capture |
+| dataFmt 2 live soak, 600 s (`..._SAR_2ms_fmt2.json`) | `firmware: match`; 1175 frames, 2,731,404 packets; 0 dropped, late, stalls, kernel drops, resyncs; records_valid 299,625 = 1175 x 255; records_invalid 0; other_run 0; sensorStart 5 ms, sensorStop 102 ms; 0 driver warnings |
+
+### Interpretation
+
+The core driver configures the SAR image, passes the identity check, and streams dataFmt 1 and dataFmt 2 without loss on the bench, and the SAR descriptor restarts without a power cycle. The sensorStop times are normal: the firmware acks after the current frame ends, and the descriptor's stop timeout (4000 ms) is about 20 times larger than the measured wait. The one thin margin is the first `sensorStart` after power-up (74 ms against the hard 100 ms), which passed but is closer to its limit than every later start.
+
+### Honest caveats
+
+- The driver's dataFmt 2 output equals the golden parser only on **complete frames**. The recording ends mid-frame: the driver drops the trailing partial frame by design (`sar_parse.py` emits a 40th frame from the tail hole), and it writes each frame's metadata one frame late so the last chirp's carried saturation field is empty (`sar_parse.py` writes `0`). So `chirp_meta.csv` has 9,946 lines against the golden's 10,201 and differs only at that end-of-recording row.
+- The I/Q reflector check on the dataFmt 2 capture was **inconclusive** and is informative only (the I/Q verdict belongs to the firmware tuning work). With a reflector at 0.90 m (tape band 0.813-0.991 m), the strongest peak was room clutter at 3.77 m (bin 88, 20x the median); a weaker peak at bin 20 (0.857 m, 7.1x the median) lies inside the band and may be the reflector. It neither confirms nor refutes the I/Q order and needs a cleaner scene or a larger reflector.
+- Each run is a single run; the restarts are separate driver processes, not in-process restarts. The ADC scene held no tuned gain or HPF point.
+- The end-of-run `sarStats` checks (capture checks 3 and 4) are not in the driver; the bench ran them through `bench_check.py` (check 3 not evaluable on the 20 s capture because of a 1,280 B tail hole).
+
 ## GUI bench validation (gui-09), IWR1843 + DCA1000 and AWR2243 cascade
 
 Bench session 2026-10-07 (host `cpsl-gmk-6`, Release driver sha256 `f34182371d0b...a4e6`, repo HEAD at start `fc385db`), driven from the `radar_gui` Run and Live tabs by a human at the bench. Every value below is read from the gui-09 directive Log (`.friday/active/harness/plans/directives/gui-09.md`) and the run directories named there under `runs/gui/` (gitignored, not in the repo). IWR1843 = XDS110 `R2101050` running the SDK 3.6.2 demo image; DCA1000 at 192.168.33.180. Each item was **one run** (no repetitions), and pass/fail was judged largely from the numbers the user read off the GUI; serial-only runs write no files, so those counts have no file to cross-check.
@@ -218,7 +243,7 @@ The driver and the GUI validator now agree on every error code they share, on th
 - Only the **IWR1843 demo** identity is bench-recorded. `iwr1843_sar_lvds`, IWR6843/ODS and IWR1443 entries are derived from firmware source. The cascade `once_safe` stays **false** (its version-reply capture, gui-33 Step 7, was not done), so the cascade check is skipped.
 - The **DCA1000 was not reachable** (192.168.33.180 did not answer ping and the board ran the stock demo without LVDS), so there was no ADC run in this session.
 - The GUI Live source (gui-33 Step 6c) was accepted through the GUI-backend run (it drives the same C++ driver), not as a separate serial-source session.
-- **core-24 dataFmt 2** (`adc_sar_meta`) is verified on synthetic captures only (`tests/data/sar_fmt2/`, golden compare against `sar_parse`); the core-23 SAR bench has not run.
+- dataFmt 2 (`adc_sar_meta`) and the SAR image were later bench-verified; see "Core driver on the SAR image" above.
 - The driver checks error-level rules only; warnings stay in the GUI (user ruling, 2026-10-07).
 
 ## Release readiness: Docker image and test suite (2026-10-08)
