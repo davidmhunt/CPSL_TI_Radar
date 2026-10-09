@@ -181,7 +181,7 @@
     <section class="card">
       <h2>Load an existing cfg</h2>
       <div class="controls">
-        <select id="cLoad"><option value="">(choose a shipped or saved cfg)</option></select>
+        <div style="display:flex; gap:8px"><select id="cLoad" style="flex:1"><option value="">(choose a shipped or saved cfg)</option></select><button class="btn" id="cRefresh" type="button" title="Re-read config/user and the shipped cfgs">Refresh</button></div>
         <div id="cSource" class="muted"></div>
         <div style="display:flex; gap:8px; flex-wrap:wrap">
           <button class="btn" id="cToTargets" disabled>Use its numbers as targets</button>
@@ -247,8 +247,9 @@
         <span class="seg" id="rMode"><button data-m="saved" class="on">Saved config</button><button data-m="quick">Quick setup</button></span>
         <div id="rSavedBox" class="stack">
           <label>System config
-            <select id="rCfg"></select></label>
+            <span style="display:flex; gap:8px"><select id="rCfg" style="flex:1"></select><button class="btn" id="rRefresh" type="button" title="Re-read config/user and config/system">Refresh</button></span></label>
           <div class="muted" id="rCfgInfo"></div>
+          <div id="rOrphans" class="stack" hidden></div>
           <div id="rFwMark" class="runmsg warn" hidden>
             <span id="rFwMarkText"></span>
             <span id="rFwAdd" hidden><select id="rFwPick"></select> <button class="btn" id="rFwAddBtn">Add firmware</button></span>

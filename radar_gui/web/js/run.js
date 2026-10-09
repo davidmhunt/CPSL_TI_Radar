@@ -18,6 +18,14 @@ function msg(text, cls) {
 
 // ---------- the setup form (reads and writes the shared `spec`) ----------
 const cfgPath = () => spec.mode === 'quick' && hasSetup() ? 'quick:' + spec.board + ':' + spec.cfg_id : spec.config;
+function fill_orphans(host, list) {
+  const sig = JSON.stringify(list);
+  if (host.dataset.sig === sig) return;
+  host.dataset.sig = sig;
+  host.innerHTML = list.length ? '<div class="muted">Saved cfgs with no system JSON (not startable here):</div>' +
+    list.map((o, i) => `<div class="orphan muted" style="opacity:.6"><span>${esc(o.name)} <em>(cfg only, no system JSON)</em></span> <a href="#configure" data-i="${i}" class="orphanOpen">Open in Configure</a></div>`).join('') : '';
+  host.querySelectorAll('.orphanOpen').forEach(a => a.onclick = e => { e.preventDefault(); dispatchEvent(new CustomEvent('open-in-configure', { detail: list[+a.dataset.i].id })); });
+}
 function renderSetup() {
   const quick = spec.mode === 'quick' && hasSetup();
   $('rMode').hidden = !hasSetup();
@@ -25,6 +33,9 @@ function renderSetup() {
   $('rSavedBox').hidden = quick; $('rQuickBox').hidden = !quick;
   fill($('rCfg'), D.configs.length ? splitBy(D.configs, 'group', [['user', 'Saved from Configure (config/user)'], ['system', 'Shipped (config/system)']])
     .map(([l, xs]) => [l, xs.map(c => [c.path, c.name + (c.board ? `  [${c.board}]` : '')])]) : [[null, [['', '(no system JSONs found)']]]], spec.config);
+  const orph = $('rOrphans'), ol = quick ? [] : D.orphans;   // gui-39 Q1: cfg-only user files, greyed, with a way to Configure
+  orph.hidden = !ol.length;
+  fill_orphans(orph, ol);
   if (quick || (D.boards.length && hasSetup())) {
     const b = boardInfo(spec.board) || {}, fws = b.firmwares || [], fw = fws.find(f => f.id === spec.firmware) || {};
     fill($('rBoard'), [[null, D.boards.map(x => [x.board, x.board])]], spec.board);
@@ -221,6 +232,7 @@ function applyStatus(st) {
   if (st.stats && Object.keys(st.stats).length) R.stats = st.stats;
   if (st.log && st.log.length) { R.log = st.log.slice(-LOG_MAX); renderLog(); }
   sawRun(st.run);
+  if (cliPanel && st.firmware_check !== undefined) cliPanel.setFirmware(st.firmware_check);
   if (cliPanel && Array.isArray(st.cli)) cliPanel.merge(st.cli);   // absent on a backend older than gui-34
   render();
 }
@@ -356,7 +368,7 @@ export function onDriverMessage(m) {
   } else if (m.type === 'driver_stats') {
     R.stats[m.stream] = m.stats; if (R.ready) { pend.streams = true; schedule(); }
   } else if (m.type === 'driver_firmware') {
-    sawRun(m.run); R.st = { ...(R.st || {}), firmware_check: m.firmware_check }; if (R.ready) renderState();
+    sawRun(m.run); R.st = { ...(R.st || {}), firmware_check: m.firmware_check }; if (cliPanel) cliPanel.setFirmware(m.firmware_check); if (R.ready) renderState();
   } else if (m.type === 'driver_state') {
     const first = !seenState; seenState = true;
     const { type, ...st } = m; sawRun(st.run);
@@ -367,7 +379,7 @@ export function onDriverMessage(m) {
 async function refresh() { const { ok, j } = await api('/api/driver/status'); if (ok) applyStatus(j); }
 
 export function showRun() {
-  if (R.ready) { refresh(); renderSetup(); return; }
+  if (R.ready) { refresh(); loadData().then(renderSetup); return; }   // gui-39: re-list on every show (the selection is kept)
   R.ready = true; cliPanel = mountCliPanel($('rCli'));
   $('rMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; spec.mode = b.dataset.m; spec.skipSet = false; specChanged(); });
   const on = (id, fn, resetSkip = false) => $(id).addEventListener('change', () => { fn($(id)); if (resetSkip) spec.skipSet = false; specChanged(); });
@@ -379,6 +391,7 @@ export function showRun() {
   on('rQDca', e => { spec.dca1000 = e.checked; });
   for (const [id, [k]] of [['rSaveAdc', FLAGS[0]], ['rSaveLvds', FLAGS[1]], ['rSaveSer', FLAGS[2]]]) on(id, e => { spec[k] = e.checked; });
   $('rSaveCfg').onclick = saveToConfig;
+  $('rRefresh').onclick = () => loadData().then(renderSetup);
   $('rFwAddBtn').onclick = addFirmware;
   on('rFwChk', e => { spec.fw_check = e.value; });
   $('rSkip').addEventListener('change', () => { spec.skip = $('rSkip').checked; spec.skipSet = true; specChanged(); });

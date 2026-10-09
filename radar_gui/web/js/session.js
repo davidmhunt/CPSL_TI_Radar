@@ -32,10 +32,11 @@ export const baseName = p => String(p || '').split('/').pop();
 export const stem = p => baseName(p).replace(/\.[^.]*$/, '');
 
 // ---------- data the pickers share ----------
-export const D = { configs: [], caps: null, boards: [], cfgs: [], files: [], loaded: false };
+export const D = { configs: [], orphans: [], caps: null, boards: [], cfgs: [], files: [], loaded: false };
 export async function loadData() {
   const [c, b, g, f] = await Promise.all([api('/api/driver/configs'), api('/api/driver/boards'), api('/api/cfgs'), api('/api/source/files')]);
   D.configs = (c.j && c.j.configs) || [];
+  D.orphans = (c.j && c.j.orphans) || [];   // gui-39: user .cfg files with no system JSON
   D.caps = (c.j && c.j.caps) || null;           // absent on an older backend
   let boards = b.ok && b.j && b.j.boards;
   if (!boards) boards = ((await api('/api/source/boards')).j || {}).boards || [];   // backend older than gui-37: board list only

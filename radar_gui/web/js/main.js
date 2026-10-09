@@ -2,7 +2,7 @@
 import { $, S } from './state.js';
 import { drawLegend } from './colors.js';
 import { redraw, visiblePoints, topXf } from './views.js';
-import { showConfigure } from './cfg.js';
+import { showConfigure, openInConfigure } from './cfg.js';
 import { initSource, srcStatus, resetStats } from './source.js';
 import { initSession, feedMessage, boardLive, view as sessView } from './session.js';
 import { showSettings } from './settings.js';
@@ -141,8 +141,9 @@ function tab(name, auto) {
   if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else if (name === 'logs') showLogs(); else redraw();
   if (!auto) history.replaceState(null, '', HASH[name] || location.pathname);
 }
-// Configure -> Save result "Open in Run" link
+// Configure -> Save result "Open in Radar" link
 addEventListener('open-in-run', e => { tab('run'); openInRun(e.detail); });
+addEventListener('open-in-configure', e => { tab('cfg'); openInConfigure(e.detail); });   // Radar tab: a user cfg with no system JSON
 addEventListener('goto-tab', e => tab(e.detail));   // Point cloud "More options in Radar" / Radar "Watch in Point cloud" / header "Set up..."
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[role=tab]'); if (b) tab(b.dataset.tab); });
 // WAI-ARIA tabs: arrow keys move between tabs (and select them), Home/End jump to the ends; digits 1-N select a tab when

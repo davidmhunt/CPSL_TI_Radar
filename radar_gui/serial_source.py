@@ -218,7 +218,7 @@ class SerialSource(Source):
         prompt = c.get("prompt", "")
         parts = [p for p in parts if p and p != cmd and not (prompt and p.endswith(prompt)) and p != "Done"]
         shown = " | ".join(parts)
-        self.cli.append({"seq": len(self.cli) + 1, "i": None, "n": None, "tag": "id", "cmd": cmd, "ok": bool(text.strip()),
+        self.cli.append({"seq": len(self.cli) + 1, "i": None, "n": None, "tag": "id", "probe": True, "cmd": cmd, "ok": bool(text.strip()),
                          "verdict": "DONE" if text.strip() else "TIMEOUT", "reply": shown if len(shown) <= 200 else shown[:199] + "\u2026",
                          "ms": round((time.monotonic() - t0) * 1000)})
         return text if text.strip() else None

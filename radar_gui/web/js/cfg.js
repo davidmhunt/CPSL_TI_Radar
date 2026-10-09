@@ -554,7 +554,7 @@ async function save() {
   }
   msg.className = 'ok';
   msg.innerHTML = `Saved<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
-    (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span><br><a href="#run" id="sOpenRun">Open in Run</a>`;
+    (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span><br><a href="#run" id="sOpenRun">Open in Radar</a>`;
   const dv = j.driver;   // gui-04: the real driver's verdict on the saved system JSON (absent from an older server)
   if (dv) {
     const line = !dv.available ? `Driver check unavailable: ${esc(dv.message)}`
@@ -577,6 +577,7 @@ async function init() {
   $('cFw').addEventListener('change', () => { C.det = {}; C.detDirty = {}; resetDetectionUi(); showFirmware(); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
   $('cBoard').addEventListener('change', async () => { C.det = {}; C.detDirty = {}; resetDetectionUi(); await loadFirmware($('cBoard').value, $('cFw').value); if (C.mode === 'direct') reseedDirect(); else if (C.source === 'targets') schedule(); else analyze(); });
   $('cLoad').addEventListener('change', onLoad);
+  $('cRefresh').onclick = () => loadList();
   $('cToTargets').onclick = toTargets;
   buildParams();
   for (const b of document.querySelectorAll('#cInMode button')) b.onclick = () => setMode(b.dataset.m);
@@ -587,4 +588,9 @@ async function init() {
   for (const k of ['subframe', 'data_fmt', 'header', 'sw']) $('l_' + k).addEventListener('input', () => { if (C.mode === 'direct') schedule(); });
   dcaVis(); analyze();
 }
-export function showConfigure() { if (!C.ready) { C.ready = true; init(); } }
+export function showConfigure() { if (!C.ready) { C.ready = true; C.initP = init(); } else loadList(); }   // gui-39: re-list on every show (keeps the selection)
+// Radar tab -> a user cfg that has no system JSON: load it here (Save then creates the JSON)
+export async function openInConfigure(id) {
+  await C.initP; await loadList(id);
+  if ($('cLoad').value === id) await onLoad();
+}

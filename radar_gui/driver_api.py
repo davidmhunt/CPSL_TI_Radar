@@ -104,6 +104,28 @@ def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
     return out
 
 
+def list_orphan_cfgs(user_dir: Path) -> list[dict]:
+    """gui-39 Q1: user .cfg files that no JSON in config/user names as its radar_cfg (a JSON resolves its cfg next to itself),
+    so the saved-config list cannot show them. The Radar tab greys them out with an "Open in Configure" link; Save there
+    creates the JSON."""
+    root = Path(user_dir)
+    used = set()
+    for p in sorted(root.glob("*.json")) if root.is_dir() else []:
+        try:
+            j = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(j, dict) and isinstance(j.get("radar_cfg"), str):
+            used.add((root / j["radar_cfg"]).resolve())
+    out = []
+    for p in sorted(root.rglob("*.cfg")) if root.is_dir() else []:
+        if p.resolve() in used:
+            continue
+        rel = p.relative_to(root).as_posix()
+        out.append({"name": rel, "id": f"user:{rel}", "board": cfgapi.guess_board(rel)})
+    return out
+
+
 def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter:
     user_dir = Path(user_dir or os.environ.get("RADAR_GUI_USER_CFG_DIR") or DEFAULT_USER_DIR)
     system_dir = Path(system_dir) if system_dir else DEFAULT_SYSTEM_DIR
@@ -136,7 +158,7 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
 
     @r.get("/configs")
     def configs():
-        return {"configs": list_configs(user_dir, system_dir), "caps": mgr.caps()}
+        return {"configs": list_configs(user_dir, system_dir), "orphans": list_orphan_cfgs(user_dir), "caps": mgr.caps()}
 
     @r.get("/boards")
     def boards():

@@ -239,6 +239,7 @@ label.warn input { border-color: var(--warn); } label.warn { color: var(--warn);
 /* Board command transcript (gui-34) */
 .clipanel { margin-top: 8px; min-width: 0; }
 .clipanel summary { margin-bottom: 4px; }
+.clipanel .probe { color: var(--muted); }
 .clipanel .clibad { color: var(--bad); font-weight: 600; }
 .cliscroll { max-height: 260px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--line); border-radius: 4px; }
 .clitbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; font-family: ui-monospace, monospace; }
