@@ -20,7 +20,7 @@ ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 - `firmware_dev/` is an opt-in submodule and is not fetched by the clone. You only need it to build firmware ([`docs/firmware.md`](../firmware.md)).
 - Check the Python side: `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs everything (about a minute). Neither needs hardware.
 
-Prefer a container? [`docs/docker.md`](../docker.md) builds the driver and GUI into one image: `docker compose -f docker/app/compose.yaml build demo`, then `up demo` serves a hardware-free demo on `http://127.0.0.1:8090/`. Its `hw` profile (real boards) is built to the design in that page but is **not yet verified on a real board**.
+Prefer a container? [`docs/docker.md`](../docker.md) builds the driver and GUI into one image: `docker compose -f docker/app/compose.yaml build demo`, then `up demo` serves a hardware-free demo on `http://127.0.0.1:8090/`. Its `hw` profile (real boards) is built to the design in that page but is **not yet verified on a real board**; `docker/app/setup_env.sh` writes its `.env`.
 
 ## Board firmware
 
@@ -40,7 +40,7 @@ Serial-only runs need just the first row. DCA1000 runs need all three.
 
 | Need | Why | Fix |
 |------|-----|-----|
-| `dialout` group | read the radar's `/dev/ttyACM*` | `sudo usermod -a -G dialout $USER`, then log out and in |
+| the serial device's group (`dialout`, or `plugdev` on some hosts: `stat -L -c %G /dev/ttyACM0`) | read the radar's `/dev/ttyACM*` | `sudo usermod -a -G <group> $USER`, then log out and in |
 | DCA1000 NIC at `192.168.33.30/24` | the DCA1000 FPGA is `192.168.33.180` | static address on the wired NIC |
 | `net.core.rmem_max` >= `dca1000.rcvbuf_bytes` | the kernel caps the socket buffer at `rmem_max` | `sudo sysctl -w net.core.rmem_max=134217728` |
 
