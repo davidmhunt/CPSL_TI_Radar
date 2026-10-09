@@ -23,7 +23,7 @@ The submodule is initialised with `git submodule update --init shipped_firmware/
 
 - The IWR1843 and IWR6843 stock demos, and the IWR1843 SAR/LVDS image
   (`iwr1843_sar_lvds`), are built from `firmware_dev/` (an opt-in submodule;
-  see `docs/firmware.md`);.
+  see `docs/firmware.md`).
 - The cascade (AWR2243 + AM273x) image is built from
   `firmware_dev/projects/awr2243_cascade_ddm/`; TI's two SBL `.tiimage` files
   it needs for flashing sit in that project's `prebuilt_binaries/`.
