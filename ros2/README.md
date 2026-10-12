@@ -31,9 +31,8 @@ colcon build --base-paths src --symlink-install
 source install/setup.bash
 ```
 
-Initialise only `CPSL_TI_Radar_cpp/include/json` (the JSON header library the driver needs).
-Do **not** initialise the other submodules: `firmware_dev` (firmware build environment), `shipped_firmware/.../iwr_raw_rosnode` and `.friday`
-(project tooling) are not used by the build.
+Initialise only `CPSL_TI_Radar_cpp/include/json` (the driver's JSON header library); the other
+submodules (`firmware_dev`, `shipped_firmware/.../iwr_raw_rosnode`, `.friday`) are not used by the build.
 `CPSL_TI_Radar_cpp/COLCON_IGNORE` keeps colcon from listing the C++ tree as a third package.
 
 ## Run
@@ -56,15 +55,15 @@ node directly: `ros2 run ti_radar_connect ti_radar_connect --ros-args -p config_
 
 Configs come from `CPSL_TI_Radar_cpp/config/` (installed into `share/.../config/`) with
 `ros2/ti_radar_connect/config/` installed on top, so a same-named file there wins. The shipped SAR
-config has `cli.port` `/dev/ttyACM0`. For now: copy the system JSON in the same directory and edit
-the ports (and `dca1000.host_ip`) in the copy.
+config has `cli.port` `/dev/ttyACM0`: copy the system JSON in the same directory and edit the
+ports (and `dca1000.host_ip`) in the copy.
 
-The v1 configs still under `ros2/ti_radar_connect/config/system/` (every file except
-`radar_0_IWR1843_SAR_2ms_fmt2.json`) are v1 schema, not loadable by v2; convert with
+Every file under `ros2/ti_radar_connect/config/system/` except `radar_0_IWR1843_SAR_2ms_fmt2.json`
+is v1 schema and not loadable by v2; convert with
 `tools/migrate_config_v1_to_v2.py --add-firmware`.
 
 A node that cannot load its config or open a port logs the reason (e.g. `cannot open the CLI port
-...`) and exits 1; the launch file reports the process died.
+...`) and exits 1.
 
 ## SAR firmware: no point cloud, optional per-chirp metadata
 
@@ -72,10 +71,10 @@ The `iwr1843_sar_lvds` firmware has no on-chip detection and no data UART, so no
 publisher exists; the node logs `point cloud disabled: ...` and runs ADC-only.
 
 With `lvdsStreamCfg ... dataFmt 2` in the radar cfg (the shipped SAR config has it), each chirp
-carries a metadata record. `publish_chirp_meta:=true` (off by default) publishes one `ADCChirpMeta`
-per cube on `<radar_name>/adc_meta`, right after its `ADCDataCube` with the same `header.stamp`.
-The log then says `chirp metadata enabled: publishing Radar_0/adc_meta`; when it is off, or the
-config has no `dataFmt 2`, the topic is absent. The parameter is read at start.
+carries a metadata record. `publish_chirp_meta:=true` publishes one `ADCChirpMeta` per cube on
+`<radar_name>/adc_meta`, right after its `ADCDataCube` with the same `header.stamp`. The log then
+says `chirp metadata enabled: publishing Radar_0/adc_meta`; otherwise, or without `dataFmt 2`, the
+topic is absent. The parameter is read at start.
 
 | Field (per chirp unless noted) | Meaning |
 |--------------------------------|---------|
@@ -98,10 +97,9 @@ source /opt/ros/jazzy/setup.bash
 colcon build --base-paths src --symlink-install --packages-select raw_radar_msgs ti_radar_connect
 ```
 
-Those are the commands of its `scripts/install.sh` and of console's Sensors picker (Settings >
-Sensors > radar: it inits the submodule plus the json one, then runs the `colcon build` line above).
-`scripts/deps/radar.sh` has no system dependencies; `rosdep install --from-paths src` covers the rest.
-For your own workspace, add this repo under `src/` the same way and keep the json-only init.
+These are the commands of its `scripts/install.sh` and of console's Sensors picker (Settings >
+Sensors > radar). `scripts/deps/radar.sh` has no system dependencies; `rosdep install --from-paths src`
+covers the rest. For your own workspace, add this repo under `src/` the same way.
 If you moved the sources from an older path, delete `build/raw_radar_msgs` and `build/ti_radar_connect`
 first (colcon's CMake cache refuses a moved source directory).
 
