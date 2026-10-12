@@ -102,3 +102,24 @@ def test_save_button_does_not_pass_click_event_as_overwrite():
     src = js("cfg.js")
     assert re.search(r"\$\('sSave'\)\.onclick\s*=\s*\(\)\s*=>\s*save\(false\)", src)
     assert not re.search(r"\.onclick\s*=\s*save\s*;", src)
+
+
+# ---- gui-41 A/B ----
+def test_gui41_save_message_clears_on_reload_and_selection_change():
+    run = js("run.js")
+    assert "function clearSaveMsg()" in run
+    body = fn_body(run, "export function showRun()")
+    assert "clearSaveMsg(); refresh(); loadData()" in body                # re-show
+    assert "$('rRefresh').onclick = () => { clearSaveMsg();" in body      # Refresh
+    assert "on('rCfg', e => { clearSaveMsg();" in body and "on('rBoard', e => { clearSaveMsg();" in body
+    # a save / add-firmware still writes its own fresh message after the reload
+    assert "Saved ${res.j.path}" in run and "Added firmware" in run
+
+
+def test_gui41_reconfigure_confirm_guard_and_skip_bypass():
+    s = js("session.js")
+    g = fn_body(s, "export async function startSession(")
+    assert "onceBoard() && cfgSentHere(specBoard()) && !body.skip_configure" in g
+    assert "accepts a cfg once per power-up. Power-cycle it first, or it will not start. Continue?" in g
+    assert g.index("confirm(") < g.index("api('/api/driver/start'")      # asked before anything is sent
+    assert "if (skip && onceBoard() && skipSupported()) body.skip_configure = true" in s   # skip on -> no prompt

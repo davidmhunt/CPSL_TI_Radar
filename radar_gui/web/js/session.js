@@ -255,6 +255,9 @@ function buildBody(opts) {
 export async function startSession(opts = {}) {
   const why = blockedReason(); if (why) return { ok: false, text: why };
   const body = buildBody(opts); if (typeof body === 'string') return { ok: false, text: body };
+  // gui-41: a once-per-power-up board this GUI already configured would be sent the cfg again and not start (bench 2026-10-12)
+  if (onceBoard() && cfgSentHere(specBoard()) && !body.skip_configure
+      && !confirm(`The ${specBoard()} accepts a cfg once per power-up. Power-cycle it first, or it will not start. Continue?`)) return { ok: false, text: '' };
   SS.startErr = ''; SS.busy = true; changed();
   const run = { board: specBoard(), label: specLabel() };
   const res = await api('/api/driver/start', body);

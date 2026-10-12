@@ -589,6 +589,16 @@ def _r_dop_guard0(ctx, rule):
             for r in _dop(ctx, "guardLen") if r["vals"]["guardLen"] != 0]
 
 
+def _r_ddm_range_guard(ctx, rule):
+    # gui-41: observed on the cascade (bench session 2, 2026-10-12): range cfarCfg guardLen 2 with mode 3 hung sensorStart
+    # (TIMEOUT 5000 ms, runs 20261012T135326Z/135439Z); the same cfg with guardLen 0 started (DONE, 20261012T135918Z).
+    # Only guard 2 / mode 3 was observed; other guard values are a HYPOTHESIS, rule is deliberately broader.
+    return [f"line {r['line']}: range CFAR guardLen {r['vals']['guardLen']:g} must be 0 on the cascade DDM image; with guardLen 2 "
+            f"(mode 3) sensorStart timed out and the board needed a power-cycle (bench 2026-10-12)"
+            for r in ctx["recs"] if r["dir"] == "range" and "guardLen" in r["vals"] and not r["problems"] and not r["fov"]
+            and r["vals"]["guardLen"] > 0]
+
+
 # code -> (default severity, function)
 _RULES = {
     "cfar_args": ("error", _r_args), "cfar_enum": ("error", _r_enum), "cfar_threshold_max": ("error", _r_threshold_max),
@@ -596,7 +606,7 @@ _RULES = {
     "cfar_fov_order": ("error", _r_fov_order), "cfar_fov_noop": ("info", _r_fov_noop),
     "cfar_missing_direction": ("error", _r_missing_direction), "cfar_win2_invalid": ("error", _r_win2),
     "cfar_doppler_enabled": ("error", _r_dop_enabled), "cfar_doppler_os_mode": ("error", _r_dop_os_mode),
-    "cfar_doppler_os_guard0": ("error", _r_dop_guard0),
+    "cfar_doppler_os_guard0": ("error", _r_dop_guard0), "cfar_ddm_range_guard": ("error", _r_ddm_range_guard),
 }
 
 

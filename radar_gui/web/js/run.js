@@ -93,6 +93,8 @@ async function renderFwMark(c) {
   fill($('rFwPick'), [[null, ids.map(i => [i, i])]], c.firmware_hint && ids.includes(c.firmware_hint) ? c.firmware_hint : ids[0] || '');
   $('rFwAddBtn').disabled = !ids.length || boardLive();
 }
+// gui-41: the add-firmware / save result stays until the list is reloaded or the selection changes (a later save or add writes a fresh one)
+function clearSaveMsg() { const m = $('rSaveMsg'); m.hidden = true; m.textContent = ''; }
 async function addFirmware() {
   const c = savedCfg(); if (!c || c.firmware !== null || c.group !== 'user') return;
   const fw = $('rFwPick').value; if (!fw) return;
@@ -379,19 +381,19 @@ export function onDriverMessage(m) {
 async function refresh() { const { ok, j } = await api('/api/driver/status'); if (ok) applyStatus(j); }
 
 export function showRun() {
-  if (R.ready) { refresh(); loadData().then(renderSetup); return; }   // gui-39: re-list on every show (the selection is kept)
+  if (R.ready) { clearSaveMsg(); refresh(); loadData().then(renderSetup); return; }   // gui-39: re-list on every show (the selection is kept)
   R.ready = true; cliPanel = mountCliPanel($('rCli'));
-  $('rMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; spec.mode = b.dataset.m; spec.skipSet = false; specChanged(); });
+  $('rMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; spec.mode = b.dataset.m; spec.skipSet = false; clearSaveMsg(); specChanged(); });
   const on = (id, fn, resetSkip = false) => $(id).addEventListener('change', () => { fn($(id)); if (resetSkip) spec.skipSet = false; specChanged(); });
-  on('rCfg', e => { spec.config = e.value; for (const [k] of FLAGS) spec[k] = null; }, true);
-  on('rBoard', e => { spec.board = e.value; const b = boardInfo(e.value) || {}; spec.firmware = b.default_firmware || ''; spec.cfg_id = (cfgsFor(e.value)[0] || {}).id || ''; spec.cli_port = spec.data_port = ''; spec.dca1000 = null; for (const [k] of FLAGS) spec[k] = null; }, true);
+  on('rCfg', e => { clearSaveMsg(); spec.config = e.value; for (const [k] of FLAGS) spec[k] = null; }, true);
+  on('rBoard', e => { clearSaveMsg(); spec.board = e.value; const b = boardInfo(e.value) || {}; spec.firmware = b.default_firmware || ''; spec.cfg_id = (cfgsFor(e.value)[0] || {}).id || ''; spec.cli_port = spec.data_port = ''; spec.dca1000 = null; for (const [k] of FLAGS) spec[k] = null; }, true);
   on('rFw', e => { spec.firmware = e.value; spec.dca1000 = null; });
   on('rQCfg', e => { spec.cfg_id = e.value; });
   on('rQCli', e => { spec.cli_port = e.value.trim(); }); on('rQData', e => { spec.data_port = e.value.trim(); });
   on('rQDca', e => { spec.dca1000 = e.checked; });
   for (const [id, [k]] of [['rSaveAdc', FLAGS[0]], ['rSaveLvds', FLAGS[1]], ['rSaveSer', FLAGS[2]]]) on(id, e => { spec[k] = e.checked; });
   $('rSaveCfg').onclick = saveToConfig;
-  $('rRefresh').onclick = () => loadData().then(renderSetup);
+  $('rRefresh').onclick = () => { clearSaveMsg(); loadData().then(renderSetup); };
   $('rFwAddBtn').onclick = addFirmware;
   on('rFwChk', e => { spec.fw_check = e.value; });
   $('rSkip').addEventListener('change', () => { spec.skip = $('rSkip').checked; spec.skipSet = true; specChanged(); });

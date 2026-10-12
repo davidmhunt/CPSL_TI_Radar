@@ -265,8 +265,8 @@
               "range": 0,
               "doppler": 0
             },
-            "help": "Guard cells; must be 0 for the Doppler direction (CFAR-OS). The range limit is not readable from the repo.",
-            "cite": "dopplerprochwaDDMA.c:3993-4003"
+            "help": "Guard cells; must be 0 for the Doppler direction (CFAR-OS) and, as observed on the bench, for range too: range guardLen 2 (mode 3) hung sensorStart (runs 20261012T135326Z/135439Z), guardLen 0 started (135918Z; docs/bench_tests/2026-10-12_session2_iwr1843.md).",
+            "cite": "dopplerprochwaDDMA.c:3993-4003; bench 2026-10-12 session 2 (range guard 2 -> sensorStart TIMEOUT)"
           },
           {
             "key": "divShift",
@@ -385,6 +385,9 @@
           },
           {
             "code": "cfar_doppler_os_guard0"
+          },
+          {
+            "code": "cfar_ddm_range_guard"
           }
         ]
       }

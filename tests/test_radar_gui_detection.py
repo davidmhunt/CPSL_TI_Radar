@@ -211,6 +211,9 @@ SEEDED = {
                              lambda t: sub_line(t, "cfarCfg", lambda k: k.__setitem__(3, "2"), 0), "error"),
     "cfar_doppler_os_guard0": ("cascade_ddm", "AWR2243_CASCADE",
                                lambda t: sub_line(t, "cfarCfg", lambda k: k.__setitem__(5, "2"), 0), "error"),
+    # gui-41: range line (second cfarCfg in the cascade template) with guardLen 2
+    "cfar_ddm_range_guard": ("cascade_ddm", "AWR2243_CASCADE",
+                             lambda t: sub_line(t, "cfarCfg", lambda k: k.__setitem__(5, "2"), 1), "error"),
 }
 
 
