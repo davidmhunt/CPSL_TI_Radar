@@ -15,8 +15,9 @@ find_package(raw_radar_msgs REQUIRED)
 # the v2 driver's tests and bench are not needed to build the node
 set(BUILD_TESTING_SAVED ${BUILD_TESTING})
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-#add subdirectories
-add_subdirectory(include)
+# vendor the driver from this repo (ros2/ti_radar_connect -> ../../CPSL_TI_Radar_cpp)
+set(TI_RADAR_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../CPSL_TI_Radar_cpp)
+add_subdirectory(${TI_RADAR_CPP_DIR} ${CMAKE_CURRENT_BINARY_DIR}/CPSL_TI_Radar_cpp)
 set(BUILD_TESTING ${BUILD_TESTING_SAVED} CACHE BOOL "" FORCE)
 
 #following instructions from: following instructions from: https://docs.ros.org/en/rolling/How-To-Guides/Ament-CMake-Documentation.html
@@ -73,11 +74,11 @@ install(DIRECTORY
 )
 
 install(DIRECTORY
-  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system
+  ../../CPSL_TI_Radar_cpp/config/system
   DESTINATION share/${PROJECT_NAME}/config
 )
 install(DIRECTORY
-  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/radar
+  ../../CPSL_TI_Radar_cpp/config/radar
   DESTINATION share/${PROJECT_NAME}/config
 )
 
@@ -86,7 +87,7 @@ install(DIRECTORY
 # config/system in the install tree.
 foreach(_d boards firmware limits)
   install(DIRECTORY
-    include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/${_d}
+    ../../CPSL_TI_Radar_cpp/config/${_d}
     DESTINATION share/${PROJECT_NAME}/config
   )
 endforeach()
