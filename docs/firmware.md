@@ -87,6 +87,14 @@ One row per `fw` verb; arguments, flash modes and per-project details are in [`f
 - The `flash` compose service bind-mounts `/dev` so ports that
   re-enumerate after a power-cycle stay visible.
 
+## Bench status (awr2243_cascade_ddm)
+
+Record: `[[bench]]` in `firmware_dev/projects/awr2243_cascade_ddm/project.toml` (pass, 2026-10-12). The cascade now runs **our** build
+(image sha256 `9bf7f418076a1f71720c444c173aaa388a5210326bb031925ba38666af30c770`): the user flashed it with `fw flash` ("Cascade finished successfully"),
+`fw verify` was `skipped` (exit 0; `once_safe` false), and one configured GUI/driver run on the next power-up (run `20261012T141433Z_bench_cascade`)
+got `sensorStart` DONE and 163 frames, 0 missed. TI's prebuilt image stays the fallback (`./fw flash awr2243_cascade_ddm <port> prebuilt`).
+No identify probe was confirmed, so `identify.level` is unchanged.
+
 ## Bench status (iwr1843_sar_lvds)
 
 Bench evidence lives only in the project's `[[bench]]` records (`firmware_dev/projects/iwr1843_sar_lvds/project.toml`);
