@@ -105,7 +105,9 @@ first (colcon's CMake cache refuses a moved source directory).
 
 ## Host prerequisites
 
-Serial access (`dialout` group), the DCA1000 NIC address and the UDP receive buffer are host
+Serial access (`dialout` group), the DCA1000 NIC address, the UDP receive buffer and the firewall are host
 settings, not ROS ones. Check and fix them with `uv run tools/setup/host_setup.py --nic <if>`
 (add `--apply` to fix; `--dry-run` shows the commands first); details in
-[`CPSL_TI_Radar_cpp/Readme.md`](../CPSL_TI_Radar_cpp/Readme.md).
+[`CPSL_TI_Radar_cpp/Readme.md`](../CPSL_TI_Radar_cpp/Readme.md). If the driver reports
+`DCA1000 did not answer SYSTEM_CONNECT` while ARP resolves, see
+[`docs/hardware/dca1000_firewall.md`](../docs/hardware/dca1000_firewall.md) (ufw drops the card's replies).

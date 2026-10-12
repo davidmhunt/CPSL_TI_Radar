@@ -44,7 +44,7 @@ Serial-only runs need just the first row. DCA1000 runs need all three.
 | DCA1000 NIC at `192.168.33.30/24` | the DCA1000 FPGA is `192.168.33.180` | static address on the wired NIC |
 | `net.core.rmem_max` >= `dca1000.rcvbuf_bytes` | the kernel caps the socket buffer at `rmem_max` | `sudo sysctl -w net.core.rmem_max=134217728` |
 
-The `Fix` column is the manual route. `host_setup.py` checks all three and applies the same fixes for you, so use either, not both. First run it without `--nic`: it checks everything else and lists the wired interfaces. `<dca-nic>` is the one cabled to the DCA1000 (it is never auto-picked):
+The `Fix` column is the manual route. `host_setup.py` checks all three (plus the firewall below) and applies the same fixes for you, so use either, not both. First run it without `--nic`: it checks everything else and lists the wired interfaces. `<dca-nic>` is the one cabled to the DCA1000 (it is never auto-picked):
 
 ```bash
 uv run tools/setup/host_setup.py                                    # list candidate NICs, check the rest
@@ -54,6 +54,8 @@ uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (
 ```
 
 `--apply` also sets the `192.168.33.30/24` address: it adds it to the NIC's NetworkManager profile (keeping the other addresses), and prints the manual `nmcli` command if the NIC is not NetworkManager-managed. Do not put `sudo` in front of the tool; it calls `sudo` itself, one confirmation per fix. Add `--udev` to also write stable `/dev/radar/<id>-cli` and `-data` port names for every XDS110 and CP2105 radar board. `<id>` is the board's USB serial, or its USB port path (for example `1-2.3`) when another connected board reports the same serial. `--json` lists each board's `id`.
+
+It also checks the firewall: an active ufw drops the DCA1000's replies unless it has an allow rule for `192.168.33.180` on the NIC (`--apply` adds `sudo ufw allow in on <dca-nic> from 192.168.33.180 comment DCA1000`; `--fpga-ip` for another address). Without root the rules file is unreadable, so the check shows `WARN`, not `MISSING`. Procedure, other firewalls and undo: [`docs/hardware/dca1000_firewall.md`](../hardware/dca1000_firewall.md).
 
 On a loaded host, pin the driver's two threads to cores your own pipeline does not use with `runtime.rx_cpu` and `runtime.worker_cpu` (driver Readme, "Choosing CPUs").
 
