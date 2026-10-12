@@ -413,12 +413,19 @@ def _check_nic(host: Host, nic: str, addrs: dict) -> Check:
                                     "reset; configure it in netplan/ifupdown to keep it"])
     prof, active, problem, dups = _nm_profile_for(host, nic)
     if prof is None:
-        manual = []
+        manual, fix = [], []
         if problem and problem.startswith("no NetworkManager profile"):
-            manual = [shlex.join(["nmcli", "connection", "add", "type", "ethernet", "ifname", nic,
-                                  "con-name", "radar-dca", "ipv4.method", "manual",
-                                  "ipv4.addresses", DCA_HOST_CIDR])]
-        return Check("dca-nic", MISSING, f"{nic}: {problem}", manual=manual, notes=notes)
+            # A new profile for the point-to-point DCA1000 link: static address, and never
+            # the default route (the host's internet is on another interface).
+            fix = [Step(["sudo", "nmcli", "connection", "add", "type", "ethernet", "ifname", nic,
+                         "con-name", "radar-dca", "ipv4.method", "manual",
+                         "ipv4.addresses", DCA_HOST_CIDR, "ipv4.never-default", "yes"]),
+                   Step(["sudo", "nmcli", "connection", "up", "radar-dca", "ifname", nic])]
+            if not carrier:
+                fix = fix[:1]
+                notes = notes + ["link is down: the profile is created now and the address "
+                                 "appears when the link comes up"]
+        return Check("dca-nic", MISSING, f"{nic}: {problem}", fix_cmds=fix, manual=manual, notes=notes)
     name, uuid = prof.get("connection.id", ""), prof.get("connection.uuid", "")
     if dups:
         notes.append(f"WARN: {len(dups) + 1} NetworkManager profiles are named {name!r} ("
@@ -429,19 +436,27 @@ def _check_nic(host: Host, nic: str, addrs: dict) -> Check:
     method = prof.get("ipv4.method", "")
     detail = (f"{nic}: profile {name!r} ({'active' if active else 'inactive'}, ipv4.method {method}, "
               f"addresses {', '.join(paddrs) or 'none'}); runtime {', '.join(have) or 'no IPv4'}; {link}")
-    # Additive only (+ipv4.addresses), on this one profile, addressed by uuid: NM allows
-    # duplicate names, so `id <name>` could select another NIC's profile.
+    # On this one profile, addressed by uuid: NM allows duplicate names, so `id <name>`
+    # could select another NIC's profile.  A static-addressed profile only gets the address
+    # added; a DHCP (`auto`) profile is switched to manual, because on the DCA1000's
+    # DHCP-less point-to-point link `auto` can stall activation.  nmcli needs root here
+    # (polkit refuses an ordinary session), like the other checks.
     label = repr(name)
-    mod = Step(["nmcli", "connection", "modify", "uuid", uuid, "+ipv4.addresses", DCA_HOST_CIDR],
-               comment=label)
-    up = Step(["nmcli", "connection", "up", "uuid", uuid], comment=label)
-    polkit = ("nmcli runs without sudo; if NetworkManager's polkit policy refuses, "
-              "run the same command with sudo")
+    if method == "auto":
+        args = ["ipv4.method", "manual", "ipv4.addresses", DCA_HOST_CIDR, "ipv4.never-default", "yes"]
+        if not prof.get("connection.interface-name"):
+            args += ["connection.interface-name", nic]
+        mod = Step(["sudo", "nmcli", "connection", "modify", "uuid", uuid] + args, comment=label)
+    else:
+        mod = Step(["sudo", "nmcli", "connection", "modify", "uuid", uuid, "+ipv4.addresses",
+                    DCA_HOST_CIDR], comment=label)
+    up = Step(["sudo", "nmcli", "connection", "up", "uuid", uuid], comment=label)
     if persistent and runtime:
         return Check("dca-nic", WARN if dups else OK, detail, notes=notes)
     if method in ("disabled", "ignore"):
+        # Left manual: switching these changes how the profile gets its other addresses.
         return Check("dca-nic", MISSING, detail + f"; IPv4 is {method} on this profile",
-                     manual=[shlex.join(["nmcli", "connection", "modify", "uuid", uuid,
+                     manual=[shlex.join(["sudo", "nmcli", "connection", "modify", "uuid", uuid,
                                          "ipv4.method", "manual", "+ipv4.addresses", DCA_HOST_CIDR])],
                      notes=notes + ["changing ipv4.method is left to you (it changes how "
                                     "this profile gets its other addresses)"])
@@ -449,12 +464,12 @@ def _check_nic(host: Host, nic: str, addrs: dict) -> Check:
         if not carrier:
             return Check("dca-nic", WARN, detail + "; the address is persistent and is applied "
                          "when the link comes up (cable / DCA1000 power)", notes=notes)
-        return Check("dca-nic", MISSING, detail, fix_cmds=[up], notes=notes + [polkit])
+        return Check("dca-nic", MISSING, detail, fix_cmds=[up], notes=notes)
     if not carrier:
         return Check("dca-nic", MISSING, detail, fix_cmds=[mod],
-                     notes=notes + [polkit, "link is down: the profile is updated now and the "
+                     notes=notes + ["link is down: the profile is updated now and the "
                                     "address appears when the link comes up"])
-    return Check("dca-nic", MISSING, detail, fix_cmds=[mod, up], notes=notes + [polkit])
+    return Check("dca-nic", MISSING, detail, fix_cmds=[mod, up], notes=notes)
 
 
 def check_dialout(host: Host) -> Check:

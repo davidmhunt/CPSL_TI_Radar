@@ -221,16 +221,16 @@ def test_nic_link_down_with_persistent_profile_is_warn():
     assert "'Wired connection 1' (inactive" in c.detail and "no carrier" in c.detail
 
 
-def test_nic_fix_is_additive_on_named_profile_only():
+def test_nic_fix_is_sudo_additive_on_named_profile_only():
     h = bench_host()
     strip_dca_addr(h)
     c = nic(h, "--nic", "enp3s0")
     assert c.status == "MISSING"
     assert [s.display() for s in c.fix_cmds] == [
-        f"nmcli connection modify uuid {W1} +ipv4.addresses 192.168.33.30/24  # 'Wired connection 1'",
-        f"nmcli connection up uuid {W1}  # 'Wired connection 1'"]
+        f"sudo nmcli connection modify uuid {W1} +ipv4.addresses 192.168.33.30/24  # 'Wired connection 1'",
+        f"sudo nmcli connection up uuid {W1}  # 'Wired connection 1'"]
     for s in c.fix_cmds:
-        assert "sudo" not in s.argv and "ipv4.addresses" not in s.argv and "-ipv4.addresses" not in s.argv
+        assert s.argv[0] == "sudo" and "ipv4.addresses" not in s.argv and "-ipv4.addresses" not in s.argv
         assert s.argv[s.argv.index("uuid") + 1] == W1 and "id" not in s.argv
         assert W2 not in s.display() and "Wired connection 1" not in s.argv  # name is display-only
 
@@ -246,7 +246,7 @@ def test_nic_duplicate_profile_name_targets_only_enp3s0_uuid():
     c = nic(h, "--nic", "enp3s0")
     assert c.status == "MISSING" and len(c.fix_cmds) == 2
     for s in c.fix_cmds:
-        assert s.argv[3:5] == ["uuid", W1] and W2 not in s.argv
+        assert s.argv[4:6] == ["uuid", W1] and W2 not in s.argv
     assert any(n.startswith("WARN: 2 NetworkManager profiles are named 'Wired connection 1'") and W2 in n
                for n in c.notes)
     # configured host with the duplicate: still flagged (WARN), nothing to run
@@ -264,7 +264,7 @@ def test_nic_profile_with_awkward_name_is_quoted():
     h.cmds[nmcli_con(W1)] = (0, h.cmds[nmcli_con(W1)][1].replace("connection.id:Wired connection 1",
                                                                   r"connection.id:Lab\:DCA it's"))
     c = nic(h, "--nic", "enp3s0")
-    assert c.fix_cmds[0].argv[4] == W1
+    assert c.fix_cmds[0].argv[5] == W1
     assert c.fix_cmds[0].display().endswith('  # "Lab:DCA it\'s"')
     assert shlex.split(c.fix_cmds[0].display(), comments=True) == c.fix_cmds[0].argv
 
@@ -274,7 +274,7 @@ def test_nic_link_down_profile_missing_address_only_modifies():
     strip_dca_addr(h)
     h.files["/sys/class/net/enp3s0/carrier"] = "0\n"
     c = nic(h, "--nic", "enp3s0")
-    assert [s.argv[2] for s in c.fix_cmds] == ["modify"]
+    assert [s.argv[3] for s in c.fix_cmds] == ["modify"]
 
 
 def test_nic_inactive_profile_found_by_interface_name_and_ambiguity():
@@ -283,7 +283,7 @@ def test_nic_inactive_profile_found_by_interface_name_and_ambiguity():
     lst = ("nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE", "connection", "show")
     h.cmds[lst] = (0, fx("nmcli_con_list.txt").replace(f"{W1}:802-3-ethernet:enp3s0", f"{W1}:802-3-ethernet:"))
     c = nic(h, "--nic", "enp3s0")  # Wired connection 2 is bound to enx306893aba600, not picked
-    assert [s.display() for s in c.fix_cmds] == [f"nmcli connection up uuid {W1}  # 'Wired connection 1'"]
+    assert [s.display() for s in c.fix_cmds] == [f"sudo nmcli connection up uuid {W1}  # 'Wired connection 1'"]
     h.cmds[nmcli_con(W2)] = (0, fx(f"nmcli_con_{W2}.txt").replace("enx306893aba600", "enp3s0"))
     c = nic(h, "--nic", "enp3s0")
     assert c.status == "MISSING" and not c.fix_cmds and "several NetworkManager profiles" in c.detail
@@ -327,6 +327,56 @@ def test_nic_ping_is_report_only_and_missing_iface():
     c = nic(h, "--nic", "enp3s0", "--ping")
     assert c.status == "OK" and any("does not answer ping" in n for n in c.notes)
     assert nic(h, "--nic", "eth9").detail == "interface eth9 not found"
+
+
+DHCP_UP = f"sudo nmcli connection up uuid {W1}  # 'Wired connection 1'"
+
+
+def dhcp_profile(h, iface="enp3s0"):
+    """The profile is still on DHCP (`auto`), as on a fresh machine."""
+    strip_dca_addr(h)
+    h.cmds[nmcli_con(W1)] = (0, "\n".join([
+        "connection.id:Wired connection 1", f"connection.uuid:{W1}",
+        f"connection.interface-name:{iface}", "ipv4.method:auto", "ipv4.addresses:"]) + "\n")
+
+
+def test_nic_dhcp_profile_is_switched_to_manual_never_default():
+    h = bench_host()
+    dhcp_profile(h)
+    c = nic(h, "--nic", "enp3s0")
+    assert c.status == "MISSING"
+    assert [s.display() for s in c.fix_cmds] == [
+        f"sudo nmcli connection modify uuid {W1} ipv4.method manual ipv4.addresses 192.168.33.30/24 "
+        "ipv4.never-default yes  # 'Wired connection 1'", DHCP_UP]
+    # profile with no interface binding: bind it to the NIC (found as the active profile)
+    dhcp_profile(h, iface="")
+    mod = nic(h, "--nic", "enp3s0").fix_cmds[0]
+    assert mod.argv[-2:] == ["connection.interface-name", "enp3s0"] and "ipv4.never-default" in mod.argv
+    # link down: modify only
+    h.files["/sys/class/net/enp3s0/carrier"] = "0\n"
+    assert [s.argv[3] for s in nic(h, "--nic", "enp3s0").fix_cmds] == ["modify"]
+
+
+def test_nic_disabled_profile_stays_a_manual_hint_with_sudo():
+    h = bench_host()
+    dhcp_profile(h)
+    h.cmds[nmcli_con(W1)] = (0, h.cmds[nmcli_con(W1)][1].replace("ipv4.method:auto", "ipv4.method:disabled"))
+    c = nic(h, "--nic", "enp3s0")
+    assert not c.fix_cmds and c.manual[0].startswith("sudo nmcli connection modify uuid")
+
+
+def test_nic_no_profile_offers_sudo_add_never_default():
+    h = bench_host()
+    strip_dca_addr(h)
+    h.cmds[("nmcli", "-t", "-f", "NAME,UUID,TYPE,DEVICE", "connection", "show")] = (0, "")
+    c = nic(h, "--nic", "enp3s0")
+    assert c.status == "MISSING" and "no NetworkManager profile" in c.detail
+    assert [s.display() for s in c.fix_cmds] == [
+        "sudo nmcli connection add type ethernet ifname enp3s0 con-name radar-dca ipv4.method manual "
+        "ipv4.addresses 192.168.33.30/24 ipv4.never-default yes",
+        "sudo nmcli connection up radar-dca ifname enp3s0"]
+    h.files["/sys/class/net/enp3s0/carrier"] = "0\n"
+    assert len(nic(h, "--nic", "enp3s0").fix_cmds) == 1
 
 
 # --------------------------------------------------- dialout / build
@@ -406,8 +456,8 @@ EOF
 sudo sysctl -p /etc/sysctl.d/99-radar.conf
 
 # dca-nic
-nmcli connection modify uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8 +ipv4.addresses 192.168.33.30/24  # 'Wired connection 1'
-nmcli connection up uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8  # 'Wired connection 1'
+sudo nmcli connection modify uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8 +ipv4.addresses 192.168.33.30/24  # 'Wired connection 1'
+sudo nmcli connection up uuid 8cca3611-6a6e-34cd-99f7-f55a946082b8  # 'Wired connection 1'
 
 # dialout
 sudo usermod -aG dialout cpsl
@@ -443,8 +493,8 @@ def test_apply_dry_run_forced_missing_prints_exact_commands():
     assert out.split("would run (nothing executed):\n\n", 1)[1] == FORCED_MISSING_DRY_RUN
     assert "run by hand: cmake -S CPSL_TI_Radar_cpp -B /fake/build -DCMAKE_BUILD_TYPE=Release" in out
     for s in all_steps(hs.run_checks(h, args("--nic", "enp3s0", "--udev"))):
-        assert s.argv[0] in ("sudo", "nmcli") and "sudo" not in s.argv[1:]
-        assert not (s.argv[0] == "nmcli" and "ipv4.addresses" in s.argv)
+        assert s.argv[0] == "sudo" and "sudo" not in s.argv[1:]
+        assert "ipv4.addresses" not in s.argv
 
 
 def test_idempotent_second_dry_run_prints_nothing():
@@ -482,7 +532,7 @@ def test_apply_confirm_single_candidate_nic():
     asked = []
     run_main(h, "--apply", ask=lambda p: asked.append(p) or True)
     assert "enp3s0" in asked[0]
-    assert [s.argv[2] for s in h.executed] == ["modify", "up"]
+    assert [s.argv[3] for s in h.executed] == ["modify", "up"]
     assert sum(1 for k in h.calls if k[:2] == ("nmcli", "-t") and k[-1] == "enp3s0") == 2  # re-checked
 
 
