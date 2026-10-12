@@ -1,5 +1,5 @@
 // Board command transcript panel (gui-34), shared by the Radar tab (under the log) and the Live Source card.
-// Entry shape (driver `cli` list / SerialSource transcript): {seq, i, n, tag, cmd, ok, verdict: DONE|ERROR|TIMEOUT|SKIP, reply, ms}.
+// Entry shape (driver `cli` list): {seq, i, n, tag, cmd, ok, verdict: DONE|ERROR|TIMEOUT|SKIP, reply, ms}.
 // Collapsed when every command was answered Done; auto-opened (once per failure) with the first failing row red and
 // scrolled into view. Tolerates a backend that sends no transcript: the panel just stays hidden.
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -15,11 +15,6 @@ class Source:
     rate_hz = 10.0
     info = {"max_range_m": 10, "fov": [-60, 60]}  # hints for the page
 
-    holds_lock = False   # True for a source that owns the radar (SerialSource)
-
-    def claim(self):
-        """Take whatever exclusive resource the source needs; raise PortBusy if it is taken. Default: none."""
-
     def release(self):
         pass
 
@@ -32,7 +27,7 @@ class NoSource(Source):
     """No source yet (the default since gui-36 Step 3b): the Point cloud tab waits for Serial, Replay or a driver run."""
     name = "none"
     drives_status = True
-    MSG = "pick Serial or Replay, or start a driver run in the Radar tab"
+    MSG = "pick Replay, or start a driver session in the Radar tab"
 
     def __init__(self):
         self.on_status = lambda s, m: None

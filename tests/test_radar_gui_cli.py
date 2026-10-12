@@ -1,10 +1,8 @@
-"""gui-34 Step 1: board command transcript (driver CLI echo lines in both formats, SerialSource transcript)."""
-import asyncio
+"""gui-34 Step 1: board command transcript (driver CLI echo lines in both formats)."""
 import json
 import time
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from radar_gui import ports
@@ -103,56 +101,3 @@ def test_api_status_and_ws_events_with_fake_driver(tmp_path, monkeypatch):
         while time.time() < end and c.get("/api/driver/status").json()["state"] in ("running", "stopping"):
             time.sleep(0.05)
         ports.radar_lock.release()
-
-
-# ---- SerialSource transcript -------------------------------------------------------------------------------------
-from test_radar_gui_serial import FakeBoard, api, cfg_file, free_lock, make_src, run, take  # noqa: E402,F401
-
-
-def test_serial_transcript_all_done_then_stop(tmp_path):
-    brd = FakeBoard(prompt="mmwDemo:/>")
-    from test_radar_gui_serial import make_frame, points_tlv, side_info_tlv
-    brd.feed(make_frame(1, [points_tlv(2, 0.0), side_info_tlv(2)]))
-    src = make_src("IWR1843", cfg_file(tmp_path), brd)
-    assert len(run(take(src, 1))) == 1
-    assert [e["cmd"] for e in src.cli][:2] == ["sensorStop", "flushCfg"] and src.cli[-1]["cmd"] == "sensorStop"
-    assert src.cli[-1]["tag"] == "stop" and all(e["verdict"] == "DONE" for e in src.cli)
-    assert (src.cli[1]["i"], src.cli[1]["n"]) == (2, 4)
-    assert src.cli_first_fail is None and all(e["ms"] is not None for e in src.cli)
-
-
-def test_serial_transcript_error_reply_on_sensorstart(tmp_path):
-    """A board answering `Error -1` to sensorStart: cli_first_fail is that line, the cfg_failed text names it, and
-    GET /api/source carries the transcript."""
-    brd = FakeBoard(prompt="mmwDemo:/>", reject=3)       # FakeBoard counts non-sensorStop lines: flushCfg, calibData, sensorStart
-    states = []
-    src = make_src("IWR1843", cfg_file(tmp_path), brd)
-    src.on_status = lambda s, m: states.append((s, m))
-
-    async def go():
-        t = asyncio.create_task(take(src, 1))
-        await asyncio.sleep(0.3)
-        t.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await t
-
-    run(go())
-    ff = src.cli_first_fail
-    assert ff is not None and src.cli[ff - 1]["cmd"] == "sensorStart" and src.cli[ff - 1]["verdict"] == "ERROR"
-    assert "not recognized" in src.cli[ff - 1]["reply"] and src.cli[ff - 1]["ok"] is False
-    failed = [m for s, m in states if s == "cfg_failed"]
-    assert failed and f"line {src.cli[ff - 1]['i']}/{src.cli[ff - 1]['n']} 'sensorStart'" in failed[0]
-
-
-def test_api_source_exposes_transcript(api):
-    c, brd, _ = api
-    brd.reject = 3
-    with c:
-        assert c.post("/api/source", json={"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg",
-                                           "cli_port": "/dev/ttyACM0", "data_port": "/dev/ttyACM1"}).status_code == 200
-        j, end = {}, time.time() + 8
-        while time.time() < end and not j.get("cli_first_fail"):
-            time.sleep(0.05)
-            j = c.get("/api/source").json()
-        assert j["source_state"] == "cfg_failed" and j["cli"][j["cli_first_fail"] - 1]["cmd"] == "sensorStart"
-        assert j["cli"][j["cli_first_fail"] - 1]["verdict"] == "ERROR"

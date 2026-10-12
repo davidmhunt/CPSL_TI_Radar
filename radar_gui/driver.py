@@ -195,10 +195,9 @@ class DriverManager:
     """At most one driver run at a time; thread-safe. `emit(msg_dict)` receives driver_* messages (any thread)."""
 
     def __init__(self, bin_override=None, run_root_override=None, lock=radar_lock, emit=None,
-                 min_stop_grace: float = 5.0, on_run=None, owner_detail=None):
+                 min_stop_grace: float = 5.0, on_run=None):
         self.bin_override, self.root_override, self.lock = bin_override, run_root_override, lock
         self.on_run = on_run                      # gui-36: called with the run info after the spawn; True = tap fd taken over
-        self.owner_detail = owner_detail or (lambda: "")
         self._tap_cache = {}                      # (binary path, mtime) -> supports --tap-fd
         self._caps_cache = {}                     # (binary path, mtime) -> session_cfg.probe_caps()
         self.emit, self.min_grace = emit or (lambda m: None), min_stop_grace
@@ -315,8 +314,7 @@ class DriverManager:
                     ports.append(eff["serial_stream"].get("port"))
                 ports = [p for p in ports if p]
                 if not self.lock.acquire("driver"):
-                    raise DriverError(f"Live serial source holds the radar{self.owner_detail()}; stop it in the Point cloud tab"
-                                      if self.lock.owner == "serial source" else f"radar in use by {self.lock.owner}")
+                    raise DriverError(f"radar in use by {self.lock.owner}")
                 try:
                     if (why := check_ports(ports)):
                         raise DriverError(why)

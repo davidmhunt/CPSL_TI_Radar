@@ -167,10 +167,10 @@ def test_double_start_refused(env):
 
 def test_radar_lock_held_elsewhere_refused(env):
     make, cfg, _, _ = env
-    assert ports.radar_lock.acquire("serial source")
+    assert ports.radar_lock.acquire("other tool")
     with make() as c:
         r = c.post("/api/driver/start", json={"config": str(cfg)})
-        assert r.status_code == 409 and "serial source" in r.json()["detail"]
+        assert r.status_code == 409 and "other tool" in r.json()["detail"]
 
 
 def test_ports_busy_refused_and_missing_port(env):

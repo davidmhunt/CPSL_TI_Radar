@@ -6,7 +6,7 @@ import threading
 
 
 class RadarLock:
-    """One session at a time (driver run now, gui-06 serial source next). Non-blocking."""
+    """One session at a time (the driver run). Non-blocking."""
 
     def __init__(self):
         self._lock, self._owner = threading.Lock(), None

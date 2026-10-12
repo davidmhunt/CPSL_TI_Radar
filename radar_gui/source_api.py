@@ -3,32 +3,22 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from . import cfgapi
 from . import driver as driver_mod
-from .serial_source import PortBusy, SerialSource, SerialSourceError, load_board
-from .session_cfg import DEFAULT_PORTS, PORT_NAME, SERIAL_BOARDS  # noqa: F401  (moved: gui-37)
+from . import session_cfg
 from .sources import MockSource, ReplaySource, detect_dialect
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures"
-DUMP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
-
-
-def check_port(path: str, what: str) -> str:
-    if not PORT_NAME.match(path):
-        raise HTTPException(422, f"{what} {path!r} is not allowed: use /dev/serial/by-id/<name>, /dev/ttyACM<N> or /dev/ttyUSB<N>")
-    return path
 
 
 def dump_dir() -> Path:
-    """GUI-owned directory for serial `dump` captures (runs/ is gitignored); also replayable."""
+    """GUI-owned directory of extra replayable captures (runs/ is gitignored)."""
     return Path(os.environ.get("RADAR_GUI_DUMP_DIR") or REPO / "runs" / "gui" / "dumps")
 
 
@@ -81,33 +71,14 @@ def replay_files(extra=None, runs_root=None) -> list[dict]:
 
 
 class SourceReq(BaseModel):
-    kind: Literal["mock", "replay", "serial"]
-    board: str | None = None
-    cfg_id: str | None = None          # an id from GET /api/cfgs (shipped or config/user/)
-    cli_port: str | None = None
-    data_port: str | None = None
-    skip_configure: bool = False
-    skip_firmware_check: bool = False  # serial: do not ask the board what firmware it runs before the cfg (gui-33)
+    kind: Literal["mock", "replay", "serial"]   # "serial" only to answer 410 (gui-37 Step 6)
     file: str | None = None            # replay: TLV dump (default: the one the GUI was started with)
     dialect: Literal["sdk2", "sdk3", "mcuplus_cascade"] | None = None   # replay: TLV dialect (default: from the file name)
     rate_hz: float = 10.0
-    dump: str | None = None            # serial: capture the raw data-port bytes to <dumps dir>/<this name> (a bare file name)
 
 
-def make_router(hub, user_dir=None, serial_factory=None, run_root=None) -> APIRouter:
-    udir = Path(user_dir or os.environ.get("RADAR_GUI_USER_CFG_DIR") or cfgapi.DEFAULT_USER_DIR)
-    make_serial = serial_factory or SerialSource
+def make_router(hub, user_dir=None, run_root=None) -> APIRouter:
     r = APIRouter()
-
-    def cfg_path(cfg_id: str) -> Path:
-        group, _, rel = cfg_id.partition(":")
-        root = {**cfgapi.SHIPPED, "user": udir}.get(group)
-        if root is None or not rel:
-            raise HTTPException(422, f"unknown cfg id {cfg_id!r}")
-        p = (root / rel).resolve()
-        if root.resolve() not in p.parents or p.suffix != ".cfg" or not p.is_file():
-            raise HTTPException(422, f"no such cfg {cfg_id!r}")
-        return p
 
     def describe():
         s = hub.source
@@ -117,9 +88,6 @@ def make_router(hub, user_dir=None, serial_factory=None, run_root=None) -> APIRo
                 out["source_" + k] = getattr(s, k)
         if s.name == "driver":   # gui-36: Live follows a driver run
             out.update(config=s.config, pid=s.pid, tap=s.tapped, frames_in=s.frames_in, skipped=s.skipped, hello=s.hello)
-        if hasattr(s, "cli"):   # serial source: board command transcript of the latest configure (gui-34)
-            out["cli"], out["cli_first_fail"] = list(s.cli), s.cli_first_fail
-            out["firmware"] = getattr(s, "firmware", None)   # gui-33: identity check result, None = not checked
         return out
 
     @r.get("/api/source")
@@ -133,17 +101,9 @@ def make_router(hub, user_dir=None, serial_factory=None, run_root=None) -> APIRo
 
     @r.get("/api/source/boards")
     def boards():
-        out = []
-        for b in SERIAL_BOARDS:
-            try:
-                d = load_board(b)
-            except SerialSourceError:
-                continue
-            cli, data = DEFAULT_PORTS.get(b, ("/dev/ttyACM0", "/dev/ttyACM1"))
-            out.append({"board": b, "once_per_boot": bool(d.get("lifecycle", {}).get("config_once_per_boot")),
-                        "cli_baud": d["cli"]["baud"], "data_baud": d["data_uart"]["baud"],
-                        "tlv_dialect": d["data_uart"]["tlv_dialect"], "cli_port": cli, "data_port": data})
-        return {"boards": out}
+        """Kept for old pages; the same rows as GET /api/driver/boards (without its firmware lists)."""
+        keep = ("board", "once_per_boot", "cli_baud", "data_baud", "tlv_dialect", "cli_port", "data_port")
+        return {"boards": [{k: b[k] for k in keep} for b in session_cfg.boards_info()]}
 
     def refuse_while_following():
         if hub.following_run:
@@ -153,6 +113,9 @@ def make_router(hub, user_dir=None, serial_factory=None, run_root=None) -> APIRo
     async def set_source(req: SourceReq):
         refuse_while_following()
         spec = req.model_dump(exclude_none=True)
+        if req.kind == "serial":
+            raise HTTPException(410, "the Python serial source was removed: start a driver session "
+                                     "(POST /api/driver/start, or Start in the Radar tab)")
         if req.kind == "mock":
             new = MockSource(rate_hz=req.rate_hz)
         elif req.kind == "replay":
@@ -174,40 +137,12 @@ def make_router(hub, user_dir=None, serial_factory=None, run_root=None) -> APIRo
             except (OSError, ValueError) as e:
                 raise HTTPException(422, f"replay: {e}") from e
             spec["file"] = str(path)
-        else:
-            missing = [k for k in ("board", "cfg_id") if not getattr(req, k)]
-            if missing:
-                raise HTTPException(422, f"serial source needs {missing}")
-            dcli, ddata = DEFAULT_PORTS.get(req.board, ("/dev/ttyACM0", "/dev/ttyACM1"))
-            cli, data = req.cli_port or dcli, req.data_port or ddata
-            check_port(cli, "cli_port")
-            check_port(data, "data_port")
-            path = cfg_path(req.cfg_id)
-            if (cfgapi.guess_board(req.cfg_id.partition(":")[2]) == "AWR2243_CASCADE") != (req.board == "AWR2243_CASCADE"):
-                raise HTTPException(422, f"cfg {req.cfg_id!r} is not for board {req.board}")
-            spec.update(cli_port=cli, data_port=data)
-            dump = None
-            if req.dump:
-                if not DUMP_NAME.match(req.dump) or ".." in req.dump:
-                    raise HTTPException(422, "dump must be a plain file name (letters, digits, _ . -); "
-                                             "it is written under the GUI's dumps directory")
-                dump_dir().mkdir(parents=True, exist_ok=True)
-                dump = str(dump_dir() / req.dump)
-                spec["dump"] = dump
-            try:
-                extra = {"skip_firmware_check": True} if req.skip_firmware_check else {}
-                new = make_serial(req.board, path, cli, data, skip_configure=req.skip_configure, dump=dump, **extra)
-            except SerialSourceError as e:
-                raise HTTPException(422, str(e)) from e
-        try:
-            await hub.set_source(new, spec)
-        except PortBusy as e:
-            raise HTTPException(409, str(e)) from e
+        await hub.set_source(new, spec)
         return describe()
 
     @r.post("/api/source/stop")
     async def stop():
-        """Stop the running source (a serial one releases the ports and the radar lock). The page then shows `ended`."""
+        """Stop the running source. The page then shows `ended`."""
         refuse_while_following()
         await hub.stop_source()
         hub.set_status("ended", "Source stopped")

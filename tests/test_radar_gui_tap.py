@@ -180,16 +180,6 @@ def test_slow_ws_client_does_not_stall_the_pipe_reader(env, monkeypatch):
         assert end["frames_in"] == 400 and end["source_state"] == "ended"
 
 
-def test_run_refused_while_serial_source_holds_the_board(env):
-    make, user = env
-    assert ports.radar_lock.acquire("serial source")
-    with make() as c:
-        r = c.post("/api/driver/start", json={"config": cfgp(user)})
-        assert r.status_code == 409 and "Live serial source holds the radar" in r.json()["detail"]
-        assert "stop it in the Point cloud tab" in r.json()["detail"]
-        assert src(c)["kind"] == "mock"
-
-
 def test_default_source_is_none_and_idle():
     from radar_gui.__main__ import parse_args
     from radar_gui.sources import NoSource, make_source
@@ -197,7 +187,7 @@ def test_default_source_is_none_and_idle():
     with TestClient(create_app(make_source("none"))) as c, c.websocket_connect("/stream") as ws:
         assert c.get("/api/source").json()["kind"] == "none"
         seen = [ws.receive_json() for _ in range(3)]
-        assert any(m.get("state") == "idle" and "Serial or Replay" in m["msg"] for m in seen)
+        assert any(m.get("state") == "idle" and "pick Replay" in m["msg"] for m in seen)
         assert next(m for m in seen if m["type"] == "cfg")["name"] == ""
         assert isinstance(create_app(NoSource()).state.hub.source, NoSource)
 

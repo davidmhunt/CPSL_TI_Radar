@@ -65,18 +65,8 @@ class Hub:
         self.source.release()
 
     async def set_source(self, new: Source, spec: dict | None = None):
-        """Swap the running source. A source that needs the radar lock claims it first (raises PortBusy; the old
-        source then keeps running), unless the old source holds it itself: then the old one is stopped first."""
-        if not self.source.holds_lock:
-            new.claim()
-            await self.stop_source()
-        else:
-            await self.stop_source()
-            try:
-                new.claim()
-            except Exception as e:
-                self.set_status("ended", f"Source stopped ({e})")
-                raise
+        """Swap the running source: the old one is stopped and released first."""
+        await self.stop_source()
         self.source, self.spec = new, spec or {"kind": new.name}
         self.replay_file = getattr(new, "path", None) or self.replay_file
         self.frames = self.errors = self.gaps = 0
@@ -128,7 +118,7 @@ class Hub:
 
 
 def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_dir=None, run_root=None,
-               min_stop_grace: float = 5.0, serial_factory=None) -> FastAPI:
+               min_stop_grace: float = 5.0) -> FastAPI:
     hub = Hub(source)
     loop_ref = {}
 
@@ -143,10 +133,6 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
             return False
         asyncio.run_coroutine_threadsafe(hub.follow_driver(driver, info), loop)
         return True
-
-    def owner_detail():   # who holds the board, for the refusal text
-        sp = hub.spec
-        return f" ({sp.get('cli_port')})" if hub.source.holds_lock and sp.get("cli_port") else ""
 
     adc_clients = set()
 
@@ -165,7 +151,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     hub.adc_sink = adc_publish
 
     driver = DriverManager(bin_override=driver_bin, run_root_override=run_root, emit=emit,
-                           min_stop_grace=min_stop_grace, on_run=on_run, owner_detail=owner_detail)
+                           min_stop_grace=min_stop_grace, on_run=on_run)
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -179,7 +165,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     app.state.hub, app.state.driver = hub, driver
     app.include_router(make_router(user_cfg_dir, driver_bin, driver))
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
-    app.include_router(make_source_router(hub, user_cfg_dir, serial_factory, run_root))
+    app.include_router(make_source_router(hub, user_cfg_dir, run_root))
     app.include_router(make_logs_router(driver, run_root))
     app.include_router(make_settings_router())
 
