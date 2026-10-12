@@ -298,7 +298,7 @@
       "adc_buffer_streaming_bytes": {
         "value": 16384,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR sar_feasibility.md)",
+        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR, firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 Timing math and limits)",
         "confidence": "medium"
       },
       "l3_radar_cube_bytes": {
@@ -474,7 +474,7 @@
       "adc_buffer_streaming_bytes": {
         "value": 16384,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR sar_feasibility.md)",
+        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR, firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 Timing math and limits)",
         "confidence": "medium"
       },
       "l3_radar_cube_bytes": {
@@ -650,7 +650,7 @@
       "adc_buffer_streaming_bytes": {
         "value": 16384,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR sar_feasibility.md)",
+        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR, firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 Timing math and limits)",
         "confidence": "medium"
       },
       "l3_radar_cube_bytes": {

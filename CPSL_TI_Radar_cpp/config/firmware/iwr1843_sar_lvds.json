@@ -79,7 +79,7 @@
       "max_sample_rate_ksps": {
         "value": 12500,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 5: complex-1x, regular ADC mode (RL:742-757; IWR1843 12500 per datasheet IF 10 MHz, user ruling 2026-10-06); sar_feasibility.md / sar_cfg_check.py allow 18750 (generic xWR1xxx header text), a firmware-docs discrepancy flagged in the memo",
+        "source": "docs/research/gui_board_limits_single_chip.md row 5: complex-1x, regular ADC mode (RL:742-757; IWR1843 12500 per datasheet IF 10 MHz, user ruling 2026-10-06); firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 / sar_cfg_check.py allow 18750 (generic xWR1xxx header text), a firmware-docs discrepancy flagged in the memo",
         "confidence": "high"
       },
       "lowpower_max_ksps": {
@@ -133,7 +133,7 @@
       "adc_buffer_streaming_bytes": {
         "value": 16384,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR sar_feasibility.md)",
+        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR, firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 Timing math and limits)",
         "confidence": "medium"
       },
       "lvds_supported": {
