@@ -75,4 +75,7 @@ The `hw` profile for real boards (verified on an IWR1843 with the stock demo) is
 | `tests/` | pytest suite and fixtures |
 | `docs/` | tutorials, architecture, results, firmware notes, `hardware/`, `images/` (GUI shots via git LFS, boot modes), `archive/` (finished design notes), `research/` |
 
+**ROS 2:** [`ros2/`](ros2/README.md) holds the `ti_radar_connect` driver node and `raw_radar_msgs` (colcon packages, branch `feature/ros2`).
+Its README covers building them, launching a radar, and adding them to another workspace such as CPSL_ROS2_Sensors.
+
 A companion ROS package for consuming the streams is [CPSL_TI_Radar_ROS](https://github.com/davidmhunt/CPSL_TI_Radar_ROS); it still uses the v1 `Runner` API and does not build against v2.0 yet.
