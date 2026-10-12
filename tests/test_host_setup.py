@@ -632,7 +632,10 @@ def test_exit_codes_json_and_root():
     assert "setcap" not in data["would_run"]
     h = bench_host()
     h._euid = 0
-    assert run_main(h, "--nic", "enp3s0")[0] == 2
+    assert run_main(h, "--nic", "enp3s0", "--apply")[0] == 2           # --apply refuses root
+    assert run_main(h, "--nic", "enp3s0", "--apply", "--dry-run")[0] == 2
+    rc, out = run_main(h, "--nic", "enp3s0", "--json")                 # report mode is fine as root
+    assert rc == json.loads(out)["exit"] == 1
     with pytest.raises(SystemExit):
         run_main(bench_host(), "--json", "--apply")
 

@@ -19,6 +19,7 @@ active ufw lets the DCA1000 (``--fpga-ip``) in on the NIC: the board replies fro
 silently eats SYSTEM_CONNECT.  ``/etc/ufw/user.rules`` is root-only, so without root the
 check reports WARN (cannot verify), never a guessed MISSING.
 
+Report mode (no ``--apply``) may run as root, e.g. inside console's container.
 ``--apply`` never runs as root itself: it calls ``sudo`` per command, so every
 privilege prompt is visible, and it re-checks each fix after running it.
 ``--dry-run`` prints the commands and file contents and runs nothing.  The
@@ -845,9 +846,9 @@ def main(argv=None, host: Host | None = None, ask=_ask_tty, out=None) -> int:
     executing = args.apply and not args.dry_run
     if args.json and executing:
         ap.error("--json reports only; combine it with --apply only together with --dry-run")
-    if host.euid() == 0:
-        print("host_setup: do not run this tool as root or with sudo; it calls sudo itself "
-              "for each command that needs it", file=sys.stderr)
+    if host.euid() == 0 and args.apply:   # report mode is read-only: fine as root (console's container)
+        print("host_setup: do not run --apply as root or with sudo; it calls sudo itself "
+              "for each command that needs it (report mode, without --apply, may run as root)", file=sys.stderr)
         return 2
     chosen = {}
 
