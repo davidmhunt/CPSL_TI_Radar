@@ -95,3 +95,10 @@ def test_orphan_ui_wiring():
     run, main = js("run.js"), js("main.js")
     assert "cfg only, no system JSON" in run and "Open in Configure" in run
     assert "open-in-configure" in run and "open-in-configure" in main and "openInConfigure" in js("cfg.js")
+
+
+def test_save_button_does_not_pass_click_event_as_overwrite():
+    """Regression (#97): `onclick = save` sent the MouseEvent as `overwrite` -> 422 'valid boolean'."""
+    src = js("cfg.js")
+    assert re.search(r"\$\('sSave'\)\.onclick\s*=\s*\(\)\s*=>\s*save\(false\)", src)
+    assert not re.search(r"\.onclick\s*=\s*save\s*;", src)

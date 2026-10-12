@@ -588,7 +588,7 @@ async function init() {
   $('cToTargets').onclick = toTargets;
   buildParams();
   for (const b of document.querySelectorAll('#cInMode button')) b.onclick = () => setMode(b.dataset.m);
-  $('sSave').onclick = save;
+  $('sSave').onclick = () => save(false);
   $('sName').addEventListener('input', () => { $('sName').dataset.touched = '1'; });
   $('sDca').addEventListener('change', () => { dcaVis(); lvdsWarn(); });
   $('t_lvds').addEventListener('change', () => { $('t_lvds').dataset.touched = '1'; setSource('targets'); schedule(); });
