@@ -8,7 +8,7 @@ Keep it current when one of them changes.
 | Path | What | Repo / branch |
 |------|------|---------------|
 | `firmware_dev/` | Firmware sources, Docker build env, download/build/flash scripts | submodule `CPSL_TI_Radar_Firmware_Dev`, `release/v2.0`; opt-in (`update = none`) — fetch with `git submodule update --init --checkout firmware_dev` |
-| `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.toml`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `tests/`, `docs/`, `build/`), copied from `_template/`. **Start at [`firmware_dev/README.md`](../firmware_dev/README.md)** (5-step path and tutorials); verb/manifest reference: [`projects/README.md`](../firmware_dev/projects/README.md) | ″ |
+| `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.toml`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `tests/`, `docs/`, `build/`), copied from `_template/`. **Start at [`firmware_dev/README.md`](../firmware_dev/README.md)** (5-step path and tutorials); project index: [`projects/README.md`](../firmware_dev/projects/README.md); developer reference (verbs, `project.toml`, build environment): [`docs/reference/`](../firmware_dev/docs/reference/fw_cli.md) | ″ |
 | `firmware_dev/fw` | Bash entry point to `tools/fwcli/` (stdlib Python >= 3.11): `list`, `ports`, `new`, `deps`, `build`, `test`, `flash`, `verify`, `publish`, `help`, each with `--json` (JSON Lines, final `result`, exit codes per `docs/specs/fw_project_contract.md` App. A); runs compose as the host UID. Reads each project's `project.toml`. Own tests: `cd firmware_dev && uv run --group dev pytest tests -q` (fake compose/fuser/pty, no hardware) | ″ |
 | `firmware_dev/tools/` | Cross-project code: `fwcli/` (the `fw` logic); `cascade_serial_check.py` lives in `awr2243_cascade_ddm/tools/` | ″ |
 | `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/`, `prebuilt_binaries/` SBL images + demo.cfg) | ″ |
@@ -34,7 +34,7 @@ Cascade versions follow `firmware_dev/projects/awr2243_cascade_ddm/src/*.project
 
 ## Commands (run from `firmware_dev/`)
 
-One row per `fw` verb; arguments, flash modes and per-project details are in [`firmware_dev/README.md`](../firmware_dev/README.md), the tutorials and each project README. `./fw help` is the live summary.
+One row per `fw` verb; arguments, flash modes and per-project details are in [`firmware_dev/README.md`](../firmware_dev/README.md), the tutorials, each project README and the [`fw` reference](../firmware_dev/docs/reference/fw_cli.md). `./fw help` is the live summary.
 
 | Verb | What it does |
 |------|--------------|

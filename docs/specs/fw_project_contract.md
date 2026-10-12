@@ -57,7 +57,7 @@ Decided 2026-10-08 (user): `--confirm` needs no typed phrase (TTY path keeps it)
 
 ## Pointers
 
-`firmware_dev/fw`; `projects/README.md` §3-4; `iwr1843_sar_lvds`.
+`firmware_dev/fw`; `firmware_dev/docs/reference/projects.md`; `iwr1843_sar_lvds`.
 
 ## Appendix A — Machine interface
 

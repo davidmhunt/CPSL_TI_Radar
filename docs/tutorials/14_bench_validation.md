@@ -18,7 +18,7 @@ Run every command from the repository root. Only one person at a time may hold t
 
 ## 3. Firmware
 
-The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. For flashing and building see [`../firmware.md`](../firmware.md) and `firmware_dev/projects/README.md`. For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
+The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. For flashing and building see [`../firmware.md`](../firmware.md) and [`firmware_dev/README.md`](../../firmware_dev/README.md). For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
 
 ## 4. Choose a config
 
