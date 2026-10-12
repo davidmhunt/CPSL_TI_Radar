@@ -53,7 +53,7 @@ uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # show the e
 uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (it calls sudo itself)
 ```
 
-`--apply` also sets the `192.168.33.30/24` address: it adds it to the NIC's NetworkManager profile (keeping the other addresses), and prints the manual `nmcli` command if the NIC is not NetworkManager-managed. Do not put `sudo` in front of the tool; it calls `sudo` itself, one confirmation per fix. Add `--udev` to also write stable `/dev/radar/<serial>-cli` and `-data` port names.
+`--apply` also sets the `192.168.33.30/24` address: it adds it to the NIC's NetworkManager profile (keeping the other addresses), and prints the manual `nmcli` command if the NIC is not NetworkManager-managed. Do not put `sudo` in front of the tool; it calls `sudo` itself, one confirmation per fix. Add `--udev` to also write stable `/dev/radar/<id>-cli` and `-data` port names for every XDS110 and CP2105 radar board. `<id>` is the board's USB serial, or its USB port path (for example `1-2.3`) when another connected board reports the same serial. `--json` lists each board's `id`.
 
 On a loaded host, pin the driver's two threads to cores your own pipeline does not use with `runtime.rx_cpu` and `runtime.worker_cpu` (driver Readme, "Choosing CPUs").
 

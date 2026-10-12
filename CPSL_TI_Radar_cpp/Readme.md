@@ -42,7 +42,7 @@ sudo apt install cmake
 > uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # print the exact commands and file contents, run nothing
 > uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (sudo per command, one confirmation per check)
 > ```
-> `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. Add `--udev` for stable `/dev/radar/<serial>-cli` and `-data` names when more than one XDS110 board is connected. The manual commands below still work if you'd rather do it by hand.
+> `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. Add `--udev` for stable `/dev/radar/<id>-cli` and `-data` names for XDS110 and CP2105 boards. `<id>` is the USB serial, or the USB port path when boards share a serial. The manual commands below still work if you'd rather do it by hand.
 
 #### 3. Allow access to serial ports
 1. Finally, to ensure that your system has access to the serial ports to connect to the radar, run the following command

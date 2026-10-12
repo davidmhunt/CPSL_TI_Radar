@@ -9,6 +9,7 @@ execute.  ROS's pytest plugins are disabled in pyproject.toml (see test_bench.py
 """
 import io
 import json
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -431,18 +432,104 @@ def test_udev_two_xds110_boards():
     assert old in hs.check_udev(h, enabled=True).fix_cmds[0].stdin
 
 
-def test_udev_unexpected_layout_and_shared_serial():
+def test_udev_unexpected_layout():
     h = bench_host(boards=2)
     del h.cmds[("udevadm", "info", "--query=property", "--name=/dev/ttyACM3")]
     c = hs.check_udev(h, enabled=True)
     assert "00000000" not in c.fix_cmds[0].stdin.replace("# ", "")
     assert any("00000000" in n and "expected 00=CLI" in n for n in c.notes)
-    h = bench_host(boards=2)  # second board reporting the first board's serial
-    for n in (2, 3):
-        k = ("udevadm", "info", "--query=property", f"--name=/dev/ttyACM{n}")
-        h.cmds[k] = (0, h.cmds[k][1].replace("00000000", "R2101050"))
+
+
+def add_board(h, dev0, serial, path, vid="0451", pid="bef3", ifnums=("00", "03")):
+    """Plug a board: its tty nodes /dev/<dev0 stem><n..> reported by udevadm, built from a captured XDS110 entry."""
+    stem, n = re.fullmatch(r"([A-Za-z]+)(\d+)", dev0).groups()
+    n = int(n)
+    base = fx("udevadm_ttyACM3.txt")
+    for k, ifn in enumerate(ifnums):
+        dev = f"{stem}{n + k}"
+        t = (base.replace("00000000", serial).replace("ttyACM3", dev).replace("1-3:1.3", f"{path}:1.{int(ifn)}")
+             .replace("/usb1/1-3/", f"/usb1/{path}/").replace("ID_USB_INTERFACE_NUM=03", f"ID_USB_INTERFACE_NUM={ifn}")
+             .replace("ID_VENDOR_ID=0451", f"ID_VENDOR_ID={vid}").replace("ID_MODEL_ID=bef3", f"ID_MODEL_ID={pid}"))
+        h.dirs.add(f"/dev/{dev}")
+        h.cmds[("udevadm", "info", "--query=property", f"--name=/dev/{dev}")] = (0, t)
+
+
+def one_board_host(serial="R2101050", path="1-3"):
+    h = bench_host(boards=0)
+    add_board(h, "ttyACM0", serial, path)
+    return h
+
+
+def test_udev_one_xds110_reports_board_json():
+    h = one_board_host()
     c = hs.check_udev(h, enabled=True)
-    assert c.status == "N-A" and any("two boards share" in n for n in c.notes)
+    rules = c.fix_cmds[0].stdin
+    assert 'ENV{ID_SERIAL_SHORT}=="R2101050"' in rules and "KERNELS" not in rules
+    [b] = c.boards
+    assert b == {"id": "R2101050", "id_kind": "serial", "model": "xds110", "serial": "R2101050",
+                 "usb_path": "1-3", "cli_dev": "/dev/ttyACM0", "data_dev": "/dev/ttyACM1",
+                 "links": ["/dev/radar/R2101050-cli", "/dev/radar/R2101050-data"], "rule_present": False}
+    h.files["/etc/udev/rules.d/99-radar.rules"] = rules
+    c = hs.check_udev(h, enabled=True)
+    assert c.status == "OK" and c.boards[0]["rule_present"] is True
+    assert c.to_dict()["boards"][0]["id"] == "R2101050"
+    assert "boards" not in hs.check_dialout(h).to_dict()
+
+
+def test_udev_same_serial_gets_path_rules_and_no_serial_rule():
+    h = bench_host(boards=0)
+    add_board(h, "ttyACM0", "R2101050", "1-2.3")
+    add_board(h, "ttyACM2", "R2101050", "1-4")
+    c = hs.check_udev(h, enabled=True)
+    rules = c.fix_cmds[0].stdin
+    assert "ID_SERIAL_SHORT" not in rules
+    for path, cli in (("1-2.3", "ttyACM0"), ("1-4", "ttyACM2")):
+        assert (f'ENV{{ID_MODEL_ID}}=="bef3", KERNELS=="{path}:1.0", SYMLINK+="radar/{path}-cli"') in rules
+        assert f'KERNELS=="{path}:1.3", SYMLINK+="radar/{path}-data"' in rules
+    assert [(b["id"], b["id_kind"], b["serial"]) for b in c.boards] == [
+        ("1-2.3", "path", "R2101050"), ("1-4", "path", "R2101050")]
+    assert any("shared by 2 boards" in n for n in c.notes)
+    h.files["/etc/udev/rules.d/99-radar.rules"] = rules
+    assert hs.check_udev(h, enabled=True).status == "OK"
+
+
+def test_udev_cp2105_board_uses_ttyusb_and_interfaces_00_01():
+    h = bench_host(boards=0)
+    add_board(h, "ttyUSB0", "0123ABCD", "1-5", vid="10c4", pid="ea70", ifnums=("00", "01"))
+    c = hs.check_udev(h, enabled=True)
+    rules = c.fix_cmds[0].stdin
+    assert ('ENV{ID_VENDOR_ID}=="10c4", ENV{ID_MODEL_ID}=="ea70", ENV{ID_SERIAL_SHORT}=="0123ABCD", '
+            'ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/0123ABCD-cli"') in rules
+    assert 'ENV{ID_USB_INTERFACE_NUM}=="01", SYMLINK+="radar/0123ABCD-data"' in rules
+    [b] = c.boards
+    assert (b["model"], b["cli_dev"], b["data_dev"]) == ("cp2105", "/dev/ttyUSB0", "/dev/ttyUSB1")
+    # a CP2105 and an XDS110 sharing a serial are still two boards, named by path
+    add_board(h, "ttyACM0", "0123ABCD", "1-3")
+    c = hs.check_udev(h, enabled=True)
+    assert sorted(b["id"] for b in c.boards) == ["1-3", "1-5"]
+    assert "KERNELS==\"1-5:1.1\"" in c.fix_cmds[0].stdin   # CP2105 data = interface 01
+
+
+def test_udev_serial_that_becomes_shared_replaces_its_serial_rules():
+    h = one_board_host()
+    h.files["/etc/udev/rules.d/99-radar.rules"] = hs.check_udev(h, enabled=True).fix_cmds[0].stdin
+    assert hs.check_udev(h, enabled=True).status == "OK"
+    unrelated = hs.render_udev_rule("OLD123", "00", "cli")
+    h.files["/etc/udev/rules.d/99-radar.rules"] += unrelated + "\n"
+    add_board(h, "ttyACM2", "R2101050", "1-4")          # a second board with the same serial
+    c = hs.check_udev(h, enabled=True)
+    assert c.status == "MISSING"
+    new = c.fix_cmds[0].stdin
+    assert 'ENV{ID_SERIAL_SHORT}=="R2101050"' not in new          # old serial rules dropped
+    assert unrelated in new and new.startswith("# CPSL TI Radar port names")
+    assert new.count("KERNELS") == 4 and "1-3:1.0" in new and "1-4:1.3" in new
+    # and back: the second board leaves, the serial rules come back and the path rules go
+    h = one_board_host()
+    h.files["/etc/udev/rules.d/99-radar.rules"] = new
+    c = hs.check_udev(h, enabled=True)
+    assert c.status == "MISSING" and 'KERNELS=="1-3:1.' not in c.fix_cmds[0].stdin
+    assert 'KERNELS=="1-4:1.0"' in c.fix_cmds[0].stdin      # the unplugged board's line is kept
+    assert 'ENV{ID_SERIAL_SHORT}=="R2101050"' in c.fix_cmds[0].stdin
 
 
 # ----------------------------------------------------- modes and exit codes
@@ -464,7 +551,7 @@ sudo usermod -aG dialout cpsl
 
 # udev
 sudo tee /etc/udev/rules.d/99-radar.rules > /dev/null <<'EOF'
-# CPSL TI Radar XDS110 port names (tools/setup/host_setup.py --udev)
+# CPSL TI Radar port names (tools/setup/host_setup.py --udev)
 SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="00000000", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/00000000-cli"
 SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="00000000", ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="radar/00000000-data"
 SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="R2101050", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/R2101050-cli"

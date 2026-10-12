@@ -12,7 +12,8 @@ when nothing is MISSING and 1 otherwise, so scripts and CI can gate on it.
 Checks: ``sysctl`` (net.core.rmem_max, runtime and persistent), ``dca-nic``
 (192.168.33.30/24 on the DCA1000 NIC, persistent in its NetworkManager
 profile), ``dialout``, ``build-type`` (Release) and, opt-in with ``--udev``, stable
-``/dev/radar/<serial>-cli|data`` symlinks for XDS110 boards.
+``/dev/radar/<id>-cli|data`` symlinks for XDS110 and CP2105 radar boards (``<id>`` is the
+USB serial, or the USB port path when boards share a serial).
 
 ``--apply`` never runs as root itself: it calls ``sudo`` per command, so every
 privilege prompt is visible, and it re-checks each fix after running it.
@@ -51,8 +52,11 @@ DCA_HOST_CIDR = "192.168.33.30/24"
 DCA_SUBNET_PREFIX = "192.168.33."
 DCA_FPGA_IP = "192.168.33.180"
 UDEV_RULES = "/etc/udev/rules.d/99-radar.rules"
-XDS110_VENDOR, XDS110_MODEL = "0451", "bef3"
-XDS110_IFACES = {"00": "cli", "03": "data"}
+# model -> (USB vendor id, product id, {interface number: role})
+RADAR_MODELS = {
+    "xds110": ("0451", "bef3", {"00": "cli", "03": "data"}),   # ttyACM*
+    "cp2105": ("10c4", "ea70", {"00": "cli", "01": "data"}),   # ttyUSB*
+}
 _SAFE_SERIAL = re.compile(r"^[A-Za-z0-9._-]+$")
 
 OK, MISSING, WARN, NA = "OK", "MISSING", "WARN", "N-A"
@@ -90,9 +94,12 @@ class Check:
     fix_cmds: list = field(default_factory=list)
     manual: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    boards: list = field(default_factory=list)   # udev check only: one dict per radar board
 
     def to_dict(self) -> dict:
         d = asdict(self)
+        if not self.boards:
+            del d["boards"]
         d["fix_cmds"] = [s.display() for s in self.fix_cmds]
         return d
 
@@ -516,82 +523,134 @@ def check_build_type(host: Host, driver: Path) -> Check:
                          f"&& cmake --build {shlex.quote(b)} -j"])
 
 
-def xds110_boards(host: Host):
-    """({serial: {ifnum: devnode}}, [problems]) for XDS110 ttyACM ports."""
+def radar_boards(host: Host):
+    """([board], [problems]) for every radar board on USB, one entry per physical board.
+
+    A board is keyed by its USB port path (from the tty's DEVPATH), not by its
+    serial: two boards can report the same serial.  Each board is a dict with
+    ``model``, ``serial``, ``usb_path`` and ``ifs`` ({interface number: devnode}).
+    """
     boards: dict = {}
     problems = []
     for dev in host.listdir("/dev"):
-        if not re.fullmatch(r"ttyACM\d+", dev):
+        if not re.fullmatch(r"tty(ACM|USB)\d+", dev):
             continue
         rc, out = host.run(["udevadm", "info", "--query=property", f"--name=/dev/{dev}"])
         if rc != 0:
             continue
         p = parse_udev_props(out)
-        if (p.get("ID_VENDOR_ID"), p.get("ID_MODEL_ID")) != (XDS110_VENDOR, XDS110_MODEL):
+        model = next((m for m, (v, i, _) in RADAR_MODELS.items()
+                      if (p.get("ID_VENDOR_ID"), p.get("ID_MODEL_ID")) == (v, i)), None)
+        if model is None:
             continue
-        serial, ifn = p.get("ID_SERIAL_SHORT", ""), p.get("ID_USB_INTERFACE_NUM", "")
-        b = boards.setdefault(serial, {})
-        if ifn in b:
-            problems.append(f"serial {serial!r}: interface {ifn} seen twice ({b[ifn]}, /dev/{dev}); "
-                            "two boards share this serial")
-            b["dup"] = True
-        b[ifn] = f"/dev/{dev}"
-    return boards, problems
+        m = re.search(r"/([^/:]+):\d+\.(\d+)/", p.get("DEVPATH", ""))
+        if not m:
+            problems.append(f"/dev/{dev}: no USB port path in its DEVPATH; skipped")
+            continue
+        path, ifn = m.group(1), p.get("ID_USB_INTERFACE_NUM") or m.group(2).zfill(2)
+        b = boards.setdefault(path, {"model": model, "serial": p.get("ID_SERIAL_SHORT", ""),
+                                     "usb_path": path, "ifs": {}})
+        b["ifs"][ifn] = f"/dev/{dev}"
+    return [boards[k] for k in sorted(boards)], problems
 
 
-def render_udev_rule(serial: str, ifn: str, role: str) -> str:
-    return (f'SUBSYSTEM=="tty", ENV{{ID_VENDOR_ID}}=="{XDS110_VENDOR}", '
-            f'ENV{{ID_MODEL_ID}}=="{XDS110_MODEL}", ENV{{ID_SERIAL_SHORT}}=="{serial}", '
+def board_id(board: dict, serial_counts: dict) -> tuple:
+    """(id, 'serial'|'path'): the serial when it is the only one of its kind and safe, else the path."""
+    s = board["serial"]
+    if s and serial_counts[s] == 1 and _SAFE_SERIAL.match(s):
+        return s, "serial"
+    return board["usb_path"], "path"
+
+
+def render_udev_rule(serial: str, ifn: str, role: str, model: str = "xds110") -> str:
+    vendor, product, _ = RADAR_MODELS[model]
+    return (f'SUBSYSTEM=="tty", ENV{{ID_VENDOR_ID}}=="{vendor}", '
+            f'ENV{{ID_MODEL_ID}}=="{product}", ENV{{ID_SERIAL_SHORT}}=="{serial}", '
             f'ENV{{ID_USB_INTERFACE_NUM}}=="{ifn}", SYMLINK+="radar/{serial}-{role}"')
 
 
+def render_udev_path_rule(path: str, ifn: str, role: str, model: str = "xds110") -> str:
+    vendor, product, _ = RADAR_MODELS[model]
+    return (f'SUBSYSTEM=="tty", ENV{{ID_VENDOR_ID}}=="{vendor}", ENV{{ID_MODEL_ID}}=="{product}", '
+            f'KERNELS=="{path}:1.{int(ifn)}", SYMLINK+="radar/{path}-{role}"')
+
+
+def _board_rules(b: dict) -> list:
+    render = render_udev_rule if b["id_kind"] == "serial" else render_udev_path_rule
+    return [render(b["id"], ifn, role, b["model"]) for ifn, role in sorted(b["roles"].items())]
+
+
 def check_udev(host: Host, enabled: bool) -> Check | None:
-    boards, problems = xds110_boards(host)
+    scanned, problems = radar_boards(host)
     if not enabled:
-        if len(boards) > 1:
-            return Check("udev", NA, f"skipped (opt-in): {len(boards)} XDS110 boards seen "
-                         f"({', '.join(sorted(boards))}); run with --udev for stable "
-                         "/dev/radar/<serial>-cli|-data names")
+        if len(scanned) > 1:
+            return Check("udev", NA, f"skipped (opt-in): {len(scanned)} radar boards seen "
+                         f"({', '.join(b['serial'] or b['usb_path'] for b in scanned)}); run with --udev "
+                         "for stable /dev/radar/<id>-cli|-data names")
         return None
-    good, notes = {}, list(problems)
-    for serial, ifs in sorted(boards.items()):
-        if ifs.get("dup"):
-            continue
-        if not _SAFE_SERIAL.match(serial):
-            notes.append(f"serial {serial!r} has unexpected characters; no rule written")
-        elif set(ifs) != set(XDS110_IFACES):
-            notes.append(f"serial {serial}: interfaces {sorted(ifs)} (expected 00=CLI, 03=data); "
-                         "no rule written")
+    counts: dict = {}
+    for b in scanned:
+        if b["serial"]:
+            counts[b["serial"]] = counts.get(b["serial"], 0) + 1
+    good, notes = [], list(problems)
+    for b in scanned:
+        b["id"], b["id_kind"] = board_id(b, counts)
+        b["roles"] = RADAR_MODELS[b["model"]][2]
+        label = f"{b['model']} board {b['id']}"
+        if b["serial"] and counts[b["serial"]] > 1:
+            notes.append(f"serial {b['serial']!r} is shared by {counts[b['serial']]} boards; "
+                         f"naming {label} by USB port path")
+        elif b["serial"] and b["id_kind"] == "path":
+            notes.append(f"serial {b['serial']!r} has unexpected characters; naming {label} by USB port path")
+        if b["id_kind"] == "path" and not _SAFE_SERIAL.match(b["usb_path"]):
+            notes.append(f"{label}: unexpected characters in the USB path; no rule written")
+        elif set(b["ifs"]) != set(b["roles"]):
+            exp = ", ".join(f"{i}={'CLI' if r == 'cli' else r}" for i, r in sorted(b["roles"].items()))
+            notes.append(f"{label}: interfaces {sorted(b['ifs'])} (expected {exp}); no rule written")
         else:
-            good[serial] = ifs
-            if set(serial) == {"0"}:
-                notes.append(f"serial {serial} looks like an unprogrammed default; another board "
+            good.append(b)
+            if b["id_kind"] == "serial" and set(b["serial"]) == {"0"}:
+                notes.append(f"serial {b['serial']} looks like an unprogrammed default; another board "
                              "with the same serial would collide")
     if not good:
-        return Check("udev", NA, "no XDS110 board with the 00/03 interface layout found", notes=notes)
-    want = [render_udev_rule(s, ifn, role) for s in sorted(good)
-            for ifn, role in sorted(XDS110_IFACES.items())]
+        return Check("udev", NA, "no radar board with the expected interface layout found", notes=notes)
+    want = [r for b in good for r in _board_rules(b)]
+    for b in good:
+        b["cli_dev"] = next(b["ifs"][i] for i, r in b["roles"].items() if r == "cli")
+        b["data_dev"] = next(b["ifs"][i] for i, r in b["roles"].items() if r == "data")
+        b["links"] = [f"/dev/radar/{b['id']}-cli", f"/dev/radar/{b['id']}-data"]
+    boards_json = lambda have: [{
+        "id": b["id"], "id_kind": b["id_kind"], "model": b["model"], "serial": b["serial"],
+        "usb_path": b["usb_path"], "cli_dev": b["cli_dev"], "data_dev": b["data_dev"],
+        "links": b["links"], "rule_present": all(r in have for r in _board_rules(b))} for b in good]
     existing = host.read(UDEV_RULES)
     if existing is None and host.exists(UDEV_RULES):
         return Check("udev", MISSING, f"{UDEV_RULES} exists but is unreadable",
-                     manual=[f"sudo cat {UDEV_RULES}"],
+                     manual=[f"sudo cat {UDEV_RULES}"], boards=boards_json([]),
                      notes=notes + ["refusing to rewrite a file whose contents cannot be read; "
-                                    "add these rules by hand:"] + [render_udev_rule(s, i, r)
-                                    for s in sorted(good) for i, r in sorted(XDS110_IFACES.items())])
+                                    "add these rules by hand:"] + want)
     have = [ln.strip() for ln in (existing or "").splitlines()]
-    mapping = "; ".join(f"{s}: cli {good[s]['00']}, data {good[s]['03']}" for s in sorted(good))
-    if all(w in have for w in want):
-        return Check("udev", OK, f"{UDEV_RULES} has rules for {mapping}", notes=notes)
-    keep = [ln for ln in (existing or "").splitlines()
-            if ln.strip() and not any(f'=="{s}"' in ln for s in good)]
+    mapping = "; ".join(f"{b['id']}: cli {b['cli_dev']}, data {b['data_dev']}" for b in good)
+
+    def stale(ln: str) -> bool:
+        """An old line for a serial or port path that a plugged board now claims."""
+        return ln.strip() not in want and any(
+            (b["serial"] and f'ENV{{ID_SERIAL_SHORT}}=="{b["serial"]}"' in ln)
+            or f'KERNELS=="{b["usb_path"]}:1.' in ln for b in good)
+
+    drops = [ln for ln in have if stale(ln)]
+    if all(w in have for w in want) and not drops:
+        return Check("udev", OK, f"{UDEV_RULES} has rules for {mapping}", notes=notes,
+                     boards=boards_json(have))
+    keep = [ln for ln in (existing or "").splitlines() if ln.strip() and not stale(ln) and ln.strip() not in want]
     if not keep or not keep[0].startswith("#"):
-        keep.insert(0, "# CPSL TI Radar XDS110 port names (tools/setup/host_setup.py --udev)")
+        keep.insert(0, "# CPSL TI Radar port names (tools/setup/host_setup.py --udev)")
     content = "\n".join(keep + want) + "\n"
     return Check("udev", MISSING, f"rules missing for {mapping}",
                  fix_cmds=[Step(["sudo", "tee", UDEV_RULES], stdin=content),
                            Step(["sudo", "udevadm", "control", "--reload"]),
                            Step(["sudo", "udevadm", "trigger", "--subsystem-match=tty"])],
-                 notes=notes)
+                 notes=notes, boards=boards_json(have))
 
 
 def run_checks(host: Host, args, confirm=None, only: str | None = None) -> list:
@@ -655,7 +714,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="driver binary for the build-type check")
     ap.add_argument("--rmem-target", type=int, default=RMEM_TARGET)
     ap.add_argument("--udev", action="store_true",
-                    help="also check/generate /etc/udev/rules.d/99-radar.rules for XDS110 boards")
+                    help="also check/generate /etc/udev/rules.d/99-radar.rules: /dev/radar/<id>-cli|-data for "
+                         "every XDS110 and CP2105 radar board (<id> = USB serial, or USB port path if shared)")
     ap.add_argument("--ping", action="store_true", help=f"ping the DCA1000 at {DCA_FPGA_IP} (report only)")
     ap.add_argument("--apply", action="store_true",
                     help="run the fixes (sudo per command, one confirmation per check)")
