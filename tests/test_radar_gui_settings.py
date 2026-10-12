@@ -92,7 +92,8 @@ def test_dca_ok_and_candidates():
     h = bench_host()
     j = client("/x", host=h, proc="/x").get("/api/settings/dca?nic=enp3s0").json()
     assert j["candidates"] == ["enp3s0"] and not j["ping"]
-    nic, sysctl = j["checks"]
+    nic, sysctl, fw = j["checks"]
+    assert fw["name"] == "firewall" and fw["status"] == "N-A"   # no ufw on the fake host
     assert nic["name"] == "dca-nic" and "192.168.33.30/24" in nic["detail"]
     assert sysctl["name"] == "sysctl" and "134217728" in sysctl["detail"]
     assert ("ping", "-c", "1", "-W", "1", "192.168.33.180") not in h.calls and h.executed == []

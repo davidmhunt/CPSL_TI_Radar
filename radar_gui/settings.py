@@ -58,7 +58,8 @@ def dca_checks(host: hs.Host, nic: str | None = None, ping: bool = False) -> dic
         raise ValueError(f"{nic!r} is not a wired ethernet interface on this host (candidates: {', '.join(cands) or 'none'})")
     return {"candidates": cands, "nic": nic, "ping": ping,
             "checks": [hs.check_dca_nic(host, nic, confirm=None, ping=ping).to_dict(),
-                       hs.check_sysctl(host).to_dict()]}
+                       hs.check_sysctl(host).to_dict(),
+                       hs.check_firewall(host, nic).to_dict()]}
 
 
 def make_router(host_factory=hs.Host, by_id_dir: str = BY_ID, proc: str = "/proc") -> APIRouter:

@@ -13,7 +13,11 @@ Checks: ``sysctl`` (net.core.rmem_max, runtime and persistent), ``dca-nic``
 (192.168.33.30/24 on the DCA1000 NIC, persistent in its NetworkManager
 profile), ``dialout``, ``build-type`` (Release) and, opt-in with ``--udev``, stable
 ``/dev/radar/<id>-cli|data`` symlinks for XDS110 and CP2105 radar boards (``<id>`` is the
-USB serial, or the USB port path when boards share a serial).
+USB serial, or the USB port path when boards share a serial).  ``firewall`` checks that an
+active ufw lets the DCA1000 (``--fpga-ip``) in on the NIC: the board replies from UDP port
+1024 to host port 4096, which conntrack does not see as a reply, so a default-DROP ufw
+silently eats SYSTEM_CONNECT.  ``/etc/ufw/user.rules`` is root-only, so without root the
+check reports WARN (cannot verify), never a guessed MISSING.
 
 ``--apply`` never runs as root itself: it calls ``sudo`` per command, so every
 privilege prompt is visible, and it re-checks each fix after running it.
@@ -27,6 +31,7 @@ tests substitute a fake host fed with captured command output.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -64,6 +69,10 @@ DCA_HOST_CIDR = "192.168.33.30/24"
 DCA_SUBNET_PREFIX = "192.168.33."
 DCA_FPGA_IP = "192.168.33.180"
 UDEV_RULES = "/etc/udev/rules.d/99-radar.rules"
+UFW_CONF = "/etc/ufw/ufw.conf"          # world-readable: ENABLED=yes|no
+UFW_DEFAULTS = "/etc/default/ufw"       # world-readable: DEFAULT_INPUT_POLICY
+UFW_USER_RULES = "/etc/ufw/user.rules"  # root-only (0640): the rules themselves
+DCA_PORT = "4096"                       # host-side port the DCA1000 answers to
 # model -> (USB vendor id, product id, {interface number: role})
 RADAR_MODELS = {
     "xds110": ("0451", "bef3", {"00": "cli", "03": "data"}),   # ttyACM*
@@ -491,6 +500,86 @@ def _check_nic(host: Host, nic: str, addrs: dict) -> Check:
     return Check("dca-nic", MISSING, detail, fix_cmds=[mod, up], notes=notes)
 
 
+def parse_ufw_tuples(text: str) -> list:
+    """Rules from ufw's user.rules ``### tuple ###`` lines.
+
+    Each is a dict: action, proto, dport, dst, sport, src and direction ('in'/'out')
+    plus iface (None when the rule is not bound to one).  Format (ufw's own):
+    ``### tuple ### allow any any 0.0.0.0/0 any 192.168.33.180 in_enp86s0 comment=...``
+    """
+    out = []
+    for line in text.splitlines():
+        if not line.startswith("### tuple ### "):
+            continue
+        f = line[len("### tuple ### "):].split()
+        if len(f) < 6:
+            continue
+        direction, _, iface = (f[6] if len(f) > 6 else "in").partition("_")
+        out.append({"action": f[0], "proto": f[1], "dport": f[2], "dst": f[3], "sport": f[4],
+                    "src": f[5], "direction": direction, "iface": iface or None})
+    return out
+
+
+def _src_covers(src: str, ip: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip) in ipaddress.ip_network(src, strict=False)
+    except ValueError:
+        return False
+
+
+def _ufw_allows_dca(rules: list, nic: str | None, ip: str) -> bool:
+    for r in rules:
+        if (r["action"] == "allow" and r["direction"] == "in"
+                and r["proto"] in ("any", "udp") and r["dport"] in ("any", DCA_PORT)
+                and _src_covers(r["src"], ip)
+                and (r["iface"] is None or nic is None or r["iface"] == nic)):
+            return True
+    return False
+
+
+def ufw_allow_step(nic: str, ip: str) -> Step:
+    return Step(["sudo", "ufw", "allow", "in", "on", nic, "from", ip, "comment", "DCA1000"])
+
+
+def check_firewall(host: Host, nic: str | None = None, fpga_ip: str = DCA_FPGA_IP) -> Check:
+    """ufw must allow the DCA1000's replies in; the rules file is root-only (see module doc)."""
+    conf = host.read(UFW_CONF)
+    if conf is None:
+        if host.exists("/etc/firewalld/firewalld.conf") or host.exists("/usr/sbin/firewalld"):
+            return Check("firewall", NA, "firewalld host, not ufw; its rules are not checked "
+                         "(allow UDP from the DCA1000 by hand if streaming stalls)")
+        if host.exists(UFW_CONF) or host.exists("/usr/sbin/ufw"):
+            return Check("firewall", WARN, "ufw is installed but " + UFW_CONF + " is unreadable; "
+                         "cannot tell whether it is active")
+        return Check("firewall", NA, "ufw not installed (nftables/iptables rules, if any, are not checked)")
+    enabled = any(ln.strip().upper() == "ENABLED=YES" for ln in conf.splitlines())
+    if not enabled:
+        return Check("firewall", NA, f"ufw is inactive (ENABLED=no in {UFW_CONF}); nothing blocks the DCA1000")
+    policy = next((ln.split("=", 1)[1].strip().strip('"').upper() for ln in
+                   (host.read(UFW_DEFAULTS) or "").splitlines()
+                   if ln.strip().startswith("DEFAULT_INPUT_POLICY=")), None)
+    if policy == "ACCEPT":
+        return Check("firewall", OK, f"ufw active but DEFAULT_INPUT_POLICY=ACCEPT in {UFW_DEFAULTS}; "
+                     "the DCA1000 is not blocked")
+    where = f"on {nic}" if nic else "on any interface"
+    fix_nic = nic or "<dca-nic>"
+    hand = shlex.join(["sudo", "ufw", "allow", "in", "on", fix_nic, "from", fpga_ip, "comment", "DCA1000"])
+    text = host.read(UFW_USER_RULES)
+    if text is None:
+        return Check("firewall", WARN, f"ufw active, cannot verify DCA1000 rule without root "
+                     f"({UFW_USER_RULES} is root-only); looking for an allow from {fpga_ip} {where}",
+                     manual=[f"sudo ufw status | grep {fpga_ip}",
+                             f"if absent: {hand}  (ufw skips a rule that already exists)"])
+    if _ufw_allows_dca(parse_ufw_tuples(text), nic, fpga_ip):
+        return Check("firewall", OK, f"ufw active; allow rule from {fpga_ip} {where} present in {UFW_USER_RULES}")
+    detail = f"ufw active with input policy {policy or 'unknown'} and no allow rule from {fpga_ip} {where}: " \
+             "the DCA1000's replies (UDP 1024 -> 4096) are dropped silently"
+    if nic is None:
+        return Check("firewall", MISSING, detail, manual=[hand],
+                     notes=["re-run with --nic <dca-nic> and --apply to add it"])
+    return Check("firewall", MISSING, detail, fix_cmds=[ufw_allow_step(nic, fpga_ip)])
+
+
 def check_dialout(host: Host) -> Check:
     user = host.user()
     _, sess = host.run(["id", "-nG"])
@@ -671,6 +760,7 @@ def run_checks(host: Host, args, confirm=None, only: str | None = None) -> list:
     table = [
         ("sysctl", lambda: check_sysctl(host, args.rmem_target)),
         ("dca-nic", lambda: check_dca_nic(host, args.nic, confirm=confirm, ping=args.ping)),
+        ("firewall", lambda: check_firewall(host, args.nic, args.fpga_ip)),
         ("dialout", lambda: check_dialout(host)),
         ("build-type", lambda: check_build_type(host, args.driver)),
         ("udev", lambda: check_udev(host, args.udev)),
@@ -721,9 +811,18 @@ def _ask_tty(prompt: str) -> bool:
         return False
 
 
+def _ip(v: str) -> str:
+    try:
+        return str(ipaddress.IPv4Address(v))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an IPv4 address: {v!r}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--nic", help="DCA1000 host NIC (e.g. enp3s0); never auto-picked")
+    ap.add_argument("--fpga-ip", default=DCA_FPGA_IP, type=_ip,
+                    help="DCA1000 address for the firewall check/rule (default %(default)s)")
     ap.add_argument("--driver", type=Path, default=DEFAULT_DRIVER,
                     help="driver binary for the build-type check")
     ap.add_argument("--rmem-target", type=int, default=RMEM_TARGET)

@@ -158,7 +158,7 @@ def test_doctor_on_captured_bench_host():
     c = by_name(hs.run_checks(h, args("--nic", "enp3s0")))
     assert rc == 1
     assert {n: x.status for n, x in c.items()} == {
-        "sysctl": "MISSING", "dca-nic": "OK", "dialout": "OK", "build-type": "OK"}
+        "sysctl": "MISSING", "dca-nic": "OK", "firewall": "N-A", "dialout": "OK", "build-type": "OK"}
     assert "persistent not set" in c["sysctl"].detail and "runtime 134217728" in c["sysctl"].detail
     assert "realtime" not in out and "setcap" not in out
     assert not h.executed
@@ -677,3 +677,84 @@ def test_runs_piped_via_stdin_without_file_and_without_nmcli(tmp_path):
     assert r.returncode == d["exit"] and r.returncode in (0, 1)
     names = {c["name"]: c for c in d["checks"]}
     assert names["build-type"]["status"] == "N-A"
+    assert "firewall" in names and names["firewall"]["status"] in ("N-A", "OK", "WARN", "MISSING")
+
+
+# ---------------------------------------------------------------- firewall (radar-22)
+
+UFW_RULE = "### tuple ### allow any any 0.0.0.0/0 any 192.168.33.180 in_enp3s0 comment=4443413130303"
+UFW_OTHER = "### tuple ### allow tcp 22 0.0.0.0/0 any 0.0.0.0/0 in\n"
+
+
+def ufw_host(enabled=True, rules=None, policy="DROP"):
+    h = bench_host()
+    h.files["/etc/ufw/ufw.conf"] = f"# c\nENABLED={'yes' if enabled else 'no'}\nLOGLEVEL=low\n"
+    h.files["/etc/default/ufw"] = f'DEFAULT_INPUT_POLICY="{policy}"\n'
+    if rules is not None:
+        h.files["/etc/ufw/user.rules"] = rules
+    else:
+        h.dirs.add("/etc/ufw/user.rules")   # exists, root-only: read -> None
+    return h
+
+
+def test_firewall_not_installed_and_inactive_are_na():
+    c = hs.check_firewall(bench_host(), "enp3s0")
+    assert c.status == "N-A" and "not installed" in c.detail
+    c = hs.check_firewall(ufw_host(enabled=False), "enp3s0")
+    assert c.status == "N-A" and "inactive" in c.detail
+    h = bench_host()
+    h.dirs.add("/etc/firewalld/firewalld.conf")
+    assert hs.check_firewall(h, "enp3s0").status == "N-A"
+    assert hs.check_firewall(ufw_host(policy="ACCEPT"), "enp3s0").status == "OK"
+
+
+def test_firewall_active_rule_present_or_absent():
+    c = hs.check_firewall(ufw_host(rules=UFW_OTHER + UFW_RULE + "\n"), "enp3s0")
+    assert c.status == "OK" and not c.fix_cmds
+    for rules in (UFW_OTHER, UFW_RULE.replace("in_enp3s0", "in_wlp1s0") + "\n",
+                  UFW_RULE.replace("192.168.33.180", "10.0.0.1") + "\n"):
+        c = hs.check_firewall(ufw_host(rules=rules), "enp3s0")
+        assert c.status == "MISSING" and "192.168.33.180" in c.detail
+        assert c.fix_cmds[0].argv == ["sudo", "ufw", "allow", "in", "on", "enp3s0", "from",
+                                      "192.168.33.180", "comment", "DCA1000"]
+    # unbound rule and a covering subnet both count
+    assert hs.check_firewall(ufw_host(rules="### tuple ### allow any any 0.0.0.0/0 any 192.168.33.0/24 in\n"),
+                             "enp3s0").status == "OK"
+    # no --nic: cannot build a fix command, manual only
+    c = hs.check_firewall(ufw_host(rules=UFW_OTHER))
+    assert c.status == "MISSING" and not c.fix_cmds and "<dca-nic>" in c.manual[0]
+
+
+def test_firewall_active_but_unreadable_is_warn_never_missing():
+    h = ufw_host()
+    c = hs.check_firewall(h, "enp3s0")
+    assert c.status == "WARN" and "cannot verify" in c.detail and not c.fix_cmds
+    assert any("ufw allow in on enp3s0 from 192.168.33.180" in m for m in c.manual)
+    rc, out = run_main(h, "--nic", "enp3s0", "--apply", "--dry-run")
+    assert "ufw" not in out.split("would run", 1)[-1] and not h.executed
+
+
+def test_firewall_apply_dry_run_and_idempotence():
+    h = ufw_host(rules=UFW_OTHER)
+    rc, out = run_main(h, "--nic", "enp3s0", "--apply", "--dry-run")
+    assert "# firewall\nsudo ufw allow in on enp3s0 from 192.168.33.180 comment DCA1000" in out
+    assert not h.executed
+    rc, out = run_main(h, "--nic", "enp3s0", "--apply", ask=lambda p: "firewall" in p)
+    assert [s.argv[:3] for s in h.executed] == [["sudo", "ufw", "allow"]]
+    rc, out = run_main(h, "--nic", "enp3s0", "--fpga-ip", "192.168.33.181", "--apply", "--dry-run")
+    assert "from 192.168.33.181" in out
+    h = ufw_host(rules=UFW_RULE + "\n")
+    rc, out = run_main(h, "--nic", "enp3s0", "--apply", "--dry-run")
+    assert "ufw allow" not in out
+    with pytest.raises(SystemExit):
+        run_main(h, "--fpga-ip", "nope")
+
+
+def test_firewall_in_json_and_dca_checks():
+    import radar_gui.settings as st
+    h = ufw_host(rules=UFW_OTHER)
+    rc, out = run_main(h, "--nic", "enp3s0", "--json")
+    fw = next(c for c in json.loads(out)["checks"] if c["name"] == "firewall")
+    assert fw["status"] == "MISSING" and fw["fix_cmds"]
+    names = [c["name"] for c in st.dca_checks(h, "enp3s0")["checks"]]
+    assert names == ["dca-nic", "sysctl", "firewall"]
