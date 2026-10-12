@@ -10,8 +10,8 @@ import os
 ARGUMENTS = [
     DeclareLaunchArgument(
         'config_file',
-        default_value='radar_0_IWR1843_SAR_2ms_fmt2.json',
-        description='Bare filename from share/ti_radar_connect/config/system/'
+        default_value='IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json',
+        description='Setup name from share/ti_radar_connect/config/system/ (an absolute path also works)'
     ),
     DeclareLaunchArgument(
         'radar_name', default_value='Radar_0',

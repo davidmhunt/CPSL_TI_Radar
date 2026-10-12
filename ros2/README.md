@@ -39,12 +39,12 @@ submodules (`firmware_dev`, `shipped_firmware/.../iwr_raw_rosnode`, `.friday`) a
 
 ```bash
 ros2 launch ti_radar_connect connect_ti_radar_launch.py \
-    config_file:=radar_0_IWR1843_SAR_2ms_fmt2.json radar_name:=Radar_0 publish_chirp_meta:=true
+    config_file:=IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json radar_name:=Radar_0 publish_chirp_meta:=true
 ```
 
 | Launch argument | Default | Meaning |
 |-----------------|---------|---------|
-| `config_file` | `radar_0_IWR1843_SAR_2ms_fmt2.json` | bare filename in `install/ti_radar_connect/share/ti_radar_connect/config/system/` |
+| `config_file` | `IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json` | setup name in `install/ti_radar_connect/share/ti_radar_connect/config/system/`; an absolute path also works |
 | `radar_name` | `Radar_0` | topic namespace and frame id |
 | `tf_prefix` | `''` | prefix for the frame id |
 | `stamp_delay_sec` | `0.0` | subtracted from every `header.stamp` |
@@ -53,14 +53,9 @@ ros2 launch ti_radar_connect connect_ti_radar_launch.py \
 The launch file passes the full path to the node as the ROS parameter `config_path`; to run the
 node directly: `ros2 run ti_radar_connect ti_radar_connect --ros-args -p config_path:=<full path>`.
 
-Configs come from `CPSL_TI_Radar_cpp/config/` (installed into `share/.../config/`) with
-`ros2/ti_radar_connect/config/` installed on top, so a same-named file there wins. The shipped SAR
-config has `cli.port` `/dev/ttyACM0`: copy the system JSON in the same directory and edit the
-ports (and `dca1000.host_ip`) in the copy.
-
-Every file under `ros2/ti_radar_connect/config/system/` except `radar_0_IWR1843_SAR_2ms_fmt2.json`
-is v1 schema and not loadable by v2; convert with
-`tools/migrate_config_v1_to_v2.py --add-firmware`.
+Configs come from `CPSL_TI_Radar_cpp/config/`, the only tracked config catalogue (installed into
+`share/.../config/`). The shipped SAR setup has `cli.port` `/dev/ttyACM0`: copy the system JSON,
+edit the ports (and `dca1000.host_ip`) in the copy, and pass its absolute path as `config_file`.
 
 A node that cannot load its config or open a port logs the reason (e.g. `cannot open the CLI port
 ...`) and exits 1.
