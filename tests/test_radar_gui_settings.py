@@ -57,6 +57,19 @@ def test_port0_suffix_and_non_xds(tmp_path):
     assert b["A1234"]["xds110"] is False and b["A1234"]["ports"][0]["role"] == "" and b["A1234"]["label"] == "USB serial device"
 
 
+CP = "usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_0123ABCD"
+
+
+def test_cp2105_roles_from_model_map(tmp_path):
+    """scan_ports reads host_setup.RADAR_MODELS: XDS110 if00/if03 = cli/data, CP2105 if00/if01 = cli/data."""
+    d, _ = make_by_id(tmp_path, {X05 + "-if00": "ttyACM0", X05 + "-if03": "ttyACM1",
+                                 CP + "-if00-port0": "ttyUSB0", CP + "-if01-port0": "ttyUSB1"})
+    j = settings.scan_ports(str(d), str(tmp_path / "proc"), settings.hs.Host())
+    b = {x["serial"]: x for x in j["boards"]}
+    assert [p["role"] for p in b["R2101050"]["ports"]] == ["cli", "data"] and b["R2101050"]["label"] == "XDS110 board"
+    assert [p["role"] for p in b["0123ABCD"]["ports"]] == ["cli", "data"] and b["0123ABCD"]["label"] == "CP2105 board"
+
+
 def test_holder_reported(bench):
     d, dev, tmp = bench
     proc = tmp / "proc" / "4242"; (proc / "fd").mkdir(parents=True)

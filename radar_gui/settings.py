@@ -35,9 +35,10 @@ def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None
         m = NAME.match(n)
         serial, ifn = (m["serial"], m["ifn"]) if m else (n, "")
         dev = m["dev"] if m else n
-        xds = "XDS110" in dev
-        g = groups.setdefault(serial, {"serial": serial, "device": dev, "xds110": xds, "ports": []})
-        role = hs.XDS110_IFACES.get(ifn, "") if xds else ""
+        model = next((k for k in hs.RADAR_MODELS if k in dev.lower()), None)   # "xds110" / "cp2105" in the by-id name
+        g = groups.setdefault((serial, model), {"serial": serial, "device": dev, "model": model,
+                                                "xds110": model == "xds110", "ports": []})
+        role = hs.RADAR_MODELS[model][2].get(ifn, "") if model else ""
         g["ports"].append({"by_id": path, "tty": host.realpath(path), "interface": ifn, "role": role,
                            "holders": [{"pid": p, "comm": c} for p, c in portmod.holders(path, proc)]})
     out = []
@@ -45,7 +46,7 @@ def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None
         g["ports"].sort(key=lambda p: p["interface"])
         g["cascade"] = g["serial"] == CASCADE_SERIAL
         g["label"] = ("cascade (per AWR2243_CASCADE_cascade_ddm_shortrange.json)" if g["cascade"]
-                      else "XDS110 board" if g["xds110"] else "USB serial device")
+                      else f"{g['model'].upper()} board" if g["model"] else "USB serial device")
         out.append(g)
     out.sort(key=lambda g: g["serial"])
     return {"by_id_dir": by_id_dir, "present": bool(host.exists(by_id_dir)), "boards": out}
