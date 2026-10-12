@@ -266,6 +266,7 @@ export async function startSession(opts = {}) {
   SS.run = run; SS.cli = []; SS.runId = null;
   spec.started = true; spec.skipSet = false; saveSpec();
   mergeDrv(res.j); SS.cli = (res.j.cli || []).slice();
+  if (body.skip_configure) markSent(run.board, true);   // gui-41 A1: an accepted skip-cfg start proves the board is configured this power-up
   dispatchEvent(new CustomEvent('session-started', { detail: res.j }));
   refreshSrc(); changed();
   return { ok: true, text: '' };

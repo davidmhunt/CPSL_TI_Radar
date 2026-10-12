@@ -123,3 +123,16 @@ def test_gui41_reconfigure_confirm_guard_and_skip_bypass():
     assert "accepts a cfg once per power-up. Power-cycle it first, or it will not start. Continue?" in g
     assert g.index("confirm(") < g.index("api('/api/driver/start'")      # asked before anything is sent
     assert "if (skip && onceBoard() && skipSupported()) body.skip_configure = true" in s   # skip on -> no prompt
+
+
+def test_gui41_a1_skip_start_marks_board_configured():
+    s = js("session.js")
+    g = fn_body(s, "export async function startSession(")
+    mark = "if (body.skip_configure) markSent(run.board, true)"
+    assert mark in g
+    # only after the API accepted the start (refusal returns earlier) and after SS.boot is merged in
+    assert g.index("if (!res.ok)") < g.index(mark)
+    assert g.index("mergeDrv(res.j)") < g.index(mark)
+    # confirm guard unchanged: still keyed on cfgSentHere and bypassed only by skip
+    assert "onceBoard() && cfgSentHere(specBoard()) && !body.skip_configure" in g
+    assert "a skip-cfg start confirmed it" in js("source.js")

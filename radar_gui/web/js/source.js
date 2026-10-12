@@ -63,7 +63,7 @@ function renderState() {
   $('srcNow').textContent = v.kind === 'none' ? 'Nothing is running.' : `Now showing: ${v.pill}` + (v.desc && v.kind === 'board' ? ` — ${v.desc}` : '');
   const once = C.kind === 'board' && onceBoard();
   $('srcSkipRow').hidden = !once; $('srcSkip').checked = skipEffective() && skipSupported(); $('srcSkip').disabled = live || !skipSupported();
-  $('srcSkipRow').lastElementChild.textContent = !skipSupported() ? 'Skip cfg unavailable: rebuild the driver' : cfgSentHere(specBoard()) ? 'Restart without the cfg (this GUI configured the board; untick after a power-cycle)' : 'Already configured this power-up (skip cfg)';
+  $('srcSkipRow').lastElementChild.textContent = !skipSupported() ? 'Skip cfg unavailable: rebuild the driver' : cfgSentHere(specBoard()) ? 'Restart without the cfg (this GUI configured the board or a skip-cfg start confirmed it; untick after a power-cycle)' : 'Already configured this power-up (skip cfg)';
   $('srcRec').textContent = recSummary();
   for (const id of ['srcMode', 'srcCfgSel', 'srcBoard', 'srcCfg']) { const e = $(id); if (id === 'srcMode') [...e.children].forEach(b => { b.disabled = live; }); else e.disabled = live; }
   const why = blockedReason();
