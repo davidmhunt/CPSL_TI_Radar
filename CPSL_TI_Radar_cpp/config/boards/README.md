@@ -49,7 +49,7 @@ Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
 | `lvds.supported` | cascade `false` | `SystemConfigReader.cpp:476-482`; D4 |
 | `lvds.lanes` | 4 (IWR1443), 2 | `DCA1000Handler.cpp:377-387` (CONFIG_FPGA_GEN byte 1) |
 | `lvds.layout` | `lane_per_rx` (IWR1443), `two_lane_iq_pairs` | `ADCCubeConverter.cpp:24-27`; TI SWRA581B §5/§6 |
-| `lvds.iq_order` | `i_first` (IWR1443), `q_first` | Keeps today's behaviour: `ADCCubeConverter.cpp:74-77` (2-lane: first pair is imaginary) and `:93-94` (4-lane: first group is real). **Not settled**, see the audit's I/Q note and D9. core-17 sets the value from a bench capture. The SDK 3.6 demo maps `adcbufCfg` sampleSwap 1 to `DPIF_DATAFORMAT_COMPLEX16_IMRE` (`mss_main.c:1869-1876`). That is consistent with `q_first`, but it describes the ADC buffer, not the LVDS wire order. |
+| `lvds.iq_order` | `i_first` (IWR1443), `q_first` | `ADCCubeConverter.cpp:74-77` (2-lane: first pair is imaginary) and `:93-94` (4-lane: first group is real). **Provenance (core-17):** IWR1843 and IWR1843_SAR `q_first` is **bench-verified 2026-10-12** (0.9 m reflector, run `core17_iq_raw_R0.9m`, pinned by `test_iq_golden`, `22ba4ec`; [RESULTS.md](../../../docs/RESULTS.md) finding 3). IWR6843 and IWR6843ODS `q_first` is **inferred** from the shared xWR18xx/68xx LVDS format (SWRA581B §6), **not bench-verified**. IWR1443 `i_first` (`lane_per_rx`) matches v1 byte for byte and is out of core-17's scope. |
 | `dca1000.packet_bytes`, `packet_delay_us` | 1472, 100 | `DCA1000Handler.cpp:590-591` |
 | `dca1000.fpga_timer_s` | 30 | `DCA1000Handler.cpp:398-399` |
 

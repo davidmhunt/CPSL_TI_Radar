@@ -35,7 +35,7 @@ All flags: `uv run python -m radar_gui --help`. This tutorial uses `--port`, `--
 
 ![Point cloud tab](../images/gui/point_cloud.png)
 
-**Raw ADC.** Needs a DCA1000 session. Live range profile, range-Doppler, range-azimuth and ADC diagnostics (bits used, clipping, RMS, I/Q ratio). "Clutter removal" leaves only moving targets. The Radar tab's "ADC views" selector sets the rate (every frame, every K, or off).
+**Raw ADC.** Needs a DCA1000 session. Live range profile, range-Doppler, range-azimuth and ADC diagnostics (bits used, clipping, RMS, I/Q ratio). The IWR1843 I/Q order the driver uses (`q_first`) is bench-verified, so a positive image ratio is expected. "Clutter removal" leaves only moving targets. The Radar tab's "ADC views" selector sets the rate (every frame, every K, or off).
 
 ![Raw ADC tab](../images/gui/raw_adc.png)
 

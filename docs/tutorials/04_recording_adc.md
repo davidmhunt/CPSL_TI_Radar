@@ -36,7 +36,7 @@ cube = (raw[..., 0] + 1j * raw[..., 1]).transpose(0, 2, 3, 1)   # (frame, rx, sa
 print(cube.shape)
 ```
 
-`reshape` fails if the file is not a whole number of frames. The cube's last three axes match `AdcFrame::data[rx][sample][chirp]`, which a live consumer sees ([tutorial 12](12_consume_frames.md)).
+`reshape` fails if the file is not a whole number of frames. The cube's last three axes match `AdcFrame::data[rx][sample][chirp]`, which a live consumer sees ([tutorial 12](12_consume_frames.md)). The file holds the converter's output with the real part first, so `raw[..., 0] + 1j * raw[..., 1]` is correct; for the IWR1843 the I/Q order the converter assumes is bench-verified (core-17).
 
 For range, Doppler and azimuth processing use the notebook. It reads the radar `.cfg` for the chirp structure, so give it both files, the cfg being the one the run used:
 

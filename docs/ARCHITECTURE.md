@@ -370,6 +370,14 @@ The board descriptor's `lvds.layout` picks the decoder in `ADCCubeConverter`:
 comes first. With SDK 3+ and a single RX channel, use an even number of ADC
 samples.
 
+**I/Q order (core-17).** The IWR1843 value `q_first` (TI SWRA581B §6) is
+bench-verified: on a real 0.9 m reflector capture (run tag
+`core17_iq_raw_R0.9m`, 2026-10-12) the range DFT peaks in the expected bin and
+the mirror bin is about 31 dB down; the order is pinned by the ctest
+`test_iq_golden` (commit `22ba4ec`), which fails with `i_first`. IWR6843 and
+IWR6843ODS share the layout and value but are inferred, not bench-verified.
+Numbers and caveats: RESULTS.md finding 3.
+
 **Buffers (core-14 P2, P3).** The cubes are a pool of nested buffers,
 allocated when the radar is opened: one per frame-queue slot plus the
 worker's work buffer. They are swapped, never copied: the converter writes

@@ -94,7 +94,7 @@ A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, 
 | DCA1000 needed | yes for raw ADC; no for serial | yes (serial TLV rejected) | yes for raw ADC; no for serial | no (serial only) |
 | One cfg per boot | no | no | no | **yes**: power-cycle (12 V off and on) before every run |
 | Serial baud (data) | 921600 | n/a | 921600 | 3125000 |
-| Known limits | `calibData` rejected by the flashed firmware; I/Q order not confirmed | serial TLV (`sdk2`) unconfirmed; bench-unproven; `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (D4); never run through `bench_run.py` |
+| Known limits | `calibData` rejected by the flashed firmware; I/Q order `q_first` bench-verified (core-17, 2026-10-12) | serial TLV (`sdk2`) unconfirmed; bench-unproven; `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (D4); never run through `bench_run.py` |
 
 Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
