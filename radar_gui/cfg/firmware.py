@@ -324,6 +324,18 @@ def default_for(board: str) -> dict | None:
     return fws[0] if fws else None
 
 
+def gui_board(name: str) -> str:
+    """The GUI board for a board name as a system JSON / session.json writes it: a driver board (IWR1843_SAR, the
+    `driver_board` value of a descriptor) maps back to its GUI board (IWR1843); a path to a board descriptor (Quick-setup
+    session.json, `.../config/boards/IWR1843_SAR.json`) is reduced to its stem first; anything else is returned as is."""
+    n = Path(str(name)).stem if str(name).endswith(".json") else str(name)
+    for d in load_all().values():
+        for gui, drv in (d.get("driver_board") or {}).items():
+            if drv == n:
+                return gui
+    return n
+
+
 def driver_board(fw: dict, board: str) -> str:
     """The C++ driver board a system JSON writes for firmware `fw` on GUI board `board` (descriptor `driver_board`;
     default: `board` itself)."""

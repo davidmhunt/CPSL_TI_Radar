@@ -247,6 +247,7 @@ function render() {
   if (s === 'failed' || (s === 'exited' && st.exit_code)) msg((st.error || `driver exited with code ${st.exit_code}`) + (noFrames() ? ' ' + ZERO_HINT : ''));
   else if (s === 'exited' && noFrames()) msg(ZERO_HINT, 'warn');
   else if (s === 'running' || s === 'stopping' || s === 'idle') { if ($('rMsg').classList.contains('bad') && s !== 'idle') msg(''); }
+  if (st.adc_geom_err && (s === 'running' || s === 'stopping')) msg(st.adc_geom_err, 'warn');   // gui-44: same text as the Raw ADC panels
   const out = $('rOutCard'), done = s === 'exited' || s === 'failed';
   out.hidden = !done;
   if (done) renderOutput(st);

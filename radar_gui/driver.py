@@ -225,6 +225,7 @@ class DriverManager:
         self.tap = None   # "on" = run started with --tap-fd, "off" = the binary has no tap, None = no run yet
         self.adc_every = 0        # gui-07: K passed as --tap-adc-every (0 = not passed)
         self.adc_reason = None    # why not: "off" | "no_dca" | "no_adc_tap" | "no_tap"; None = ADC tap on
+        self.adc_geom_err = ""    # gui-44: why the ADC views cannot build their geometry from this run's cfg ("" = they can)
 
     # ---- validate -------------------------------------------------------------------------------
     def _bin(self) -> Path:
@@ -351,6 +352,13 @@ class DriverManager:
                     elif "--tap-adc-every" not in self._usage(b):
                         reason = "no_adc_tap"
                     self.adc_every, self.adc_reason = (0, reason) if reason else (k, None)
+                    self.adc_geom_err = ""
+                    if self.adc_every:
+                        try:
+                            from . import adc as _adc
+                            _adc.Geometry.from_system_json(session)
+                        except Exception as e:   # shown in the Radar tab; the ADC panels show the same text
+                            self.adc_geom_err = f"cannot build the ADC geometry from the run's cfg: {e}"
                     if tap_ok:
                         rfd, wfd = os.pipe()
                         cmd += ["--tap-fd", str(wfd)]
@@ -644,7 +652,7 @@ class DriverManager:
                     "run": self.run_id, "cli": [dict(e) for e in self.cli] if log else [], "cli_first_fail": first_fail(self.cli),
                     "files": list(self.files), "bin_verdict": self.bin_verdict,
                     "radar_owner": self.lock.owner, "tap": self.tap,
-                    "adc_every": self.adc_every, "adc_reason": self.adc_reason,
+                    "adc_every": self.adc_every, "adc_reason": self.adc_reason, "adc_geom_err": self.adc_geom_err,
                     "label": self.label, "session_json": self.session_json, "saving": dict(self.saving),
                     "firmware": self.fw_id, "firmware_check": dict(self.fw_check) if self.fw_check else None,
                     "notes": list(self.notes), "boot": self.boot}

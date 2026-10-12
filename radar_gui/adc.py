@@ -132,7 +132,9 @@ class Geometry:
         p = Path(path)
         d = json.loads(p.read_text())
         cfg = parse_cfg_file((p.parent / d["radar_cfg"]).resolve())
-        return cls.from_cfg(cfg, d.get("board"))
+        board = d.get("board")
+        # a system JSON writes the driver board (IWR1843_SAR), a Quick-setup session.json the board descriptor's path
+        return cls.from_cfg(cfg, fwmod.gui_board(board) if board else board)
 
 
 # ---- decode -----------------------------------------------------------------------------------------------

@@ -263,3 +263,26 @@ def test_real_bench_frames_run_end_to_end(geom, capsys):
         print(f"real frame {f}: peak bin {h['profile_peak_bin']} image {h['image_ratio_db']:.1f} dB; "
               f"bits {[r['bits'] for r in rows]} clipped {[r['clipped'] for r in rows]} "
               f"rms_dbfs {[round(r['rms_dbfs'], 1) for r in rows]}")
+
+
+# ---- gui-44: driver-board system JSONs and Quick-setup session.json ---------------------------------------------------
+REPO = Path(__file__).resolve().parent.parent
+SAR_SYS = REPO / "CPSL_TI_Radar_cpp" / "config" / "system" / "IWR1843_iwr1843_sar_lvds_SAR_2ms.json"
+
+
+def test_geometry_sar_driver_board_system_json():
+    g = adc.Geometry.from_system_json(SAR_SYS)               # board "IWR1843_SAR" (a driver board, not a GUI board)
+    assert g.shape == (1, 3300, 255) and g.board == "IWR1843" and g.ra_reason
+
+
+def test_geometry_quick_session_json_absolute_board_path():
+    # a real Quick-setup session.json (runs/gui/..._SAR_2ms_fmt1, path anonymised): `board` is the descriptor's absolute path
+    g = adc.Geometry.from_system_json(FIX / "quick_session" / "session.json")
+    assert g.shape == (1, 3300, 255) and g.ra_reason
+
+
+def test_gui_board_mapping():
+    from radar_gui.cfg import firmware as fw
+    assert fw.gui_board("IWR1843_SAR") == "IWR1843" and fw.gui_board("IWR1843") == "IWR1843"
+    assert fw.gui_board("/x/config/boards/IWR1843.json") == "IWR1843"
+    assert fw.gui_board("/x/config/boards/IWR1843_SAR.json") == "IWR1843"
