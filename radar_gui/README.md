@@ -126,7 +126,7 @@ API: `GET /api/settings/ports`, `GET /api/settings/dca?nic=<wired NIC>&ping=0|1`
 ## Radar tab: driver runs (gui-05; the tab was called Run)
 
 Open `http://127.0.0.1:8000/#run` (or the **Run** tab): pick a system JSON (saved ones from `config/user/` first, then `config/system/`;
-Configure's Save result has an **Open in Run** link that preselects the file), **Validate** (runs `<driver> <json> --validate`; shows
+Configure's Save result has an **Open in Radar** link that preselects the file), **Validate** (runs `<driver> <json> --validate`; shows
 OK / INVALID, frame geometry, bytes/frame, notes and the raw text), optionally set **Frames** / **Duration**, then **Start** (spawns
 `<driver> <json> --stats [--frames N] [--duration S]`, validating first) and **Stop** (SIGINT so the driver flushes its files; SIGKILL after
 `max(5 s, 2 x frame period)`). The header session bar shows the state on every tab. Per stream (DCA1000, serial) the cards show frames, rate

@@ -936,7 +936,6 @@
             "type": "int",
             "min": 0,
             "max": 255,
-            "unit": "cells",
             "default": 4,
             "help": "Cells skipped next to the cell under test.",
             "cite": "SDK 2.1 UG p.19-20; xwr14xx mmw_cli.c:162-236"
@@ -1026,8 +1025,8 @@
         ]
       },
       "sdk3_hwa": {
-        "level": "source",
-        "source": "SDK 3.6 xwr18xx mmw_cli.c:454-557; cfarcaprochwa.c:832-858 (HWA DPU); docs/research/gui_cfar_detection_2026-10-07.md",
+        "level": "bench",
+        "source": "SDK 3.6 xwr18xx mmw_cli.c:454-557; cfarcaprochwa.c:832-858 (HWA DPU); docs/research/gui_cfar_detection_2026-10-07.md. Bench: IWR1843, user cfg IcaRAus_test_cfar_copy, CFAR edits saved and streamed, nominal point cloud (docs/bench_tests/2026-10-10_session1_iwr1843.md 9a)",
         "commands": {
           "cfarCfg": {
             "per_direction": true,
@@ -1083,7 +1082,6 @@
             "type": "int",
             "min": 0,
             "max": 255,
-            "unit": "cells",
             "default": {
               "range": 4,
               "doppler": 2
@@ -1257,7 +1255,6 @@
             "type": "int",
             "min": 0,
             "max": 255,
-            "unit": "cells",
             "default": {
               "range": 4,
               "doppler": 2

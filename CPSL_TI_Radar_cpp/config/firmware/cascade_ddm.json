@@ -260,7 +260,6 @@
             "type": "int",
             "min": 0,
             "max": 255,
-            "unit": "cells",
             "default": {
               "range": 0,
               "doppler": 0
