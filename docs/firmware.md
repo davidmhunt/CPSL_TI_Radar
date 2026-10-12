@@ -11,7 +11,7 @@ Keep it current when one of them changes.
 | `firmware_dev/projects/` | One self-contained firmware per folder (`README.md`, `project.toml`, `build.sh`, `flash.sh`, `src/`, `configs/`, `tools/`, `tests/`, `docs/`, `build/`), copied from `_template/`. **Start at [`firmware_dev/README.md`](../firmware_dev/README.md)** (5-step path and tutorials); project index: [`projects/README.md`](../firmware_dev/projects/README.md); developer reference (verbs, `project.toml`, build environment): [`docs/reference/`](../firmware_dev/docs/reference/fw_cli.md) | ″ |
 | `firmware_dev/fw` | Bash entry point to `tools/fwcli/` (stdlib Python >= 3.11): `list`, `ports`, `new`, `deps`, `build`, `test`, `flash`, `verify`, `publish`, `help`, each with `--json` (JSON Lines, final `result`, exit codes per `docs/specs/fw_project_contract.md` App. A); runs compose as the host UID. Reads each project's `project.toml`. Own tests: `cd firmware_dev && uv run --group dev pytest tests -q` (fake compose/fuser/pty, no hardware) | ″ |
 | `firmware_dev/tools/` | Cross-project code: `fwcli/` (the `fw` logic); `cascade_serial_check.py` lives in `awr2243_cascade_ddm/tools/` | ″ |
-| `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/`, `prebuilt_binaries/` SBL images + demo.cfg) | ″ |
+| `firmware_dev/projects/awr2243_cascade_ddm/` | AM273x + AWR2243 2-chip cascade DDM demo (`src/` projectspecs + sources, `configs/` chirp cfgs, `docs/` — [`cascade_demo_guide.md`](../firmware_dev/projects/awr2243_cascade_ddm/docs/cascade_demo_guide.md) is the developer reference (build, UART/TLV format with source cites) and `docs/archive/` holds unverified old material —, `prebuilt_binaries/` TI's two SBL images) | ″ |
 | `firmware_dev/projects/ti_stock_demos/` | Stock SDK 3.6 IWR1843/IWR6843 mmw demos, built out of tree (overlay in `build/sdk/`; no TI source tracked) | ″ |
 | `firmware_dev/projects/iwr1843_sar_lvds/` | IWR1843 SAR/LVDS raw-ADC firmware from the SDK 3.6 `xwr18xx/mmw` demo (pristine baseline `bb3a348` in `firmware_dev`), built out of tree. MSS-only metaimage (DSS `NULL`, DSP halted), DSP chain/TLV/SW session removed, CBUFF HW session streams ADC per chirp, `sensorStop` -> `flushCfg` + cfg -> `sensorStart` without a power cycle (`channelCfg`/`adcCfg`/`lowPower` changes rejected), periodic runtime calibration off. Also `lvdsStreamCfg` dataFmt 2 = ADC + two 32-byte per-chirp metadata record slots (counters, RTI 100 MHz timestamp, lag-1 saturation), CLI `sarStats`, SDK CBUFF platform table compiled with `ENABLE_ALL_NON_INTERLEAVED`; format in its `docs/lvds_data_format.md`; see its README | ″ |
 | `firmware_dev/downloads/` | TI installers, fetched by `download.sh` (~3.6 GB, gitignored) | ″ |
@@ -61,8 +61,8 @@ One row per `fw` verb; arguments, flash modes and per-project details are in [`f
   after boot; power-cycle before every configured run. The IWR1443/1843/6843 descriptors set
   `config_once_per_boot` false, and `iwr1843_sar_lvds` re-sends a cfg without a power cycle.
 - **New-board flash failures** may mean the QSPI Quad Enable bit is unset —
-  see "Possible Flashing Issues" in the cascade user guide (rebuild
-  `sbl_uart_uniflash` with "Quad Enable Type" = 6).
+  see Known limits in the [cascade README](../firmware_dev/projects/awr2243_cascade_ddm/README.md)
+  (TI's "Possible Flashing Issues": rebuild `sbl_uart_uniflash` with "Quad Enable Type" = 6).
 - Containers run fine as the host UID (`--user $(id -u):$(id -g)`, `HOME=/tmp/fwhome`):
   both the CCS headless cascade build and the SDK 3.6 make flow were verified unprivileged. The SDK 3.6 demo makefiles include everything via
   `$(MMWAVE_SDK_INSTALL_PATH)`, so a demo builds from a copy outside `/opt/ti`; TI's
@@ -112,7 +112,7 @@ Driver support: the `IWR1843_SAR` board descriptor and `config/system/IWR1843_iw
 - Cascade TI binaries: `.gitignore` still has exceptions for `.aer5f`/`.ae66`/`.appimage`
   under `projects/awr2243_cascade_ddm/`, but none are tracked (the build takes the libraries
   from the Radar Toolbox); `prebuilt_binaries/` keeps TI's two SBL `.tiimage` files for
-  `flash.sh`. Dropping/relicensing them is still open.
+  `flash.sh`. Dropping/relicensing them is still open (listed in that README's Known limits).
 - `iwr1843_sar_lvds/src/mss/mmw_mss.cfg` (XDC config; the DSS one was removed with the DSP code) carries TI's old "Restricted rights" header;
   the SDK software manifest lists `packages\ti\demo` as BSD-3-Clause. Whether that suffices for a
   public release is the user's call. The `ti_stock_demos` `.cfg`/`.pl` copies have no header (also BSD per the manifest).
