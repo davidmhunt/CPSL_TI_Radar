@@ -20,7 +20,7 @@ ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 - `firmware_dev/` is an opt-in submodule and is not fetched by the clone. You only need it to build firmware ([`docs/firmware.md`](../firmware.md)).
 - Check the Python side: `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs everything (about a minute). Neither needs hardware.
 
-Prefer a container? [`docs/docker.md`](../docker.md) builds the driver and GUI into one image: `docker compose -f docker/app/compose.yaml build demo`, then `up demo` serves a hardware-free demo on `http://127.0.0.1:8090/`. Its `hw` profile (real boards) is built to the design in that page but is **not yet verified on a real board**; `docker/app/setup_env.sh` writes its `.env`.
+Prefer a container? [`docs/docker.md`](../docker.md) builds the driver and GUI into one image: `docker compose -f docker/app/compose.yaml build demo`, then `up demo` serves a hardware-free demo on `http://127.0.0.1:8090/`. Its `hw` profile (real boards) is verified on an IWR1843 with the stock demo; `docker/app/setup_env.sh` writes its `.env`.
 
 ## Board firmware
 

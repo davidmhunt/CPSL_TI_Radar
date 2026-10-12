@@ -46,7 +46,7 @@ docker compose -f docker/app/compose.yaml build demo
 docker compose -f docker/app/compose.yaml up demo      # http://127.0.0.1:8090/
 ```
 
-The `hw` profile for real boards is described in [`docs/docker.md`](docs/docker.md) but not yet verified on a real board.
+The `hw` profile for real boards (verified on an IWR1843 with the stock demo) is described in [`docs/docker.md`](docs/docker.md); run `docker/app/setup_env.sh` first.
 
 **Tests:** `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs the whole suite (about a minute); the C++ tests run through `ctest` as above. None need hardware.
 
