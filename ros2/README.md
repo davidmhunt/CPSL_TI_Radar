@@ -23,7 +23,7 @@ Needs ROS 2 Jazzy, `colcon`, a C++ compiler and `cmake`. From a fresh workspace:
 
 ```bash
 mkdir -p ws/src && cd ws/src
-git clone -b feature/ros2 https://github.com/davidmhunt/CPSL_TI_Radar.git
+git clone -b release/v2.0 https://github.com/davidmhunt/CPSL_TI_Radar.git
 git -C CPSL_TI_Radar submodule update --init CPSL_TI_Radar_cpp/include/json
 cd .. && source /opt/ros/jazzy/setup.bash
 colcon list --base-paths src        # expect exactly raw_radar_msgs and ti_radar_connect
@@ -96,6 +96,8 @@ git -C src/CPSL_TI_Radar submodule update --init CPSL_TI_Radar_cpp/include/json
 source /opt/ros/jazzy/setup.bash
 colcon build --base-paths src --symlink-install --packages-select raw_radar_msgs ti_radar_connect
 ```
+
+Then `source install/setup.bash` and launch as in [Run](#run).
 
 These are the commands of its `scripts/install.sh` and of console's Sensors picker (Settings >
 Sensors > radar). `scripts/deps/radar.sh` has no system dependencies; `rosdep install --from-paths src`
