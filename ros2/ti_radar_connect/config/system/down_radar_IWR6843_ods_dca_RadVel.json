@@ -1,0 +1,25 @@
+{
+    "verbose": false,
+    "TI_Radar_Config_Management": {
+        "TI_Radar_config_path": "../radar/nav_configs/6843_RadVel_ods_10Hz.cfg"
+    },
+    "CLI_Controller": {
+        "CLI_port": "/dev/ttyUSB0"
+    },
+    "Streamer": {
+        "serial_streaming": {
+            "enabled": false,
+            "data_port": "/dev/ttyUSB1"
+        },
+        "DCA1000_streaming": {
+            "enabled": true,
+            "FPGA_IP": "192.168.1.180",
+            "system_IP": "192.168.1.57",
+            "data_port": 4098,
+            "cmd_port": 4096
+        },
+        "save_to_file": false,
+        "SDK_version": "3.6",
+        "board_type": "IWR6843"
+    }
+}
