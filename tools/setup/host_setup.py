@@ -36,11 +36,23 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "tools/bench"))
-from bench_lib import parse_cmake_cache  # noqa: E402
+try:
+    REPO = Path(__file__).resolve().parents[2]
+except (NameError, IndexError):   # piped via `python3 -` (no __file__), e.g. run inside a container
+    REPO = None
+if REPO is not None and not (REPO / "tools/bench/bench_lib.py").is_file():
+    REPO = None                   # __file__ was '<stdin>' resolved against the cwd
+if REPO is not None:
+    sys.path.insert(0, str(REPO / "tools/bench"))
+    from bench_lib import parse_cmake_cache  # noqa: E402
+else:
+    def parse_cmake_cache(text: str) -> dict:
+        """Just CMAKE_BUILD_TYPE (bench_lib is not importable without the repo path)."""
+        return {k: l.split("=", 1)[1] for l in text.splitlines()
+                if not l.startswith(("//", "#")) and ":" in l and "=" in l
+                for k in [l.split(":", 1)[0]] if k == "CMAKE_BUILD_TYPE"}
 
-DEFAULT_DRIVER = REPO / "CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP"
+DEFAULT_DRIVER = REPO / "CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP" if REPO else None
 RMEM_TARGET = 134217728
 RMEM_KEY = "net.core.rmem_max"
 SYSCTL_DROPIN = "/etc/sysctl.d/99-radar.conf"
@@ -504,11 +516,13 @@ def check_dialout(host: Host) -> Check:
 def _rel(p: Path) -> str:
     try:
         return str(p.resolve().relative_to(REPO))
-    except ValueError:
+    except (ValueError, TypeError):   # outside the repo, or REPO unknown
         return str(p)
 
 
-def check_build_type(host: Host, driver: Path) -> Check:
+def check_build_type(host: Host, driver: Path | None) -> Check:
+    if driver is None:
+        return Check("build-type", NA, "no repo path (script run from stdin) and no --driver given")
     build = driver.parent
     text = host.read(str(build / "CMakeCache.txt"))
     if text is None:

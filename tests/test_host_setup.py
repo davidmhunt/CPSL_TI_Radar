@@ -664,3 +664,16 @@ def test_rerun_line_quotes_nic_and_user_comes_from_passwd():
     import os
     import pwd
     assert hs.Host().user() == pwd.getpwuid(os.getuid()).pw_name
+
+
+def test_runs_piped_via_stdin_without_file_and_without_nmcli(tmp_path):
+    """`python3 - --json < host_setup.py` (as inside console's container): no __file__, maybe no nmcli."""
+    import subprocess
+    src = (Path(hs.__file__)).read_text()
+    r = subprocess.run([sys.executable, "-", "--json"], input=src, capture_output=True, text=True,
+                       cwd=tmp_path, timeout=60)
+    assert "Traceback" not in r.stderr, r.stderr
+    d = json.loads(r.stdout)
+    assert r.returncode == d["exit"] and r.returncode in (0, 1)
+    names = {c["name"]: c for c in d["checks"]}
+    assert names["build-type"]["status"] == "N-A"
