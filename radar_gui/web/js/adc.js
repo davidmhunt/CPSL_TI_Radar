@@ -102,7 +102,7 @@ function nR(step, bins) { return A.rmax > 0 ? Math.max(2, Math.min(bins, Math.ce
 function drawProfile(m) {
   const { g, w, h } = fit($('adcProf')); g.clearRect(0, 0, w, h);
   if (!m) return;
-  const p = m.arr.profile, step = m.h.range_step_m, n = nR(step, p.length);
+  const p = m.arr.profile, step = m.h.profile_step_m || m.h.range_step_m, n = nR(step, p.length);
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
   let hi = -1e9; for (let i = 0; i < n; i++) hi = Math.max(hi, p[i]);
   const lo = hi - 70, X = i => x0 + (i + .5) / n * pw, Y = v => y0 + (1 - Math.max(0, Math.min(1, (v - lo) / (hi - lo)))) * ph;
