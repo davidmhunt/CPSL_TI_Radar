@@ -666,17 +666,27 @@ def board_id(board: dict, serial_counts: dict) -> tuple:
     return board["usb_path"], "path"
 
 
+# ModemManager probes any new serial port as a possible modem; on the CP2105
+# that races the first open of the CLI port and the open fails once. The radar
+# ports are never modems, so tell it to leave them alone.
+_MM_IGNORE = ', ENV{ID_MM_DEVICE_IGNORE}="1"'
+
+
+def _mm_ignore(model: str) -> str:
+    return _MM_IGNORE if model == "cp2105" else ""
+
+
 def render_udev_rule(serial: str, ifn: str, role: str, model: str = "xds110") -> str:
     vendor, product, _ = RADAR_MODELS[model]
     return (f'SUBSYSTEM=="tty", ENV{{ID_VENDOR_ID}}=="{vendor}", '
             f'ENV{{ID_MODEL_ID}}=="{product}", ENV{{ID_SERIAL_SHORT}}=="{serial}", '
-            f'ENV{{ID_USB_INTERFACE_NUM}}=="{ifn}", SYMLINK+="radar/{serial}-{role}"')
+            f'ENV{{ID_USB_INTERFACE_NUM}}=="{ifn}", SYMLINK+="radar/{serial}-{role}"{_mm_ignore(model)}')
 
 
 def render_udev_path_rule(path: str, ifn: str, role: str, model: str = "xds110") -> str:
     vendor, product, _ = RADAR_MODELS[model]
     return (f'SUBSYSTEM=="tty", ENV{{ID_VENDOR_ID}}=="{vendor}", ENV{{ID_MODEL_ID}}=="{product}", '
-            f'KERNELS=="{path}:1.{int(ifn)}", SYMLINK+="radar/{path}-{role}"')
+            f'KERNELS=="{path}:1.{int(ifn)}", SYMLINK+="radar/{path}-{role}"{_mm_ignore(model)}')
 
 
 def _board_rules(b: dict) -> list:

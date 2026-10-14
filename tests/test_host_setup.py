@@ -510,6 +510,21 @@ def test_udev_cp2105_board_uses_ttyusb_and_interfaces_00_01():
     assert "KERNELS==\"1-5:1.1\"" in c.fix_cmds[0].stdin   # CP2105 data = interface 01
 
 
+def test_udev_cp2105_rules_tell_modemmanager_to_ignore_the_port():
+    h = bench_host(boards=0)
+    add_board(h, "ttyUSB0", "0123ABCD", "1-5", vid="10c4", pid="ea70", ifnums=("00", "01"))
+    rules = hs.check_udev(h, enabled=True).fix_cmds[0].stdin
+    lines = [ln for ln in rules.splitlines() if "SYMLINK" in ln]
+    assert len(lines) == 2 and all(ln.endswith('ENV{ID_MM_DEVICE_IGNORE}="1"') for ln in lines)
+    # a file written before this change is stale and gets rewritten, not kept
+    old = [ln.replace(', ENV{ID_MM_DEVICE_IGNORE}="1"', "") for ln in lines]
+    h.files["/etc/udev/rules.d/99-radar.rules"] = "\n".join(old) + "\n"
+    c = hs.check_udev(h, enabled=True)
+    assert c.status == "MISSING" and c.fix_cmds[0].stdin.count("ID_MM_DEVICE_IGNORE") == 2
+    # an XDS110 (ttyACM, which ModemManager does not grab here) is unchanged
+    assert "ID_MM_DEVICE_IGNORE" not in hs.render_udev_rule("R1", "00", "cli")
+
+
 def test_udev_serial_that_becomes_shared_replaces_its_serial_rules():
     h = one_board_host()
     h.files["/etc/udev/rules.d/99-radar.rules"] = hs.check_udev(h, enabled=True).fix_cmds[0].stdin
