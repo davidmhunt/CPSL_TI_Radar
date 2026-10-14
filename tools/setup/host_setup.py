@@ -666,14 +666,15 @@ def board_id(board: dict, serial_counts: dict) -> tuple:
     return board["usb_path"], "path"
 
 
-# ModemManager probes any new serial port as a possible modem; on the CP2105
-# that races the first open of the CLI port and the open fails once. The radar
-# ports are never modems, so tell it to leave them alone.
+# ModemManager probes any new serial port as a possible modem; on the radar
+# boards (CP2105 and XDS110 ttyACM alike) that races the first open of the CLI
+# port and the open fails once. The radar ports are never modems, so tell it to
+# leave them alone.
 _MM_IGNORE = ', ENV{ID_MM_DEVICE_IGNORE}="1"'
 
 
 def _mm_ignore(model: str) -> str:
-    return _MM_IGNORE if model == "cp2105" else ""
+    return _MM_IGNORE
 
 
 def render_udev_rule(serial: str, ifn: str, role: str, model: str = "xds110") -> str:

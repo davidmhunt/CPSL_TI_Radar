@@ -521,8 +521,9 @@ def test_udev_cp2105_rules_tell_modemmanager_to_ignore_the_port():
     h.files["/etc/udev/rules.d/99-radar.rules"] = "\n".join(old) + "\n"
     c = hs.check_udev(h, enabled=True)
     assert c.status == "MISSING" and c.fix_cmds[0].stdin.count("ID_MM_DEVICE_IGNORE") == 2
-    # an XDS110 (ttyACM, which ModemManager does not grab here) is unchanged
-    assert "ID_MM_DEVICE_IGNORE" not in hs.render_udev_rule("R1", "00", "cli")
+    # XDS110 (ttyACM) rules carry it too, serial and path forms
+    assert hs.render_udev_rule("R1", "00", "cli").endswith('ENV{ID_MM_DEVICE_IGNORE}="1"')
+    assert hs.render_udev_path_rule("1-3", "03", "data").endswith('ENV{ID_MM_DEVICE_IGNORE}="1"')
 
 
 def test_udev_serial_that_becomes_shared_replaces_its_serial_rules():
@@ -567,10 +568,10 @@ sudo usermod -aG dialout cpsl
 # udev
 sudo tee /etc/udev/rules.d/99-radar.rules > /dev/null <<'EOF'
 # CPSL TI Radar port names (tools/setup/host_setup.py --udev)
-SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="00000000", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/00000000-cli"
-SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="00000000", ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="radar/00000000-data"
-SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="R2101050", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/R2101050-cli"
-SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="R2101050", ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="radar/R2101050-data"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="00000000", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/00000000-cli", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="00000000", ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="radar/00000000-data", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="R2101050", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="radar/R2101050-cli", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="0451", ENV{ID_MODEL_ID}=="bef3", ENV{ID_SERIAL_SHORT}=="R2101050", ENV{ID_USB_INTERFACE_NUM}=="03", SYMLINK+="radar/R2101050-data", ENV{ID_MM_DEVICE_IGNORE}="1"
 EOF
 sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=tty
