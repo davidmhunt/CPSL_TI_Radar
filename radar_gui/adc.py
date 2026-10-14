@@ -254,10 +254,11 @@ def process(a: np.ndarray, geom: Geometry, opts: dict | None = None) -> Result:
     rd_u8, rd_lo, rd_hi = to_u8(rdp)
     ki, kj = np.unravel_index(int(np.argmax(rd_db)), rd_db.shape)
 
-    arrays = [("profile", prof_db.astype("<f4")[:MAX_PROFILE]), ("rd", rd_u8)]
+    prof_p, prof_f = maxpool(prof_db, 0, MAX_PROFILE)                     # max-pooled like the heatmaps, never truncated
+    arrays = [("profile", prof_p.astype("<f4")), ("rd", rd_u8)]
     head = {
         "kind": "frame",
-        "range_step_m": bin_m, "range_bins": int(nf), "profile_peak_bin": k, "profile_peak_db": float(prof_db[k]),
+        "range_step_m": bin_m, "range_bins": int(nf), "profile_step_m": bin_m * prof_f, "profile_peak_bin": k, "profile_peak_db": float(prof_db[k]),
         "image_ratio_db": image_ratio,
         "rd": {"shape": list(rd_u8.shape), "min": rd_lo, "max": rd_hi, "range_step_m": bin_m * rd_f,
                "vel_step_ms": geom.velocity_step_ms, "vel_zero_bin": dn // 2, "peak": [int(ki), int(kj)]},

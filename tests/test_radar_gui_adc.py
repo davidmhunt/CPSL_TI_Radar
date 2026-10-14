@@ -156,6 +156,18 @@ def test_maxpool_keeps_the_peak():
     assert f1 == 1 and q is a
 
 
+def test_profile_is_max_pooled_not_truncated(geom, monkeypatch):
+    x = sc.cube(targets=[{"kr": 100, "kd": 10, "sin": 0.0}])       # bin 100 of 128: a truncating profile would lose it
+    full = run(geom, x)
+    assert full.header["profile_step_m"] == pytest.approx(full.header["range_step_m"])
+    monkeypatch.setattr(adc, "MAX_PROFILE", 32)
+    r = run(geom, x)
+    prof = dict(r.arrays)["profile"]
+    assert len(prof) == 32 and r.header["profile_step_m"] == pytest.approx(4 * r.header["range_step_m"])
+    assert prof.argmax() == 100 // 4 and prof.max() == pytest.approx(dict(full.arrays)["profile"].max())
+    assert len(prof) * r.header["profile_step_m"] == pytest.approx(r.header["range_bins"] * r.header["range_step_m"])
+
+
 def test_clutter_removal_drops_static_target(geom):
     x = sc.cube(targets=[{"kr": 34, "kd": 0, "amp": 4000}, {"kr": 60, "kd": 12, "amp": 1000}])
     assert run(geom, x).header["profile_peak_bin"] == 34
