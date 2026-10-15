@@ -45,6 +45,7 @@ class StartReq(BaseModel):
     frames: int = Field(tune.DEFAULT_FRAMES, ge=1, le=64)
     margin_db: float = Field(tune.DEFAULT_MARGIN_DB, ge=0, le=30)
     exclude_m: float | None = Field(None, ge=0)   # DC/leakage exclusion radius; None = 5 range bins of the config
+    adc_bits: int | None = Field(None, ge=8, le=16)   # override; None = derived from the cfg's adcCfg numADCBits
 
 
 def _board_firmware(doc: dict) -> tuple[str | None, str | None]:
@@ -136,6 +137,7 @@ class TuneManager:
             ex = tune.exclusion_m(adc.Geometry.from_system_json(p))
         except Exception as e:
             geom_err = f"cannot build the ADC geometry from this config: {e}"
+        adc_bits, adc_src = tune.adc_bits_from_cfg(cfg_text)
         gb, fw = _board_firmware(doc)
         dca = bool((doc.get("dca1000") or {}).get("enabled"))
         return {"config": config, "name": p.stem, "board": gb, "firmware": fw, "gain_range": gain_range_of(doc),
@@ -143,7 +145,7 @@ class TuneManager:
                 "dca1000": dca, "exclude_m": ex, "error": geom_err or (None if dca else "this config has the DCA1000 stream off: the sweep needs raw ADC"),
                 "defaults": {"frames": tune.DEFAULT_FRAMES, "margin_db": tune.DEFAULT_MARGIN_DB,
                              "tol_db": tune.DEFAULT_TOL_DB, "min_snr_db": tune.DEFAULT_MIN_SNR_DB,
-                             "adc_bits": tune.DEFAULT_ADC_BITS, "settle_frames": tune.SETTLE_FRAMES}}
+                             "adc_bits": adc_bits, "adc_bits_source": adc_src, "settle_frames": tune.SETTLE_FRAMES}}
 
     # ---- start / cancel ---------------------------------------------------------------------------------------
     def start(self, req: StartReq) -> dict:
@@ -169,9 +171,10 @@ class TuneManager:
             why = self._driver_busy()
             if why:
                 raise HTTPException(409, why)
+            abits, asrc = (req.adc_bits, "override") if req.adc_bits else tune.adc_bits_from_cfg(base_cfg)
             params = {"gains": gains, "frames": req.frames, "margin_db": req.margin_db, "tol_db": tune.DEFAULT_TOL_DB,
-                      "min_snr_db": tune.DEFAULT_MIN_SNR_DB, "exclude_m": ex, "adc_bits": tune.DEFAULT_ADC_BITS,
-                      "gain_range": rng, "settle_frames": tune.SETTLE_FRAMES}
+                      "min_snr_db": tune.DEFAULT_MIN_SNR_DB, "exclude_m": ex, "adc_bits": abits,
+                      "adc_bits_source": asrc, "gain_range": rng, "settle_frames": tune.SETTLE_FRAMES}
             sw = Sweep(f"tune_{session_cfg.safe_name(p.stem)}", req.config, params)
             self.sweep = sw
             self._thread = threading.Thread(target=self._run, args=(sw, p, doc, base_cfg, geom), daemon=True, name="tune-sweep")

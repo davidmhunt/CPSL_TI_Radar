@@ -109,6 +109,7 @@ def test_full_sweep_end_to_end(env):
     assert d.parent == tmp / "runs" and d.name.endswith("_tune_dca")
     saved = json.loads((d / "tune.json").read_text())
     assert saved["state"] == "done" and saved["rows"] == s["rows"] and saved["params"]["frames"] == 2
+    assert saved["params"]["adc_bits"] == 16 and saved["params"]["adc_bits_source"] == "adcCfg numADCBits 2"
     assert (d / "tune.csv").read_text().splitlines()[0].startswith("gain_db,status") and (d / "plot.json").is_file()
     assert (d / "radar.cfg").read_text() == (user / "bench_1843_dca.cfg").read_text()
     assert "profileCfg 0 77 87.04 7 73 0 0 26.981 1 128 2000 0 0 44" in (d / "step_g44" / "step.cfg").read_text()

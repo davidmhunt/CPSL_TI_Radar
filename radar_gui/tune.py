@@ -36,8 +36,10 @@ DEFAULT_FRAMES = 8               # approved defaults (radar-37, 2026-10-15)
 DEFAULT_MARGIN_DB = 3.0
 DEFAULT_TOL_DB = 1.0
 DEFAULT_MIN_SNR_DB = 10.0
-DEFAULT_ADC_BITS = 12            # ASSUMPTION (IWR1843/6843/1443 datasheets: 12-bit ADC in a 16-bit container); the board's
-                                 # ADC full scale is listed as unverified in docs/firmware.md. Override with `adc_bits`.
+ADC_BITS_CODE = {0: 12, 1: 14, 2: 16}   # adcCfg numADCBits (arg 0); samples are right-justified, full scale +-(2^(bits-1)-1)
+DEFAULT_ADC_BITS = 16            # fallback when the cfg has no adcCfg (reported as such); docs/research memo "ADC full scale
+                                 # (radar-37)": 16 for adcCfg 2 (medium confidence), 12 (medium-low), 14 (low). The RF ADC's
+                                 # effective resolution may be lower than this digital word.
 EXCLUDE_BINS = 5.0               # default DC/leakage exclusion: this many un-padded range bins (Hann main lobe + HPF corner)
 SETTLE_FRAMES = 1                # leading frames of every step dropped (the first frame after sensorStart is not steady)
 MAX_STEPS = 64
@@ -82,6 +84,21 @@ def set_rx_gain(cfg_text: str, gain_db: int) -> str:
     cr = "\r" if lines[i].endswith("\r") else ""
     lines[i] = lead + " ".join(parts) + ((" " + comment.rstrip("\r")) if comment else "") + cr
     return "\n".join(lines)
+
+
+def adc_bits_from_cfg(cfg_text: str) -> tuple[int, str]:
+    """(digital word bits, source text) from the first adcCfg's numADCBits; 16 with an explicit note when absent/unknown."""
+    for raw in cfg_text.split("\n"):
+        parts = raw.split("%")[0].split()
+        if parts and parts[0] == "adcCfg":
+            try:
+                code = int(float(parts[1]))
+            except (IndexError, ValueError):
+                break
+            if code in ADC_BITS_CODE:
+                return ADC_BITS_CODE[code], f"adcCfg numADCBits {code}"
+            break
+    return DEFAULT_ADC_BITS, f"no usable adcCfg in the cfg: assumed {DEFAULT_ADC_BITS}-bit"
 
 
 # ---- request validation -----------------------------------------------------------------------------------
@@ -139,7 +156,7 @@ def step_metrics(gain_db: int, cap: Capture, geom: adc.Geometry, exclude_m: floa
     maximum there (the strongest return), `dc_db` the maximum inside it (DC / leakage, reported but never used)."""
     if not cap.frames:
         raise TuneError(f"gain {gain_db} dB: no ADC frames were captured")
-    fs_adc = float(1 << (int(adc_bits) - 1))
+    fs_adc = float((1 << (int(adc_bits) - 1)) - 1)     # digital full scale 2^(bits-1)-1
     prof_lin, peak, bits, clipped_rail, step_m = None, 0, 0, 0, None
     for a in cap.frames:
         res = adc.process(a, geom, {"clutter": False})
@@ -150,7 +167,7 @@ def step_metrics(gain_db: int, cap: Capture, geom: adc.Geometry, exclude_m: floa
         for r in res.header["diag"]["rows"]:
             peak = max(peak, r["peak_i"], r["peak_q"])
             bits = max(bits, r["bits"])
-        clipped_rail += int((np.abs(a.astype(np.int32)) >= fs_adc - 1).sum())
+        clipped_rail += int((np.abs(a.astype(np.int32)) >= fs_adc).sum())
     prof_db = _db10(prof_lin / len(cap.frames))
     half = max(len(prof_db) // 2, 1)               # positive ranges only (the upper half mirrors the negative IF)
     r_m = np.arange(half) * step_m
@@ -241,7 +258,7 @@ def suggest(rows: list[dict], rng: dict | None = None, margin_db: float = DEFAUL
     below = g < rows[0]["gain_db"]
     lim = out["limited_by"]
     if lim == "sweep_top":
-        why = (f"no compression observed up to {good['gain_db']} dB; headroom {good['headroom_db']:.1f} dB below the {adc_bits}-bit ADC full scale "
+        why = (f"no compression observed up to {good['gain_db']} dB; headroom {good['headroom_db']:.1f} dB below the {adc_bits}-bit digital full scale (from adcCfg) "
                f"at that gain: the radar's limit is above the swept range")
     elif lim == "compression":
         why = f"returns stop tracking gain above {good['gain_db']} dB (compression > {tol_db:g} dB)"
@@ -257,7 +274,7 @@ def suggest(rows: list[dict], rng: dict | None = None, margin_db: float = DEFAUL
 def run_sweep(base_cfg_text: str, gains: list[int], n_frames: int, capture: Callable[[int, str, int], Capture],
               geom: adc.Geometry, *, rng: dict | None = None, margin_db: float = DEFAULT_MARGIN_DB,
               tol_db: float = DEFAULT_TOL_DB, min_snr_db: float = DEFAULT_MIN_SNR_DB, exclude_m: float | None = None,
-              adc_bits: int = DEFAULT_ADC_BITS, progress: Callable[[dict], None] | None = None,
+              adc_bits: int | None = None, progress: Callable[[dict], None] | None = None,
               cancelled: Callable[[], bool] = lambda: False) -> dict:
     """Sweep `gains` over `base_cfg_text` (never modified: each step gets `set_rx_gain(base, g)` text) and return
     {"rows", "suggestion", "params"}. `capture(gain, cfg_text, n_frames) -> Capture`. Raises TuneError on a bad
@@ -267,6 +284,9 @@ def run_sweep(base_cfg_text: str, gains: list[int], n_frames: int, capture: Call
         raise TuneError("frames per step must be at least 1")
     if not gains:
         raise TuneError("no gains to sweep")
+    adc_src = "override"
+    if adc_bits is None:
+        adc_bits, adc_src = adc_bits_from_cfg(base_cfg_text)
     read_rx_gain(base_cfg_text)                       # a cfg without a usable profileCfg fails before any step runs
     ex = float(exclusion_m(geom) if exclude_m is None else exclude_m)
     rows, did_cancel = [], False
@@ -283,7 +303,7 @@ def run_sweep(base_cfg_text: str, gains: list[int], n_frames: int, capture: Call
         if progress:
             progress({"step": i + 1, "steps": len(gains), "gain_db": g, "phase": "done", "row": rows[-1]})
     params = {"gains": list(gains), "frames": int(n_frames), "margin_db": float(margin_db), "tol_db": float(tol_db),
-              "min_snr_db": float(min_snr_db), "exclude_m": ex, "adc_bits": int(adc_bits), "gain_range": rng,
+              "min_snr_db": float(min_snr_db), "exclude_m": ex, "adc_bits": int(adc_bits), "adc_bits_source": adc_src, "gain_range": rng,
               "settle_frames": SETTLE_FRAMES}
     sug = None if did_cancel else suggest(rows, rng, margin_db, tol_db, min_snr_db, adc_bits)
     return {"rows": rows, "suggestion": sug, "params": params, "cancelled": did_cancel}
@@ -298,4 +318,4 @@ def rows_csv(rows: list[dict]) -> str:
 
 
 __all__ = ["Capture", "TuneError", "gain_grid", "run_sweep", "set_rx_gain", "read_rx_gain", "step_metrics", "suggest",
-           "exclusion_m", "snap_down", "rows_csv", "CfgError", "parse_cfg"]
+           "exclusion_m", "adc_bits_from_cfg", "snap_down", "rows_csv", "CfgError", "parse_cfg"]

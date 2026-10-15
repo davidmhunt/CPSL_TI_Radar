@@ -187,3 +187,36 @@ def test_run_sweep_cancel_returns_rows_so_far_and_no_suggestion(geom):
         return cap_of(synth_cube.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.3, "amp": 40.0}], noise=2.0), n)
     res = tune.run_sweep(BASE, [24, 26, 28], 1, capture, geom, rng=RNG, cancelled=lambda: flag["n"] >= 2)
     assert res["cancelled"] and len(res["rows"]) == 2 and res["suggestion"] is None
+
+
+# ---- ADC full scale from adcCfg (radar-37 follow-up) ----------------------------------------------------------
+def test_adc_bits_derived_from_adccfg():
+    assert tune.adc_bits_from_cfg("adcCfg 2 1\n") == (16, "adcCfg numADCBits 2")
+    assert tune.adc_bits_from_cfg("adcCfg 0 1 % x\n")[0] == 12 and tune.adc_bits_from_cfg("adcCfg 1 1\n")[0] == 14
+    b, why = tune.adc_bits_from_cfg("sensorStop\n")
+    assert b == 16 and "no usable adcCfg" in why
+
+
+def test_16bit_cfg_does_not_flag_1481_or_2500_counts(geom):
+    for amp in (1481.0, 2500.0):
+        x = synth_cube.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.3, "amp": amp}], noise=2.0)
+        m = tune.step_metrics(30, cap_of(x), geom, 0.4, adc_bits=tune.adc_bits_from_cfg(BASE)[0])
+        assert m["clipped"] == 0 and m["headroom_db"] > 15, (amp, m)
+
+
+def test_12bit_rail_is_2047(geom):
+    a = np.zeros((4, 128, 256, 2), np.int16)
+    a[0, 0, 0, 0] = 2046
+    m = tune.step_metrics(30, tune.Capture([a]), geom, 0.4, adc_bits=12)
+    assert m["clipped"] == 0
+    a[0, 0, 0, 0] = 2047
+    assert tune.step_metrics(30, tune.Capture([a]), geom, 0.4, adc_bits=12)["clipped"] == 1
+
+
+def test_run_sweep_derives_bits_unless_overridden(geom):
+    def capture(g, text, n):
+        return cap_of(synth_cube.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.3, "amp": 40.0}], noise=2.0), n)
+    r = tune.run_sweep(BASE, [24], 1, capture, geom, rng=RNG)
+    assert r["params"]["adc_bits"] == 16 and r["params"]["adc_bits_source"] == "adcCfg numADCBits 2"
+    r = tune.run_sweep(BASE, [24], 1, capture, geom, rng=RNG, adc_bits=12)
+    assert r["params"]["adc_bits"] == 12 and r["params"]["adc_bits_source"] == "override"
