@@ -41,8 +41,8 @@ const PF = [
   ['idle_us', 'Idle time', 'us', 'Profile (chirp)', 'p'], ['adc_start_us', 'ADC start time', 'us', 'Profile (chirp)', 'p'],
   ['ramp_us', 'Ramp end time', 'us', 'Profile (chirp)', 'p'], ['tx_start_us', 'TX start time', 'us', 'Profile (chirp)', 'p'],
   ['num_samples', 'ADC samples', '', 'Profile (chirp)', 'p'], ['sample_rate_ksps', 'Sample rate', 'ksps', 'Profile (chirp)', 'p'],
-  ['rx_gain_db', 'RX gain', 'dB', 'Profile (chirp)', 'p'], ['hpf1', 'HPF1 corner (code)', '', 'Profile (chirp)', 'p'],
-  ['hpf2', 'HPF2 corner (code)', '', 'Profile (chirp)', 'p'],
+  ['rx_gain_db', 'rxGain word', 'bits 5:0 dB, 7:6 RF target', 'Profile (chirp)', 'p'], ['hpf1', 'HPF1 corner', '', 'Profile (chirp)', 'p'],
+  ['hpf2', 'HPF2 corner', '', 'Profile (chirp)', 'p'],
   ['rx_mask', 'RX mask', 'bitmask', 'Antennas', 't'], ['tx_mask', 'TX mask', 'bitmask', 'Antennas', 't'],
   ['rx_mask2', 'RX mask (chip 2)', 'bitmask', 'Antennas', 't'], ['tx_mask2', 'TX mask (chip 2)', 'bitmask', 'Antennas', 't'],
   ['n_loops', 'Loops (chirp sets/frame)', '', 'Frame', 't'], ['frame_period_ms', 'Frame period', 'ms', 'Frame', 't'],
@@ -63,6 +63,7 @@ const ISSUE_FIELDS = {
   sampling_outside_ramp: ['adc_start_us', 'ramp_us', 'num_samples', 'sample_rate_ksps'], band: ['start_ghz', 'slope_mhz_us', 'ramp_us'],
   band_edge: ['start_ghz', 'slope_mhz_us', 'ramp_us'], too_many_rx: ['rx_mask'], too_many_tx: ['tx_mask'],
   lvds_rate: ['sample_rate_ksps', 'rx_mask'], dca_rate: ['sample_rate_ksps', 'rx_mask'], dca_rate_high: ['sample_rate_ksps', 'rx_mask'],
+  rx_gain: ['rx_gain_db'], rx_gain_target: ['rx_gain_db'], hpf_code: ['hpf1', 'hpf2'],
   duty: ['frame_period_ms'], channel_cfg_layout: ['rx_mask', 'tx_mask'], frame_cfg_layout: ['n_loops'],
 };
 const pid = k => 'p_' + k;
@@ -75,8 +76,7 @@ function buildParams() {
     group(g);
     for (const [k, label, unit, gr, kind] of PF.filter(f => f[3] === g)) {
       const lab = el('label', '', `${esc(label)} <span class="unit">${esc(unit)}</span>`); lab.id = 'pl_' + k;
-      const inp = el('input'); inp.id = pid(k); inp.type = kind === 'm' ? 'text' : 'number'; if (kind !== 'm') inp.step = 'any';
-      inp.addEventListener('input', () => { if (C.mode === 'direct') schedule(); });
+      const inp = mountControl(null, k, kind === 'm' ? 'text' : 'number');
       lab.append(inp); grid.append(lab);
     }
     if (g === 'Profile (chirp)') {   // gui-26: lowPower 0 <0|1>; shown only when the seed has low_power
@@ -84,6 +84,8 @@ function buildParams() {
       const sel = el('select'); sel.id = 'p_low_power'; sel.innerHTML = '<option value="0">regular</option><option value="1">low power</option>';
       sel.addEventListener('change', () => { if (C.mode === 'direct') schedule(); });
       lab.append(sel); grid.append(lab);
+      { const h = el('div', 'muted lvdshint'); h.id = 'pGainBox'; h.style.gridColumn = '1 / -1'; grid.append(h); }   // radar-36: RX gain split (dB + RF target) and its range
+      { const h = el('div', 'muted lvdshint'); h.id = 'pCornerBox'; h.style.gridColumn = '1 / -1'; grid.append(h); }   // radar-36: HPF corner -> range, unverified note
       { const h = el('div', 'muted lvdshint', 'ADC mode: default regular (0); low power caps the ADC rate at 9375 ksps (IWR1443/1843) or 12500 ksps (IWR6843). Over the cap is a warning, not an error.'); h.style.gridColumn = '1 / -1'; grid.append(h); }
     }
     const dg = el('div', 'dgrid');
@@ -92,6 +94,103 @@ function buildParams() {
   }
 }
 const lval = k => $(pid(k)).value.trim();
+
+// ---------- HPF corners (kHz) and RX gain, from the board's `analog` limits (radar-36) ----------
+// The tables live in the firmware descriptors (config/firmware/<id>.json limits, with source + confidence), reaching here
+// through GET /api/cfg/firmware?board= as `analog`. Nothing about corner frequencies or gain ranges is written down in JS.
+const C_LIGHT = 299792458;
+const analogData = () => { const f = curFw(); return (f && f.analog) || {}; };
+const aTrusted = e => !!e && ['repo', 'high', 'medium'].includes(e.confidence);
+const aTip = e => e ? `${e.source} [${e.confidence}]` : '';
+// (Re)create the control of field k: kind 'select' for a trusted table, else the raw number/text input. Keeps the id.
+function mountControl(old, k, kind) {
+  const inp = kind === 'select' ? el('select') : el('input'); inp.id = pid(k);
+  if (kind !== 'select') { inp.type = kind; if (kind === 'number') inp.step = 'any'; }
+  const ev = kind === 'select' ? 'change' : 'input';
+  inp.addEventListener(ev, () => { analogChanged(k); if (C.mode === 'direct') schedule(); });
+  if (old) old.replaceWith(inp);
+  return inp;
+}
+function setupCorner(which, code) {
+  const k = 'hpf' + which, e = analogData()[k + '_corner_khz'], lab = $('pl_' + k);
+  if (!lab || lab.hidden) return;
+  const trusted = aTrusted(e), cur = $(pid(k)), isSel = cur.tagName === 'SELECT';
+  const sel = trusted === isSel ? cur : mountControl(cur, k, trusted ? 'select' : 'number');
+  sel.title = trusted ? aTip(e) : '';
+  if (!trusted) { sel.value = code == null ? '' : String(code); return; }
+  const opts = e.value.map((khz, i) => new Option(`${khz} kHz (code ${i})`, String(i)));
+  if (code != null && !(Number.isInteger(code) && code >= 0 && code < e.value.length)) opts.push(new Option(`code ${code} (unknown)`, String(code)));
+  sel.replaceChildren(...opts);
+  if (code != null) sel.value = String(code);
+}
+function wordParts(w) { return { g: w & 0x3F, rf: (w >> 6) & 3, up: w >> 8 }; }
+function setupGain(word) {
+  const box = $('pGainBox'), lab = $('pl_rx_gain_db');
+  if (!box || !lab) return;
+  box.replaceChildren(); box.hidden = lab.hidden;
+  const A = analogData(), lo = A.rx_gain_min_db, hi = A.rx_gain_max_db, st = A.rx_gain_step_db, rt = A.rx_gain_rf_target_db;
+  if (lab.hidden) return;
+  if (![lo, hi, st].every(aTrusted)) {
+    box.append(el('span', '', 'RX gain: valid range/step unverified for this board; the raw rxGain word is shown (bits 5:0 = gain dB, bits 7:6 = RF target).'));
+    return;
+  }
+  const w = Number.isFinite(+$(pid('rx_gain_db')).value) && lval('rx_gain_db') !== '' ? Math.round(+$(pid('rx_gain_db')).value) : null;
+  const { g, rf } = wordParts(w == null ? 0 : w);
+  const gi = el('input'); gi.type = 'number'; gi.id = 'p_gain_db'; gi.min = lo.value; gi.max = hi.value; gi.step = st.value; gi.value = w == null ? '' : g; gi.title = aTip(lo);
+  gi.style.width = '5em';
+  const rs = el('select'); rs.id = 'p_gain_rf'; rs.title = aTip(rt);
+  const rtOk = aTrusted(rt);
+  for (let i = 0; i < 4; i++) {
+    const v = rt && rt.value[i];
+    rs.append(new Option(rtOk ? (v === 'reserved' ? `code ${i}: reserved` : `code ${i}: ${v} dB`) : `code ${i} (raw)`, String(i)));
+  }
+  rs.value = String(rf);
+  const note = el('span', 'rxgain-note');
+  const upd = () => {
+    const gv = +gi.value, bad = gi.value !== '' && (gv < lo.value || gv > hi.value || (gv - lo.value) % st.value !== 0);
+    note.textContent = `valid ${lo.value}\u2013${hi.value} dB, step ${st.value} (bits 5:0 of rxGain)` + (bad ? ` \u2014 ${gv} dB is outside it (kept as is, not rewritten)` : '')
+      + (rtOk ? '' : ' \u2014 RF gain target table unverified for this board: bits 7:6 shown raw');
+    note.classList.toggle('warn', bad);
+  };
+  const push = () => {
+    const cur = Math.round(+$(pid('rx_gain_db')).value) || 0, up = cur >> 8;
+    $(pid('rx_gain_db')).value = String((up << 8) | (+rs.value << 6) | (Math.round(+gi.value) & 0x3F));
+    upd(); if (C.mode === 'direct') schedule();
+  };
+  gi.addEventListener('input', push); rs.addEventListener('change', push);
+  box.append(el('span', '', 'RX gain '), gi, el('span', '', ' dB \u00b7 RF target '), rs, el('span', '', ' \u00b7 '), note);
+  upd();
+}
+function analogChanged(k) {
+  if (k === 'rx_gain_db') setupGain(null);
+  renderCornerHints();
+}
+// HPF corner -> range at the current slope: R = f_c * c / (2 * slope). Near targets below it sit under the corner.
+function renderCornerHints() {
+  const box = $('pCornerBox'); if (!box) return;
+  box.replaceChildren();
+  const A = analogData(), slope = +lval('slope_mhz_us'), parts = [];
+  for (const w of [1, 2]) {
+    const k = 'hpf' + w, e = A[k + '_corner_khz'], lab = $('pl_' + k);
+    if (!lab || lab.hidden || lval(k) === '') continue;
+    const code = +lval(k);
+    if (!aTrusted(e)) { parts.push(`HPF${w}: code ${code} \u2014 corner frequencies unverified for this board; raw codes shown`); continue; }
+    const khz = e.value[code];
+    if (khz == null) { parts.push(`HPF${w}: code ${code} is not in this board's table (0\u2013${e.value.length - 1}); kept as is`); continue; }
+    const r = slope > 0 ? khz * 1e3 * C_LIGHT / (2 * slope * 1e12) : null;
+    parts.push(`HPF${w} ${khz} kHz` + (r == null ? '' : ` \u2192 corner at ${r.toFixed(1)} m (slope ${+slope.toPrecision(4)} MHz/us); targets nearer than that sit below the corner and are attenuated (first-order: \u22123 dB at the corner)`));
+  }
+  box.textContent = parts.join(' \u00b7 '); box.hidden = !parts.length;
+}
+function refreshAnalog() {   // re-render the HPF/gain controls from their current values (the firmware's data changed)
+  const v = k => lval(k) === '' ? null : +lval(k);
+  setupAnalog({ hpf1: v('hpf1'), hpf2: v('hpf2'), rx_gain_db: v('rx_gain_db') });
+}
+function setupAnalog(pr) {
+  setupCorner(1, pr.hpf1 == null ? null : +pr.hpf1); setupCorner(2, pr.hpf2 == null ? null : +pr.hpf2);
+  setupGain(pr.rx_gain_db == null ? null : +pr.rx_gain_db);
+  renderCornerHints();
+}
 function fillParams(p) {   // p: a params dict from the endpoint -> inputs + derived
   const pr = (p.profiles && p.profiles[0]) || {};
   for (const [k, , , , kind] of PF) {
@@ -100,6 +199,7 @@ function fillParams(p) {   // p: a params dict from the endpoint -> inputs + der
     $(pid(k)).value = v == null ? '' : kind === 'm' ? v.join(', ') : +(+v).toPrecision(8);
   }
   C.seed = JSON.parse(JSON.stringify(p)); C.tbl = null; C.tblDirty = false; C.tblStale = false;
+  setupAnalog(pr);
   $('pl_low_power').hidden = $('pl_low_power').nextElementSibling.hidden = p.low_power == null;
   if (p.low_power != null) $('p_low_power').value = String(p.low_power);
   const lv = p.lvds_stream;
@@ -280,6 +380,7 @@ async function loadFirmware(board, want) {
   showFirmware();
 }
 function showFirmware() {
+  if (C.seed) refreshAnalog();   // the board/firmware's HPF/gain tables may have arrived after the params were seeded
   const f = C.fw.find(x => x.id === $('cFw').value);
   if (!f) { $('cOutputs').textContent = ''; return; }
   const o = [f.outputs.tlv && 'TLV point cloud (serial)', f.outputs.lvds && 'raw ADC (LVDS \u2192 DCA1000)'].filter(Boolean);
