@@ -35,7 +35,7 @@ def cfg_of(system_json: Path) -> Path:
 
 
 def test_counts():
-    assert len(SYSTEMS) >= 40 and len(CFGS) == 76       # 77 moved cfgs minus the 2 archived ones, plus the core-24 fmt2 cfg
+    assert len(SYSTEMS) >= 40 and len(CFGS) == 77       # 77 moved cfgs minus the 2 archived ones, plus the core-24 fmt2 cfg and the radar-39 SAR_ugv_fmt2 cfg
     assert len(MOVED["radar"]) == 77 and len(MOVED["system"]) == 41
 
 
