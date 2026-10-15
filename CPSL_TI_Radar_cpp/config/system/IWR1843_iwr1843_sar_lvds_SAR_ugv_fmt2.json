@@ -4,7 +4,7 @@
     "firmware": "iwr1843_sar_lvds",
     "radar_cfg": "../radar/IWR1843/iwr1843_sar_lvds/SAR_ugv_fmt2.cfg",
     "cli": {
-        "port": "/dev/ttyACM0"
+        "port": "/dev/radar/R2101050-cli"
     },
     "serial_stream": {
         "enabled": false

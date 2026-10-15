@@ -118,6 +118,15 @@ class Hub:
             self.set_status("error", f"Source failed: {e}")
 
 
+class _RevalidatingStatic(StaticFiles):
+    """web/ files: `Cache-Control: no-cache` (always revalidate; ETag/Last-Modified stay, so an unchanged file is a 304)."""
+
+    def file_response(self, *a, **k):
+        r = super().file_response(*a, **k)
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+
 def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_dir=None, run_root=None,
                min_stop_grace: float = 5.0) -> FastAPI:
     hub = Hub(source)
@@ -257,5 +266,5 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     def index():
         return FileResponse(os.path.join(WEB, "index.html"), headers={"Cache-Control": "no-store"})
 
-    app.mount("/", StaticFiles(directory=WEB), name="web")
+    app.mount("/", _RevalidatingStatic(directory=WEB), name="web")
     return app

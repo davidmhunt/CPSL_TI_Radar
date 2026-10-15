@@ -26,7 +26,7 @@ CASCADE_SERIAL = "00000000"  # the cascade's XDS110 reports serial 00000000 (con
 NAME = re.compile(r"^usb-(?P<dev>.+)_(?P<serial>[^_]+)-if(?P<ifn>[0-9a-fA-F]{2})(?:-port\d+)?$")
 
 
-def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None = None) -> dict:
+def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None = None, radar_dir: str | None = None) -> dict:
     host = host or hs.Host()
     names = host.listdir(by_id_dir)
     groups: dict = {}
@@ -49,7 +49,9 @@ def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None
                       else f"{g['model'].upper()} board" if g["model"] else "USB serial device")
         out.append(g)
     out.sort(key=lambda g: g["serial"])
-    return {"by_id_dir": by_id_dir, "present": bool(host.exists(by_id_dir)), "boards": out}
+    from .session_cfg import radar_links
+    return {"by_id_dir": by_id_dir, "present": bool(host.exists(by_id_dir)), "boards": out,
+            "radar_links": [{"id": k, "cli": c, "data": d} for k, (c, d) in radar_links(radar_dir).items()]}
 
 
 def dca_checks(host: hs.Host, nic: str | None = None, ping: bool = False) -> dict:
@@ -62,12 +64,12 @@ def dca_checks(host: hs.Host, nic: str | None = None, ping: bool = False) -> dic
                        hs.check_firewall(host, nic).to_dict()]}
 
 
-def make_router(host_factory=hs.Host, by_id_dir: str = BY_ID, proc: str = "/proc") -> APIRouter:
+def make_router(host_factory=hs.Host, by_id_dir: str = BY_ID, proc: str = "/proc", radar_dir: str | None = None) -> APIRouter:
     r = APIRouter()
 
     @r.get("/api/settings/ports")
     def ports():
-        return scan_ports(by_id_dir, proc, host_factory())
+        return scan_ports(by_id_dir, proc, host_factory(), radar_dir)
 
     @r.get("/api/settings/dca")
     def dca(nic: str | None = None, ping: int = 0):

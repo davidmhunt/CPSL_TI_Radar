@@ -79,10 +79,10 @@ class SaveReq(BaseModel):
     name: str                              # base name, no extension; used for both files
     cfg_text: str
     force: bool = False                    # save even when validate() reports an error
-    cli_port: str = "/dev/ttyACM0"
+    cli_port: str = ""                     # "" = the board default (/dev/radar pair if exactly one exists, else ACM0)
     firmware: str | None = None            # firmware id (default: the board's); sets the enables below when they are omitted
     serial_enabled: bool | None = None     # None = the firmware's system_enables
-    data_port: str = "/dev/ttyACM1"
+    data_port: str = ""
     dca1000_enabled: bool | None = None
     fpga_ip: str = "192.168.33.180"
     host_ip: str = "192.168.33.30"
@@ -141,13 +141,17 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
     en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
     serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
     dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled   # never inferred from the cfg (gui-22)
+    from . import session_cfg   # lazy: session_cfg imports this module
+    one = list(session_cfg.radar_links().values())
+    dcli, ddata = one[0] if len(one) == 1 and req.board != "AWR2243_CASCADE" else session_cfg.FALLBACK_PORTS   # as before: ACM0/1
+    cli_port, data_port = req.cli_port or dcli, req.data_port or ddata
     doc = {
         "schema_version": 2,
         "board": fwmod.driver_board(fw, req.board) if fw else req.board,   # gui-30: IWR1843 + SAR -> IWR1843_SAR
         "firmware": fw["id"] if fw else None,   # gui-04: mandatory in the driver; the resolved descriptor id
         "radar_cfg": cfg_name,
-        "cli": {"port": req.cli_port},
-        "serial_stream": {"enabled": serial, "port": req.data_port},
+        "cli": {"port": cli_port},
+        "serial_stream": {"enabled": serial, "port": data_port},
         "dca1000": {"enabled": dca, "fpga_ip": req.fpga_ip, "host_ip": req.host_ip,
                     "cmd_port": req.cmd_port, "data_port": req.data_udp_port},
         "output": {"save_adc_frames": req.save_adc_frames, "save_raw_lvds": req.save_raw_lvds},

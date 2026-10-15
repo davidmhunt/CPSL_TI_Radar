@@ -32,7 +32,9 @@ DEFAULT_PORTS = {"AWR2243_CASCADE": (_XDS.format("29", "00000000") + "-if00", _X
                  "IWR1843": (_XDS.format("05", "R2101050") + "-if00", _XDS.format("05", "R2101050") + "-if03")}
 FALLBACK_PORTS = ("/dev/ttyACM0", "/dev/ttyACM1")
 # Serial ports a start may open: USB-serial only (no /dev/tty, /dev/ttyS*, ...). Checked on the literal string.
-PORT_NAME = re.compile(r"^(/dev/serial/by-id/[A-Za-z0-9_.:+-]+|/dev/tty(ACM|USB)[0-9]+)$")
+# Only the quick-setup / Save path calls check_port; a saved JSON's ports are not checked here (the driver opens them).
+PORT_NAME = re.compile(r"^(/dev/serial/by-id/[A-Za-z0-9_.:+-]+|/dev/radar/[A-Za-z0-9_.-]+-(cli|data)|/dev/tty(ACM|USB)[0-9]+)$")
+RADAR_DIR = "/dev/radar"   # udev links <board serial>-cli / -data (the same names console's sensors_admin uses)
 SERIAL_BOARDS = ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", "AWR2243_CASCADE")
 FIRMWARE_CHECKS = ("auto", "warn", "off")
 SAVE_KEYS = ("save_adc_frames", "save_raw_lvds", "save_serial_bytes")
@@ -46,11 +48,30 @@ class SessionError(Exception):
 
 def check_port(path: str, what: str) -> str:
     if not isinstance(path, str) or not PORT_NAME.match(path):
-        raise SessionError(f"{what} {path!r} is not allowed: use /dev/serial/by-id/<name>, /dev/ttyACM<N> or /dev/ttyUSB<N>")
+        raise SessionError(f"{what} {path!r} is not allowed: use /dev/serial/by-id/<name>, /dev/radar/<id>-cli|-data, /dev/ttyACM<N> or /dev/ttyUSB<N>")
     return path
 
 
-def default_ports(board: str) -> tuple[str, str]:
+def radar_links(dir: str | None = None) -> dict[str, tuple[str, str]]:
+    """{board_id: (cli, data)} for every <id>-cli / <id>-data link pair present in `dir` (empty when there is none)."""
+    dir = dir or RADAR_DIR
+    try:
+        names = set(os.listdir(dir))
+    except OSError:
+        return {}
+    out = {}
+    for n in sorted(names):
+        if n.endswith("-cli") and n[:-4] + "-data" in names and re.fullmatch(r"[A-Za-z0-9_.-]+", n[:-4]):
+            out[n[:-4]] = (f"{dir}/{n}", f"{dir}/{n[:-4]}-data")
+    return out
+
+
+def default_ports(board: str, links_dir: str | None = None) -> tuple[str, str]:
+    """The stable /dev/radar pair when exactly one exists (not for the cascade: its serial is shared), else by-id/ACM."""
+    if board != "AWR2243_CASCADE":
+        links = radar_links(links_dir)
+        if len(links) == 1:
+            return next(iter(links.values()))
     return DEFAULT_PORTS.get(board, FALLBACK_PORTS)
 
 

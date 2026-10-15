@@ -19,3 +19,10 @@ def _bounded_ws_receive(monkeypatch):
                 return await self._send_rx.receive()
         return self.portal.call(bounded)
     monkeypatch.setattr(WebSocketTestSession, "receive", receive)
+
+
+@pytest.fixture(autouse=True)
+def _no_host_radar_links(tmp_path, monkeypatch):
+    """radar-41: port defaults prefer /dev/radar links; the suite must not see the host's."""
+    from radar_gui import session_cfg
+    monkeypatch.setattr(session_cfg, "RADAR_DIR", str(tmp_path / "no-dev-radar"))
