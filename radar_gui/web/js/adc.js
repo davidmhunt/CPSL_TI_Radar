@@ -116,8 +116,16 @@ function shadeBands(g, b, x0, y0, pw, ph, span) {
   }
   if (b.if_m != null && b.if_m < span) {
     const xs = X(b.if_m); g.fillStyle = 'rgba(150,150,150,0.38)'; g.fillRect(xs, y0, x0 + pw - xs, ph);
-    g.fillStyle = css('--text'); g.textAlign = 'right';
-    g.fillText(`outside IF band (> ${b.if_m.toFixed(0)} m = ${b.if_mhz.toFixed(2)} MHz, ${b.adc_mode})`, x0 + pw - 4, y0 + ph - 4, Math.max(40, x0 + pw - xs));
+    g.fillStyle = css('--text');
+    const bw = x0 + pw - xs, full = `outside IF band (> ${b.if_m.toFixed(0)} m = ${b.if_mhz.toFixed(2)} MHz, ${b.adc_mode})`;
+    // Band is often narrow (a sliver at the right edge): horizontal text at the top when it fits, else the same text
+    // rotated 90 degrees inside the band so it stays legible.
+    if (g.measureText(full).width + 8 <= bw) { g.textAlign = 'right'; g.textBaseline = 'top'; g.fillText(full, x0 + pw - 4, y0 + 4); }
+    else {
+      g.translate(xs + bw / 2, y0 + ph - 4); g.rotate(-Math.PI / 2); g.textAlign = 'left'; g.textBaseline = 'middle';
+      const t = g.measureText(full).width + 8 <= ph ? full : `outside IF band (> ${b.if_m.toFixed(0)} m)`;
+      g.fillText(t, 0, 0, Math.max(40, ph - 8)); // rotated: local +x runs up the band
+    }
   }
   g.restore();
 }
