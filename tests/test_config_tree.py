@@ -35,8 +35,11 @@ def cfg_of(system_json: Path) -> Path:
 
 
 def test_counts():
-    assert len(SYSTEMS) >= 40 and len(CFGS) == 77       # 77 moved cfgs minus the 2 archived ones, plus the core-24 fmt2 cfg and the radar-39 SAR_ugv_fmt2 cfg
-    assert len(MOVED["radar"]) == 77 and len(MOVED["system"]) == 41
+    # radar-40: the Configs pane adds and removes shipped files, so nothing here counts the tree. Floors only, and the
+    # migration map must stay consistent with what is on disk (test_d checks every target exists).
+    assert len(SYSTEMS) >= 40 and len(CFGS) >= 40
+    assert MOVED["radar"] and MOVED["system"]
+    assert {p.name for p in SYSTEMS} >= set(MOVED["system"].values())
 
 
 @pytest.mark.parametrize("path", SYSTEMS, ids=lambda p: p.name)
