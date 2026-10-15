@@ -9,7 +9,7 @@ tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using confi
 Mode "tap" writes the gui-36 live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
 inherited `--tap-fd N`, and its usage text lists --tap-fd; every other mode's usage text does not (an old binary). A config whose
 name (or run folder name) contains "_die" SIGKILLs itself after FAKE_DRIVER_DIE_S (default 4) seconds (a crashed driver for the page).
-Tap ADC messages (--tap-adc-every K): FAKE_DRIVER_ADC=tiny (default, a 2x4x2 ramp) or bench (a synthetic 4x128x256 cube
+Tap ADC messages (--tap-adc-every K): FAKE_DRIVER_ADC=tiny (default, a 2x4x2 ramp) or gain (radar-37: amplitude follows the cfg's rxGain; FAKE_DRIVER_KNEE, FAKE_DRIVER_SAT_GAIN) or bench (a synthetic 4x128x256 cube
 matching tests/fixtures/adc/bench_1843_dca.*: a mover at range bin 34, Doppler +10, ~20 deg, and a static reflector at bin 60,
 0 deg; FAKE_DRIVER_ADC_AMP scales both, e.g. 30000 for clipping). FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
 default 0) imitate a log_level debug run for the GUI lag measurement (gui-09 D8).
@@ -121,6 +121,31 @@ if mode == "tap" and adc_every and os.environ.get("FAKE_DRIVER_ADC") == "bench":
     amp = float(os.environ.get("FAKE_DRIVER_ADC_AMP", "4000"))
     adc_cube = synth_cube.wire(synth_cube.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.342, "amp": amp},
                                                          {"kr": 60, "kd": 0, "sin": 0.0, "amp": amp * 0.4}], noise=25.0))
+meta_f, sat_on = None, False
+if mode == "tap" and adc_every and os.environ.get("FAKE_DRIVER_ADC") == "gain":
+    # radar-37: amplitude follows the run's cfg rxGain (bits 5:0), 1 dB/dB (a mover at range bin 34 + a static reflector at 60),
+    # compressing above FAKE_DRIVER_KNEE dB at 0.3 dB/dB; FAKE_DRIVER_SAT_GAIN = the gain from which chirp_meta.csv reports
+    # saturated chirps (the file is written into output.dir when output.save_adc_frames is set).
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import synth_cube
+    _doc = json.load(open(cfg))
+    _word = 30
+    for _ln in open(os.path.join(os.path.dirname(os.path.abspath(cfg)), _doc["radar_cfg"])):
+        _p = _ln.split("%")[0].split()
+        if _p and _p[0] == "profileCfg":
+            _word = int(float(_p[14]))
+            break
+    _g = _word & 0x3F
+    _knee = float(os.environ.get("FAKE_DRIVER_KNEE", "1e9"))
+    _ge = _g if _g <= _knee else _knee + (_g - _knee) * 0.3
+    amp = float(os.environ.get("FAKE_DRIVER_ADC_AMP", "20")) * 10 ** ((_ge - 30) / 20)
+    adc_cube = synth_cube.wire(synth_cube.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.342, "amp": amp},
+                                                         {"kr": 60, "kd": 0, "sin": 0.0, "amp": amp * 0.4}], noise=2.0))
+    _out = (_doc.get("output") or {})
+    if _out.get("save_adc_frames") and _out.get("dir"):
+        meta_f = open(os.path.join(_out["dir"], "chirp_meta.csv"), "w", buffering=1)
+        meta_f.write("chirp,frame,chirpInFrame,record_valid,adc_complete,sat_slices_this_chirp\n")
+    sat_on = _g >= float(os.environ.get("FAKE_DRIVER_SAT_GAIN", "1e9"))
 tap_ok = {"on": tapf is not None}
 
 
@@ -174,6 +199,9 @@ while not stop["flag"]:
                             "iq_order": "IQ"}
                     body = struct.pack("<32h", *range(32))
                 tap_send(3, json.dumps(head).encode() + b"\n" + body)
+                if meta_f is not None:
+                    for _c in range(4):
+                        meta_f.write(f"{(frames - 1) * 4 + _c},{frames - 1},{_c},1,1,{1 if sat_on else 0}\n")
         if binf:
             binf.write(b"\0" * bpf)
     if mode == "tap" and ("_die" in os.path.basename(cfg) or "_die" in os.path.basename(os.getcwd())) and t > float(os.environ.get("FAKE_DRIVER_DIE_S", "4")):
@@ -188,6 +216,8 @@ while not stop["flag"]:
         break
 if binf:
     binf.close()
+if meta_f is not None:
+    meta_f.close()
 stats()
 print("Stopped.", flush=True)
 sys.exit(0)

@@ -8,6 +8,7 @@ import { initSession, feedMessage, boardLive, view as sessView } from './session
 import { showSettings } from './settings.js';
 import { showRun, onDriverMessage, openInRun, driverHeader } from './run.js';
 import { showLogs } from './logs.js';
+import { showTune } from './tune.js';
 import { showAdc, hideAdc, initAdc } from './adc.js';
 
 // ---------- stream ----------
@@ -123,10 +124,10 @@ addEventListener('resize', redraw);
 // ---------- tabs ----------
 // Internal ids (data-tab values) are unchanged by the gui-37 renames; the labels are Configure, Radar (run), Point cloud (live),
 // Raw ADC (adc), Devices (settings) and Logs. Old hashes (#run, #settings, ...) keep working next to the new names.
-const HASH = { cfg: '#configure', run: '#run', adc: '#adc', settings: '#settings', logs: '#logs' };
-const ALIAS = { '#configure': 'cfg', '#cfg': 'cfg', '#run': 'run', '#radar': 'run', '#live': 'live', '#pointcloud': 'live', '#adc': 'adc',
+const HASH = { cfg: '#configure', run: '#run', adc: '#adc', tune: '#tune', settings: '#settings', logs: '#logs' };
+const ALIAS = { '#configure': 'cfg', '#cfg': 'cfg', '#run': 'run', '#radar': 'run', '#live': 'live', '#pointcloud': 'live', '#adc': 'adc', '#tune': 'tune',
   '#settings': 'settings', '#devices': 'settings', '#logs': 'logs', '#3d': 'live' };
-const PANEL = { cfg: 'cfgMain', run: 'runMain', live: 'liveMain', adc: 'adcMain', settings: 'setMain', logs: 'logsMain' };
+const PANEL = { cfg: 'cfgMain', run: 'runMain', live: 'liveMain', adc: 'adcMain', tune: 'tuneMain', settings: 'setMain', logs: 'logsMain' };
 let navigated = false;
 const tabButtons = () => [...$('tabs').querySelectorAll('[role=tab]')];
 function tab(name, auto) {
@@ -138,7 +139,7 @@ function tab(name, auto) {
   }
   for (const [k, id] of Object.entries(PANEL)) if ($(id)) $(id).hidden = k !== name;
   if (name === 'adc') showAdc(); else hideAdc();
-  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else if (name === 'logs') showLogs(); else redraw();
+  if (name === 'cfg') showConfigure(); else if (name === 'run') showRun(); else if (name === 'settings') showSettings(); else if (name === 'logs') showLogs(); else if (name === 'tune') showTune(); else redraw();
   if (!auto) history.replaceState(null, '', HASH[name] || location.pathname);
 }
 // Configure -> Save result "Open in Radar" link

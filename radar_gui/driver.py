@@ -197,6 +197,7 @@ class DriverManager:
     def __init__(self, bin_override=None, run_root_override=None, lock=radar_lock, emit=None,
                  min_stop_grace: float = 5.0, on_run=None):
         self.bin_override, self.root_override, self.lock = bin_override, run_root_override, lock
+        self.extern_busy = None                   # radar-37: callable() -> str | None; a reason to refuse a start (a Tune sweep)
         self.on_run = on_run                      # gui-36: called with the run info after the spawn; True = tap fd taken over
         self._tap_cache = {}                      # (binary path, mtime) -> supports --tap-fd
         self._caps_cache = {}                     # (binary path, mtime) -> session_cfg.probe_caps()
@@ -290,6 +291,8 @@ class DriverManager:
         with self._mu:
             if self.state in ("running", "stopping"):
                 raise DriverError(f"driver already {self.state}")
+            if self.extern_busy is not None and (why := self.extern_busy()):
+                raise DriverError(why)
             b = self._bin()
             try:
                 caps = self._key_caps(b)

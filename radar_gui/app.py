@@ -15,6 +15,7 @@ from .driver_api import make_router as make_driver_router
 from .logs_api import make_router as make_logs_router
 from .settings import make_router as make_settings_router
 from .source_api import make_router as make_source_router
+from .tune_api import TuneManager, make_router as make_tune_router
 from .sources import DriverSource, Source
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -153,21 +154,26 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     driver = DriverManager(bin_override=driver_bin, run_root_override=run_root, emit=emit,
                            min_stop_grace=min_stop_grace, on_run=on_run)
 
+    tune_mgr = TuneManager(driver, user_cfg_dir, system_cfg_dir, driver_bin, run_root)
+    driver.extern_busy = tune_mgr.busy_reason   # radar-37: no driver run starts while a Tune sweep is reconfiguring the radar
+
     @contextlib.asynccontextmanager
     async def lifespan(app):
         loop_ref["loop"] = asyncio.get_running_loop()
         hub.start()
         yield
+        await asyncio.to_thread(tune_mgr.shutdown)
         await asyncio.to_thread(driver.shutdown)
         await hub.stop_source()
 
     app = FastAPI(title="CPSL radar GUI", lifespan=lifespan)
-    app.state.hub, app.state.driver = hub, driver
+    app.state.hub, app.state.driver, app.state.tune = hub, driver, tune_mgr
     app.include_router(make_router(user_cfg_dir, driver_bin, driver))
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
     app.include_router(make_source_router(hub, user_cfg_dir, run_root))
     app.include_router(make_logs_router(driver, run_root))
     app.include_router(make_settings_router())
+    app.include_router(make_tune_router(tune_mgr))
 
     @app.get("/api/health")
     def health():

@@ -10,7 +10,7 @@
 <header>
   <h1>CPSL Radar</h1>
   <span class="seg" id="tabs" role="tablist" aria-label="Pages">
-    <button role="tab" id="tab-cfg" data-tab="cfg" aria-controls="cfgMain" aria-selected="false" tabindex="-1">Configure</button><button role="tab" id="tab-run" data-tab="run" aria-controls="runMain" aria-selected="false" tabindex="-1">Radar</button><button role="tab" id="tab-live" data-tab="live" class="on" aria-controls="liveMain" aria-selected="true">Point cloud</button><button role="tab" id="tab-adc" data-tab="adc" aria-controls="adcMain" aria-selected="false" tabindex="-1">Raw ADC</button><button role="tab" id="tab-settings" data-tab="settings" aria-controls="setMain" aria-selected="false" tabindex="-1">Devices</button><button role="tab" id="tab-logs" data-tab="logs" aria-controls="logsMain" aria-selected="false" tabindex="-1">Logs</button>
+    <button role="tab" id="tab-cfg" data-tab="cfg" aria-controls="cfgMain" aria-selected="false" tabindex="-1">Configure</button><button role="tab" id="tab-run" data-tab="run" aria-controls="runMain" aria-selected="false" tabindex="-1">Radar</button><button role="tab" id="tab-live" data-tab="live" class="on" aria-controls="liveMain" aria-selected="true">Point cloud</button><button role="tab" id="tab-adc" data-tab="adc" aria-controls="adcMain" aria-selected="false" tabindex="-1">Raw ADC</button><button role="tab" id="tab-tune" data-tab="tune" aria-controls="tuneMain" aria-selected="false" tabindex="-1">Tune</button><button role="tab" id="tab-settings" data-tab="settings" aria-controls="setMain" aria-selected="false" tabindex="-1">Devices</button><button role="tab" id="tab-logs" data-tab="logs" aria-controls="logsMain" aria-selected="false" tabindex="-1">Logs</button>
   </span>
   <span class="sessbar" id="sessBar">
     <span class="pill" id="sessPill" role="status" aria-live="polite"><span class="dot" id="sessDot"></span><span id="sessText">No session</span></span>
@@ -352,6 +352,38 @@
       <div class="diagbody"><canvas id="adcSeries"></canvas><canvas id="adcBits"></canvas><table class="ftbl" id="adcTable"></table></div>
       <div class="adcmsg" id="adcMsgDiag" hidden></div></section>
   </div>
+</main>
+<main id="tuneMain" role="tabpanel" aria-labelledby="tab-tune" hidden>
+  <section class="card" id="tnSetup">
+    <h2>RX gain sweep <span class="muted sub">Steps the profileCfg rxGain over a range, captures raw ADC against whatever the radar sees, and suggests a gain. It never applies one: the suggestion is text only, and your config files are not touched (each step runs on a temporary copy).</span></h2>
+    <div class="controls">
+      <div class="detgrid">
+        <label for="tnConfig">Config</label><select id="tnConfig"></select>
+        <label for="tnMin">Gain min (dB)</label><input type="number" id="tnMin" step="1">
+        <label for="tnMax">Gain max (dB)</label><input type="number" id="tnMax" step="1">
+        <label for="tnStep">Gain step (dB)</label><input type="number" id="tnStep" step="1" min="1">
+        <label for="tnFrames">Frames per step</label><input type="number" id="tnFrames" min="1" max="64" step="1" value="8">
+        <label for="tnMargin">Margin (dB)</label><input type="number" id="tnMargin" min="0" max="30" step="0.5" value="3">
+      </div>
+      <div class="muted" id="tnLimits">Pick a config.</div>
+      <div class="muted" id="tnWarn" hidden></div>
+      <div class="btnrow">
+        <button class="btn primary" id="tnStart" disabled>Start sweep</button>
+        <button class="btn" id="tnCancel" disabled>Cancel</button>
+      </div>
+      <div class="muted">Each step reconfigures the radar (about 1.5 s plus the frames; no power cycle) and needs the radar and DCA1000 free: stop any running session first.</div>
+      <div id="tnMsg" class="runmsg" hidden></div>
+    </div>
+  </section>
+  <section class="card" id="tnResult" hidden>
+    <h2>Result <span class="muted sub" id="tnRun"></span></h2>
+    <div class="controls">
+      <div class="runmsg ok" id="tnSug"></div>
+      <div class="tnplot"><canvas id="tnPlot"></canvas></div>
+      <div class="lgscroll"><table class="ftbl" id="tnTable"></table></div>
+      <div class="muted" id="tnNote"></div>
+    </div>
+  </section>
 </main>
 <main id="setMain" role="tabpanel" aria-labelledby="tab-settings" hidden>
   <div class="setcol">
