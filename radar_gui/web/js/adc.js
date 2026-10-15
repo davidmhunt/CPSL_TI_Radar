@@ -175,7 +175,11 @@ function drawRd(m) {
   for (const v of ticks(vlo, vhi, 6)) { const y = y0 + (1 - (v - vlo) / (vhi - vlo)) * ph; g.fillText(v.toFixed(1), 6, y + 4); g.beginPath(); g.moveTo(x0 - 4, y); g.lineTo(x0, y); g.stroke(); }
   for (const r of ticks(0, n * d.range_step_m, 8)) g.fillText(r.toFixed(r % 1 ? 1 : 0) + ' m', x0 + r / (n * d.range_step_m) * pw - 8, h - 8);
   g.fillText('m/s', 6, y0 + 10);
-  if (cd) { g.textAlign = 'right'; g.fillText(`compensated (${COMP_LABEL[A.comp]}), relative colour scale`, x0 + pw - 6, y0 + ph - 6); g.textAlign = 'left'; }
+  if (cd) {
+    const t = `compensated (${COMP_LABEL[A.comp]}), relative colour scale`, tw = g.measureText(t).width;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x0 + pw - 10 - tw, y0 + 19, tw + 8, 14);
+    g.fillStyle = '#fff'; g.textAlign = 'right'; g.fillText(t, x0 + pw - 6, y0 + 30); g.textAlign = 'left';
+  }
   shadeBands(g, m.h.bands, x0, y0, pw, ph, n * d.range_step_m);
   frame(g, x0, y0, pw, ph);
   const [pr, pc] = d.peak;
