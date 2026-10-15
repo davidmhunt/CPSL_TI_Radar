@@ -13,6 +13,18 @@ function setPorts(id, cli, data, where) {
 function renderPorts(j) {
   const box = $('setPorts'); box.innerHTML = '';
   if (!j) { box.append(el('div', 'runmsg bad', 'Could not read /api/settings/ports (this backend is older than the Devices tab).')); return; }
+  const links = j.radar_links || [];
+  if (links.length) {
+    const d = el('div', 'setboard'); d.append(el('h3', '', 'Stable names (/dev/radar)'));
+    const t = el('table', 'ftbl'); t.innerHTML = '<tr><th>Board</th><th>CLI</th><th>Data</th><th></th></tr>';
+    for (const l of links) {
+      const tr = el('tr'); tr.append(el('td', '', l.id), el('td', 'cmd', l.cli), el('td', 'cmd', l.data));
+      const td = el('td'); const bt = el('button', 'btn', 'Use for Configure → Save'); bt.onclick = () => setPorts(l.id, l.cli, l.data, 'save'); td.append(bt);
+      if (hasSetup()) { const b2 = el('button', 'btn', 'Use for Quick setup'); b2.onclick = () => setPorts(l.id, l.cli, l.data, 'live'); td.append(b2); }
+      tr.append(td); t.append(tr);
+    }
+    d.append(t); box.append(d);
+  }
   if (!j.boards.length) { box.append(el('div', 'runmsg warn', j.present ? `No serial devices in ${j.by_id_dir}: is a radar plugged in?` : `${j.by_id_dir} does not exist: no USB serial devices on this host.`)); return; }
   for (const b of j.boards) {
     const d = el('div', 'setboard'); d.append(el('h3', '', `${b.label} · serial ${b.serial}`));
@@ -48,6 +60,9 @@ function renderDca(j, ok) {
     box.append(m);
   }
 }
+// New setup defaults: the single /dev/radar pair when exactly one exists (the server resolves "" the same way); else the static ACM names stay.
+(async () => { const r = await get('/api/settings/ports'); const l = r.ok && r.j && r.j.radar_links;
+  if (l && l.length === 1) { $('sCli').value = l[0].cli; $('sData').value = l[0].data; } })();
 async function loadPorts() { const r = await get('/api/settings/ports'); renderPorts(r.ok ? r.j : null); }
 async function loadDca() {
   const q = new URLSearchParams(); if ($('setNic').value) q.set('nic', $('setNic').value); if ($('setPing').checked) q.set('ping', '1');
