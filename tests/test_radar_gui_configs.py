@@ -324,7 +324,7 @@ def test_delete_shipped_needs_both_confirms_and_restores_tree(env):
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["readme_updated"] and {x["id"] for x in j["results"]} == {js[0], cfgid}
-    assert all(x["action"] == "removed" and x["restore"].startswith("git restore -- ") for x in j["results"])
+    assert all(x["action"] == "removed" and "git status unavailable" in x["restore"] for x in j["results"])   # temp tree: no repo
     after = digest(cfg)
     gone = {k for k in after if k.startswith(".")}
     assert not gone
@@ -450,3 +450,41 @@ def test_outputs_and_index_row_helpers():
     assert "| DCA1000 | `x` | new |" in new2 and new2.count("C.json") == 2
     gone, hit = ca.readme_drop_row(new2, "C.json")
     assert hit and gone == text
+
+
+def test_promoted_files_honour_umask_and_keep_readme_mode(env):
+    c, cfg, user, mgr, t = env
+    old = os.umask(0o022)
+    try:
+        os.chmod(cfg / "README.md", 0o640)
+        assert post(c, "/api/configs/promote", id="user:scratch.json").status_code == 200
+        js = cfg / "system" / "IWR1843_iwr1843_sar_lvds_scratch.json"
+        cf = cfg / "radar" / "IWR1843" / "iwr1843_sar_lvds" / "scratch.cfg"
+        assert js.stat().st_mode & 0o777 == 0o644 and cf.stat().st_mode & 0o777 == 0o644
+        assert (cfg / "README.md").stat().st_mode & 0o777 == 0o640
+        os.chmod(js, 0o664)                                              # an overwrite keeps the existing file's mode
+        assert post(c, "/api/configs/promote", id="user:scratch.json", confirm_overwrite=True).status_code == 200
+        assert js.stat().st_mode & 0o777 == 0o664
+        b = next((user / ".promote_backups").iterdir())
+        assert (b / "system" / js.name).stat().st_mode & 0o777 == 0o664
+    finally:
+        os.umask(old)
+
+
+def test_restore_hint_only_for_tracked_files(env):
+    c, cfg, user, mgr, t = env
+    ident = ["-c", "user.name=T", "-c", "user.email=t@example.com"]
+    g = lambda *a: subprocess.run(["git", *ident, "-C", str(cfg), *a], check=True, capture_output=True)   # noqa: E731
+    g("init", "-q"); g("add", "system", "radar", "README.md"); g("commit", "-q", "-m", "t")
+    assert post(c, "/api/configs/promote", id="user:scratch.json").status_code == 200       # untracked now
+    new = "shipped:system/IWR1843_iwr1843_sar_lvds_scratch.json"
+    old = f"shipped:system/{GATE}.json"
+    d = post(c, "/api/configs/delete?dry=1", ids=[new, old]).json()["would_remove"]
+    by = {x["id"]: x for x in d}
+    assert by[new]["tracked"] is False and "git cannot restore" in by[new]["restore"]
+    assert by[old]["tracked"] is True and by[old]["restore"].startswith("git restore -- ")
+    r = post(c, "/api/configs/delete", ids=[new, old], confirm=True, confirm_shipped=True, force_referenced=True).json()
+    res = {x["id"]: x for x in r["results"]}
+    assert res[old]["action"] == "removed" and res[old]["restore"].startswith("git restore -- ")
+    assert res[new]["action"] == "trashed" and Path(res[new]["to"]).is_file() and "git restore" not in res[new]["restore"]
+    assert not (cfg / "system" / "IWR1843_iwr1843_sar_lvds_scratch.json").exists()

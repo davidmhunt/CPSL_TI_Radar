@@ -282,6 +282,39 @@ def git_status(t: Tree) -> dict:
         return {"available": False, "dirty": [], "branch": None, "note": str(e)[:200]}
 
 
+def tracked(t: Tree, p: Path) -> bool | None:
+    """True/False: git tracks `p` (ls-files, read-only); None when git cannot tell (no repo / no binary)."""
+    try:
+        r = subprocess.run(["git", "--no-optional-locks", "-c", "safe.directory=*", "-C", str(t.config), "ls-files",
+                            "--error-unmatch", "--", str(p.resolve())], capture_output=True, text=True, timeout=GIT_TIMEOUT)
+        if r.returncode == 0:
+            return True
+        top = subprocess.run(["git", "-C", str(t.config), "-c", "safe.directory=*", "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=GIT_TIMEOUT)
+        return False if top.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def default_mode() -> int:
+    """0o666 minus the process umask: what a plain open() would give a new file."""
+    m = os.umask(0)
+    os.umask(m)
+    return 0o666 & ~m
+
+
+def write_like(path: Path, text: str, mode: int | None = None) -> None:
+    """Atomic text write whose result has `mode` (default: the existing file's mode, else the umask default) instead of
+    mkstemp's 0600."""
+    if mode is None:
+        try:
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            mode = default_mode()
+    sysjson.atomic_write_text(path, text)
+    os.chmod(path, mode)
+
+
 def name_pattern(t: Tree) -> re.Pattern:
     """The system-JSON file-name pattern `tests/test_config_tree.py` enforces: <GUIBOARD>_<fw>_<purpose>[_front|back|down|r1].json."""
     boards = {fwmod.gui_board(p.stem) for p in (t.config / "boards").glob("*.json")} or set(fwmod.load_all()) or {"X"}
@@ -510,7 +543,7 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
             os.replace(tmp, p["cfg_dst"])
         finally:
             tmp.unlink(missing_ok=True)
-        sysjson.atomic_write_json(p["json_dst"], p["doc"])
+        write_like(p["json_dst"], sysjson.dumps(p["doc"]), p["json_dst"].stat().st_mode & 0o777 if p["json_dst"].is_file() else default_mode())
         notes = []
         purpose = (req.note or "").strip() or f"promoted from config/user ({datetime.now().strftime('%Y-%m-%d')})"
         purpose = purpose.replace("|", "/").replace("\n", " ")
@@ -521,7 +554,7 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
                                         f"{p['gui']}/{p['fw']}/{p['name']}.cfg", purpose if (req.note or old is None) else old)
             new_text, readme_updated = readme_set_row(text, p["sys_name"], row)
             if readme_updated and new_text != text:
-                sysjson.atomic_write_text(t.readme, new_text)
+                write_like(t.readme, new_text)
             elif not readme_updated:
                 notes.append("config/README.md has no System JSON index: add the row by hand")
         else:
@@ -536,6 +569,15 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
         return {"ok": True, "result": "overwritten" if p["exists"] else "created", "files": files, "backups": backups,
                 "readme_updated": readme_updated, "driver": verdict, "git": git_status(t), "notes": notes,
                 "commit_hint": "git add " + " ".join(hint_path(Path(f["path"])) for f in files) + " " + hint_path(t.readme)}
+
+    def restore_hint(p: Path, tr="?") -> str:
+        tr = tracked(t, p) if tr == "?" else tr
+        if tr is True:
+            return f"git restore -- {hint_path(p)}"
+        if tr is False:
+            return (f"not tracked in git, so git cannot restore it: it is moved to {t.user / TRASH}/<UTC>/ "
+                    f"(move it back by hand)")
+        return "git status unavailable here: restore it from version control or a copy"
 
     # -- delete -------------------------------------------------------------------------------------------------
 
@@ -580,7 +622,8 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
         preview = {"would_remove": [{"id": i, "group": g, "kind": k,
                                      "action": "trash" if g == "user" else "unlink",
                                      "referenced_by": pl["referenced"].get(i, []),
-                                     "restore": (f"git restore -- {hint_path(p)}" if g == "shipped" else
+                                     "tracked": tracked(t, p) if g == "shipped" else None,
+                                     "restore": (restore_hint(p) if g == "shipped" else
                                                  f"mv {t.user / TRASH}/<UTC>/{p.name} {p}")}
                                     for i, (g, k, p) in targets.items()],
                    "refused": pl["refused"], "shipped_writes": ws,
@@ -616,8 +659,19 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
                     shutil.move(str(p), str(dst))
                     res.update(ok=True, action="trashed", to=str(dst))
                 else:
-                    p.unlink()
-                    res.update(ok=True, action="removed", restore=f"git restore -- {hint_path(p)}")
+                    tr = tracked(t, p)
+                    if tr is False:   # never committed: git cannot bring it back, so keep a copy in the trash
+                        d = t.user / TRASH / stamp
+                        d.mkdir(parents=True, exist_ok=True)
+                        dst, n = d / p.name, 1
+                        while dst.exists():
+                            dst, n = d / f"{p.name}.{n}", n + 1
+                        shutil.move(str(p), str(dst))
+                        res.update(ok=True, action="trashed", to=str(dst), tracked=False,
+                                   restore=f"untracked in git: moved to {dst}; move it back by hand")
+                    else:
+                        p.unlink()
+                        res.update(ok=True, action="removed", tracked=tr, restore=restore_hint(p, tr))
                     if kind == "system_json" and text is not None:
                         text, hit = readme_drop_row(text, p.name)
                         readme_dirty = readme_dirty or hit
@@ -626,7 +680,7 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
             results.append(res)
         readme_updated = False
         if readme_dirty and text is not None:
-            sysjson.atomic_write_text(t.readme, text)
+            write_like(t.readme, text)
             readme_updated = True
         notes = []
         if any(i in pl["referenced"] and any("moved_paths" in x for x in pl["referenced"][i]) for i in targets):
