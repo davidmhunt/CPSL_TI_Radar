@@ -2,10 +2,11 @@
 // driver tap, over the binary /adc WebSocket. Message = u32 LE header length + JSON header + arrays (radar_gui/adc.py `encode`).
 // The socket is only open while the tab is shown. An older backend without /adc degrades to a message in each panel.
 import { $ } from './state.js';
+import { COMP_LABEL, rangeComp, rangeRef } from './rangecomp.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const A = { ws: null, open: false, retry: 0, last: null, status: null, ra: 'cart', rx: 0, lut: null, drawn: 0, noBackend: false,
-  clutter: false, chirp: 0, rmax: 0, crop: false, cache: {} };
+  clutter: false, chirp: 0, rmax: 0, crop: false, comp: 'off', cache: {} };
 const RXCOL = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#79c0ff', '#ffa657', '#56d4dd'];
 const PANELS = ['adcProf', 'adcRd', 'adcRa', 'adcSeries', 'adcBits'];
 
@@ -80,13 +81,14 @@ function niceStep(span, n) {
 }
 function ticks(lo, hi, n) { const s = niceStep(hi - lo, n), out = []; for (let v = Math.ceil(lo / s) * s; v <= hi + 1e-9; v += s) out.push(Math.abs(v) < 1e-9 ? 0 : v); return out; }
 // An offscreen image of an array region: u8 values -> colormap. `get(col,row)` returns the value; the result is w x h pixels.
-function heat(u8, rows, cols, c0, c1, flipRows, transpose) {
+function heat(u8, rows, cols, c0, c1, flipRows, transpose, colDelta) {
   const w = transpose ? rows : c1 - c0, h = transpose ? c1 - c0 : rows;
   const cv = A.cache.cv || (A.cache.cv = document.createElement('canvas'));
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   const g = cv.getContext('2d'), im = g.createImageData(w, h), px = new Uint32Array(im.data.buffer);
   for (let r = 0; r < rows; r++) for (let c = c0; c < c1; c++) {
-    const v = LUT[u8[r * cols + c]];
+    const q = colDelta ? Math.max(0, Math.min(255, Math.round(u8[r * cols + c] + colDelta[c]))) : u8[r * cols + c];
+    const v = LUT[q];
     if (transpose) px[(c1 - 1 - c) * w + r] = v;                           // x = row (angle), y = range upward
     else px[(flipRows ? rows - 1 - r : r) * w + (c - c0)] = v;             // x = range, y = row upward when flipRows
   }
@@ -133,7 +135,10 @@ function shadeBands(g, b, x0, y0, pw, ph, span) {
 function drawProfile(m) {
   const { g, w, h } = fit($('adcProf')); g.clearRect(0, 0, w, h);
   if (!m) return;
-  const p = m.arr.profile, step = m.h.profile_step_m || m.h.range_step_m, n = nR(step, p.length, m.h.bands);
+  const raw = m.arr.profile, step = m.h.profile_step_m || m.h.range_step_m, n = nR(step, raw.length, m.h.bands);
+  // display-only range compensation (radar-38): added per bin at the bin's range; stats and the peak text stay raw
+  const bd = m.h.bands, rref = rangeRef(bd), edge = bd && bd.if_m > 0 ? bd.if_m : null;
+  const p = A.comp === 'off' ? raw : Float32Array.from(raw, (v, i) => v + rangeComp(A.comp, (i + .5) * step, rref, edge));
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
   let hi = -1e9; for (let i = 0; i < n; i++) hi = Math.max(hi, p[i]);
   const lo = hi - 70, X = i => x0 + (i + .5) / n * pw, Y = v => y0 + (1 - Math.max(0, Math.min(1, (v - lo) / (hi - lo)))) * ph;
@@ -148,6 +153,7 @@ function drawProfile(m) {
   if (k < n) { g.fillStyle = css('--warn'); g.fillRect(X(k) - 1.5, Y(p[k]) - 1.5, 4, 4); }
   g.fillStyle = css('--text'); g.textAlign = 'right';
   g.fillText(`peak bin ${k} · ${(k * step).toFixed(2)} m · ${m.h.profile_peak_db.toFixed(1)} dB · image ratio ${m.h.image_ratio_db.toFixed(1)} dB`, x0 + pw - 6, y0 + 14);
+  if (A.comp !== 'off') g.fillText(`compensated: ${COMP_LABEL[A.comp]} from ${rref.toFixed(1)} m (display only; peak dB above is raw)`, x0 + pw - 6, y0 + 28);
   g.textAlign = 'left';
 }
 
@@ -157,12 +163,19 @@ function drawRd(m) {
   const d = m.h.rd, [rows, cols] = d.shape, n = nR(d.range_step_m, cols, m.h.bands);
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
   g.imageSmoothingEnabled = false;
-  g.drawImage(heat(m.arr.rd, rows, cols, 0, n, true, false), x0, y0, pw, ph);
+  // range compensation on the u8 map: dB offset per column converted to u8 steps with the header's min/max (clamped 0..255)
+  let cd = null;
+  if (A.comp !== 'off' && d.max > d.min) {
+    const bd = m.h.bands, rref = rangeRef(bd), edge = bd && bd.if_m > 0 ? bd.if_m : null, per = 255 / (d.max - d.min);
+    cd = Float32Array.from({ length: cols }, (_, c) => rangeComp(A.comp, (c + .5) * d.range_step_m, rref, edge) * per);
+  }
+  g.drawImage(heat(m.arr.rd, rows, cols, 0, n, true, false, cd), x0, y0, pw, ph);
   font(g);
   const vlo = (0 - d.vel_zero_bin - .5) * d.vel_step_ms, vhi = (rows - 1 - d.vel_zero_bin + .5) * d.vel_step_ms;
   for (const v of ticks(vlo, vhi, 6)) { const y = y0 + (1 - (v - vlo) / (vhi - vlo)) * ph; g.fillText(v.toFixed(1), 6, y + 4); g.beginPath(); g.moveTo(x0 - 4, y); g.lineTo(x0, y); g.stroke(); }
   for (const r of ticks(0, n * d.range_step_m, 8)) g.fillText(r.toFixed(r % 1 ? 1 : 0) + ' m', x0 + r / (n * d.range_step_m) * pw - 8, h - 8);
   g.fillText('m/s', 6, y0 + 10);
+  if (cd) { g.textAlign = 'right'; g.fillText(`compensated (${COMP_LABEL[A.comp]}), relative colour scale`, x0 + pw - 6, y0 + ph - 6); g.textAlign = 'left'; }
   shadeBands(g, m.h.bands, x0, y0, pw, ph, n * d.range_step_m);
   frame(g, x0, y0, pw, ph);
   const [pr, pc] = d.peak;
@@ -309,6 +322,7 @@ export function initAdc() {
   });
   $('adcClutter').addEventListener('change', () => { A.clutter = $('adcClutter').checked; sendOpts(); });
   $('adcChirp').addEventListener('change', () => { A.chirp = Math.max(0, parseInt($('adcChirp').value, 10) || 0); sendOpts(); });
+  $('adcComp').addEventListener('change', () => { A.comp = $('adcComp').value; schedule(); });
   $('adcCropIf').addEventListener('change', () => { A.crop = $('adcCropIf').checked; A.lut = null; schedule(); });
   $('adcRx').addEventListener('change', () => { A.rx = +$('adcRx').value; schedule(); });
   $('adcRmax').addEventListener('input', () => { A.rmax = +$('adcRmax').value; A.lut = null; $('adcRmaxVal').textContent = A.rmax > 0 ? A.rmax + ' m' : 'full'; schedule(); });

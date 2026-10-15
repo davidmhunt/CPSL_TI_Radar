@@ -336,6 +336,7 @@
       <label class="chk"><input type="checkbox" id="adcClutter"> clutter removal</label>
       <label class="inl">max range <input type="range" id="adcRmax" min="0" max="12" step="1" value="0"><span id="adcRmaxVal">full</span></label>
       <label class="chk"><input type="checkbox" id="adcCropIf"> crop to IF band</label>
+      <label class="inl" title="Display only: adds 20 or 40 log10(R/Rref) dB to the range profile and range-Doppler so far returns are comparable with near ones. Stats, peak markers and recordings are unchanged.">range compensation <select id="adcComp"><option value="off" selected>off</option><option value="r2">R^2 (+20 log R)</option><option value="r4">R^4 (+40 log R)</option></select></label>
     </span>
   </div>
   <div class="muted" id="adcErr" hidden></div>
