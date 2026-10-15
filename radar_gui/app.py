@@ -12,6 +12,7 @@ from . import adc as adcmod
 from .cfgapi import make_router
 from .driver import DriverManager
 from .driver_api import make_router as make_driver_router
+from .configs_api import make_router as make_configs_router
 from .logs_api import make_router as make_logs_router
 from .settings import make_router as make_settings_router
 from .source_api import make_router as make_source_router
@@ -128,7 +129,7 @@ class _RevalidatingStatic(StaticFiles):
 
 
 def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_dir=None, run_root=None,
-               min_stop_grace: float = 5.0) -> FastAPI:
+               min_stop_grace: float = 5.0, config_dir=None) -> FastAPI:
     hub = Hub(source)
     loop_ref = {}
 
@@ -181,6 +182,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
     app.include_router(make_driver_router(driver, user_cfg_dir, system_cfg_dir))
     app.include_router(make_source_router(hub, user_cfg_dir, run_root))
     app.include_router(make_logs_router(driver, run_root))
+    app.include_router(make_configs_router(driver, user_cfg_dir, config_dir, driver_bin))
     app.include_router(make_settings_router())
     app.include_router(make_tune_router(tune_mgr))
 
