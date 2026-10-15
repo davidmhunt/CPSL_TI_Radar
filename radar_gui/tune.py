@@ -8,7 +8,7 @@ docs/RESULTS.md and runs/radar37_gate). It SUGGESTS a gain and never applies one
 
 Suggestion rule (documented, deterministic, re-runnable on the stored rows with `suggest`):
   * a step is USABLE when it has no firmware-saturated chirp (sat_chirps == 0, or unknown on firmware that does not report
-    it), no ADC sample at the rails (|x| >= full scale - 1, `adc_bits`), and its strongest return (outside the DC/leakage
+    it), no ADC sample at the rails (|x| >= full scale, `adc_bits`), and its strongest return (outside the DC/leakage
     exclusion zone) is at least `min_snr_db` above the median noise floor;
   * the ANCHOR is the lowest-gain usable step; a later step TRACKS when its strongest-return power rose within `tol_db` of
     the 1 dB/dB line from the anchor: P(g) - P(g0) >= (g - g0) - tol_db;

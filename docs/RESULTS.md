@@ -271,6 +271,35 @@ The driver and the GUI validator now agree on every error code they share, on th
 - dataFmt 2 (`adc_sar_meta`) and the SAR image were later bench-verified; see "Core driver on the SAR image" above.
 - The driver checks error-level rules only; warnings stay in the GUI (user ruling, 2026-10-07).
 
+## RX-gain sweep on the IWR1843 SAR LVDS firmware (radar-37 Tune), 2026-10-15
+
+One real sweep with the radar_gui Tune tab (`radar_gui/tune.py`, commits `7b499e0`..`809c985`), IWR1843BOOST R2101050 on `iwr1843_sar_lvds` + DCA1000, config `SAR_ugv_fmt2`, after a user power cycle, bench scene (no placed reflector). profileCfg `rxGain` 24..48 dB step 2 (board min/max/step from radar-36), 8 frames per step, 3 dB margin; each step is a full reconfigure by a fresh driver run (a profileCfg-only change then `sensorStart` is rejected after `sensorStop`, radar-37 Step 1). Run dir `runs/gui/20261015T222501Z_tune_radar37_sweep_SAR_ugv_fmt2` (gitignored; `tune.csv`, `tune.json`, per-step folders); shot `docs/images/gui/tune_real_iwr1843.png` (real board, not masked like the fake-driver tab shots).
+
+| Gain (dB) | Sat chirps / 391 | Clipped | ADC peak | Peak dBFS (16-bit) | Strongest return (dB) | Dev vs 1 dB/dB | Noise (dB) | SNR (dB) |
+|---|---|---|---|---|---|---|---|---|
+| 24 | 0 | 0 | 112 | -49.3 | 81.1 | 0.00 | 55.3 | 25.8 |
+| 28 | 0 | 0 | 163 | -46.1 | 84.9 | -0.21 | 58.7 | 26.3 |
+| 32 | 0 | 0 | 236 | -42.9 | 88.8 | -0.29 | 62.4 | 26.4 |
+| 36 | 0 | 0 | 349 | -39.5 | 92.6 | -0.56 | 66.3 | 26.3 |
+| 40 | 0 | 0 | 594 | -34.8 | 96.7 | -0.46 | 69.8 | 26.8 |
+| 44 | 0 | 0 | 1161 | -29.0 | 100.6 | -0.51 | 73.9 | 26.7 |
+| 48 | 0 | 0 | 1861 | -24.9 | 104.6 | -0.53 | 77.9 | 26.7 |
+
+All 13 steps (24..48 step 2) are in `tune.csv`; the rows above are every fourth step. The strongest return sits at 35.9 m in every step. Suggestion: **44 dB**, limited by the sweep top ("no compression up to 48").
+
+### Interpretation
+
+- No compression or saturation was reached up to the chip maximum of 48 dB on this scene: 0 saturated chirps and 0 clipped samples at every step; the strongest return tracks gain within 0.6 dB of the 1 dB/dB line.
+- SNR is flat (25.8-26.9 dB) because the noise floor rises about 1 dB per dB of gain too. Noise ahead of the gain stage dominates here, so on this scene gain only trades ADC headroom (24.9 dB below full scale at 48 dB); it does not improve SNR.
+- The 44 dB suggestion is the rule's 3 dB margin off the sweep top (48), not a measured limit.
+- Full scale is taken from `adcCfg` (16-bit container, +-32767; Researcher memo `docs/research/gui_hpf_rxgain_2026-10-15.md`), medium confidence; the effective ADC resolution may be lower, which would shrink the real headroom.
+
+### Caveats
+
+- Firmware-18 "saturation-vs-gain": partially covered. No saturation was reached, so the saturation onset is still unmeasured; it needs a closer or stronger reflector.
+- One bench scene, one board, one config, one sweep, 8 frames per step; no repeat, so the 0.6 dB deviation spread is not characterized.
+- The strongest-return peak is the scene's own strongest bin outside the DC/leakage exclusion, not a calibrated target.
+
 ## Release readiness: Docker image and test suite (2026-10-08)
 
 Measured 2026-10-08 on `release/v2.0`; values are read from the Logs of the closed directives `rel-04` (test-suite audit, `19f949e`) and `rel-05` (Docker image, `d77b9f5`, `3e6526d`, `12a5fd4`) in `.friday/active/harness/plans/directives/closed/`. Each is a single run.
