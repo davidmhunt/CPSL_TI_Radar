@@ -5,7 +5,7 @@ import { $ } from './state.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const A = { ws: null, open: false, retry: 0, last: null, status: null, ra: 'cart', rx: 0, lut: null, drawn: 0, noBackend: false,
-  clutter: false, chirp: 0, rmax: 0, cache: {} };
+  clutter: false, chirp: 0, rmax: 0, crop: false, cache: {} };
 const RXCOL = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#79c0ff', '#ffa657', '#56d4dd'];
 const PANELS = ['adcProf', 'adcRd', 'adcRa', 'adcSeries', 'adcBits'];
 
@@ -97,12 +97,35 @@ const frame = (g, x, y, w, h) => { g.strokeStyle = css('--line'); g.strokeRect(x
 
 // ---------- the four panels ----------
 const PAD = { l: 44, r: 10, t: 8, b: 24 };
-function nR(step, bins) { return A.rmax > 0 ? Math.max(2, Math.min(bins, Math.ceil(A.rmax / step))) : bins; }
+// Visible range bins: the max-range slider, and (when ticked and the chip's IF band is known) the usable IF band edge.
+function nR(step, bins, b) {
+  let lim = A.rmax > 0 ? A.rmax : Infinity;
+  if (A.crop && b && b.if_m > 0) lim = Math.min(lim, b.if_m);
+  return isFinite(lim) ? Math.max(2, Math.min(bins, Math.ceil(lim / step))) : bins;
+}
+// Shade what the analog front end makes unreliable (radar-36). Edges come from the frame header `bands` (backend:
+// radar_gui/cfg/analog.py from the per-chip limits data + the cfg's slope, fs, ADC mode and HPF1 code); null edge = no shading.
+function shadeBands(g, b, x0, y0, pw, ph, span) {
+  if (!b || !(span > 0)) return;
+  const X = r => x0 + Math.max(0, Math.min(1, r / span)) * pw;
+  g.save(); g.font = '11px sans-serif'; g.textBaseline = 'bottom';
+  if (b.hpf_m > 0) {
+    const xe = X(b.hpf_m); g.fillStyle = 'rgba(150,150,150,0.38)'; g.fillRect(x0, y0, xe - x0, ph);
+    g.fillStyle = css('--text'); g.textAlign = 'left';
+    g.fillText(`below HPF corner (${b.hpf_khz} kHz = ${b.hpf_m.toFixed(1)} m)`, x0 + 4, y0 + ph - 4, Math.max(40, pw));
+  }
+  if (b.if_m != null && b.if_m < span) {
+    const xs = X(b.if_m); g.fillStyle = 'rgba(150,150,150,0.38)'; g.fillRect(xs, y0, x0 + pw - xs, ph);
+    g.fillStyle = css('--text'); g.textAlign = 'right';
+    g.fillText(`outside IF band (> ${b.if_m.toFixed(0)} m = ${b.if_mhz.toFixed(2)} MHz, ${b.adc_mode})`, x0 + pw - 4, y0 + ph - 4, Math.max(40, x0 + pw - xs));
+  }
+  g.restore();
+}
 
 function drawProfile(m) {
   const { g, w, h } = fit($('adcProf')); g.clearRect(0, 0, w, h);
   if (!m) return;
-  const p = m.arr.profile, step = m.h.profile_step_m || m.h.range_step_m, n = nR(step, p.length);
+  const p = m.arr.profile, step = m.h.profile_step_m || m.h.range_step_m, n = nR(step, p.length, m.h.bands);
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
   let hi = -1e9; for (let i = 0; i < n; i++) hi = Math.max(hi, p[i]);
   const lo = hi - 70, X = i => x0 + (i + .5) / n * pw, Y = v => y0 + (1 - Math.max(0, Math.min(1, (v - lo) / (hi - lo)))) * ph;
@@ -112,6 +135,7 @@ function drawProfile(m) {
   g.strokeStyle = css('--accent'); g.lineWidth = 1.4; g.beginPath();
   for (let i = 0; i < n; i++) { const x = X(i), y = Y(p[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); }
   g.stroke(); g.lineWidth = 1; frame(g, x0, y0, pw, ph);
+  shadeBands(g, m.h.bands, x0, y0, pw, ph, n * step);
   const k = m.h.profile_peak_bin;
   if (k < n) { g.fillStyle = css('--warn'); g.fillRect(X(k) - 1.5, Y(p[k]) - 1.5, 4, 4); }
   g.fillStyle = css('--text'); g.textAlign = 'right';
@@ -122,7 +146,7 @@ function drawProfile(m) {
 function drawRd(m) {
   const { g, w, h } = fit($('adcRd')); g.clearRect(0, 0, w, h);
   if (!m) return;
-  const d = m.h.rd, [rows, cols] = d.shape, n = nR(d.range_step_m, cols);
+  const d = m.h.rd, [rows, cols] = d.shape, n = nR(d.range_step_m, cols, m.h.bands);
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
   g.imageSmoothingEnabled = false;
   g.drawImage(heat(m.arr.rd, rows, cols, 0, n, true, false), x0, y0, pw, ph);
@@ -131,6 +155,7 @@ function drawRd(m) {
   for (const v of ticks(vlo, vhi, 6)) { const y = y0 + (1 - (v - vlo) / (vhi - vlo)) * ph; g.fillText(v.toFixed(1), 6, y + 4); g.beginPath(); g.moveTo(x0 - 4, y); g.lineTo(x0, y); g.stroke(); }
   for (const r of ticks(0, n * d.range_step_m, 8)) g.fillText(r.toFixed(r % 1 ? 1 : 0) + ' m', x0 + r / (n * d.range_step_m) * pw - 8, h - 8);
   g.fillText('m/s', 6, y0 + 10);
+  shadeBands(g, m.h.bands, x0, y0, pw, ph, n * d.range_step_m);
   frame(g, x0, y0, pw, ph);
   const [pr, pc] = d.peak;
   if (pc < n) {
@@ -157,7 +182,7 @@ function raLut(w, h, d, rows, cols, n, x0, y0, pw, ph) {
 function drawRa(m) {
   const { g, w, h } = fit($('adcRa')); g.clearRect(0, 0, w, h);
   if (!m || !m.h.ra) return;
-  const d = m.h.ra, [rows, cols] = d.shape, n = nR(d.range_step_m, cols);
+  const d = m.h.ra, [rows, cols] = d.shape, n = nR(d.range_step_m, cols, m.h.bands);
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
   font(g);
   if (A.ra === 'polar') {
@@ -262,6 +287,8 @@ function status() {
 function draw() {
   const m = A.last; status();
   drawProfile(m); drawRd(m); drawRa(m); drawSeries(m); drawBits(m); table(m);
+  const cb = $('adcCropIf'), known = !!(m && m.h.bands && m.h.bands.if_m > 0);
+  cb.disabled = !known; cb.title = known ? 'Only draw ranges up to the usable IF band edge (' + m.h.bands.if_m.toFixed(0) + ' m)' : 'The usable IF band is unknown or unverified for this chip/ADC mode';
   const sr = $('adcRx'), nrx = m ? m.h.diag.rows.length : 0;
   if (sr.options.length !== nrx) { sr.innerHTML = Array.from({ length: nrx }, (_, i) => `<option value="${i}">RX ${i}</option>`).join(''); sr.value = String(Math.min(A.rx, Math.max(0, nrx - 1))); }
 }
@@ -274,6 +301,7 @@ export function initAdc() {
   });
   $('adcClutter').addEventListener('change', () => { A.clutter = $('adcClutter').checked; sendOpts(); });
   $('adcChirp').addEventListener('change', () => { A.chirp = Math.max(0, parseInt($('adcChirp').value, 10) || 0); sendOpts(); });
+  $('adcCropIf').addEventListener('change', () => { A.crop = $('adcCropIf').checked; A.lut = null; schedule(); });
   $('adcRx').addEventListener('change', () => { A.rx = +$('adcRx').value; schedule(); });
   $('adcRmax').addEventListener('input', () => { A.rmax = +$('adcRmax').value; A.lut = null; $('adcRmaxVal').textContent = A.rmax > 0 ? A.rmax + ' m' : 'full'; schedule(); });
   addEventListener('resize', () => { if (A.visible) { A.lut = null; schedule(); } });

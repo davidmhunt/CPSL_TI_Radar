@@ -29,7 +29,9 @@ import numpy as np
 
 import importlib
 
+from .cfg import analog
 from .cfg import firmware as fwmod
+from .cfg import limits as limmod
 mt = importlib.import_module("radar_gui.cfg.metrics")   # `radar_gui.cfg.metrics` the module (the package re-exports the function)
 from .cfg.parse import Cfg, CfgError, parse_cfg_file
 
@@ -87,6 +89,7 @@ class Geometry:
     az_sign: int = AZ_SIGN_DEFAULT   # see AZ_SIGN_BY_BOARD
     ra_reason: str = ""              # non-empty = the range-azimuth view is disabled, with the reason
     notes: list[str] = field(default_factory=list)
+    bands: dict = field(default_factory=dict)   # radar-36: analog.band_edges(...) (HPF1-corner / usable-IF-band edges in m), see below
 
     @property
     def n_chirps(self) -> int:
@@ -105,7 +108,7 @@ class Geometry:
         return self.lambda_m / (2 * self.doppler_bins * self.loop_period_s)
 
     @classmethod
-    def from_cfg(cls, cfg: Cfg, board: str | None = None) -> "Geometry":
+    def from_cfg(cls, cfg: Cfg, board: str | None = None, firmware: str | None = None) -> "Geometry":
         m = mt.metrics(cfg, board or None)
         if board == mt.CASCADE:
             raise CfgError("cascade raw ADC is not supported by the ADC views")
@@ -122,10 +125,20 @@ class Geometry:
             reason = "range-azimuth is not available for the IWR6843ODS (not a half-wavelength line)"
         elif len(az_slots) * m.n_rx < 2:
             reason = "range-azimuth needs at least 2 azimuth virtual channels"
+        bands: dict = {}
+        try:   # display only: any problem with the analog data just means nothing is shaded
+            pa = cfg.first("profileCfg").floats()
+            ac = cfg.first("adcCfg")
+            lim = limmod.firmware_limits(board, firmware) if board else None
+            bands = analog.band_edges(lim, int(pa[11]) if len(pa) > 11 else None,
+                                      int(ac.floats()[1]) if ac is not None and len(ac.args) > 1 else 1,
+                                      m.sample_rate_ksps, m.slope_mhz_us)
+        except (CfgError, ValueError, KeyError, TypeError, IndexError):
+            bands = {}
         return cls(n_rx=m.n_rx, n_samples=m.num_samples, n_loops=m.n_loops, cpl=m.chirps_per_loop, slot_masks=masks,
                    az_slots=az_slots, range_res_m=m.range_res_m, loop_period_s=m.loop_period_us * 1e-6,
                    lambda_m=m.lambda_mm * 1e-3, doppler_bins=pow2(m.n_loops), frame_rate_hz=m.frame_rate_hz,
-                   board=board or "", az_sign=az_sign_for(board), ra_reason=reason, notes=list(m.notes))
+                   board=board or "", az_sign=az_sign_for(board), ra_reason=reason, notes=list(m.notes), bands=bands)
 
     @classmethod
     def from_system_json(cls, path) -> "Geometry":
@@ -134,7 +147,7 @@ class Geometry:
         cfg = parse_cfg_file((p.parent / d["radar_cfg"]).resolve())
         board = d.get("board")
         # a system JSON writes the driver board (IWR1843_SAR), a Quick-setup session.json the board descriptor's path
-        return cls.from_cfg(cfg, fwmod.gui_board(board) if board else board)
+        return cls.from_cfg(cfg, fwmod.gui_board(board) if board else board, d.get("firmware") or None)
 
 
 # ---- decode -----------------------------------------------------------------------------------------------
@@ -257,7 +270,7 @@ def process(a: np.ndarray, geom: Geometry, opts: dict | None = None) -> Result:
     prof_p, prof_f = maxpool(prof_db, 0, MAX_PROFILE)                     # max-pooled like the heatmaps, never truncated
     arrays = [("profile", prof_p.astype("<f4")), ("rd", rd_u8)]
     head = {
-        "kind": "frame",
+        "kind": "frame", "bands": geom.bands or None,
         "range_step_m": bin_m, "range_bins": int(nf), "profile_step_m": bin_m * prof_f, "profile_peak_bin": k, "profile_peak_db": float(prof_db[k]),
         "image_ratio_db": image_ratio,
         "rd": {"shape": list(rd_u8.shape), "min": rd_lo, "max": rd_hi, "range_step_m": bin_m * rd_f,
