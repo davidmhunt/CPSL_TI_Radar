@@ -46,6 +46,8 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from . import analog
+
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "CPSL_TI_Radar_cpp" / "config"
 FIRMWARE_DIR = CONFIG_DIR / "firmware"
 BOARDS_DIR = CONFIG_DIR / "boards"
@@ -186,6 +188,8 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
                     bad.append(f"limits[{b}][{name}] needs value/level/source/confidence")
                 elif e["level"] not in LEVELS or e["confidence"] not in CONFIDENCES or not e["source"]:
                     bad.append(f"limits[{b}][{name}]: bad level/confidence/source")
+            if all(isinstance(e, dict) and "value" in e for e in entries.values()):
+                bad += [f"limits[{b}]: {m}" for m in analog.check_entries(entries)]   # radar-36 keys (HPF / rxGain / IF band)
     m = d.get("mimo")
     bad += _check_mimo_entry(m, "mimo", True) if m is not None else ["mimo block missing"]
     if isinstance(m, dict):
@@ -403,4 +407,8 @@ def summary(board: str | None = None) -> list[dict]:
              "system_enables": d["system_enables"], "pending": d.get("pending"),
              "driver_board": driver_board(d, board) if board else d.get("driver_board"),
              "default": bool(board and fws and d is fws[0]),
-             "template": d["templates"].get(board) if board else None} for d in fws]
+             "template": d["templates"].get(board) if board else None,
+             # radar-36: the analog front-end entries of the board (HPF corner tables, rxGain range/target, IF band), raw
+             # {value, level, source, confidence} dicts; only with a board (the Configure tab's direct mode reads them)
+             "analog": ({k: e for k, e in d["limits"].get(board, {}).items() if k in analog.ANALOG_KEYS} if board else None)}
+            for d in fws]

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from . import firmware as fwmod
+from . import analog
 from .limits import BOARD_LIMITS, Limit, dca1000_ceiling_mbps, dca1000_params, firmware_limits, host_limits
 from .metrics import BOARDS, CASCADE, Metrics, frame_layout, metrics, popcount, tdm_slots
 from .parse import Cfg, CfgError
@@ -409,6 +410,22 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
         add("physics: ADC window must end inside the ramp", "sampling_outside_ramp",
             f"ADC start {m.adc_start_us:g} + sampling {m.sampling_us:.2f} us = "
             f"{m.adc_start_us + m.sampling_us:.2f} us exceeds ramp end {m.ramp_us:g} us")
+
+    # --- profileCfg HPF codes and rxGain word (radar-36): bits 5:0 of rxGain are range/step-checked, bits 7:6 only looked up;
+    # a code outside the table is reported (never rewritten). Levels follow the limit entries (warning; weak confidence stays one).
+    for pc in cfg.all("profileCfg"):
+        try:
+            pa = pc.floats()
+        except ValueError:
+            continue
+        if len(pa) < 14:
+            continue
+        for which, idx in ((1, 11), (2, 12)):
+            iss = analog.hpf_issue(pa[idx], which, lim)
+            if iss:
+                add(lim[iss[2]], iss[0], iss[1])
+        for code, msg, key in analog.gain_issues(pa[13], lim):
+            add(lim[key], code, msg)
 
     # --- frame
     if m.n_loops > lim["max_loops"].value:

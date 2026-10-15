@@ -196,6 +196,72 @@
         "level": "warning",
         "source": "CPSL_TI_Radar_cpp/config/boards/IWR1443.json lifecycle",
         "confidence": "repo"
+      },
+      "hpf1_corner_khz": {
+        "value": [175, 235, 350, 700],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs211c s5.7 RF Specification fn (2) p.24-25; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
+        "confidence": "high"
+      },
+      "hpf2_corner_khz": {
+        "value": [350, 700, 1400, 2800],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs211c s5.7 RF Specification fn (2) p.24-25; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
+        "confidence": "high"
+      },
+      "rx_gain_min_db": {
+        "value": 24,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs211c s5.7 RF Specification (max 48 dB, range 24 dB, step 2 dB); applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_max_db": {
+        "value": 48,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs211c s5.7 RF Specification (max 48 dB, range 24 dB, step 2 dB); applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_step_db": {
+        "value": 2,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
+        "confidence": "high"
+      },
+      "rx_gain_rf_target_db": {
+        "value": [30, 34, "reserved", 26],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: mmwavelink rlProfileCfg_t rxGain b7:6 (xWR1xxx table); index = rxGain bits 7:6, bits 7:6 are preserved on write-back",
+        "confidence": "high"
+      },
+      "if_band_max_mhz": {
+        "value": 15,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E5/E6: swrs211c s5.7 (max IF bandwidth)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex1x": {
+        "value": 0.9,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex2x": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_real": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "complex1x_upper_half_is_positive_if": {
+        "value": true,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
+        "confidence": "medium"
       }
     },
     "IWR1843": {
@@ -372,6 +438,72 @@
         "level": "warning",
         "source": "CPSL_TI_Radar_cpp/config/boards/IWR1843.json lifecycle",
         "confidence": "repo"
+      },
+      "hpf1_corner_khz": {
+        "value": [175, 235, 350, 700],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs228b s7.7 RF Specification fn (3) p.28-29; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
+        "confidence": "high"
+      },
+      "hpf2_corner_khz": {
+        "value": [350, 700, 1400, 2800],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs228b s7.7 RF Specification fn (3) p.28-29; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
+        "confidence": "high"
+      },
+      "rx_gain_min_db": {
+        "value": 24,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs228b s7.7 RF Specification (max 48, range 24, step 2); applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_max_db": {
+        "value": 48,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs228b s7.7 RF Specification (max 48, range 24, step 2); applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_step_db": {
+        "value": 2,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
+        "confidence": "high"
+      },
+      "rx_gain_rf_target_db": {
+        "value": [30, 34, "reserved", 26],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: mmwavelink rlProfileCfg_t rxGain b7:6 (xWR1xxx table); index = rxGain bits 7:6, bits 7:6 are preserved on write-back",
+        "confidence": "high"
+      },
+      "if_band_max_mhz": {
+        "value": 10,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E5/E6: swrs228b s7.7 (max IF bandwidth)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex1x": {
+        "value": 0.9,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex2x": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_real": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "complex1x_upper_half_is_positive_if": {
+        "value": true,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
+        "confidence": "medium"
       }
     },
     "IWR6843": {
@@ -548,6 +680,72 @@
         "level": "warning",
         "source": "CPSL_TI_Radar_cpp/config/boards/IWR6843.json lifecycle",
         "confidence": "repo"
+      },
+      "hpf1_corner_khz": {
+        "value": [175, 235, 350, 700],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs219f s7.9 RF Specification fn (2) p.32-33; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
+        "confidence": "high"
+      },
+      "hpf2_corner_khz": {
+        "value": [350, 700, 1400, 2800],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs219f s7.9 RF Specification fn (2) p.32-33; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
+        "confidence": "high"
+      },
+      "rx_gain_min_db": {
+        "value": 30,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs219f s7.9 RF Specification (max 48, range 18, step 2); rl_sensor.h 'xWR6x43: all even values from 30 to 48'; applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_max_db": {
+        "value": 48,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs219f s7.9 RF Specification (max 48, range 18, step 2); rl_sensor.h 'xWR6x43: all even values from 30 to 48'; applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_step_db": {
+        "value": 2,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
+        "confidence": "high"
+      },
+      "rx_gain_rf_target_db": {
+        "value": [30, 33, 36, "reserved"],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: rl_sensor.h rxGain b7:6 (xWR6843 ES2.0 table) quoted in e2e_awr6843_rxgain_info; index = rxGain bits 7:6, bits 7:6 are preserved on write-back",
+        "confidence": "medium"
+      },
+      "if_band_max_mhz": {
+        "value": 10,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E5/E6: swrs219f s7.9 (max IF bandwidth)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex1x": {
+        "value": 0.9,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex2x": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_real": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "complex1x_upper_half_is_positive_if": {
+        "value": true,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
+        "confidence": "medium"
       }
     },
     "IWR6843ODS": {
@@ -724,6 +922,72 @@
         "level": "warning",
         "source": "CPSL_TI_Radar_cpp/config/boards/IWR6843.json lifecycle",
         "confidence": "repo"
+      },
+      "hpf1_corner_khz": {
+        "value": [175, 235, 350, 700],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs219f (IWR6843 datasheet; ODS is the same die) s7.9 RF Specification fn (2) p.32-33; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
+        "confidence": "high"
+      },
+      "hpf2_corner_khz": {
+        "value": [350, 700, 1400, 2800],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs219f (IWR6843 datasheet; ODS is the same die) s7.9 RF Specification fn (2) p.32-33; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
+        "confidence": "high"
+      },
+      "rx_gain_min_db": {
+        "value": 30,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs219f s7.9 RF Specification (IWR6843 datasheet; ODS is the same die); applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_max_db": {
+        "value": 48,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs219f s7.9 RF Specification (IWR6843 datasheet; ODS is the same die); applies to rxGain bits 5:0 only",
+        "confidence": "high"
+      },
+      "rx_gain_step_db": {
+        "value": 2,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
+        "confidence": "high"
+      },
+      "rx_gain_rf_target_db": {
+        "value": [30, 33, 36, "reserved"],
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: rl_sensor.h rxGain b7:6 (xWR6843 ES2.0 table) quoted in e2e_awr6843_rxgain_info; ODS taken as IWR6843; index = rxGain bits 7:6, bits 7:6 are preserved on write-back",
+        "confidence": "medium"
+      },
+      "if_band_max_mhz": {
+        "value": 10,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E5/E6: swrs219f s7.9 (IWR6843 datasheet) (max IF bandwidth)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex1x": {
+        "value": 0.9,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_complex2x": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "if_band_frac_real": {
+        "value": 0.45,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "confidence": "high"
+      },
+      "complex1x_upper_half_is_positive_if": {
+        "value": true,
+        "level": "warning",
+        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
+        "confidence": "medium"
       }
     }
   },

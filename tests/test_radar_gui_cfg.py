@@ -277,7 +277,9 @@ def test_generate_round_trips_targets_and_validates_clean(board, fw, targets):
     assert m.duty_cycle <= 0.9
     # no warnings for the typical targets either, apart from the cascade's standing notes
     # (cascade at 5 m needs a sample rate between TI's tested 5000/10000 ksps, which is a legitimate warning)
-    assert not [i for i in r.report.warnings if i.code != "sample_rate_untested"], \
+    # radar-36: the cascade generator's built-in rxGain 30 is below the AWR2243 datasheet minimum of 32 dB; it runs on the bench
+    # (docs/research/gui_hpf_rxgain_2026-10-15.md, "Applicability"), so it is a standing, honest warning, not a defect to fix here
+    assert not [i for i in r.report.warnings if i.code not in ("sample_rate_untested", "rx_gain")], \
         [i.message for i in r.report.warnings]
     assert m.mode == ("ddma" if board == "AWR2243_CASCADE" else "tdm")
     assert validate(parse_cfg(r.text), board).ok
