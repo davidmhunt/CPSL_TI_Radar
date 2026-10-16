@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
+import grp
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -62,6 +65,73 @@ class Tree:
 
 def _plain(p: Path) -> bool:
     return p.is_file() and not p.is_symlink()
+
+
+# --- ownership (radar-48): warn, never fix -----------------------------------------------------------------------
+
+MAX_OWNER_SCAN = 2000
+
+
+def _owner_uid(st) -> int:
+    """The uid a stat result belongs to (one seam so tests can fake a foreign owner)."""
+    return st.st_uid
+
+
+def _name_of(uid: int, gid: int | None = None) -> str:
+    try:
+        u = pwd.getpwuid(uid).pw_name
+    except KeyError:
+        u = str(uid)
+    if gid is None:
+        return u
+    try:
+        g = grp.getgrgid(gid).gr_name
+    except KeyError:
+        g = str(gid)
+    return f"{u}:{g}"
+
+
+def repo_owner(t: Tree) -> tuple[int, int]:
+    """(uid, gid) of the repository root holding the config dir (the nearest ancestor with a .git), else of the config dir."""
+    base = t.config.resolve()
+    root = next((d for d in (base, *base.parents) if (d / ".git").exists()), base)
+    st = root.stat()
+    return st.st_uid, st.st_gid
+
+
+def owner_warning(t: Tree, paths) -> dict | None:
+    """None when every existing path is owned by the repo owner; else {repo_owner, entries:[{path, owner}], count, command}.
+    The command is a suggestion (`sudo chown user:group <paths>`): nothing here ever runs it. Symlinks are judged by their own
+    owner (lstat). Existing backup/trash trees are scanned too."""
+    try:
+        ruid, rgid = repo_owner(t)
+    except OSError:
+        return None
+    extra: list[Path] = []
+    for d in (t.user / BACKUPS, t.user / TRASH):
+        if d.is_dir() and not d.is_symlink():
+            for n, f in enumerate(d.rglob("*")):
+                if n >= MAX_OWNER_SCAN:
+                    break
+                extra.append(f)
+    bad, seen = [], set()
+    for p in [*paths, *extra]:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            st = os.lstat(p)
+        except OSError:
+            continue
+        if _owner_uid(st) != ruid:
+            bad.append({"path": key, "owner": _name_of(_owner_uid(st), st.st_gid)})
+    if not bad:
+        return None
+    owner = _name_of(ruid, rgid)
+    shown = [b["path"] for b in bad[:20]]
+    return {"repo_owner": owner, "count": len(bad), "entries": bad[:50],
+            "command": f"sudo chown {owner} " + " ".join(shlex.quote(x) for x in shown) + (" ..." if len(bad) > 20 else "")}
 
 
 def utc_stamp() -> str:
@@ -395,6 +465,7 @@ class PromoteReq(BaseModel):
     name: str | None = None
     note: str | None = Field(None, max_length=300)
     confirm_overwrite: bool = False
+    folder: str | None = None   # a user .cfg only: the existing config/radar/<chip>/<firmware> folder to file it in
 
 
 class DeleteReq(BaseModel):
@@ -403,6 +474,16 @@ class DeleteReq(BaseModel):
     confirm_shipped: bool = False
     with_cfg: bool = False
     force_referenced: bool = False
+
+
+def radar_folders(t: Tree) -> list[str]:
+    """Existing config/radar/<chip>/<firmware> folders (plain directories), as 'chip/firmware': where a .cfg can be filed."""
+    out = []
+    if t.radar.is_dir():
+        for p in sorted(t.radar.glob("*/*")):
+            if p.is_dir() and not p.is_symlink() and not p.parent.is_symlink() and NAME_RE.match(p.name) and NAME_RE.match(p.parent.name):
+                out.append(f"{p.parent.name}/{p.name}")
+    return out
 
 
 def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> APIRouter:
@@ -427,8 +508,15 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
             it["in_use"] = Path(it["path"]).resolve() in live
             if it["kind"] == "radar_cfg":
                 it["template_of"] = tpl.get(it["id"], [])
+        ow = owner_warning(t, [Path(it["path"]) for it in items] + [d for d in (t.user, t.user / BACKUPS, t.user / TRASH) if d.exists()])
+        if ow:
+            bad = {e["path"]: e["owner"] for e in ow["entries"]}
+            for it in items:
+                if it["path"] in bad:
+                    it["foreign_owner"] = bad[it["path"]]
         return {"configs": items, "user_dir": str(t.user), "config_dir": str(t.config),
-                "shipped_writes": shipped_write_state(t), "git": git_status(t)}
+                "shipped_writes": shipped_write_state(t), "git": git_status(t), "owner_warning": ow,
+                "radar_folders": radar_folders(t)}
 
     @r.get("/file")
     def file(id: str = Query(...)):
@@ -441,10 +529,35 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
 
     # -- promote ------------------------------------------------------------------------------------------------
 
+    def plan_promote_cfg(req: PromoteReq, src: Path) -> dict:
+        """A standalone chirp .cfg: filed in an EXISTING config/radar/<chip>/<firmware>/ folder the caller names (it is not
+        guessed: a .cfg carries no board/firmware). No JSON and no README row are written."""
+        folders = radar_folders(t)
+        if not req.folder or req.folder not in folders:
+            raise HTTPException(422, {"message": "choose the config/radar folder (chip/firmware) to file this .cfg in",
+                                      "folders": folders})
+        name = (req.name or src.stem)
+        if not NAME_RE.match(name) or name.endswith("."):
+            raise HTTPException(422, "name: letters, digits, '_', '-', '.', must start with a letter or digit")
+        if name.endswith(".cfg"):
+            name = name[:-4]
+        gui, fw_id = req.folder.split("/")
+        dst = t.radar / gui / fw_id / f"{name}.cfg"
+        if dst.is_symlink() or (dst.exists() and not dst.is_file()):
+            raise HTTPException(409, f"{dst.name} exists and is not a plain file")
+        tgt = f"shipped:radar/{gui}/{fw_id}/{name}.cfg"
+        if tgt in template_cfgs(t):
+            raise HTTPException(409, f"{dst.name} is the template of firmware {', '.join(template_cfgs(t)[tgt])}: the Configure tab needs it, pick another name")
+        refs = sorted({i["id"] for i in scan(t) if i["kind"] == "system_json" and i.get("cfg") == tgt})
+        return {"kind": "cfg", "src": src, "cfg_src": src, "gui": gui, "fw": fw_id, "name": name, "sys_name": None, "doc": None,
+                "cfg_dst": dst, "json_dst": None, "exists": [tgt] if dst.is_file() else [], "referenced_by": refs, "board": None}
+
     def plan_promote(req: PromoteReq) -> dict:
         group, kind, src = resolve_id(t, req.id)
+        if group == "user" and kind == "radar_cfg":
+            return plan_promote_cfg(req, src)
         if group != "user" or kind != "system_json":
-            raise HTTPException(422, "promote takes a saved setup: a JSON in config/user/ (id user:<name>.json)")
+            raise HTTPException(422, "promote takes a saved setup (a JSON in config/user/) or a saved chirp config (a .cfg in config/user/)")
         doc = _load(src)
         if doc is None:
             raise HTTPException(422, f"{src.name} is not a JSON object")
@@ -501,13 +614,19 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
 
     def check_live(p: dict):
         live = live_paths(mgr)
-        busy = [x.name for x in (p["src"], p["cfg_src"], p["json_dst"], p["cfg_dst"]) if x.resolve() in live]
+        busy = [x.name for x in (p["src"], p["cfg_src"], p["json_dst"], p["cfg_dst"]) if x is not None and x.resolve() in live]
         if busy:
             raise HTTPException(409, f"in use by a running driver session ({', '.join(busy)}): stop it first")
 
     def promote_preview(p: dict) -> dict:
+        if p.get("kind") == "cfg":
+            return {"kind": "cfg", "would_write": [f"shipped:radar/{p['gui']}/{p['fw']}/{p['name']}.cfg"], "would_replace": p["exists"],
+                    "referenced_by": p["referenced_by"], "json": None, "readme_row": None, "folders": radar_folders(t),
+                    "owner_warning": owner_warning(t, [p["src"], p["cfg_dst"], p["cfg_dst"].parent, t.user, t.user / BACKUPS])}
         return {"would_write": [f"shipped:radar/{p['gui']}/{p['fw']}/{p['name']}.cfg", f"shipped:system/{p['sys_name']}"],
                 "would_replace": p["exists"], "referenced_by": p["referenced_by"], "json": p["doc"],
+                "owner_warning": owner_warning(t, [p["src"], p["cfg_src"], p["json_dst"], p["cfg_dst"], p["json_dst"].parent,
+                                                   p["cfg_dst"].parent, t.readme, t.user, t.user / BACKUPS]),
                 "readme_row": index_row(p["sys_name"], p["board"], p["fw"], outputs_of(p["doc"]),
                                         f"{p['gui']}/{p['fw']}/{p['name']}.cfg", "<note>")}
 
@@ -528,7 +647,7 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
         if p["exists"]:
             bdir = t.user / BACKUPS / f"{stamp}_{p['name']}"
             for dst in (p["cfg_dst"], p["json_dst"]):
-                if dst.is_file():
+                if dst is not None and dst.is_file():
                     rel = dst.relative_to(t.config)
                     b = bdir / rel
                     b.parent.mkdir(parents=True, exist_ok=True)
@@ -543,10 +662,15 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
             os.replace(tmp, p["cfg_dst"])
         finally:
             tmp.unlink(missing_ok=True)
+        if p.get("kind") == "cfg":
+            f = {"id": f"shipped:radar/{p['gui']}/{p['fw']}/{p['name']}.cfg", "path": str(p["cfg_dst"]),
+                 "action": "overwritten" if p["exists"] else "created"}
+            return {"ok": True, "result": f["action"], "files": [f], "backups": backups, "readme_updated": False, "driver": None,
+                    "git": git_status(t), "notes": [], "commit_hint": "git add " + hint_path(p["cfg_dst"])}
         write_like(p["json_dst"], sysjson.dumps(p["doc"]), p["json_dst"].stat().st_mode & 0o777 if p["json_dst"].is_file() else default_mode())
         notes = []
         purpose = (req.note or "").strip() or f"promoted from config/user ({datetime.now().strftime('%Y-%m-%d')})"
-        purpose = purpose.replace("|", "/").replace("\n", " ")
+        purpose = re.sub(r"[\r\n]+", " ", purpose.replace("|", "/"))
         readme_updated = False
         if t.readme.is_file():
             text = t.readme.read_text()
@@ -620,13 +744,15 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
         targets = pl["targets"]
         ws = shipped_write_state(t)
         preview = {"would_remove": [{"id": i, "group": g, "kind": k,
-                                     "action": "trash" if g == "user" else "unlink",
+                                     "action": "trash" if g == "user" or tracked(t, p) is not True else "unlink",
                                      "referenced_by": pl["referenced"].get(i, []),
                                      "tracked": tracked(t, p) if g == "shipped" else None,
                                      "restore": (restore_hint(p) if g == "shipped" else
                                                  f"mv {t.user / TRASH}/<UTC>/{p.name} {p}")}
                                     for i, (g, k, p) in targets.items()],
                    "refused": pl["refused"], "shipped_writes": ws,
+                   "owner_warning": owner_warning(t, [*(p for _, _, p in targets.values()), *(p.parent for _, _, p in targets.values()),
+                                                      t.user / TRASH, t.readme]),
                    "needs_confirm_shipped": bool(pl["shipped"]),
                    "needs_force_referenced": bool(pl["referenced"])}
         if dry:
@@ -660,15 +786,16 @@ def make_router(mgr=None, user_dir=None, config_dir=None, driver_bin=None) -> AP
                     res.update(ok=True, action="trashed", to=str(dst))
                 else:
                     tr = tracked(t, p)
-                    if tr is False:   # never committed: git cannot bring it back, so keep a copy in the trash
+                    if tr is not True:   # never committed, or git cannot tell: git may not bring it back, so keep a copy in the trash
                         d = t.user / TRASH / stamp
                         d.mkdir(parents=True, exist_ok=True)
                         dst, n = d / p.name, 1
                         while dst.exists():
                             dst, n = d / f"{p.name}.{n}", n + 1
                         shutil.move(str(p), str(dst))
-                        res.update(ok=True, action="trashed", to=str(dst), tracked=False,
-                                   restore=f"untracked in git: moved to {dst}; move it back by hand")
+                        res.update(ok=True, action="trashed", to=str(dst), tracked=tr,
+                                   restore=(f"untracked in git: moved to {dst}; move it back by hand" if tr is False else
+                                            f"git status unavailable here: moved to {dst}; move it back by hand"))
                     else:
                         p.unlink()
                         res.update(ok=True, action="removed", tracked=tr, restore=restore_hint(p, tr))

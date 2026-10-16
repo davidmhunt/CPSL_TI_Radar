@@ -336,7 +336,7 @@ label.chk.dis { opacity: .55; }
 #cgLists h3 { margin: 12px 0 4px; font-size: 13px; }
 #cgFilter { min-width: 18ch; }
 #cgLists .lgscroll { max-height: 34vh; overflow: auto; }
-#cgUser tr.cur td, #cgShipped tr.cur td { background: rgba(88,166,255,.10); }
+#cgUserJson tr.cur td, #cgShipJson tr.cur td, #cgUserCfg tr.cur td, #cgShipCfg tr.cur td { background: rgba(88,166,255,.10); }
 #cgStatus .cgwarn, #cgAction .cgwarn { color: var(--warn); margin: 4px 0; }
 #cgStatus .cgok { color: var(--ok); margin: 4px 0; }
 #cgAction .cgbad { color: var(--bad); margin: 4px 0; }
@@ -351,5 +351,11 @@ label.chk.dis { opacity: .55; }
 #cgPromote { margin-bottom: 8px; display: grid; gap: 6px; }
 #cgText { max-height: none; flex: 1; min-height: 200px; }
 .cgchips { white-space: normal; }
-#cgUser td.cgname, #cgShipped td.cgname { overflow-wrap: anywhere; }
+#cgUserJson td.cgname, #cgShipJson td.cgname, #cgUserCfg td.cgname, #cgShipCfg td.cgname { overflow-wrap: anywhere; }
 #cgAction label.inl { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 13px; }
+
+#cgLists h3.cgsec { margin-top: 18px; font-size: 15px; border-bottom: 1px solid var(--border, #30363d); padding-bottom: 2px; }
+#cgLists tr.cggrp td { font-weight: 600; font-size: 12px; color: var(--muted, #8b949e); padding-top: 8px; }
+.cgowner { border: 1px solid var(--warn); border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+.cgowner code { display: block; font-size: 12px; overflow-wrap: anywhere; user-select: all; margin: 4px 0; }
+.cgowner .cgwarn { color: var(--warn); }

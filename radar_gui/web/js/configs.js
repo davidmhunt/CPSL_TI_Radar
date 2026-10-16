@@ -14,6 +14,19 @@ const byId = id => C.items.find(i => i.id === id);
 const label = id => { const i = byId(id); return i ? `${i.group === 'user' ? 'saved' : 'shipped'} ${i.rel.replace(/^(system|radar)\//, '')}` : id; };
 const writesOff = () => C.data && C.data.shipped_writes && !C.data.shipped_writes.enabled;
 
+// owner warning (radar-48): a file or folder owned by someone other than the repo owner. Shows the suggested command; never runs it.
+function ownerBox(w) {
+  if (!w) return null;
+  const box = el('div', 'cgowner');
+  box.append(el('div', 'cgwarn', `${w.count} file${w.count > 1 ? 's' : ''} here ${w.count > 1 ? 'are' : 'is'} not owned by ${w.repo_owner} (the repository owner), for example left by an older root-run GUI. Writes to ${w.count > 1 ? 'them' : 'it'} may fail. Fix it yourself in a terminal; this page does not run it:`));
+  const code = el('code', '', w.command); box.append(code);
+  const b = el('button', 'btn', 'Copy command');
+  b.onclick = async () => { try { await navigator.clipboard.writeText(w.command); b.textContent = 'Copied'; } catch (e) { const r = document.createRange(); r.selectNodeContents(code); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = 'Selected: press Ctrl+C'; } };
+  box.append(b);
+  if (w.entries && w.entries.length) box.append(el('pre', 'cgdirty', w.entries.map(e => `${e.owner}  ${e.path}`).join('\n')));
+  return box;
+}
+
 function msg(text, cls) { const m = $('cgMsg'); m.hidden = !text; m.textContent = text || ''; m.className = 'runmsg ' + (cls || 'bad'); }
 // error text of a response: a string detail, or an object {message, exists, referenced_by, refused}
 function errText(res) {
@@ -52,6 +65,7 @@ function status() {
       : `No uncommitted changes in the shipped configs${g.branch ? ` (${g.branch})` : ''}.`));
     if (n) { const pre = el('pre', 'cgdirty', g.dirty.join('\n')); box.append(pre); }
   } else box.append(el('div', 'muted', 'git status unavailable' + (g.note ? `: ${g.note}` : '') + '. Changes to shipped files are not shown here.'));
+  const ob = ownerBox(C.data.owner_warning); if (ob) box.append(ob);
   box.append(el('div', w.enabled ? 'cgok' : 'cgwarn', w.enabled
     ? 'Shipped configs are writable from this GUI (promote and delete need an explicit confirm). The GUI never commits.'
     : `Shipped configs are read-only from this GUI: ${w.reason}`));
@@ -69,6 +83,7 @@ function chips(i) {
   } else if ((i.referenced_by || []).length) add(`used by ${i.referenced_by.length}`, 'ok', i.referenced_by.map(label).join('\n'));
   else add('unreferenced', 'warn');
   if (i.template_of && i.template_of.length) add('firmware template', 'warn', 'Used by firmware ' + i.template_of.join(', '));
+  if (i.foreign_owner) add('owner: ' + i.foreign_owner, 'warn', 'Not owned by the repository owner: see the warning at the top');
   if (i.in_use) add('in use', 'bad', 'A running driver session uses this file');
   return d;
 }
@@ -78,7 +93,12 @@ function section(tbl, items, group) {
   const f = C.filter.toLowerCase();
   const rows = items.filter(i => !f || (i.rel + ' ' + (i.firmware || '') + ' ' + (i.gui_board || '')).toLowerCase().includes(f));
   if (!rows.length) { const tr = el('tr'); const td = el('td', 'muted', items.length ? 'Nothing matches the filter.' : 'Nothing here.'); td.colSpan = 3; tr.append(td); tbl.append(tr); }
+  let last = null;
   for (const i of rows) {
+    if (group === 'shipped' && i.kind === 'radar_cfg') {   // grouped by chip/firmware folder
+      const g = `${i.board || '?'}/${i.firmware || '?'}`;
+      if (g !== last) { last = g; const gr = el('tr', 'cggrp'); const gt = el('td', '', g); gt.colSpan = 3; gr.append(gt); tbl.append(gr); }
+    }
     const tr = el('tr'); if (C.cur === i.id) tr.className = 'cur';
     const cb = el('input'); cb.type = 'checkbox'; cb.checked = C.sel.has(i.id); cb.disabled = !!i.in_use || (group === 'shipped' && writesOff());
     cb.title = i.in_use ? 'In use by a running session' : (cb.disabled ? 'Shipped configs are read-only here' : 'Select ' + i.rel); cb.setAttribute('aria-label', 'Select ' + i.rel);
@@ -92,9 +112,12 @@ function section(tbl, items, group) {
   }
 }
 function render() {
-  section($('cgUser'), C.items.filter(i => i.group === 'user'), 'user');
-  section($('cgShipped'), C.items.filter(i => i.group === 'shipped'), 'shipped');
-  $('cgCounts').textContent = `${C.items.filter(i => i.group === 'user').length} saved, ${C.items.filter(i => i.group === 'shipped').length} shipped`;
+  const sel = (g, k) => C.items.filter(i => i.group === g && i.kind === k);
+  section($('cgUserJson'), sel('user', 'system_json'), 'user');
+  section($('cgShipJson'), sel('shipped', 'system_json'), 'shipped');
+  section($('cgUserCfg'), sel('user', 'radar_cfg'), 'user');
+  section($('cgShipCfg'), sel('shipped', 'radar_cfg'), 'shipped');
+  $('cgCounts').textContent = `${sel('user', 'system_json').length + sel('shipped', 'system_json').length} setups (.json), ${sel('user', 'radar_cfg').length + sel('shipped', 'radar_cfg').length} chirp configs (.cfg)`;
   buttons();
 }
 function buttons() {
@@ -106,9 +129,17 @@ async function view(id) {
   const i = byId(id); $('cgTitle').textContent = id;
   const res = await api('/api/configs/file?id=' + encodeURIComponent(id));
   $('cgText').textContent = res.ok ? res.j.text + (res.j.truncated ? '\n[truncated]' : '') : errText(res);
-  const canPromote = i && i.group === 'user' && i.kind === 'system_json';
+  const isCfg = !!i && i.group === 'user' && i.kind === 'radar_cfg';
+  const canPromote = !!i && i.group === 'user' && (i.kind === 'system_json' || isCfg);
   $('cgPromote').hidden = !canPromote;
-  if (canPromote) {
+  $('cgFolderPick').hidden = !isCfg; $('cgNoteLab').hidden = isCfg; $('cgCfgHelp').hidden = !isCfg; $('cgJsonHelp').hidden = isCfg;
+  if (isCfg) {
+    const fs = $('cgFolderSel'); fs.textContent = '';
+    const ph = el('option', '', '(choose chip/firmware)'); ph.value = ''; fs.append(ph);
+    for (const f of (C.data.radar_folders || [])) { const o = el('option', '', f); o.value = f; fs.append(o); }
+    $('cgName').value = i.name.replace(/\.cfg$/, '');
+    $('cgPreview').disabled = writesOff(); $('cgPreview').title = writesOff() ? 'Shipped configs are read-only here' : '';
+  } else if (canPromote) {
     const nm = i.name.replace(/\.json$/, '');
     $('cgName').value = nm; $('cgNote').value = '';
     $('cgFolder').textContent = `config/radar/${i.gui_board || '?'}/${i.firmware || '(no firmware)'}/`;
@@ -133,14 +164,18 @@ function panel(title, lines, confirmText, onConfirm, extra) {
 
 async function previewPromote() {
   const id = C.cur; if (!id) return;
-  const body = { id, name: $('cgName').value.trim() || undefined, note: $('cgNote').value.trim() || undefined };
+  const isCfg = (byId(id) || {}).kind === 'radar_cfg';
+  const body = { id, name: $('cgName').value.trim() || undefined, note: isCfg ? undefined : ($('cgNote').value.trim() || undefined) };
+  if (isCfg) { body.folder = $('cgFolderSel').value || undefined; if (!body.folder) { closePlan(); msg('Choose the chip/firmware folder to file this .cfg in.'); return; } }
   const res = await api('/api/configs/promote?dry=1', body);
   if (!res.ok) { closePlan(); msg(errText(res)); return; }
   msg(''); const j = res.j, lines = [];
-  lines.push({ text: 'This writes two tracked files:' });
+  lines.push({ text: j.would_write.length > 1 ? 'This writes two tracked files:' : 'This writes one tracked file:' });
   for (const w of j.would_write) lines.push({ cls: 'cgfile', text: w.replace(/^shipped:/, 'config/') });
-  lines.push({ text: 'The cfg is copied byte for byte; the JSON is the saved one with radar_cfg ../radar/... and no data port when the serial stream is off. This index row is added to config/README.md:' });
-  lines.push({ cls: 'cgfile', text: j.readme_row.replace('<note>', body.note || 'promoted from config/user (date)') });
+  if (j.readme_row) {
+    lines.push({ text: 'The cfg is copied byte for byte; the JSON is the saved one with radar_cfg ../radar/... and no data port when the serial stream is off. This index row is added to config/README.md:' });
+    lines.push({ cls: 'cgfile', text: j.readme_row.replace('<note>', body.note || 'promoted from config/user (date)') });
+  } else lines.push({ text: 'The cfg is copied byte for byte. No JSON and no README row are written.' });
   let confirmText = 'Promote to shipped';
   if (j.would_replace.length) {
     lines.push({ cls: 'cgwarn', text: `This replaces existing shipped file${j.would_replace.length > 1 ? 's' : ''}: ${j.would_replace.map(x => x.replace(/^shipped:/, 'config/')).join(', ')}. The previous bytes are kept under config/user/.promote_backups/.` });
@@ -148,6 +183,7 @@ async function previewPromote() {
   }
   if (j.referenced_by.length) lines.push({ cls: 'cgwarn', text: `Other shipped JSONs use the cfg being written and will change behaviour: ${j.referenced_by.map(x => x.replace(/^shipped:/, 'config/')).join(', ')}` });
   lines.push({ cls: 'muted', text: 'Nothing is committed. Afterwards commit the new files in CPSL_TI_Radar, then bump the pins in Sensors and console.' });
+  const ob = ownerBox(j.owner_warning);
   panel('Promote ' + id, lines, confirmText, async () => {
     const r = await api('/api/configs/promote', { ...body, confirm_overwrite: j.would_replace.length > 0 });
     closePlan();
@@ -155,7 +191,7 @@ async function previewPromote() {
     msg(`${r.j.result === 'created' ? 'Created' : 'Replaced'} ${r.j.files.map(f => f.id.replace(/^shipped:/, 'config/')).join(' and ')}.`
       + (r.j.readme_updated ? ' README index updated.' : '') + (r.j.notes.length ? ' ' + r.j.notes.join(' ') : '') + ` To record it: ${r.j.commit_hint}`, 'ok');
     await load(true);
-  });
+  }, ob);
 }
 
 async function previewDelete() {
@@ -167,16 +203,18 @@ async function previewDelete() {
     msg(''); const j = res.j, lines = [];
     const shipped = j.would_remove.filter(x => x.group === 'shipped'), user = j.would_remove.filter(x => x.group === 'user');
     for (const x of j.would_remove) {
-      lines.push({ cls: 'cgfile', text: `${x.group === 'user' ? 'moved to config/user/.trash/' : 'deleted'}: ${label(x.id)}` });
+      lines.push({ cls: 'cgfile', text: `${x.action === 'trash' ? 'moved to config/user/.trash/' : 'deleted'}: ${label(x.id)}` });
       if (x.referenced_by.length) lines.push({ cls: 'cgwarn', text: `   referenced by: ${x.referenced_by.map(y => (y.includes(':') ? label(y) : y)).join(', ')}` });
     }
+    const trk = shipped.filter(x => x.tracked === true), untrk = shipped.filter(x => x.tracked !== true);
+    if (trk.length) lines.push({ cls: 'cgwarn', text: `${trk.length > 1 ? 'These files are' : 'This file is'} tracked in git. Deleting shows up as a change in CPSL_TI_Radar; it only reaches other machines after you commit and push it. Undo: ` + trk.map(x => x.restore).join('; ') });
+    if (untrk.length) lines.push({ cls: 'cgwarn', text: `${untrk.length > 1 ? 'These files are' : 'This file is'} not tracked in git (or git cannot tell): a copy is kept in config/user/.trash/<UTC>/. ` + untrk.map(x => x.restore).join('; ') });
     if (shipped.length) {
-      lines.push({ cls: 'cgwarn', text: 'This file is tracked in git. Deleting shows up as a change in CPSL_TI_Radar; it only reaches other machines after you commit and push it. Undo: ' + shipped.map(x => x.restore).join('; ') });
       lines.push({ cls: 'cgwarn', text: 'Console radar setups may reference a shipped JSON by name: a deleted file breaks such an entry.' });
     }
     if (user.length) lines.push({ cls: 'muted', text: 'Saved files are moved, not erased: config/user/.trash/<UTC>/ (move them back by hand to restore).' });
     for (const x of j.refused) lines.push({ cls: 'cgbad', text: `Cannot delete ${label(x.id)}: ${x.why}` });
-    const extra = el('div', 'cgopts');
+    const extra = el('div', 'cgopts'); const ob = ownerBox(j.owner_warning); if (ob) extra.append(ob);
     const mk = (key, text) => {
       const lab = el('label', 'inl'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = opts[key];
       cb.onchange = async () => { opts[key] = cb.checked; if (key === 'with_cfg') await run(); else okBtn.disabled = j.refused.length > 0 || (j.needs_force_referenced && !opts.force_referenced); };

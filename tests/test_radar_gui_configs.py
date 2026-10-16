@@ -324,7 +324,7 @@ def test_delete_shipped_needs_both_confirms_and_restores_tree(env):
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["readme_updated"] and {x["id"] for x in j["results"]} == {js[0], cfgid}
-    assert all(x["action"] == "removed" and "git status unavailable" in x["restore"] for x in j["results"])   # temp tree: no repo
+    assert all(x["action"] == "trashed" and "git status unavailable" in x["restore"] for x in j["results"])   # temp tree: no repo -> trash copy (radar-48 nit 2)
     after = digest(cfg)
     gone = {k for k in after if k.startswith(".")}
     assert not gone
@@ -488,3 +488,134 @@ def test_restore_hint_only_for_tracked_files(env):
     assert res[old]["action"] == "removed" and res[old]["restore"].startswith("git restore -- ")
     assert res[new]["action"] == "trashed" and Path(res[new]["to"]).is_file() and "git restore" not in res[new]["restore"]
     assert not (cfg / "system" / "IWR1843_iwr1843_sar_lvds_scratch.json").exists()
+
+
+# --- radar-48: owner warning, radar-40 nits, standalone .cfg promote -----------------------------------------------
+
+_REAL_UID = ca._owner_uid
+
+
+def fake_owner(monkeypatch, foreign: set):
+    """Pretend files whose name is in `foreign` belong to uid 0 (we cannot create a root-owned file without sudo)."""
+    real = _REAL_UID
+    monkeypatch.setattr(ca, "_owner_uid", lambda st: 0 if st.st_ino in foreign else real(st))
+
+
+def test_owner_warning_none_when_all_owned(env):
+    c, cfg, user, mgr, t = env
+    j = c.get("/api/configs").json()
+    assert j["owner_warning"] is None and not any("foreign_owner" in i for i in j["configs"])
+    assert c.post("/api/configs/delete?dry=1", json={"ids": ["user:scratch.json"]}).json()["owner_warning"] is None
+
+
+def test_owner_warning_listing_names_path_owner_and_chown_without_running_it(env, monkeypatch):
+    c, cfg, user, mgr, t = env
+    ino = (user / "scratch.cfg").stat().st_ino
+    fake_owner(monkeypatch, {ino})
+    ran = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: ran.append(a) or subprocess.CompletedProcess(a, 1, "", ""))
+    j = c.get("/api/configs").json()
+    w = j["owner_warning"]
+    assert w["count"] == 1 and w["entries"][0]["path"] == str(user / "scratch.cfg") and w["entries"][0]["owner"].startswith("root")
+    me = ca._name_of(os.getuid(), os.getgid())
+    assert w["repo_owner"] == me
+    assert w["command"].startswith(f"sudo chown {me} ") and str(user / "scratch.cfg") in w["command"]
+    assert not any(a and "chown" in str(a[0]) for a in ran)       # only git calls, never chown
+    by = {i["id"]: i for i in j["configs"]}
+    assert by["user:scratch.cfg"]["foreign_owner"].startswith("root") and "foreign_owner" not in by["user:scratch.json"]
+    assert (user / "scratch.cfg").stat().st_uid == os.getuid()    # nothing changed
+
+
+def test_owner_warning_in_trash_copies_and_plans(env, monkeypatch):
+    c, cfg, user, mgr, t = env
+    assert post(c, "/api/configs/delete", ids=["user:scratch.json"], confirm=True).status_code == 200
+    trashed = next((user / ".trash").rglob("scratch.json"))
+    fake_owner(monkeypatch, {trashed.stat().st_ino})
+    assert c.get("/api/configs").json()["owner_warning"]["entries"][0]["path"] == str(trashed)
+    # delete and promote plans carry it as well (a foreign owned shipped target)
+    tgt = cfg / "radar" / "IWR1843" / "iwr1843_sar_lvds" / "SAR_2ms_fmt2.cfg"
+    fake_owner(monkeypatch, {tgt.stat().st_ino})
+    d = c.post("/api/configs/delete?dry=1", json={"ids": ["shipped:radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt2.cfg"]}).json()
+    assert d["owner_warning"]["count"] == 1 and d["owner_warning"]["entries"][0]["path"] == str(tgt)
+    (user / "scratch.json").write_text((trashed).read_text())
+    p = c.post("/api/configs/promote?dry=1", json={"id": "user:scratch.cfg", "folder": "IWR1843/iwr1843_sar_lvds", "name": "SAR_2ms_fmt2"}).json()
+    assert p["owner_warning"]["entries"][0]["path"] == str(tgt)
+
+
+def test_note_sanitiser_strips_carriage_returns(env):
+    c, cfg, user, mgr, t = env
+    r = post(c, "/api/configs/promote", id="user:scratch.json", name="crnote", note="a\rb\r\nc|d")
+    assert r.status_code == 200
+    row = next(ln for ln in (cfg / "README.md").read_text().splitlines(keepends=True) if "crnote" in ln)
+    assert "\r" not in row and "a b c/d" in row and row.count("\n") == 1
+
+
+def test_shipped_delete_when_git_cannot_tell_keeps_a_trash_copy(env):
+    c, cfg, user, mgr, t = env
+    sid = f"shipped:system/{GATE}.json"
+    d = c.post("/api/configs/delete?dry=1", json={"ids": [sid]}).json()
+    assert d["would_remove"][0]["tracked"] is None and d["would_remove"][0]["action"] == "trash"
+    r = post(c, "/api/configs/delete", ids=[sid], confirm=True, confirm_shipped=True, force_referenced=True).json()
+    res = r["results"][0]
+    assert res["action"] == "trashed" and res["tracked"] is None and Path(res["to"]).is_file()
+    assert not (cfg / "system" / f"{GATE}.json").exists()
+
+
+def test_web_delete_text_names_git_only_for_tracked_files():
+    js = (Path(__file__).resolve().parents[1] / "radar_gui" / "web" / "js" / "configs.js").read_text()
+    assert "x.tracked === true" in js and "not tracked in git" in js and "ownerBox" in js and "sudo" not in js.replace("w.command", "")
+
+
+def test_listing_has_shipped_cfgs_and_folders(env):
+    c, cfg, user, mgr, t = env
+    j = c.get("/api/configs").json()
+    cfgs = [i for i in j["configs"] if i["group"] == "shipped" and i["kind"] == "radar_cfg"]
+    assert len(cfgs) == len(list((cfg / "radar").glob("*/*/*.cfg"))) > 50
+    assert "IWR1843/iwr1843_sar_lvds" in j["radar_folders"]
+
+
+def test_promote_user_cfg_needs_a_folder_and_writes_only_the_cfg(env):
+    c, cfg, user, mgr, t = env
+    before = digest(cfg / "system"), (cfg / "README.md").read_bytes()
+    r = c.post("/api/configs/promote?dry=1", json={"id": "user:scratch.cfg"})
+    assert r.status_code == 422 and "IWR1843/iwr1843_sar_lvds" in r.json()["detail"]["folders"]
+    for bad in ("../x/y", "IWR1843/nope", "IWR1843", "IWR1843/iwr1843_sar_lvds/../.."):
+        assert c.post("/api/configs/promote?dry=1", json={"id": "user:scratch.cfg", "folder": bad}).status_code == 422
+    body = {"id": "user:scratch.cfg", "folder": "IWR1843/iwr1843_sar_lvds", "name": "my_new_chirp"}
+    d = c.post("/api/configs/promote?dry=1", json=body).json()
+    assert d["would_write"] == ["shipped:radar/IWR1843/iwr1843_sar_lvds/my_new_chirp.cfg"] and d["would_replace"] == [] and d["readme_row"] is None
+    dst = cfg / "radar" / "IWR1843" / "iwr1843_sar_lvds" / "my_new_chirp.cfg"
+    assert not dst.exists()
+    r = post(c, "/api/configs/promote", **body).json()
+    assert r["result"] == "created" and r["readme_updated"] is False and dst.read_bytes() == (user / "scratch.cfg").read_bytes()
+    assert (digest(cfg / "system"), (cfg / "README.md").read_bytes()) == before
+    ids = {i["id"] for i in c.get("/api/configs").json()["configs"]}
+    assert "shipped:radar/IWR1843/iwr1843_sar_lvds/my_new_chirp.cfg" in ids
+
+
+def test_promote_user_cfg_overwrite_confirm_backup_and_template_refusal(env):
+    c, cfg, user, mgr, t = env
+    name = "SAR_2ms_fmt2"
+    body = {"id": "user:scratch.cfg", "folder": "IWR1843/iwr1843_sar_lvds", "name": name}
+    dst = cfg / "radar" / "IWR1843" / "iwr1843_sar_lvds" / f"{name}.cfg"
+    old = dst.read_bytes()
+    d = c.post("/api/configs/promote?dry=1", json=body).json()
+    assert d["would_replace"] and d["referenced_by"] == [f"shipped:system/{GATE}.json"]
+    assert c.post("/api/configs/promote", json=body).status_code == 409 and dst.read_bytes() == old
+    r = post(c, "/api/configs/promote", confirm_overwrite=True, **body).json()
+    assert r["result"] == "overwritten" and dst.read_bytes() == (user / "scratch.cfg").read_bytes()
+    assert Path(r["backups"][0]).read_bytes() == old and ".promote_backups" in r["backups"][0]
+    tpl = next(i for i in c.get("/api/configs").json()["configs"] if i.get("template_of"))
+    gui, fw, fn = tpl["rel"].split("/")[1:]
+    assert c.post("/api/configs/promote?dry=1", json={**body, "folder": f"{gui}/{fw}", "name": fn[:-4]}).status_code == 409
+
+
+def test_promote_user_cfg_gates(env, monkeypatch):
+    c, cfg, user, mgr, t = env
+    body = {"id": "user:scratch.cfg", "folder": "IWR1843/iwr1843_sar_lvds", "name": "gated"}
+    monkeypatch.setenv("RADAR_GUI_SHIPPED_WRITES", "0")
+    assert c.post("/api/configs/promote", json=body).status_code == 409
+    assert c.post("/api/configs/promote?dry=1", json=body).status_code == 200
+    monkeypatch.delenv("RADAR_GUI_SHIPPED_WRITES")
+    mgr.state, mgr.config = "running", str(user / "scratch.json")
+    assert c.post("/api/configs/promote", json=body).status_code == 409        # live session uses the source cfg

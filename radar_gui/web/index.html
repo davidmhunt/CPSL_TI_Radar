@@ -437,10 +437,16 @@
         <span class="muted" id="cgCounts"></span>
       </div>
       <div id="cgMsg" class="runmsg" hidden></div>
+      <h3 class="cgsec">Setups (.json) <span class="muted sub">what the driver is started with</span></h3>
       <h3>Saved <span class="muted sub">config/user/ (yours, not in git)</span></h3>
-      <div class="lgscroll"><table class="ftbl" id="cgUser"></table></div>
-      <h3>Shipped <span class="muted sub">config/system/ and config/radar/ (tracked in git)</span></h3>
-      <div class="lgscroll"><table class="ftbl" id="cgShipped"></table></div>
+      <div class="lgscroll"><table class="ftbl" id="cgUserJson"></table></div>
+      <h3>Shipped <span class="muted sub">config/system/ (tracked in git)</span></h3>
+      <div class="lgscroll"><table class="ftbl" id="cgShipJson"></table></div>
+      <h3 class="cgsec">Chirp configs (.cfg) <span class="muted sub">the radar's own chirp/frame settings</span></h3>
+      <h3>Saved <span class="muted sub">config/user/ (yours, not in git)</span></h3>
+      <div class="lgscroll"><table class="ftbl" id="cgUserCfg"></table></div>
+      <h3>Shipped <span class="muted sub">config/radar/&lt;chip&gt;/&lt;firmware&gt;/ (tracked in git)</span></h3>
+      <div class="lgscroll"><table class="ftbl" id="cgShipCfg"></table></div>
     </div>
   </section>
   <section class="card grow" id="cgView">
@@ -448,10 +454,12 @@
     <div id="cgPromote" hidden>
       <div class="btnrow">
         <label class="inl">Shipped name <input type="text" id="cgName" size="24" spellcheck="false"></label>
-        <label class="inl">Purpose note <input type="text" id="cgNote" size="30" maxlength="300" placeholder="shown in config/README.md"></label>
+        <label class="inl" id="cgFolderPick" hidden>File in <select id="cgFolderSel" aria-label="config/radar folder"></select></label>
+        <label class="inl" id="cgNoteLab">Purpose note <input type="text" id="cgNote" size="30" maxlength="300" placeholder="shown in config/README.md"></label>
         <button class="btn" id="cgPreview">Promote to shipped…</button>
       </div>
-      <div class="muted">Goes to <code id="cgFolder"></code>; the JSON is filed as <code>&lt;BOARD&gt;_&lt;firmware&gt;_&lt;name&gt;.json</code> in config/system/.</div>
+      <div class="muted" id="cgCfgHelp" hidden>A .cfg does not say which radar it is for: pick the existing config/radar/&lt;chip&gt;/&lt;firmware&gt;/ folder to file it in. Only the .cfg is written (no JSON, no README row).</div>
+      <div class="muted" id="cgJsonHelp">Goes to <code id="cgFolder"></code>; the JSON is filed as <code>&lt;BOARD&gt;_&lt;firmware&gt;_&lt;name&gt;.json</code> in config/system/.</div>
     </div>
     <div id="cgAction" class="cgaction" hidden></div>
     <pre class="runpre logpane" id="cgText">Choose a file and press its name.</pre>
