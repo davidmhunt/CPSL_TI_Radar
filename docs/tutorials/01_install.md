@@ -26,13 +26,12 @@ ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 
 You should see `Build type: Release` from the configure step and `100% tests passed` from `ctest` (28 tests, a short run). `ctest` reads the repo's `tests/fixtures/`, so run it from the full checkout.
 
-**Why not `--recurse-submodules`?** The repo has four submodules and only `include/json` (the JSON library) is needed to build. The other three:
+**Why not `--recurse-submodules`?** The repo has three submodules and only `include/json` (the JSON library) is needed to build. The other two:
 
 | Submodule | Fetch it only if |
 |---|---|
 | `shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode` | you flash the IWR1443 raw-ADC image ([tutorial 3](03_flash_a_radar.md)) |
 | `firmware_dev` | you build firmware from source (`git submodule update --init --checkout firmware_dev`) |
-| `.friday` | never; it is the maintainers' tooling |
 
 ## Check the Python side and the demo GUI
 
