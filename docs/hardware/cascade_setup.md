@@ -22,17 +22,10 @@ points in the C++ driver. Go through the steps in order and tick each box as you
 
 **1. The J6 jumper sets the board's mode.**
 
-```
-   J6 jumper                    What the board does
-   ─────────                    ───────────────────
-   [ ]                          
-   [■]  ← jumper on BOTTOM two  FLASH mode: ready to receive new firmware
-   [■]
-   
-   [■]  ← jumper on TOP two     RUN mode: runs the radar demo
-   [■]
-   [ ]
-```
+| J6 jumper | Pins (top to bottom) | What the board does |
+|---|---|---|
+| On the BOTTOM two pins | `[ ]`<br>`[■]`<br>`[■]` | FLASH mode: ready to receive new firmware |
+| On the TOP two pins | `[■]`<br>`[■]`<br>`[ ]` | RUN mode: runs the radar demo |
 
 Turn the 12 V off before moving the jumper, then turn it back on. The board only reads the jumper when it powers up.
 

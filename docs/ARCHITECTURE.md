@@ -206,21 +206,21 @@ Release (the default build type) for comparable numbers.
 
 ## Component graph
 
-```
-main.cpp (CLI)
-  └── Radar                     (public API; src/Radar)
-        ├── RadarConfig          (src/utilities)
-        │     ├── SystemConfigReader   (JSON system config v2; loads the board)
-        │     │     └── BoardDescriptor    (board descriptor, cfg cross-checks, cfg command filter)
-        │     └── RadarConfigReader    (TI .cfg with the board's cfg dialect, bytes_per_frame)
-        ├── CLIController        (sends the filtered .cfg commands over a ByteStream)
-        ├── DCA1000Handler       (assembles, converts, publishes and saves frames)
-        │     ├── PacketSource       (UdpPacketSource: DCA1000Socket + DCA1000Commands; or ReplayPacketSource)
-        │     ├── FrameAssembler     (sequence check, frame assembly, drop stats)
-        │     └── ADCCubeConverter   (ADC conversion per lvds.layout / lvds.iq_order)
-        └── SerialStreamer        (serial TLV frames → PointCloud, over a ByteStream)
-              └── TLVProcessing      (parse_uart_frame in UartFrame.cpp: one frame per TLV dialect; TLV codes)
-  Log, Status                   (every library; Log has no dependencies)
+```mermaid
+flowchart TD
+  main["main.cpp (CLI)"] --> Radar["Radar<br/>(public API; src/Radar)"]
+  Radar --> RC["RadarConfig<br/>(src/utilities)"]
+  RC --> SCR["SystemConfigReader<br/>(JSON system config v2; loads the board)"]
+  SCR --> BD["BoardDescriptor<br/>(board descriptor, cfg cross-checks, cfg command filter)"]
+  RC --> RCR["RadarConfigReader<br/>(TI .cfg with the board's cfg dialect, bytes_per_frame)"]
+  Radar --> CLI["CLIController<br/>(sends the filtered .cfg commands over a ByteStream)"]
+  Radar --> DCA["DCA1000Handler<br/>(assembles, converts, publishes and saves frames)"]
+  DCA --> PS["PacketSource<br/>(UdpPacketSource: DCA1000Socket + DCA1000Commands; or ReplayPacketSource)"]
+  DCA --> FA["FrameAssembler<br/>(sequence check, frame assembly, drop stats)"]
+  DCA --> ACC["ADCCubeConverter<br/>(ADC conversion per lvds.layout / lvds.iq_order)"]
+  Radar --> SS["SerialStreamer<br/>(serial TLV frames to PointCloud, over a ByteStream)"]
+  SS --> TLV["TLVProcessing<br/>(parse_uart_frame in UartFrame.cpp: one frame per TLV dialect; TLV codes)"]
+  LS["Log, Status<br/>(every library; Log has no dependencies)"]
 ```
 
 `Radar::start()` spawns a DCA worker thread (`runtime.worker_cpu` /

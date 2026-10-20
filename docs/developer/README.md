@@ -16,18 +16,23 @@ Also: the GUI's HTTP and WebSocket API is in [`radar_gui/README.md`](../../radar
 
 ## How data moves
 
-```
- DCA1000 --UDP--> RX thread --ring--> DCA worker --> FrameAssembler --> ADCCubeConverter
-                  (DCA1000Socket)     (Radar)         (zero-fills gaps)  (board's lvds layout)
-                                                                              |
-                          adc_data.bin <--- one write per frame ---+          v
-                                                              frame queue (depth N, drop-oldest)
-                                                                              |
- radar --UART--> serial reader --> parse_uart_frame --> newest PointCloud     |
-                  (SerialStreamer)  (UartFrame.cpp)           |               |
-                                                              v               v
-                                                  Radar::next_point_cloud / next_adc_frame  --> your code
- your code --> Radar::configure/start/stop --> CLIController --CLI UART--> radar (cfg commands)
+```mermaid
+flowchart LR
+  DCA["DCA1000"] -->|UDP| RX["RX thread<br/>(DCA1000Socket)"]
+  RX -->|ring| W["DCA worker<br/>(Radar)"]
+  W --> FA["FrameAssembler<br/>(zero-fills gaps)"]
+  FA --> ACC["ADCCubeConverter<br/>(board's lvds layout)"]
+  ACC -->|"one write per frame"| BIN["adc_data.bin"]
+  ACC --> FQ["frame queue<br/>(depth N, drop-oldest)"]
+  RAD["radar"] -->|UART| SR["serial reader<br/>(SerialStreamer)"]
+  SR --> PUF["parse_uart_frame<br/>(UartFrame.cpp)"]
+  PUF --> PC["newest PointCloud"]
+  FQ --> API["Radar::next_point_cloud / next_adc_frame"]
+  PC --> API
+  API --> YC["your code"]
+  YC2["your code"] --> CFG["Radar::configure/start/stop"]
+  CFG --> CLI["CLIController"]
+  CLI -->|"CLI UART"| RAD2["radar (cfg commands)"]
 ```
 
 ## The C++ driver (`CPSL_TI_Radar_cpp/src/`)

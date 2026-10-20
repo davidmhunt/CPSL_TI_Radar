@@ -20,26 +20,31 @@ Symbols: `Tc` full chirp period = idle + ramp (us); `cpl` chirps per loop (frame
 ## 2. Timing diagrams (one column per chirp, `#` = TX on)
 
 **TDM, 3 TX, pattern 1,4,2 (TX1, TX3, TX2), `cpl = 3`, `L = 2`.**
-```
-chirp  : 0  1  2 | 3  4  5          n_TX = 3  (TX1, TX3 azimuth; TX2 elevation)
-TX1    : #  .  . | #  .  .          interval per TX = 3*Tc
-TX2    : .  .  # | .  .  #
-TX3    : .  #  . | .  #  .
-```
+
+| chirp | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| TX1 | # | . | . | # | . | . |
+| TX2 | . | . | # | . | . | # |
+| TX3 | . | # | . | . | # | . |
+
+Loop boundary after chirp 2. n_TX = 3 (TX1, TX3 azimuth; TX2 elevation); interval per TX = 3*Tc.
 
 **TDM, 2 TX BPM (opt-in), mask 5 on both chirps, `cpl = 2`.** `bpmCfg` flips the sign of one TX on alternate chirps. Combining each chirp pair separates TX1 from TX3, so `n_TX = 2`, interval `2*Tc`.
-```
-chirp  : 0  1 | 2  3
-TX1    : #  # | #  #
-TX3    : #  # | #  #     (sign pattern, e.g. +,+ then +,-: unverified)
-```
+
+| chirp | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| TX1 | # | # | # | # |
+| TX3 | # | # | # | # |
+
+Loop boundary after chirp 1. Sign pattern, e.g. +,+ then +,-: unverified.
 
 **DDMA, 6 TX, `cpl = 8`.** All six TX fire on every chirp; TX of rank `r` gets phase `phi = k*r/n_bands` turns on chirp `k` (M2 s3), so the Doppler spectrum splits into `n_bands = 8` sub-bands, one per TX, 2 left empty.
-```
-Doppler: -vmax                                    +vmax    (vmax = lambda/(4 Tc))
-         | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 |        each band = 1/8 of the span
-         | T  | T  | T  | T  | T  | T  | -  | -  |        T = one TX's band; - = empty (positions unverified)
-```
+
+| Band | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 |
+|---|---|---|---|---|---|---|---|---|
+| Content | T | T | T | T | T | T | - | - |
+
+Doppler axis from -vmax (b0) to +vmax (b7), vmax = lambda/(4 Tc); each band = 1/8 of the span. T = one TX's band; - = empty (positions unverified).
 
 ## 3. Worked numbers (`lambda = 3.9 mm`, `Tc = 50 us`)
 

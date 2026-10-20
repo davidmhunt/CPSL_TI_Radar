@@ -4,13 +4,26 @@ Hand-check sheet for every number `radar_gui/cfg/metrics.py` derives from a `.cf
 
 ## Chirp timeline
 
-```
- chirp Tc = idle + ramp (ramp_us)            frame = n_chirps * Tc active, then dead time
- |<-- idle -->|<------------ ramp ------------>|<-- idle -->|<-- ramp --> ...
-              |<adcStart>|<-- ADC window N/fs -->|margin|
- freq ^        ________/  slope (MHz/us); B = slope * N/fs (sampled band)
- |<------------------- frame period (frameCfg) ------------------->|
- |<-- n_chirps * Tc (active_ms) -->|<--------- dead time --------->|   duty = active / period
+```mermaid
+flowchart LR
+  subgraph FP["frame period (frameCfg)"]
+    direction LR
+    subgraph ACT["n_chirps * Tc (active_ms)"]
+      direction LR
+      subgraph CH1["chirp Tc = idle + ramp (ramp_us)"]
+        direction LR
+        I1["idle"] --> R1["ramp<br/>slope (MHz/us)"]
+      end
+      CH1 --> NXT["idle, ramp ... (next chirps)"]
+    end
+    ACT --> DEAD["dead time"]
+  end
+  subgraph ADCW["inside the ramp"]
+    direction LR
+    AS["adcStart"] --> WIN["ADC window N/fs<br/>B = slope * N/fs (sampled band)"] --> MG["margin"]
+  end
+  R1 -.-> AS
+  DEAD -.- DUTY["duty = active / period<br/>frame = n_chirps * Tc active, then dead time"]
 ```
 
 ## Formulas
