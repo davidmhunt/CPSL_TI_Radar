@@ -46,7 +46,7 @@ Properties the tests rely on:
 
 ## Tests
 
-`tests/test_migrate_config.py` converts the v1 files in `tests/fixtures/v1_configs/` and compares each with the tracked v2 file it became (the deliberate edits made afterwards are listed in the test); it also covers in-place and directory runs, idempotence, `--check`, key mapping, override dropping, board inference, unmapped keys, `--add-firmware`, and the moved-cfg rewrite. `uv run pytest -q tests/test_migrate_config.py tests/test_config_tree.py`.
+`tests/test_migrate_config.py` converts the v1 files in `tests/fixtures/v1_configs/` and compares each with the tracked v2 file it became (the deliberate edits made afterwards are listed in the test); it also covers every property above. `uv run pytest -q tests/test_migrate_config.py tests/test_config_tree.py`.
 
 ## Reaching old files
 

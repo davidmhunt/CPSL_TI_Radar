@@ -32,8 +32,6 @@ cmake --build CPSL_TI_Radar_cpp/build -j --target test_board_descriptor
 ctest --test-dir CPSL_TI_Radar_cpp/build -R test_board_descriptor --output-on-failure
 ```
 
-It must report `100% tests passed`.
-
 ## Add a TLV type to a serial dialect
 
 The demo sends each frame as a header followed by `{type, length, payload}` TLVs. `parse_uart_frame` in `src/SerialStreamer/UartFrame.cpp` is a pure function (bytes in, `UartFrame` out, no I/O), so a new TLV is one change there plus one test with a synthetic frame. Example: decode the cascade demo's stats TLV (type 6, six `uint32`, layout in the optional `firmware_dev/` submodule, `firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/include/mmw_output.h`), keeping the first field.
@@ -68,7 +66,7 @@ TEST_CASE(cascade_stats_tlv_is_decoded) {
 cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-All tests must pass. For a real new dialect, add a `TlvDialect` value, its header size (`uart_header_bytes`) and a golden frame written out byte by byte, as `sdk3_golden_frame_from_literal_bytes` does.
+For a real new dialect, add a `TlvDialect` value, its header size (`uart_header_bytes`) and a golden frame written out byte by byte, as `sdk3_golden_frame_from_literal_bytes` does.
 
 ## Undo the exercise
 

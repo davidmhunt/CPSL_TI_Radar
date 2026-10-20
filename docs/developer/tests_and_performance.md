@@ -59,7 +59,7 @@ cmake --build CPSL_TI_Radar_cpp/build -j --target test_one_frame
 ctest --test-dir CPSL_TI_Radar_cpp/build -R test_one_frame --output-on-failure
 ```
 
-Expect `100% tests passed`. Record a bug you are not fixing with `KNOWN_BUG(...)`. For a crash or memory bug, run the suite under ASan/UBSan:
+Record a bug you are not fixing with `KNOWN_BUG(...)`. For a crash or memory bug, run the suite under ASan/UBSan:
 
 ```bash
 cd CPSL_TI_Radar_cpp && cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan; cd ..

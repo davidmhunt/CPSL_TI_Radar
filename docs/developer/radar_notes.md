@@ -1,6 +1,6 @@
 # Notes on TI's sources
 
-What the TI documents and SDK sources say about the things this repo's code depends on: serial frame formats, board limits, chirp rules, CFAR commands, analog settings. Each section gives the decision or finding, the numbers code and tests rely on, and where in TI's material it came from. Code comments, `config/firmware/*.json` `source` strings and tests cite sections by anchor (for example `radar_notes.md#single-chip-limits`, "row 15").
+What the TI documents and SDK sources say about the things this repo's code depends on: serial frame formats, board limits, chirp rules, CFAR commands, analog settings. Code comments, `config/firmware/*.json` `source` strings and tests cite sections by anchor (for example `radar_notes.md#single-chip-limits`, "row 15").
 
 How to read it: a fact was read from TI source or a TI document unless it is marked HYPOTHESIS (inferred, not tested). Confidence is `high`, `medium` or `low` as stated. "Bench" means a real board; no section below was bench-tested unless it says so. Paths such as `rl_sensor.h:742` are inside TI's package (mmWave SDK 3.6.02.00-LTS unless stated; `casc:` is `firmware_dev/projects/awr2243_cascade_ddm/src/ti/`). The tables the code reads directly are in the appendix. Re-check a number against the TI source before you change a limit that rests on it.
 
