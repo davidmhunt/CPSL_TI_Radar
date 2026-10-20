@@ -47,7 +47,7 @@ TEST_CASE(one_frame_through_fake_transports) {
 TEST_MAIN()
 ```
 
-Register it by adding one line to `CPSL_TI_Radar_cpp/tests/CMakeLists.txt`, next to the other `add_driver_test` lines (`LIBS` names the libraries it links), then re-run the configure step (CMake does not scan for new files). Add this line with an editor:
+Register it by adding one line to `CPSL_TI_Radar_cpp/tests/CMakeLists.txt`, next to the other `add_driver_test` lines (`LIBS` lists the CMake libraries the test links), then re-run the configure step (CMake does not scan for new files):
 
 ```cmake
 add_driver_test(test_one_frame           LIBS Radar)
@@ -59,13 +59,13 @@ cmake --build CPSL_TI_Radar_cpp/build -j --target test_one_frame
 ctest --test-dir CPSL_TI_Radar_cpp/build -R test_one_frame --output-on-failure
 ```
 
-Record a bug you are not fixing with `KNOWN_BUG(...)`. For a crash or memory bug, run the suite under ASan/UBSan:
+Pin a bug you are not fixing with `KNOWN_BUG(correct_behaviour, "what")`: it passes while `correct_behaviour` is false and fails once the bug is fixed, as a reminder to update the test. For a crash or memory bug, run the suite under ASan/UBSan:
 
 ```bash
 cd CPSL_TI_Radar_cpp && cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan; cd ..
 ```
 
-Remove the exercise when done: `rm CPSL_TI_Radar_cpp/tests/test_one_frame.cpp && git restore CPSL_TI_Radar_cpp/tests/CMakeLists.txt`.
+Remove the exercise when done: `rm CPSL_TI_Radar_cpp/tests/test_one_frame.cpp && git restore CPSL_TI_Radar_cpp/tests/CMakeLists.txt` (the path-scoped restore leaves your other edits alone).
 
 ## Measure performance
 
@@ -78,13 +78,17 @@ CPSL_TI_Radar_cpp/build/bench/bench_pipeline --udp --frames 100 --stall-ms 200  
 
 The second line runs the real receive path over loopback and should report 0 discards and 0 kernel drops.
 
-**Before/after a change.** Moving code can change a short kernel's speed by tens of percent on its own. The gate compares two builds of each tree, the default and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`), three interleaved runs each, and fails only if a row is more than 5% slower in **both** builds, allocations per frame rise, or a run is not golden. In each tree (before your change, then after), build both and save the binaries under the names shown, then run:
+**Before/after a change.** Moving code can change a short kernel's speed by tens of percent on its own. The gate compares two builds of each tree, the default and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`), three interleaved runs each, and fails only if a row is more than 5% slower in **both** builds, allocations per frame rise, or a run is not golden (it completes fewer frames than the replay expects). Do the first block twice, once before your change (`v=before`) and once after it (`v=after`); the second block then compares:
 
 ```bash
-cd CPSL_TI_Radar_cpp && cmake --preset bench-aligned && cmake --build --preset bench-aligned -j --target bench_pipeline; cd ..
-cp CPSL_TI_Radar_cpp/build/bench/bench_pipeline /tmp/bp_before_default      # after building the "before" tree
-cp CPSL_TI_Radar_cpp/build-bench-aligned/bench/bench_pipeline /tmp/bp_before_aligned
-# apply your change, rebuild both, copy to /tmp/bp_after_default and /tmp/bp_after_aligned
+v=before      # set v=after on the second pass
+cmake --build CPSL_TI_Radar_cpp/build -j --target bench_pipeline
+(cd CPSL_TI_Radar_cpp && cmake --preset bench-aligned && cmake --build --preset bench-aligned -j --target bench_pipeline)
+cp CPSL_TI_Radar_cpp/build/bench/bench_pipeline /tmp/bp_${v}_default
+cp CPSL_TI_Radar_cpp/build-bench-aligned/bench/bench_pipeline /tmp/bp_${v}_aligned
+```
+
+```bash
 mkdir -p /tmp/perf
 for i in 1 2 3; do for v in before after; do for b in default aligned; do
     /tmp/bp_${v}_${b} --frames 400 > /tmp/perf/p_${v}_${b}_${i}.txt
@@ -94,7 +98,7 @@ uv run tools/bench/pipeline_gate.py /tmp/perf/p_*.txt
 
 Exit 0 passes; a regression in one build only is printed as layout noise.
 
-**On a board** (needs the board and a DCA1000): follow [`bench_validation.md`](bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`.
+**On a board** (needs the board and a DCA1000): follow [`bench_validation.md`](bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines (the driver's `--stats` output, see `../ARCHITECTURE.md`) and compares them with the reference numbers in `docs/RESULTS.md`.
 
 ## The Python tests
 

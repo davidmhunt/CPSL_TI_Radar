@@ -1,6 +1,6 @@
 # Add a board, add a TLV type
 
-Two small changes, each with a test; the last section undoes both. Run from the repository root, with the build from [tutorial 1](../tutorials/01_install.md).
+Two small changes, each with a test; the last section undoes both. Run from the repository root, with the Release build in `CPSL_TI_Radar_cpp/build` from [tutorial 1](../tutorials/01_install.md) (plain `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build`; no flags).
 
 ## Add or tune a board (no rebuild of the driver)
 
@@ -34,10 +34,10 @@ ctest --test-dir CPSL_TI_Radar_cpp/build -R test_board_descriptor --output-on-fa
 
 ## Add a TLV type to a serial dialect
 
-The demo sends each frame as a header followed by `{type, length, payload}` TLVs. `parse_uart_frame` in `src/SerialStreamer/UartFrame.cpp` is a pure function (bytes in, `UartFrame` out, no I/O), so a new TLV is one change there plus one test with a synthetic frame. Example: decode the cascade demo's stats TLV (type 6, six `uint32`, layout in the optional `firmware_dev/` submodule, `firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/include/mmw_output.h`), keeping the first field.
+The demo sends each frame as a header followed by `{type, length, payload}` TLVs. `parse_uart_frame` in `src/SerialStreamer/UartFrame.cpp` is a pure function (bytes in, `UartFrame` out, no I/O), so a new TLV is one change there plus one test with a synthetic frame. Example: decode the cascade demo's stats TLV (type 6, six `uint32`, layout in the optional `firmware_dev/` submodule, `firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/include/mmw_output.h`), keeping the first field. Names used below: `has_side_info` is the `UartFrame` flag set when a TLV 7 was decoded; `compact_points_skipped` flags that a TLV 12 (cascade compact points) was seen and not decoded; `kTlvSideInfo` and `kTlvCascadeCompactPoints` are the type constants at the top of `UartFrame.cpp`; `data` is the frame start and `off` the offset of the TLV being read, so its payload starts at `off + 8` (after `type` and `length`) and `uart_le32(data, off + 8)` reads the payload's first `uint32`.
 
 1. `src/SerialStreamer/UartFrame.hpp`, in `struct UartFrame`, add `bool has_stats = false;` and `uint32_t inter_frame_processing_us = 0;` right after `has_side_info` (above the comment on `compact_points_skipped`, which stays attached to that field).
-2. `src/SerialStreamer/UartFrame.cpp`: add `constexpr uint32_t kTlvStats = 6;` beside `kTlvSideInfo`; add `out.has_stats = false;` beside `out.compact_points_skipped = false;` at the top of `parse_uart_frame`; and in the TLV loop add this branch just before the `kTlvCascadeCompactPoints` one. The snippet's first line closes the previous branch and its last line leaves the block open; the existing `} else if (type == kTlvCascadeCompactPoints ...` below it closes it:
+2. `src/SerialStreamer/UartFrame.cpp`: add `constexpr uint32_t kTlvStats = 6;` beside `kTlvSideInfo`; add `out.has_stats = false;` beside `out.compact_points_skipped = false;` at the top of `parse_uart_frame`; and in the TLV loop insert these lines directly above the line `} else if (type == kTlvCascadeCompactPoints ...`: your first line closes the previous branch, and that existing line's `}` closes yours:
 
 ```cpp
         } else if (type == kTlvStats && dialect == TlvDialect::mcuplus_cascade) {
@@ -48,7 +48,7 @@ The demo sends each frame as a header followed by `{type, length, payload}` TLVs
 
 The loop has already checked that the TLV fits in the frame; validate only the length you expect, and never read past it.
 
-3. `tests/test_uart_parse.cpp`, above `TEST_MAIN()`: the helpers `make_frame`, `points_tlv` and `put_u32` are in `tests/uart_test_frames.hpp`.
+3. `tests/test_uart_parse.cpp`, above `TEST_MAIN()`: the helpers are in `tests/uart_test_frames.hpp`: `Tlv{type, payload}`, `put_u32(bytes, v)` (append little-endian), `points_tlv(n, base)` (a TLV 1 with `n` points) and `make_frame(frame_number, tlvs)`. `TLVCodes::STATS` already exists (`= 6`, in `src/SerialStreamer/TLVProcessing.hpp`); it is the test-side name for the same type as `kTlvStats`, which is local to `UartFrame.cpp`.
 
 ```cpp
 TEST_CASE(cascade_stats_tlv_is_decoded) {
@@ -66,11 +66,12 @@ TEST_CASE(cascade_stats_tlv_is_decoded) {
 cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-For a real new dialect, add a `TlvDialect` value, its header size (`uart_header_bytes`) and a golden frame written out byte by byte, as `sdk3_golden_frame_from_literal_bytes` does.
+For a real new dialect (`enum class TlvDialect` in `src/BoardDescriptor/BoardDescriptor.hpp`: `sdk3`, `sdk2`, `mcuplus_cascade`), add a value there, its header size in `uart_header_bytes` and its name in the descriptor parser, then a golden frame written out byte by byte, as `sdk3_golden_frame_from_literal_bytes` does.
 
 ## Undo the exercise
 
 ```bash
 rm CPSL_TI_Radar_cpp/config/boards/TOY1843.json CPSL_TI_Radar_cpp/config/system/toy_1843.json
-git restore CPSL_TI_Radar_cpp/tests CPSL_TI_Radar_cpp/src
+git restore CPSL_TI_Radar_cpp/tests/test_board_descriptor.cpp CPSL_TI_Radar_cpp/tests/test_uart_parse.cpp \
+    CPSL_TI_Radar_cpp/src/SerialStreamer/UartFrame.hpp CPSL_TI_Radar_cpp/src/SerialStreamer/UartFrame.cpp
 ```

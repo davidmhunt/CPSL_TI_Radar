@@ -1,11 +1,12 @@
 # Consume frames in your own program
 
-Write a program that links the driver and reads ADC frames as they complete. Without a radar it still builds and fails cleanly. Prerequisite: [tutorial 1](../tutorials/01_install.md).
+Write a program that links the driver and reads ADC frames as they complete. Without a radar it still builds and fails cleanly. Prerequisite: the Release build from [tutorial 1](../tutorials/01_install.md) (`CPSL_TI_Radar_cpp/build`; no extra flags).
 
 ## Install the driver and build a consumer
 
 ```bash
 cmake --install CPSL_TI_Radar_cpp/build --prefix ~/cpsl_install
+REPO=$PWD                                   # your CPSL_TI_Radar checkout, used below
 mkdir -p ~/radar_consumer && cd ~/radar_consumer
 ```
 
@@ -62,10 +63,10 @@ int main(int argc, char** argv) {
 ```bash
 cmake -S . -B build -DCMAKE_PREFIX_PATH=~/cpsl_install && cmake --build build
 ./build/consumer /nonexistent.json        # prints "cannot open system config", exits 1
-./build/consumer ~/path/to/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json
+./build/consumer $REPO/CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json
 ```
 
-Use a DCA1000 config for the last line. For a serial config call `next_point_cloud(cloud, timeout, &why)` the same way; `cloud.points` is a `std::vector<Point>` (`x, y, z, v, snr_db, noise_db`).
+The last line needs the radar and a DCA1000 (that config enables `dca1000`). For a serial config call `next_point_cloud(cloud, timeout, &why)` the same way; `cloud.points` is a `std::vector<Point>` (`x, y, z, v, snr_db, noise_db`).
 
 ## The swap contract
 

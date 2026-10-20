@@ -26,7 +26,7 @@ A v1 or early v2 config points at a radar cfg by its old path. The migration too
 
 ## The migration tool
 
-`tools/migrate_config_v1_to_v2.py` converts v1 system configs (`verbose`, `TI_Radar_Config_Management`, `CLI_Controller`, `Streamer`) to schema v2. Why the driver names it: `SystemConfigReader.cpp:276-281` refuses a file with no `schema_version` and prints the exact command (`kMigrationScript` in `SystemConfigReader.hpp`), instead of reading both schemas. The key-by-key mapping and the behaviour changes are in [`../migration_v1_to_v2.md`](../migration_v1_to_v2.md); the v1 code is the `v1.0` tag.
+`tools/migrate_config_v1_to_v2.py` converts v1 system configs (`verbose`, `TI_Radar_Config_Management`, `CLI_Controller`, `Streamer`) to schema v2. Why the driver names it: `SystemConfigReader.cpp` refuses a file with no `schema_version` and prints the exact command (`kMigrationScript` in `SystemConfigReader.hpp`), instead of reading both schemas. The key-by-key mapping and the behaviour changes are in [`../migration_v1_to_v2.md`](../migration_v1_to_v2.md); the v1 code and files are the `v1.0` tag (`git show v1.0:<path>`).
 
 ```bash
 uv run tools/migrate_config_v1_to_v2.py my_config.json                      # print the v2 JSON, write nothing
@@ -47,7 +47,3 @@ Properties the tests rely on:
 ## Tests
 
 `tests/test_migrate_config.py` converts the v1 files in `tests/fixtures/v1_configs/` and compares each with the tracked v2 file it became (the deliberate edits made afterwards are listed in the test); it also covers every property above. `uv run pytest -q tests/test_migrate_config.py tests/test_config_tree.py`.
-
-## Reaching old files
-
-Removed v1 files stay in git: `git show v1.0:<path>` prints one (for example `git show v1.0:CPSL_TI_Radar_cpp/config/radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg`), and `moved_paths.json` gives the new name of every shipped cfg that moved.
