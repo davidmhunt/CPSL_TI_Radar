@@ -58,3 +58,11 @@ def test_sar_capture_bit_exact_against_adc_data():
     arr, _ = d.decode_sar(raw.read_bytes(), 1, 3980, 0)
     expect = np.fromfile(ref, dtype="<i2")
     assert np.array_equal(arr.reshape(-1)[:expect.size], expect)
+
+
+def test_decoder_equals_cube_golden_used_by_cpp_test():
+    """The golden the C++ ctest test_iq_cube_bitexact compares ADCCubeConverter against is this decoder's output."""
+    gold = ROOT / "CPSL_TI_Radar_cpp/tests/data/iq/iwr1843_R0.9m_frame99.cube_int16.bin"
+    arr = d.decode_demo_frame(_frame_bytes(), R, NS, NC)  # [chirp][rx][sample][re, im]
+    mine = np.ascontiguousarray(arr.transpose(1, 2, 0, 3)).astype("<i2").tobytes()  # [rx][sample][chirp][re, im]
+    assert mine == gold.read_bytes()

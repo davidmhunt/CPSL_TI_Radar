@@ -81,7 +81,7 @@ Six stages, one section each. Stages 1-3 run inside the chip, stage 4 in the DCA
  no header (dataFmt 1, enableHeader 0):  [ ADC payload ........................ ]
  HSI header on:   [ data-card hdr 16 B ][ SDK hdr ][ pad ][ ADC payload ][ pad ]
                     8 B ID + 8 B length   CBUFF session description            [H3][H4]
- SAR (dataFmt 2): [ ADC payload (4 x R x Ns) ][ 2 x 32 B chirp metadata ]      -> sar_lvds.md
+ SAR (dataFmt 2): [ ADC payload (4 x R x Ns) ][ 2 x 32 B chirp metadata ]      -> sar_lvds.md: H, record fields, lane undo [F7][F8][F9]
 ```
 
 - `lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>`: `enableHeader` 1 adds an HSI header to all active streams; `dataFmt` 0 off, 1 ADC, 4 CP_ADC_CQ; `enableSW` 1 adds a software session and needs `enableHeader` 1. [H1]
