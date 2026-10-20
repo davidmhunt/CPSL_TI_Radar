@@ -1,4 +1,4 @@
-# Replay fixtures (bench captures, gui-09 Step 3)
+# Replay fixtures (bench captures)
 
 Whole frames cut with `radar_gui.tlv.split_packets` from raw `dump` captures made through the GUI Live serial
 source on 2026-10-07 (originals in gitignored `runs/gui/dumps/`). Partial leading/trailing bytes dropped.

@@ -29,7 +29,7 @@ enum class Sdk { mmwave_sdk_2, mmwave_sdk_3, mmwave_mcuplus };
 enum class TlvDialect { sdk3, sdk2, mcuplus_cascade };
 enum class LvdsLayout { two_lane_iq_pairs, lane_per_rx };
 enum class IqOrder { i_first, q_first };
-// What one LVDS packet stream carries (core-24). adc: plain ADC samples, packets back to back, one driver frame =
+// What one LVDS packet stream carries. adc: plain ADC samples, packets back to back, one driver frame =
 // 4 * rx * samples * chirps bytes (lvdsStreamCfg dataFmt 1 on every firmware). adc_sar_meta: the iwr1843_sar_lvds
 // firmware's dataFmt 2, one packet per chirp = optional HSI header + ADC samples + two 32-byte metadata record slots
 // (firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md).

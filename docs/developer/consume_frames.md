@@ -70,6 +70,13 @@ The last line needs the radar and a DCA1000 (that config enables `dca1000`). For
 
 ## The swap contract
 
+```
+ driver pool:  [buf A] [buf B] [buf C] ...        your frame.data = [buf X]
+
+ next_adc_frame(frame):   queue's oldest buffer  <-- swapped -->  frame.data
+                          (A comes to you)                        (X goes back to the pool)
+```
+
 `next_adc_frame` does not copy. It **swaps** the oldest queued buffer into `frame.data` and the buffer you held goes back to the driver's pool. Consequences:
 
 - Reuse one `AdcFrame` and nothing is allocated per frame.

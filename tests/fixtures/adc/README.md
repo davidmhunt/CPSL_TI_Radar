@@ -1,4 +1,4 @@
-# ADC fixtures (gui-07)
+# ADC fixtures
 
 - `bench_1843_dca.cfg` / `.json`: copy of `CPSL_TI_Radar_cpp/config/user/bench_1843_dca` (serial stream off in the json). Used by the
   synthetic-cube tests and the fake driver. Shape 4 rx x 128 samples x 256 chirps (2 TX slots x 128 loops), 100 ms frames.

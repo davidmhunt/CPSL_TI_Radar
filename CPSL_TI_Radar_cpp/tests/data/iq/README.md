@@ -1,4 +1,4 @@
-# I/Q golden frame (core-17)
+# I/Q golden frame
 
 `iwr1843_R0.9m_frame99.bin` is one raw LVDS frame used by `tests/test_iq_golden.cpp`, which pins the
 IWR1843 `lvds.iq_order` (`q_first`) against real data.
@@ -33,5 +33,5 @@ Chirp-averaged range DFT magnitude on rx0 (positive half, DC excluded): the peak
 (10.4 +/- 2), and the mirror bin (128 - peak) is at least 15 dB below it. Measured on this frame
 (ctest): peak bin 9, 82.7 dB, mirror 31.2 dB below (Python on frames 0 / 50: peak 11 / 9, mirror 28.8 / 26.8 dB below).
 The reflector is not at exactly 10.4 (peak 9 or 11 across frames, user-estimated range, strong room
-clutter at bins 21-27), so the +/-2 tolerance is the directive's, not loosened. Frame 99 was chosen for the
+clutter at bins 21-27), so the +/-2 tolerance is the test's, not loosened. Frame 99 was chosen for the
 largest margin over the next peak. A second case flips `iq_order`: the peak leaves the window.
