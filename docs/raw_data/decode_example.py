@@ -62,6 +62,30 @@ def undo_lane_order(b):
     return w[:, [0, 2, 1, 3]].astype("<u2").tobytes()
 
 
+META_FIELDS = ("magic", "version", "flags", "frameIdx", "chirpInFrame", "numChirpsPerFrame",
+               "globalChirpIdx", "runIdx", "satSlices", "satRefLag", "tsTicks")
+META_FMT = "<IHHIHHIHBBQ"  # sar_lvds.md record table, 32 bytes, little-endian
+SAR_MAGIC = 0x4D524153
+
+
+def decode_sar_meta(slots):
+    """Slot bytes [chirp, 2, 32] -> dict of arrays, one record per chirp k (slot k mod 2).
+
+    Lane undo first (sar_lvds.md): swap the middle two 16-bit units of each 8-byte group.
+    'valid' = magic, version == 1 and globalChirpIdx == k (the doc's rule for packet k's own record).
+    """
+    n = slots.shape[0]
+    sel = slots[np.arange(n), np.arange(n) % 2]  # [n, 32]
+    w = np.ascontiguousarray(sel).view("<u2").reshape(n, 4, 4)[:, :, [0, 2, 1, 3]]
+    rec = np.ascontiguousarray(w.astype("<u2").reshape(n, 16)).view(np.dtype(
+        [("magic", "<u4"), ("version", "<u2"), ("flags", "<u2"), ("frameIdx", "<u4"),
+         ("chirpInFrame", "<u2"), ("numChirpsPerFrame", "<u2"), ("globalChirpIdx", "<u4"),
+         ("runIdx", "<u2"), ("satSlices", "u1"), ("satRefLag", "u1"), ("tsTicks", "<u8")]))[:, 0]
+    out = {f: rec[f] for f in META_FIELDS}
+    out["valid"] = (rec["magic"] == SAR_MAGIC) & (rec["version"] == 1) & (rec["globalChirpIdx"] == np.arange(n))
+    return out
+
+
 def decode_sar(raw, n_rx, n_samples, header=0):
     adc, slots = sar_packets(raw, n_rx, n_samples, header)
     n = adc.shape[0]
@@ -76,5 +100,7 @@ if __name__ == "__main__":
         arr = decode_demo_frame(data, r, ns, nc)
     else:
         r, ns = map(int, sys.argv[3:5])
-        arr, _ = decode_sar(data, r, ns, int(sys.argv[5]) if len(sys.argv) > 5 else 0)
+        arr, slots = decode_sar(data, r, ns, int(sys.argv[5]) if len(sys.argv) > 5 else 0)
+        meta = decode_sar_meta(slots)
+        print("records valid", int(meta["valid"].sum()), "of", len(meta["valid"]))
     print(arr.shape, arr.dtype, arr.min(), arr.max())

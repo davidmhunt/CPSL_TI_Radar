@@ -66,3 +66,19 @@ def test_decoder_equals_cube_golden_used_by_cpp_test():
     arr = d.decode_demo_frame(_frame_bytes(), R, NS, NC)  # [chirp][rx][sample][re, im]
     mine = np.ascontiguousarray(arr.transpose(1, 2, 0, 3)).astype("<i2").tobytes()  # [rx][sample][chirp][re, im]
     assert mine == gold.read_bytes()
+
+
+def test_sar_metadata_matches_chirp_meta_csv():
+    import csv
+    raw, ref = SAR_RUN / "LVDS_Raw_0.bin", SAR_RUN / "chirp_meta.csv"
+    if not (raw.exists() and ref.exists()):
+        pytest.skip("local SAR capture absent")
+    _, slots = d.decode_sar(raw.read_bytes(), 1, 3980, 0)
+    m = d.decode_sar_meta(slots)
+    rows = list(csv.DictReader(ref.open()))
+    cols = {"version": "version", "flags": "flags", "frameIdx": "frameIdx", "rec_chirpInFrame": "chirpInFrame",
+            "numChirpsPerFrame": "numChirpsPerFrame", "globalChirpIdx": "globalChirpIdx", "runIdx": "runIdx",
+            "satSlices": "satSlices", "satRefLag": "satRefLag", "tsTicks": "tsTicks"}
+    assert m["valid"][:len(rows)].all()
+    for csv_col, field in cols.items():
+        assert [int(r[csv_col]) for r in rows] == m[field][:len(rows)].tolist(), csv_col
