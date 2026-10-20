@@ -140,19 +140,19 @@ This is the same as Steps 2 and 3, but **leave off the word `prebuilt`**:
    sudo usermod -a -G dialout $USER
    ```
 2. **One-time setup** (✅ done 2026-10-01, by-id paths from Step 1 are filled in): open this file in VS Code:
-   `CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system/radar_0_AWR2243_cascade_serial.json`
+   `CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json`
    Then replace the two port names with your **full by-id paths** from Step 1. Those paths stay the same every
    time you plug in, unlike `ttyACM0`:
    ```json
-   "CLI_port": "/dev/serial/by-id/...CLI port path...",
+   "cli": {"port": "/dev/serial/by-id/...CLI port path..."},
    ...
-   "data_port": "/dev/serial/by-id/...data port path...",
+   "serial_stream": {"port": "/dev/serial/by-id/...data port path..."},
    ```
 3. **Power-cycle the board.** The jumper stays on the top pins.
 4. Run:
    ```bash
    cd ~/Documents/radar_dev/CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
-   ./CPSL_TI_Radar_CPP ../config/system/radar_0_AWR2243_cascade_serial.json
+   ./CPSL_TI_Radar_CPP ../config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json
    ```
 5. ✅ **Success:** about 20 lines per second like this:
    ```

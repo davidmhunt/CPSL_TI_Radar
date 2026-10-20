@@ -2,7 +2,7 @@
 
 ## Symptom
 
-The driver stops with `DCA1000 did not answer SYSTEM_CONNECT` (tutorial 5, `device_error`), although the card is powered, `ip neigh` / ARP resolves `192.168.33.180`, and the same card works on another machine.
+The driver stops with `DCA1000 did not answer SYSTEM_CONNECT` (tutorial 8, `device_error`), although the card is powered, `ip neigh` / ARP resolves `192.168.33.180`, and the same card works on another machine.
 
 ## Why
 

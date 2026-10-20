@@ -1,63 +1,56 @@
-# 1. Install: build the driver, run the tests, set up the host
+# 1. Install: build the driver, run the tests, try the demo GUI
 
-Get a working checkout, build `CPSL_TI_Radar_CPP`, and prepare the host. No radar is needed until tutorial 3. Run every command from the repository root (the folder with `pyproject.toml`).
+From a fresh Ubuntu to a working build, with no radar. You need `sudo` once. Run every command from the repository root (the folder with `pyproject.toml`).
 
-## Install
-
-You need Linux, `git`, `git-lfs`, `g++` 7 or newer, `cmake`, and [`uv`](https://docs.astral.sh/uv/).
+## Packages and `uv`
 
 ```bash
-git clone --recurse-submodules https://github.com/davidmhunt/CPSL_TI_Radar
+sudo apt update
+sudo apt install -y build-essential cmake git git-lfs curl
+curl -LsSf https://astral.sh/uv/install.sh | sh     # installs uv; open a new shell afterwards
+```
+
+`g++` 7 or newer and any CMake from 3.11 are enough. [`uv`](https://docs.astral.sh/uv/getting-started/installation/) runs all the Python here and fetches Python 3.12 itself if your system has an older one. `git-lfs` is for the doc screenshots and TI PDFs only; nothing builds or runs from them.
+
+## Clone and build
+
+```bash
+git lfs install
+git clone https://github.com/davidmhunt/CPSL_TI_Radar
 cd CPSL_TI_Radar
-git lfs install && git lfs pull          # the GUI screenshots in docs/images/ are LFS files
+git submodule update --init CPSL_TI_Radar_cpp/include/json
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build
 cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-- The configure step prints `Build type: Release` (the default); `ctest` (a short run) must end with `100% tests passed`. It reads the repo-root `tests/fixtures/`, so run it from a full checkout.
-- If the build cannot find the JSON library, run `git submodule update --init CPSL_TI_Radar_cpp/include/json`.
-- `firmware_dev/` is an opt-in submodule and is not fetched by the clone. You only need it to build firmware ([`docs/firmware.md`](../firmware.md)).
-- Check the Python side: `uv run pytest -m "not slow"` is the fast loop; `uv run pytest` runs everything (about a minute). Neither needs hardware.
+You should see `Build type: Release` from the configure step and `100% tests passed` from `ctest` (28 tests, a short run). `ctest` reads the repo's `tests/fixtures/`, so run it from the full checkout.
 
-Prefer a container? [`docs/docker.md`](../docker.md) builds the driver and GUI into one image: `docker compose -f docker/app/compose.yaml build demo`, then `up demo` serves a hardware-free demo on `http://127.0.0.1:8090/`. Its `hw` profile (real boards) is verified on an IWR1843 with the stock demo; `docker/app/setup_env.sh` writes its `.env`.
+**Why not `--recurse-submodules`?** The repo has four submodules and only `include/json` (the JSON library) is needed to build. The others are optional:
 
-## Board firmware
+| Submodule | Fetch it only if |
+|---|---|
+| `shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode` | you flash the IWR1443 raw-ADC image ([tutorial 3](03_flash_a_radar.md)) |
+| `firmware_dev` | you build firmware from source (`git submodule update --init --checkout firmware_dev`) |
+| `.friday` | never; it is the maintainers' tooling |
 
-The board must run the image that matches the `"firmware"` key of the config you use (tutorial 3), or the run fails or shows nothing.
-
-| Board | Image | Where |
-|---|---|---|
-| IWR1443 | `demo` (serial) or `dca1000_raw` (DCA1000) | prebuilt in [`shipped_firmware/`](../../shipped_firmware/README.md) |
-| IWR1843, IWR6843, IWR6843ODS | TI SDK 3.6 mmWave demo (`demo`); `iwr1843_sar_lvds` for SAR | built from `firmware_dev/` ([`docs/firmware.md`](../firmware.md)) |
-| AWR2243 cascade | `cascade_ddm` | [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) |
-
-Flash with TI UniFlash with the board in flashing mode, then return it to functional mode (switch diagrams: [`docs/images/boot_modes/`](../images/boot_modes/)). Steps: driver Readme, [Flash the correct firmware](../../CPSL_TI_Radar_cpp/Readme.md#2flash-the-correct-firmware-onto-the-device). Many boards already carry the demo, so you may skip this and see tutorial 5 if a run fails.
-
-## Prepare the host (DCA1000 and serial)
-
-Serial-only runs need just the first row. DCA1000 runs need all three.
-
-| Need | Why | Fix |
-|------|-----|-----|
-| the serial device's group (`dialout`, or `plugdev` on some hosts: `stat -L -c %G /dev/ttyACM0`) | read the radar's `/dev/ttyACM*` | `sudo usermod -a -G <group> $USER`, then log out and in |
-| DCA1000 NIC at `192.168.33.30/24` | the DCA1000 FPGA is `192.168.33.180` | static address on the wired NIC |
-| `net.core.rmem_max` >= `dca1000.rcvbuf_bytes` | the kernel caps the socket buffer at `rmem_max` | `sudo sysctl -w net.core.rmem_max=134217728` |
-
-The `Fix` column is the manual route. `host_setup.py` checks all three (plus the firewall below) and applies the same fixes for you, so use either, not both. First run it without `--nic`: it checks everything else and lists the wired interfaces. `<dca-nic>` is the one cabled to the DCA1000 (it is never auto-picked):
+## Check the Python side and the demo GUI
 
 ```bash
-uv run tools/setup/host_setup.py                                    # list candidate NICs, check the rest
-uv run tools/setup/host_setup.py --nic <dca-nic>                    # report: OK / MISSING / WARN
-uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # show the exact commands
-uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (it calls sudo itself)
+uv run pytest -m "not slow"        # the fast loop; `uv run pytest` runs all of it (about a minute)
+RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 8090 \
+    --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin
 ```
 
-`--apply` also sets the `192.168.33.30/24` address: it adds it to the NIC's NetworkManager profile (keeping the other addresses), and prints the manual `nmcli` command if the NIC is not NetworkManager-managed. Do not put `sudo` in front of the tool; it calls `sudo` itself, one confirmation per fix. Add `--udev` to also write stable `/dev/radar/<id>-cli` and `-data` port names for every XDS110 and CP2105 radar board. `<id>` is the board's USB serial, or its USB port path (for example `1-2.3`) when another connected board reports the same serial. `--json` lists each board's `id`.
+The first line of output is `radar_gui: source=replay  open http://127.0.0.1:8090/`. Open that address: the GUI replays a recorded IWR1843 capture with a stand-in driver, so it needs no board. Stop it with Ctrl-C. [Tutorial 4](04_first_run_gui.md) tours the tabs.
 
-It also checks the firewall: an active ufw drops the DCA1000's replies unless it has an allow rule for `192.168.33.180` on the NIC (`--apply` adds `sudo ufw allow in on <dca-nic> from 192.168.33.180 comment DCA1000`; `--fpga-ip` for another address). Without root the rules file is unreadable, so the check shows `WARN`, not `MISSING`. Procedure, other firewalls and undo: [`docs/hardware/dca1000_firewall.md`](../hardware/dca1000_firewall.md).
+Check a shipped config with the real driver, still without a radar (it opens no port):
 
-On a loaded host, pin the driver's two threads to cores your own pipeline does not use with `runtime.rx_cpu` and `runtime.worker_cpu` (driver Readme, "Choosing CPUs").
+```bash
+CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json --validate
+```
+
+The last line is `OK: CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json`.
 
 ## After pulling new code
 
@@ -66,6 +59,6 @@ git pull && git submodule update --init CPSL_TI_Radar_cpp/include/json
 cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 ```
 
-For a debug crash hunt, `cd CPSL_TI_Radar_cpp && cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan` builds under AddressSanitizer in `build-asan-ubsan/` and leaves `build/` alone (presets need CMake 3.25 or newer).
+Prefer a container with no toolchain on the host? [`docs/docker.md`](../docker.md) builds the same driver and GUI into one image.
 
-Next: [tutorial 2, the GUI](02_first_run_gui.md).
+Next: [tutorial 2, host setup](02_host_setup.md) if you have a board, otherwise [tutorial 4](04_first_run_gui.md).
