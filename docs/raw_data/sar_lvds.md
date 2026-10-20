@@ -11,7 +11,7 @@ Only what differs from the [pipeline](README.md). Not a TI-published format: TI'
  B = H + 4 x R x Ns + 64   (H = 0, 56 or 64 bytes of header/padding)
 ```
 
-- `lvdsStreamCfg ... dataFmt`: 0 off, 1 ADC, 2 ADC plus two 32-byte per-chirp metadata record slots (CBUFF `ADC_USER`), 4 CP_ADC_CQ. [F3]
+- `dataFmt` 2: ADC plus two 32-byte per-chirp metadata record slots (CBUFF `ADC_USER`). [F3]
 - Requires complex output, ChanInterleave 1 (non-interleaved), R x Ns even, and `enableSW` 0. [F3][L5][H8]
 - The board descriptor shares the stock IWR1843 LVDS path: 2 lanes, Q first (I/Q order measured on the stock demo only). [F6][L7]
 - **Header size H.** Read the cfg used for the run (the `lvdsStreamCfg <sub> <enableHeader> <dataFmt> <enableSW>` line): enableHeader 0 gives H = 0; 1 gives H = 64 if R x Ns is a multiple of 4, else 56. R = bits set in `channelCfg` rxMask, Ns = `profileCfg` numAdcSamples. Cross-check: B must divide the file length. [F8]
@@ -35,9 +35,7 @@ Only what differs from the [pipeline](README.md). Not a TI-published format: TI'
   The record in a packet usually describes the next chirp (k+1); the saturation result lags 1-2 chirps. A record is packet k's only if magic, version = 1 and `globalChirpIdx` = k hold. [F4]
 - CQ2 reports ADC saturation. `dataFmt` 4 packets (13 616 B with both monitors) need a CQ block and carry no metadata record. [H6]
 - Bench-measured: the HSI ID read correctly in 30 090 of 30 090 packets; a 600 s soak ran. [L7][F4]
-- Frames are cut by counting bytes (B per chirp). [L14][R2]
 
 ## Known gaps
 
 - V8: the firmware doc says the firmware pads header + data to 16 B (not TI's "256 B"), with no other padding, and bench-measured B = 13 264 / 13 328. This page follows that. The firmware descriptor `iwr1843_sar_lvds.json` instead states `roundup256(Ns*Nrx*4+52)`. The two repo files disagree; the descriptor's formula is an open discrepancy. TI says only "multiple of 8". [V8][L5]
-- Not documented in TI's public docs: any `dataFmt` 2 layout; from our firmware doc and code. [F3]

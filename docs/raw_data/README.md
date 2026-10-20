@@ -1,6 +1,6 @@
 # Raw ADC data: from chirp to array
 
-How one radar frame becomes an array in our code, for a reader who has never used an IWR1843 or a DCA1000. Per-firmware differences are on short pages: [demo](demo.md), [dca1000_raw](dca1000_raw.md), [sar_lvds](sar_lvds.md), [cascade_ddm](cascade_ddm.md).
+How one radar frame becomes an array in our code, for a reader who has never used an IWR1843 or a DCA1000. Per-firmware differences are on short pages (section 8).
 
 TI sources: IWR1843 data sheet (SWRS228B), mmWave SDK 3.6 user guide, xWR TRM (SWRU522E), DCA1000 user guide (SPRUIJ4A), app note SWRA581B. The PDFs in [`docs/references/`](../references/) are Git LFS pointers: run `git lfs pull` or use the ti.com links in its README. Where TI's public docs are silent, the text says "not documented in TI's public docs" and cites our code or a measurement. Bracketed tags like `[L3]` are claim IDs for review and are removed before release.
 
@@ -14,7 +14,7 @@ TI sources: IWR1843 data sheet (SWRS228B), mmWave SDK 3.6 user guide, xWR TRM (S
  [rx][sample][chirp]   by byte count    10 B header + <=1462 B payload, over Ethernet
 ```
 
-Six stages, one section each. Stages 1-3 run inside the chip, stage 4 in the DCA1000, stages 5-6 on the host. The LVDS interface on the IWR1843/6843 is a debug interface, not a production one (TI data sheet note). [L3]
+The LVDS interface on the IWR1843/6843 is a debug interface, not a production one (TI data sheet note). [L3]
 
 ## 2. Frame and chirp timing
 
@@ -151,9 +151,6 @@ Six stages, one section each. Stages 1-3 run inside the chip, stage 4 in the DCA
 
 ## Known gaps
 
-- V1: 4-lane layout with fewer than 4 RX; TI and our code disagree. Open.
-- V3, V4: header-enabled demo configs and DCA1000 "multi" logging mode versus our always-raw; open, benign.
-- V8, V10: see [sar_lvds](sar_lvds.md) and section 3.
 - Not documented in TI's public docs: SDK header fields, CP/CQ layouts, the `u0 u2 u1 u3` reorder, CONFIG_FPGA_GEN and CONFIG_PACKET_DATA bytes, what "byte count" counts.
 - The mmWave Studio guide, DCA1000 CLI guide and ICD were not available when this was written.
 
@@ -166,24 +163,8 @@ Golden frame (IWR1843, stock demo, SDK 3.6.2): R = 4, Ns = 128, Nc = 256.
 | Bytes per sample | 4 | [E4] |
 | Frame bytes B | 4 x R x Ns x Nc = 524 288 | [R1] |
 | Words per RX per chirp | Ns x 2 = 256 int16 | [E4][L9] |
-| Stream order | chirp, RX, sample | [L9] |
 | Payload per packet | 1462 B | [D4][D5] |
 | Packets per frame | 524 288 / 1462 = 358.6, so frames straddle packets | [R2] |
-| Packet header | seq u32 LE @0, byte count u48 LE @4 | [D4] |
-
-Two-lane word groups (SampleSwap 1), file words `[A0 A1 B0 B1]` repeating:
-
-| Word | Content | Claim |
-|---|---|---|
-| A0, A1 | Q of samples 2g, 2g+1 | [L6][L7] |
-| B0, B1 | I of samples 2g, 2g+1 | [L6][L7] |
-
-Four-lane word groups (IWR1443), per time step t = chirp x Ns + sample, R = 4:
-
-| Words | Content | Claim |
-|---|---|---|
-| 0..3 | first component, RX0..RX3 (I when `i_first`) | [L11][E6] |
-| 4..7 | second component, RX0..RX3 | [L11] |
 
 Fixed identifiers:
 
@@ -192,15 +173,3 @@ Fixed identifiers:
 | HSI ID, HW stream | `DC 0A DA 0C DC 0A DA 0C` | [H3][V6] |
 | Command header / footer | `0xA55A` / `0xEEAA` | [D3] |
 | Command codes | RESET 0x01, CONFIG_FPGA_GEN 0x03, RECORD_START 0x05, RECORD_STOP 0x06, SYSTEM_CONNECT 0x09, CONFIG_PACKET_DATA 0x0B, READ_FPGA_VERSION 0x0E | [D3] |
-| Default ports | command 4096, data 4098 | [D2] |
-
-Axis order per consumer:
-
-| Consumer | Axes | Claim |
-|---|---|---|
-| `LVDS_Raw_0.bin` | concatenated payloads, wire order | [R6] |
-| `adc_data.bin` | `[chirp][rx][sample][re, im]` int16 | [R6] |
-| C++ cube | `[rx][sample][chirp]` complex<int16> | [R5] |
-| Tap / `radar_gui` | `[rx][sample][chirp][I, Q]` int16, `iq_order: "IQ"` | [R6] |
-| ROS `ADCDataCube` | `rx_channel`/`sample`/`chirp`, separate real and imag arrays, chirp fastest | [R6] |
-| HDF5 `radar_adc/data` | `(N, 2, rx, sample, chirp)` | [R6] |
