@@ -54,7 +54,7 @@ Status decode_points_sdk3(const uint8_t* p, uint32_t len, uint32_t num_obj, Uart
     return Status::ok();
 }
 
-// TLV 1, sdk2 layout (docs/research/sdk2_uart_format_2026-10-05.md): a
+// TLV 1, sdk2 layout (docs/developer/radar_notes.md#sdk-2-uart-frame): a
 // descriptor {u16 numDetetedObj, u16 xyzQFormat}, then 12 B per object
 // {u16 rangeIdx, i16 dopplerIdx, u16 peakVal, i16 x, i16 y, i16 z};
 // meters = int16 / 2^xyzQFormat. No velocity, SNR or noise is sent: v,

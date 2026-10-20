@@ -278,7 +278,7 @@ def test_generate_round_trips_targets_and_validates_clean(board, fw, targets):
     # no warnings for the typical targets either, apart from the cascade's standing notes
     # (cascade at 5 m needs a sample rate between TI's tested 5000/10000 ksps, which is a legitimate warning)
     # radar-36: the cascade generator's built-in rxGain 30 is below the AWR2243 datasheet minimum of 32 dB; it runs on the bench
-    # (docs/research/gui_hpf_rxgain_2026-10-15.md, "Applicability"), so it is a standing, honest warning, not a defect to fix here
+    # (docs/developer/radar_notes.md#hpf-rxgain-and-adc, "Cascade rxGain 30"), so it is a standing, honest warning, not a defect to fix here
     assert not [i for i in r.report.warnings if i.code not in ("sample_rate_untested", "rx_gain")], \
         [i.message for i in r.report.warnings]
     assert m.mode == ("ddma" if board == "AWR2243_CASCADE" else "tdm")
@@ -443,7 +443,7 @@ def test_mimo_block_on_every_descriptor():
     assert r["max_chirps_per_loop"] is None and r["subframes"] is None and r["confidence"] == "unverified"
     c = fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")
     assert c["bpm"] is False and c["subframes"] == 0 and "8" in c["note"]
-    assert "gui_multichirp_tdm.md" in fwmod.mimo("IWR6843", "demo")["source"] and "mmw_cli.c" in d["source"]   # gui-39: 1843 override cites the SDK file
+    assert "radar_notes.md#chirp-patterns" in fwmod.mimo("IWR6843", "demo")["source"] and "mmw_cli.c" in d["source"]   # gui-39: 1843 override cites the SDK file
     with pytest.raises(KeyError):
         fwmod.mimo("IWR1843", "nope")
 

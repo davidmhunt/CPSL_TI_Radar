@@ -264,7 +264,7 @@ TEST_CASE(rejects_dca1000_on_cascade) {
 }
 
 TEST_CASE(serial_with_sdk2_dialect_is_accepted) {
-    // core-16: the SDK 2 frame format is confirmed (docs/research/sdk2_uart_format_2026-10-05.md)
+    // core-16: the SDK 2 frame format is confirmed (docs/developer/radar_notes.md#sdk-2-uart-frame)
     BoardDescriptor d = must_load("IWR1443");
     std::string cfg = write_cfg("bd_1443_serial.cfg", "adcCfg 2 1\nadcbufCfg 0 1 0 1\n");
     CHECK(check(d, cfg, false, true).ok());

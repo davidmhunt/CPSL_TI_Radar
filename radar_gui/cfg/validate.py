@@ -13,8 +13,8 @@ from .parse import Cfg, CfgError
 BAND_TOLERANCE_MHZ = 5.0
 REQUIRED = ("profileCfg", "chirpCfg", "channelCfg")   # plus a frame: frameCfg OR advFrameCfg + subFrameCfg
 _MIMO_DOC = "docs/design/mimo_modes.md"
-_M1 = "docs/research/gui_multichirp_tdm.md"
-_M2 = "docs/research/gui_board_limits_cascade_multiprofile.md"
+_M1 = "docs/developer/radar_notes.md#chirp-patterns"
+_M2 = "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix"
 _WEAK = ("unverified", "low")
 
 
@@ -118,8 +118,8 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
             add("error", "chirps_span_profiles",
                 f"{label}: chirps {a}-{b} reference profiles {sorted(pids)}; the demo data path takes RF parameters from "
                 f"one profile per (sub)frame and rejects a frame whose chirps use more than one "
-                f"(mmwdemo_rfparser.c:788; {_M2} s2, docs/research/gui_board_limits_cascade_multiprofile.md)",
-                f"{_M2} s2", "high")
+                f"(mmwdemo_rfparser.c:788; {_M2}, Profiles and chirps per firmware)",
+                f"{_M2} (Profiles and chirps per firmware)", "high")
     extra = sorted(declared - used)
     if extra and used:
         add("warning", "extra_profiles_ignored",
@@ -189,7 +189,7 @@ def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | No
                     f"{label}: bpmCfg drives TX1+TX3 (mask 5) in the stock demo (mss_main.c:1767-1796), but on {board} the "
                     f"azimuth pair is TX1+TX2 (TX3 is elevation), so BPM does not give a pure 2-TX azimuth aperture here "
                     f"(inferred from the antenna layout, not bench-tested)",
-                    "docs/research/iwr6843_ods_antenna_2026-10-07.md", "low")
+                    "docs/developer/radar_notes.md#ods-antenna", "low")
             continue
         if multi:
             add("info", "simo_multi_tx",
@@ -242,7 +242,7 @@ def _valid_fft_size(n: int) -> int:
 def _cascade_chirp_limit(m, lim, add) -> None:
     """Cascade DDM firmware: chirps per frame (= chirps per loop x loops) set the Doppler FFT size N, and the DSS L2 heap
     (83,968 B) must hold ~N(2V + 16 Rx + 8) B of scratch. For the full 6TX/8RX config (V=48) that is 232 N, so
-    <= 256 chirps fits (bench-confirmed) and 384 / 1024 do not (docs/research/gui_cascade_chirp_limit_2026-10-07.md).
+    <= 256 chirps fits (bench-confirmed) and 384 / 1024 do not (docs/developer/radar_notes.md#cascade-chirp-limit).
     Full config: error above the limit. Reduced-TX configs (V < 48) are not bench-tested, so they only warn."""
     cap = lim["max_chirps"].value
     n_fft = _valid_fft_size(m.n_chirps)
@@ -261,7 +261,7 @@ def _cascade_chirp_limit(m, lim, add) -> None:
 
 
 def _cascade_l3_check(cfg, m, lim, add) -> None:
-    """L3 radar cube (docs/research/gui_cascade_chirp_limit_2026-10-07.md item 4): compressed cube R*C*Rx*4*rho + decompression
+    """L3 radar cube (docs/developer/radar_notes.md#cascade-chirp-limit, "Second limit"): compressed cube R*C*Rx*4*rho + decompression
     scratch C*Rx*4*8 + detection matrix R*(N/8)*2 + ~64 KiB of object lists, against the 2,654,208 B `.l3ram`. Error only when exceeded."""
     rho = 1.0
     cc = cfg.first("compressionCfg")

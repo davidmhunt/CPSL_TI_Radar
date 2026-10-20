@@ -109,7 +109,7 @@ function render() {
     sug.textContent = x.text + ' This is a suggestion only; nothing was applied.';
   }
   table(s); plot(s);
-  $('tnNote').textContent = s.params ? `${s.params.frames} frames per step (first ${s.params.settle_frames} dropped), DC/leakage exclusion ${f1(s.params.exclude_m)} m, headroom is dB below the ${s.params.adc_bits}-bit digital full scale (${s.params.adc_bits_source || 'adcCfg'}; the RF ADC's effective resolution may be lower: docs/research memo "ADC full scale (radar-37)"); compression = strongest return more than ${s.params.tol_db} dB under the 1 dB/dB line; margin ${s.params.margin_db} dB.` : '';
+  $('tnNote').textContent = s.params ? `${s.params.frames} frames per step (first ${s.params.settle_frames} dropped), DC/leakage exclusion ${f1(s.params.exclude_m)} m, headroom is dB below the ${s.params.adc_bits}-bit digital full scale (${s.params.adc_bits_source || 'adcCfg'}; the RF ADC's effective resolution may be lower: docs/developer/radar_notes.md#hpf-rxgain-and-adc "ADC full scale"); compression = strongest return more than ${s.params.tol_db} dB under the 1 dB/dB line; margin ${s.params.margin_db} dB.` : '';
 }
 
 function table(s) {

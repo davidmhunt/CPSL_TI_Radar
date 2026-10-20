@@ -395,7 +395,7 @@ def _loop_options(loops_given, vres, cand, cpl, cascade):
         lam = C / cand["fc_hz"]
         chirps = lam / (2 * vres * cand["tc"] * 1e-6)
         loops = max(1, math.ceil(chirps / cpl))
-        if cascade:     # the cascade firmware fails above 256 chirps per frame (docs/research/gui_cascade_chirp_limit_2026-10-07.md)
+        if cascade:     # the cascade firmware fails above 256 chirps per frame (docs/developer/radar_notes.md#cascade-chirp-limit)
             loops = min(loops, CASCADE_MAX_CHIRPS // cpl)
         return [loops], False
     return ([32, 16, 8] if cascade else [128, 64, 32, 16, 8]), True

@@ -37,13 +37,13 @@
       "n_tx": {
         "value": 3,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 1: DS Table; max 2 simultaneous per chirp (SYS_18xx, RL:925)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 1: DS Table; max 2 simultaneous per chirp (SYS_18xx, RL:925)",
         "confidence": "high"
       },
       "n_rx": {
         "value": 4,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 2: SYS_COMMON_NUM_RX_CHANNEL=4 (sys_common.h:70)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 2: SYS_COMMON_NUM_RX_CHANNEL=4 (sys_common.h:70)",
         "confidence": "high"
       },
       "band_ghz": {
@@ -52,7 +52,7 @@
           81.0
         ],
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 3: datasheet RF band; RL:667-668",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 3: datasheet RF band; RL:667-668",
         "confidence": "high"
       },
       "band_subranges_ghz": {
@@ -67,73 +67,73 @@
           ]
         ],
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 3: a sweep must lie wholly inside one sub-band (RL:667-668)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 3: a sweep must lie wholly inside one sub-band (RL:667-668)",
         "confidence": "high"
       },
       "max_slope_mhz_us": {
         "value": 100.0,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 4: datasheet ramp rate (DS14 5.7 / DS18 7.7 / DS68 7.9); RL:710,713",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 4: datasheet ramp rate (DS14 5.7 / DS18 7.7 / DS68 7.9); RL:710,713",
         "confidence": "high"
       },
       "max_sample_rate_ksps": {
         "value": 12500,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 5: complex-1x, regular ADC mode (RL:742-757; IWR1843 12500 per datasheet IF 10 MHz, user ruling 2026-10-06); firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 / sar_cfg_check.py allow 18750 (generic xWR1xxx header text), a firmware-docs discrepancy flagged in the memo",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 5: complex-1x, regular ADC mode (RL:742-757; IWR1843 12500 per datasheet IF 10 MHz, user ruling 2026-10-06); firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 / sar_cfg_check.py allow 18750 (generic xWR1xxx header text), a firmware-docs discrepancy flagged in the memo",
         "confidence": "high"
       },
       "lowpower_max_ksps": {
         "value": 9375,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md (correction section; rl_sensor.h L742-767): applies only when the cfg selects low-power ADC mode (lowPower <x> 1); API doc, not datasheet",
+        "source": "docs/developer/radar_notes.md#single-chip-limits (correction section; rl_sensor.h L742-767): applies only when the cfg selects low-power ADC mode (lowPower <x> 1); API doc, not datasheet",
         "confidence": "medium"
       },
       "min_sample_rate_ksps": {
         "value": 2000,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 6: RL:742-743",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 6: RL:742-743",
         "confidence": "high"
       },
       "min_chirp_cycle_us": {
         "value": 15.0,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 7: chirp cycle (idle + rampEnd) minimum, RL:651-654, RL:4570-4573; +10 us if the watchdog is on (xWR1xxx), not modelled",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 7: chirp cycle (idle + rampEnd) minimum, RL:651-654, RL:4570-4573; +10 us if the watchdog is on (xWR1xxx), not modelled",
         "confidence": "high"
       },
       "max_loops": {
         "value": 255,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 8: frameCfg numLoops 1..255 (RL:958, RL:1066)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 8: frameCfg numLoops 1..255 (RL:958, RL:1066)",
         "confidence": "high"
       },
       "min_frame_period_us": {
         "value": 300.0,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 16: frame period 300 us..1.342 s (RL:978-987)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 16: frame period 300 us..1.342 s (RL:978-987)",
         "confidence": "medium"
       },
       "max_frame_period_ms": {
         "value": 1342.0,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 16: frame period 300 us..1.342 s (RL:978-987)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 16: frame period 300 us..1.342 s (RL:978-987)",
         "confidence": "medium"
       },
       "min_frame_blank_us": {
         "value": 300.0,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md row 16: inter-frame blank typically >= 300 us (+150 us if the profile changes); RL:978-987",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 16: inter-frame blank typically >= 300 us (+150 us if the profile changes); RL:978-987",
         "confidence": "medium"
       },
       "adc_buffer_bytes": {
         "value": 32768,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 9: ADC buffer 32 KB, profile max (SYS18:306, RL:728)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 9: ADC buffer 32 KB, profile max (SYS18:306, RL:728)",
         "confidence": "high"
       },
       "adc_buffer_streaming_bytes": {
         "value": 16384,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_single_chip.md row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR, firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 Timing math and limits)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 9: ping/pong halves, usable per chirp when streaming (inferred, same as SAR, firmware_dev/projects/iwr1843_sar_lvds/docs/sar_cfg_guide.md section 4 Timing math and limits)",
         "confidence": "medium"
       },
       "lvds_supported": {
@@ -145,25 +145,25 @@
       "lvds_lanes": {
         "value": 2,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 11: DS14 5.9.5 / DS18, DS68 7.10.4",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 11: DS14 5.9.5 / DS18, DS68 7.10.4",
         "confidence": "high"
       },
       "lvds_lane_mbps": {
         "value": 600,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 12: DCA1000 max and demo/SAR program 0x9 = 600 (silicon allows 900)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 12: DCA1000 max and demo/SAR program 0x9 = 600 (silicon allows 900)",
         "confidence": "high"
       },
       "lvds_chirp_overhead_bytes": {
         "value": 52,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 13: bytes/chirp = roundup256(Ns*Nrx*4+52) (MSS18:372-381)",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 13: bytes/chirp = roundup256(Ns*Nrx*4+52) (MSS18:372-381)",
         "confidence": "high"
       },
       "lvds_chirp_align_bytes": {
         "value": 256,
         "level": "error",
-        "source": "docs/research/gui_board_limits_single_chip.md row 13: MSS18:372-381",
+        "source": "docs/developer/radar_notes.md#single-chip-limits row 13: MSS18:372-381",
         "confidence": "high"
       },
       "sdk": {
@@ -193,67 +193,67 @@
       "hpf1_corner_khz": {
         "value": [175, 235, 350, 700],
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs228b s7.7 RF Specification fn (3) p.28-29; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E1: swrs228b s7.7 RF Specification fn (3) p.28-29; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
         "confidence": "high"
       },
       "hpf2_corner_khz": {
         "value": [350, 700, 1400, 2800],
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs228b s7.7 RF Specification fn (3) p.28-29; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E1: swrs228b s7.7 RF Specification fn (3) p.28-29; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
         "confidence": "high"
       },
       "rx_gain_min_db": {
         "value": 24,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs228b s7.7 RF Specification (max 48, range 24, step 2); applies to rxGain bits 5:0 only",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E3: swrs228b s7.7 RF Specification (max 48, range 24, step 2); applies to rxGain bits 5:0 only",
         "confidence": "high"
       },
       "rx_gain_max_db": {
         "value": 48,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs228b s7.7 RF Specification (max 48, range 24, step 2); applies to rxGain bits 5:0 only",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E3: swrs228b s7.7 RF Specification (max 48, range 24, step 2); applies to rxGain bits 5:0 only",
         "confidence": "high"
       },
       "rx_gain_step_db": {
         "value": 2,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
         "confidence": "high"
       },
       "rx_gain_rf_target_db": {
         "value": [30, 34, "reserved", 26],
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: mmwavelink rlProfileCfg_t rxGain b7:6 (xWR1xxx table); index = rxGain bits 7:6, bits 7:6 are preserved on write-back",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E3: mmwavelink rlProfileCfg_t rxGain b7:6 (xWR1xxx table); index = rxGain bits 7:6, bits 7:6 are preserved on write-back",
         "confidence": "high"
       },
       "if_band_max_mhz": {
         "value": 10,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E5/E6: swrs228b s7.7 (max IF bandwidth)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E5/E6: swrs228b s7.7 (max IF bandwidth)",
         "confidence": "high"
       },
       "if_band_frac_complex1x": {
         "value": 0.9,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
         "confidence": "high"
       },
       "if_band_frac_complex2x": {
         "value": 0.45,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
         "confidence": "high"
       },
       "if_band_frac_real": {
         "value": 0.45,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
         "confidence": "high"
       },
       "complex1x_upper_half_is_positive_if": {
         "value": true,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
         "confidence": "medium"
       }
     }
@@ -263,7 +263,7 @@
     "bpm": false,
     "max_chirps_per_loop": 32,
     "subframes": 0,
-    "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 2: same SDK 3.6 parser, frame mode only, no BPM evidence (conservative false)",
+    "source": "docs/developer/radar_notes.md#chirp-patterns (c1ccf7a) section 2: same SDK 3.6 parser, frame mode only, no BPM evidence (conservative false)",
     "confidence": "medium"
   },
   "cfg_rules": {

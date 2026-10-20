@@ -18,7 +18,7 @@
 //   sdk2             mmWave SDK 1.x/2.x xWR14xx demo (IWR1443): 36-byte
 //                    header (no subFrameNumber); TLV 1 = {u16 numObj,
 //                    u16 xyzQFormat} + 12 B per object with int16 Q-format
-//                    x/y/z; no TLV 7 (docs/research/sdk2_uart_format_2026-10-05.md).
+//                    x/y/z; no TLV 7 (docs/developer/radar_notes.md#sdk-2-uart-frame).
 //
 // Frame layout (little-endian), shared by every dialect:
 //

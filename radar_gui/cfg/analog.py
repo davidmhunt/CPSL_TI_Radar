@@ -1,7 +1,7 @@
 """profileCfg analog front-end facts (radar-36): the HPF corner tables, the rxGain word and the usable IF band.
 
 All values come from the per-board `limits` of the firmware descriptors (config/firmware/<id>.json, each with
-level/source/confidence; memo docs/research/gui_hpf_rxgain_2026-10-15.md); nothing here is a table. This module
+level/source/confidence; memo docs/developer/radar_notes.md#hpf-rxgain-and-adc); nothing here is a table. This module
 only interprets them. Keys (per chip board):
 
   hpf1_corner_khz, hpf2_corner_khz   list of kHz, index = the profileCfg hpf code

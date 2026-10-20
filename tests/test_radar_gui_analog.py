@@ -16,7 +16,7 @@ CONFIG = ROOT / "CPSL_TI_Radar_cpp" / "config"
 WEBJS = ROOT / "radar_gui" / "web" / "js"
 CHIPS = ["IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", "AWR2243_CASCADE"]
 
-# The values of docs/research/gui_hpf_rxgain_2026-10-15.md (E1, E3, E5/E6), written out independently of the descriptors.
+# The values of docs/developer/radar_notes.md#hpf-rxgain-and-adc (E1, E3, E5/E6), written out independently of the descriptors.
 HPF1, HPF2 = [175, 235, 350, 700], [350, 700, 1400, 2800]
 GAIN = {"IWR1443": (24, 48), "IWR1843": (24, 48), "IWR6843": (30, 48), "IWR6843ODS": (30, 48), "AWR2243_CASCADE": (32, 52)}
 RF = {"IWR1443": [30, 34, "reserved", 26], "IWR1843": [30, 34, "reserved", 26],
@@ -40,7 +40,7 @@ def test_every_chip_entry_has_every_key_with_source_and_confidence():
         for k in KEYS:
             assert k in e, (fid, b, k)
             assert e[k]["source"].strip() and e[k]["confidence"] in fwmod.CONFIDENCES and e[k]["level"] in fwmod.LEVELS, (fid, b, k)
-            assert "gui_hpf_rxgain_2026-10-15.md" in e[k]["source"], (fid, b, k)   # cites a row of the Step 1 memo
+            assert "radar_notes.md#hpf-rxgain-and-adc" in e[k]["source"], (fid, b, k)   # cites a table of radar_notes.md
     assert seen == set(CHIPS)
 
 

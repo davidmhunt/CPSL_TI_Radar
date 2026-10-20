@@ -37,8 +37,8 @@ DEFAULT_MARGIN_DB = 3.0
 DEFAULT_TOL_DB = 1.0
 DEFAULT_MIN_SNR_DB = 10.0
 ADC_BITS_CODE = {0: 12, 1: 14, 2: 16}   # adcCfg numADCBits (arg 0); samples are right-justified, full scale +-(2^(bits-1)-1)
-DEFAULT_ADC_BITS = 16            # fallback when the cfg has no adcCfg (reported as such); docs/research memo "ADC full scale
-                                 # (radar-37)": 16 for adcCfg 2 (medium confidence), 12 (medium-low), 14 (low). The RF ADC's
+DEFAULT_ADC_BITS = 16            # fallback when the cfg has no adcCfg (reported as such); docs/developer/radar_notes.md#hpf-rxgain-and-adc, "ADC full scale"
+                                 # (16 for adcCfg 2 (medium confidence), 12 (medium-low), 14 (low)). The RF ADC's
                                  # effective resolution may be lower than this digital word.
 EXCLUDE_BINS = 5.0               # default DC/leakage exclusion: this many un-padded range bins (Hann main lobe + HPF corner)
 SETTLE_FRAMES = 1                # leading frames of every step dropped (the first frame after sensorStart is not steady)

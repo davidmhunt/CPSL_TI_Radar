@@ -1,7 +1,7 @@
 # Board descriptors
 
 One JSON file per board, read by `BoardDescriptor::load` (`src/BoardDescriptor/`).
-The schema is in [`docs/archive/driver_v2_design.md`](../../../docs/archive/driver_v2_design.md) §1.
+The schema is under "Schema" below; the keys' evidence is under "Where each value comes from".
 Loading is strict: an unknown key, a wrong type, an unknown enum string, or a `lanes`/`layout`
 mismatch is an error, and so is a key repeated in one object. `name` must equal the file name. `dca1000` is required when
 `lvds.supported` is true and not allowed when it is false.
@@ -11,45 +11,99 @@ config's `board_overrides` over it, and takes every board-specific behaviour fro
 handshake, cfg field layout, UART baud/timeout, DCA1000 lane count and packet settings, ADC
 layout and I/Q order, and the once-per-boot rule.
 
+## Schema
+
+**Location and selection.** One JSON file per board in `config/boards/<name>.json`. The system config names it with `"board": "IWR1843"` (a file in this directory) or a path, and may override any field with a `board_overrides` object, which is deep-merged over the file. Every file carries `"schema": 1`. Unknown keys are a load error, which catches typos.
+
+```json
+{
+  "schema": 1,
+  "name": "IWR1843",
+  "firmwares": ["demo", "iwr1843_sar_lvds"],
+  "sdk": "mmwave_sdk_3",
+  "cli":       { "baud": 115200, "ack": "Done", "error_tokens": ["Error", "not recognized"],
+                 "prompt": ":/>", "prompt_wait_ms": 500, "cmd_timeout_ms": 100, "stop_timeout_ms": null,
+                 "start_cmd": "sensorStart", "stop_cmd": "sensorStop", "skip_prefixes": ["%", "#"] },
+  "lifecycle": { "config_once_per_boot": false },
+  "cfg_dialect": { "rx_mask_fields": [1], "frame_period_field": 5 },
+  "data_uart": { "baud": 921600, "header_bytes": 40, "tlv_dialect": "sdk3", "timeout_ms": 1000 },
+  "lvds":      { "supported": true, "lanes": 2, "layout": "two_lane_iq_pairs", "iq_order": "q_first" },
+  "dca1000":   { "packet_bytes": 1472, "packet_delay_us": 100, "fpga_timer_s": 30 }
+}
+```
+
+| Field | Type / values |
+|-------|---------------|
+| `name` | string; must match the file name |
+| `sdk` | `mmwave_sdk_2` \| `mmwave_sdk_3` \| `mmwave_mcuplus` |
+| `cli.*` | handshake strings and timings; `stop_timeout_ms` is `null` (computed) or 1 to 600000 |
+| `lifecycle.config_once_per_boot` | bool. If true, `configure()` refuses a second cfg in one process and `stop()` prints the power-cycle note |
+| `cfg_dialect.rx_mask_fields` | `channelCfg` field indices whose set bits are summed into the Rx count |
+| `cfg_dialect.frame_period_field` | `frameCfg` field index of the period (5, or 6 on the cascade) |
+| `cfg_dialect.required_commands`, `forbidden_commands` | optional, `[]`: the cfg must contain / must not use these commands; a violation is a cross-check error naming command and board (the per-firmware rules live in `config/firmware/<fw>.json` `cfg_rules`) |
+| `data_uart.supported` | optional, `true`. `false` = no data UART (no TLV): then `data_uart` is just `{"supported": false}` |
+| `data_uart.header_bytes`, `tlv_dialect` | 40 (SDK 3, MCU+) or 36 (SDK 2); `sdk3` \| `sdk2` \| `mcuplus_cascade` (sdk3 plus types 10/11/12); the dialect selects the decoder in `parse_uart_frame` |
+| `lvds.supported` | bool; `dca1000` is required when true and not allowed when false |
+| `lvds.lanes` | 2 \| 4 (sent in `CONFIG_FPGA_GEN`) |
+| `lvds.layout` | `two_lane_iq_pairs` (SWRA581B sec. 6) \| `lane_per_rx` (SWRA581B sec. 5, 4-lane) |
+| `lvds.iq_order` | `i_first` \| `q_first` |
+| `firmwares`, `elevation_tx_bit` | optional, host-GUI metadata; the C++ driver accepts and ignores them |
+
+**The four boards.** Values outside the shared defaults:
+
+| Field | IWR1443 | IWR1843 | IWR6843 | AWR2243_CASCADE |
+|-------|---------|---------|---------|-----------------|
+| `sdk` | mmwave_sdk_2 | mmwave_sdk_3 | mmwave_sdk_3 | mmwave_mcuplus |
+| `cli.cmd_timeout_ms` | 100 | 100 | 100 | 5000 |
+| `lifecycle.config_once_per_boot` | false | false | false | **true** |
+| `cfg_dialect.rx_mask_fields` | [1] | [1] | [1] | [1, 4] |
+| `cfg_dialect.frame_period_field` | 5 | 5 | 5 | 6 |
+| `data_uart.baud` / `timeout_ms` | 921600 / 1000 | 921600 / 1000 | 921600 / 1000 | 3125000 / 5000 |
+| `data_uart.header_bytes` / `tlv_dialect` | 36 / sdk2 | 40 / sdk3 | 40 / sdk3 | 40 / mcuplus_cascade |
+| `lvds` | 4 lanes, `lane_per_rx`, `i_first` | 2 lanes, `two_lane_iq_pairs`, `q_first` | same as 1843 | `supported: false` |
+
+**Cross-checks against the radar cfg** run at load time and fail with a message rather than producing garbage data: `adcbufCfg` `chanInterleave` must match `lvds.layout` (interleaved goes with `lane_per_rx`, non-interleaved with `two_lane_iq_pairs`); `adcbufCfg` and `adcCfg` must give complex output (real-only halves `bytes_per_frame` and needs a `*_real` layout that does not exist, so it is rejected); `lvdsStreamCfg` must enable ADC streaming when `dca1000.enabled`; `required_commands` must all appear and `forbidden_commands` must not. The rule table is under "Radar .cfg cross-checks".
+
+**What still lives in code.** Each LVDS layout, each TLV dialect and the DCA1000 command protocol are C++ decoders, selected by their string from a closed registry, so an unknown value is a load error.
+
 | File | SDK | LVDS (DCA1000) | Serial TLV |
 |------|-----|----------------|------------|
-| `IWR1443.json` | `mmwave_sdk_2` | 4 lanes, `lane_per_rx`, `i_first` | `sdk2`: format confirmed from TI source (D7, [memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); not yet run on the bench |
+| `IWR1443.json` | `mmwave_sdk_2` | 4 lanes, `lane_per_rx`, `i_first` | `sdk2`: format confirmed from TI source ([notes](../../../docs/developer/radar_notes.md#sdk-2-uart-frame)); not yet run on the bench |
 | `IWR1843.json` | `mmwave_sdk_3` | 2 lanes, `two_lane_iq_pairs`, `q_first` | `sdk3` |
 | `IWR1843_SAR.json` | `mmwave_sdk_3` | 2 lanes, `two_lane_iq_pairs`, `q_first`; `iwr1843_sar_lvds` image only. Bench-verified 2026-10-09 (driver sha256 `751621f1...7390c4`, image sha256 `a06ee615...070924`): dataFmt 1, 60 s, 117 frames of 3,366,000 B, 0 dropped; two restarts without a power cycle; `sensorStart` ack 74 ms first start (measured against the former hard `cmd_timeout_ms` 100, now 500) then 5 ms; `sensorStop` 102-204 ms against `stop_timeout_ms` 4000. dataFmt 2: replay byte-equal to `sar_parse.py` on all complete frames, 600 s live soak 1175 frames, 0 loss, `records_valid` 299,625. Details in `docs/RESULTS.md` | none (no data UART) |
 | `IWR6843.json` | `mmwave_sdk_3` | same as IWR1843 | `sdk3` |
 | `IWR6843ODS.json` | `mmwave_sdk_3` | same as IWR1843 (copy of `IWR6843.json`; differs only in `elevation_tx_bit`) | `sdk3` |
-| `AWR2243_CASCADE.json` | `mmwave_mcuplus` | `supported: false` (D4) | `mcuplus_cascade`, 3,125,000 baud |
+| `AWR2243_CASCADE.json` | `mmwave_mcuplus` | `supported: false` | `mcuplus_cascade`, 3,125,000 baud |
 
 ## Where each value comes from
 
-Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`. The audit is
-`docs/archive/driver_v2_audit.md` (b).
+Line numbers refer to `CPSL_TI_Radar_cpp/` at commit `6d6aa59`.
 
 | Field | Value(s) | Evidence |
 |-------|----------|----------|
-| `firmwares` | per board, default first: `demo`, `dca1000_raw` (1443 only); `demo`, `iwr1843_sar_lvds` (1843); `demo` (6843, 6843ODS); `cascade_ddm`; `iwr1843_sar_lvds` (driver board IWR1843_SAR) | Optional key (gui-10). Ids of the firmware descriptors (`config/firmware/<id>.json`) this board supports, default first. Host-GUI metadata read by `radar_gui/cfg/firmware.py`; the C++ driver accepts and ignores it. |
-| `elevation_tx_bit` | IWR6843: 2 (TX2); IWR6843ODS: 4 (TX3); others omit it (GUI default 2) | Optional key (gui-25). The chirp-mask bit of the elevation TX. Host-GUI metadata read by `radar_gui/cfg/validate.py` (`tx_order_convention`: warn when this TX is in the loop and not last). The C++ driver accepts and ignores it. ISK: azimuth TX1+TX3, elevation TX2; ODS: azimuth TX1+TX2, elevation TX3 (SWRU546E sec 3.7 Fig 3-17; `docs/research/iwr6843_ods_antenna_2026-10-07.md`). Antenna positions in lambda/2 units are not recorded here. |
+| `firmwares` | per board, default first: `demo`, `dca1000_raw` (1443 only); `demo`, `iwr1843_sar_lvds` (1843); `demo` (6843, 6843ODS); `cascade_ddm`; `iwr1843_sar_lvds` (driver board IWR1843_SAR) | Optional key. Ids of the firmware descriptors (`config/firmware/<id>.json`) this board supports, default first. Host-GUI metadata read by `radar_gui/cfg/firmware.py`; the C++ driver accepts and ignores it. |
+| `elevation_tx_bit` | IWR6843: 2 (TX2); IWR6843ODS: 4 (TX3); others omit it (GUI default 2) | Optional key. The chirp-mask bit of the elevation TX. Host-GUI metadata read by `radar_gui/cfg/validate.py` (`tx_order_convention`: warn when this TX is in the loop and not last). The C++ driver accepts and ignores it. ISK: azimuth TX1+TX3, elevation TX2; ODS: azimuth TX1+TX2, elevation TX3 (SWRU546E sec 3.7 Fig 3-17; `docs/developer/radar_notes.md#ods-antenna`). Antenna positions in lambda/2 units are not recorded here. |
 | `cli.baud` | 115200 | `SystemConfigReader.cpp:15` default |
 | `cli.ack` | `Done` | `CLIController.cpp:223,246` |
-| `cli.prompt`, `prompt_wait_ms` | `mmwDemo:/>`, 500 (IWR1843: `:/>`, a substring match of the SDK demo prompt `mmwDemo:/>`; the current SAR image (firmware-17) prints `mm_sar_lvds:/>`, which the same substring matches. A firmware can override the prompt: `config/firmware/<fw>.json` `cli_overrides.<board>.prompt`, e.g. `dca1000_raw` on IWR1443 prints `LVDS Stream:/>`) | `CLIController.cpp:225-230`. The SDK 3.6 demo sets `mmwDemo:/>` (prompt assignment in the SDK `mmw_cli.c`), the SAR project sets `mm_sar_lvds:/>` (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:752`), and the cascade demo sets its prompt (`firmware_dev/projects/awr2243_cascade_ddm/.../mss/mmw_cli.c:2220`). **IWR1443 (SDK 2): not checked against source.** |
-| `cli.cmd_timeout_ms` | 100; cascade 5000; `IWR1843_SAR` 500 (core-23 Step 4) | `SystemConfigReader.cpp:16` default; `config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json:9` |
-| `cli.stop_timeout_ms` | `null` on all four (computed) | Optional (core-13). How long `stop_cmd` waits for the ack. `null` or omitted means `max(cmd_timeout_ms, frame period + 200 ms)`: the demo acks `sensorStop` only after the current frame ends, and with the IWR1843's 100 ms timeout and 100 ms frames every healthy bench stop missed it (core-06 review S1). A number (1–600000) overrides it, also through `board_overrides`. |
+| `cli.prompt`, `prompt_wait_ms` | `mmwDemo:/>`, 500 (IWR1843: `:/>`, a substring match of the SDK demo prompt `mmwDemo:/>`; the current SAR image prints `mm_sar_lvds:/>`, which the same substring matches. A firmware can override the prompt: `config/firmware/<fw>.json` `cli_overrides.<board>.prompt`, e.g. `dca1000_raw` on IWR1443 prints `LVDS Stream:/>`) | `CLIController.cpp:225-230`. The SDK 3.6 demo sets `mmwDemo:/>` (prompt assignment in the SDK `mmw_cli.c`), the SAR project sets `mm_sar_lvds:/>` (`firmware_dev/projects/iwr1843_sar_lvds/src/mss/mmw_cli.c:752`), and the cascade demo sets its prompt (`firmware_dev/projects/awr2243_cascade_ddm/.../mss/mmw_cli.c:2220`). **IWR1443 (SDK 2): not checked against source.** |
+| `cli.cmd_timeout_ms` | 100; cascade 5000; `IWR1843_SAR` 500 | `SystemConfigReader.cpp:16` default; `config/system/AWR2243_CASCADE_cascade_ddm_shortrange.json:9` |
+| `cli.stop_timeout_ms` | `null` on all four (computed) | Optional. How long `stop_cmd` waits for the ack. `null` or omitted means `max(cmd_timeout_ms, frame period + 200 ms)`: the demo acks `sensorStop` only after the current frame ends, and with the IWR1843's 100 ms timeout and 100 ms frames every healthy bench stop missed it. A number (1–600000) overrides it, also through `board_overrides`. |
 | `cli.start_cmd`, `stop_cmd` | `sensorStart`, `sensorStop` | `CLIController.cpp:135,156,165` |
 | `cli.skip_prefixes` | `%`, `#` | `CLIController.cpp:132` |
-| `cli.error_tokens` | `Error`, `not recognized` | **Not used by today's code** (design §1 adds it). `Error` matches the demos' `CLI_write("Error: ...")` replies (SDK 3.6 `mmw_cli.c:377,821`, for example). `not recognized` is the TI CLI utility's unknown-command reply, quoted from memory: **unverified**, so check it before core-10 relies on it. |
+| `cli.error_tokens` | `Error`, `not recognized` | **Not used by today's code** (the schema adds it). `Error` matches the demos' `CLI_write("Error: ...")` replies (SDK 3.6 `mmw_cli.c:377,821`, for example). `not recognized` is the TI CLI utility's unknown-command reply, quoted from memory: **unverified**, so check it before relying on it. |
 | `lifecycle.config_once_per_boot` | cascade only | `Runner.cpp:94-99,217-218` |
 | `cfg_dialect.rx_mask_fields` | `[1]`; cascade `[1, 4]` | `RadarConfigReader.cpp:285-289` (slave mask when `channelCfg` has 6 or more fields) |
 | `cfg_dialect.frame_period_field` | 5; cascade 6 | `RadarConfigReader.cpp:261-276` (field-count guess) |
-| `cfg_dialect.skip_commands` / `required_commands` / `forbidden_commands` | moved out (gui-33 Step 4): the board loader rejects them | Now `cfg_rules.<board>` in `config/firmware/<fw>.json` (the rules depend on the flashed image). The system config's `firmware` (default: the board's first `firmwares` entry) selects them; `demo` on IWR1843 requires `calibData` (SDK 3.6 xwr18xx `mmw_cli.c` sensorStart -> `MmwDemo_isAllCfgInPendingState`, `mss_main.c:1038` `isCalibCfgPending`; the xwr68xx demo, `mss_main.c:1222-1238`, has no such term, so IWR6843/ODS require nothing). `cli.prompt` stays the board's default; `cli_overrides.<board>.prompt` in a firmware descriptor overrides it. |
-| `data_uart.supported` | `true` on all shipped boards (key omitted = `true`) | Optional key (core-22). `false` = firmware has no data UART / TLV output. Then `{"supported": false}` is the whole `data_uart` block (`baud`, `header_bytes`, `tlv_dialect`, `timeout_ms` are not required and are rejected as unknown keys), and `serial_stream.enabled: true` with that board is a cross-check error. |
+| `cfg_dialect.skip_commands` / `required_commands` / `forbidden_commands` | moved out: the board loader rejects them | Now `cfg_rules.<board>` in `config/firmware/<fw>.json` (the rules depend on the flashed image). The system config's `firmware` (default: the board's first `firmwares` entry) selects them; `demo` on IWR1843 requires `calibData` (SDK 3.6 xwr18xx `mmw_cli.c` sensorStart -> `MmwDemo_isAllCfgInPendingState`, `mss_main.c:1038` `isCalibCfgPending`; the xwr68xx demo, `mss_main.c:1222-1238`, has no such term, so IWR6843/ODS require nothing). `cli.prompt` stays the board's default; `cli_overrides.<board>.prompt` in a firmware descriptor overrides it. |
+| `data_uart.supported` | `true` on all shipped boards (key omitted = `true`) | Optional key. `false` = firmware has no data UART / TLV output. Then `{"supported": false}` is the whole `data_uart` block (`baud`, `header_bytes`, `tlv_dialect`, `timeout_ms` are not required and are rejected as unknown keys), and `serial_stream.enabled: true` with that board is a cross-check error. |
 | `data_uart.baud` | 921600; cascade 3,125,000 | `SystemConfigReader.cpp:17` default; cascade JSON `:15` |
-| `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. Design §1's board table lists the same values (5000 on the cascade, from the tracked cascade JSON). |
-| `data_uart.header_bytes` | 40; IWR1443 36 | 8-byte magic word + 32-byte header; 36 on SDK 2, whose header has no `subFrameNumber` (confirmed, [SDK 2 memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)). Must match `tlv_dialect` (36 for `sdk2`, else 40): a mismatch is a load error. |
-| `data_uart.tlv_dialect` | `sdk3`, `mcuplus_cascade`, `sdk2` | Selects the frame decoder in `parse_uart_frame` (`src/SerialStreamer/UartFrame.cpp`, core-16). `sdk2` is confirmed from TI source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)). See "TLV dialects" below. |
-| `lvds.supported` | cascade `false` | `SystemConfigReader.cpp:476-482`; D4 |
+| `data_uart.timeout_ms` | 1000; cascade 5000 | `SystemConfigReader.cpp:18` default; cascade JSON `:16`. |
+| `data_uart.header_bytes` | 40; IWR1443 36 | 8-byte magic word + 32-byte header; 36 on SDK 2, whose header has no `subFrameNumber` (confirmed, [SDK 2 memo](../../../docs/developer/radar_notes.md#sdk-2-uart-frame)). Must match `tlv_dialect` (36 for `sdk2`, else 40): a mismatch is a load error. |
+| `data_uart.tlv_dialect` | `sdk3`, `mcuplus_cascade`, `sdk2` | Selects the frame decoder in `parse_uart_frame` (`src/SerialStreamer/UartFrame.cpp`). `sdk2` is confirmed from TI source ([memo](../../../docs/developer/radar_notes.md#sdk-2-uart-frame)). See "TLV dialects" below. |
+| `lvds.supported` | cascade `false` | `SystemConfigReader.cpp:476-482` |
 | `lvds.lanes` | 4 (IWR1443), 2 | `DCA1000Handler.cpp:377-387` (CONFIG_FPGA_GEN byte 1) |
 | `lvds.layout` | `lane_per_rx` (IWR1443), `two_lane_iq_pairs` | `ADCCubeConverter.cpp:24-27`; TI SWRA581B §5/§6 |
-| `lvds.iq_order` | `i_first` (IWR1443), `q_first` | `ADCCubeConverter.cpp:74-77` (2-lane: first pair is imaginary) and `:93-94` (4-lane: first group is real). **Provenance (core-17):** IWR1843 and IWR1843_SAR `q_first` is **bench-verified 2026-10-12** (0.9 m reflector, run `core17_iq_raw_R0.9m`, pinned by `test_iq_golden`, `22ba4ec`; [RESULTS.md](../../../docs/RESULTS.md) finding 3). IWR6843 and IWR6843ODS `q_first` is **inferred** from the shared xWR18xx/68xx LVDS format (SWRA581B §6), **not bench-verified**. IWR1443 `i_first` (`lane_per_rx`) matches v1 byte for byte and is out of core-17's scope. |
+| `lvds.iq_order` | `i_first` (IWR1443), `q_first` | `ADCCubeConverter.cpp:74-77` (2-lane: first pair is imaginary) and `:93-94` (4-lane: first group is real). **Provenance:** IWR1843 and IWR1843_SAR `q_first` is **bench-verified 2026-10-12** (0.9 m reflector, run `core17_iq_raw_R0.9m`, pinned by `test_iq_golden`, `22ba4ec`; [RESULTS.md](../../../docs/RESULTS.md) finding 3). IWR6843 and IWR6843ODS `q_first` is **inferred** from the shared xWR18xx/68xx LVDS format (SWRA581B §6), **not bench-verified**. IWR1443 `i_first` (`lane_per_rx`) matches v1 byte for byte and is out of core-17's scope. |
 | `dca1000.packet_bytes`, `packet_delay_us` | 1472, 100 | `DCA1000Handler.cpp:590-591` |
 | `dca1000.fpga_timer_s` | 30 | `DCA1000Handler.cpp:398-399` |
 
@@ -63,8 +117,8 @@ dialect starts a frame with the same 8-byte magic word, has a `{type, length}` T
 | Dialect | Boards | Header | Detected points (TLV 1) | SNR / noise (TLV 7) | Status |
 |---------|--------|--------|-------------------------|---------------------|--------|
 | `sdk3` | IWR1843, IWR6843 (mmWave SDK 3.x demo) | 40 B | float x, y, z (m), v (m/s); 16 B per point | int16 per point, 0.1 dB steps | in use since v1 |
-| `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade (`docs/archive/CASCADE_PLAN.md`). TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
-| `sdk2` | IWR1443 (mmWave SDK 1.x/2.x xWR14xx demo) | 36 B (no `subFrameNumber`) | `{u16 count, u16 xyzQFormat}`, then 12 B per point: int16 x, y, z in meters x 2^xyzQFormat (decoded per frame), plus range/Doppler bin indices and peak value | not sent | format confirmed from TI's SDK 2.1 source ([memo](../../../docs/research/sdk2_uart_format_2026-10-05.md)); **not yet run against a real IWR1443** |
+| `mcuplus_cascade` | AWR2243 cascade (AM273x MCU+ demo) | 40 B | as `sdk3` | as `sdk3` | run on the cascade. TLVs 10 (tracker), 11 (RANSAC mask) and 12 (compact points) are skipped. With `guiMonitor` detectedObjects 3 the demo sends only TLV 12, so clouds stay empty and the driver warns once: use 1 (points + SNR/noise) or 2 (points only). |
+| `sdk2` | IWR1443 (mmWave SDK 1.x/2.x xWR14xx demo) | 36 B (no `subFrameNumber`) | `{u16 count, u16 xyzQFormat}`, then 12 B per point: int16 x, y, z in meters x 2^xyzQFormat (decoded per frame), plus range/Doppler bin indices and peak value | not sent | format confirmed from TI's SDK 2.1 source ([memo](../../../docs/developer/radar_notes.md#sdk-2-uart-frame)); **not yet run against a real IWR1443** |
 
 **Documented compromise (`sdk2`), approved by the user 2026-10-06 for now; to be improved (compute velocity from the radar .cfg, SNR/noise from firmware if it exposes them):** the SDK 2 demo sends no velocity, SNR or noise per point.
 The driver sets `Point::v`, `snr_db` and `noise_db` to NaN (not a number) on this dialect, so
@@ -82,7 +136,7 @@ for `mcuplus_cascade`, and frames with targets in view should show a non-zero po
 
 ## Skipped cfg commands
 
-(Moved to the firmware descriptors in gui-33 Step 4; the text below describes the semantics, the keys now live in `config/firmware/<fw>.json` `cfg_rules.<board>` and `board_overrides` no longer accepts them.) `skip_commands` lists cfg commands the board's firmware
+(Moved to the firmware descriptors; the text below describes the semantics, the keys now live in `config/firmware/<fw>.json` `cfg_rules.<board>` and `board_overrides` no longer accepts them.) `skip_commands` lists cfg commands the board's firmware
 rejects. The driver leaves them in the `.cfg` file and does not send them:
 `filter_cfg_commands` compares each line's first word with the list (exact and case-sensitive,
 as the TI CLI is). Skipped lines are printed at `runtime.log_level: "debug"`, listed by
@@ -92,7 +146,7 @@ and cannot be the board's start or stop command. A system config can change the 
 
 `cfg_dialect.required_commands` and `forbidden_commands` (optional, default `[]`) are the
 cross-check counterparts of `skip_commands`: they make `cross_check_radar_cfg` fail a cfg that
-omits a command the firmware needs or uses one it lacks (core-22).
+omits a command the firmware needs or uses one it lacks.
 
 ## Radar .cfg cross-checks
 
@@ -105,7 +159,7 @@ demo sources and mmWaveLink:
 | `adcCfg <bits> <fmt>` | bits = 2 (16-bit), because the DCA1000 is set to 16-bit (`DCA1000Handler.cpp:395-396`). fmt must be 1 or 2 (complex 1x or 2x): 0 is real and 3 is pseudo-real. | `rl_sensor.h:106-119` (`RL_ADC_DATA_16_BIT`, `RL_ADC_FORMAT_*`) |
 | `adcbufCfg [<subFrameIdx>] <fmt> <swap> <interleave> <thr>` | fmt = 0 (complex). interleave 0 (interleaved) needs `lane_per_rx`, and 1 (non-interleaved) needs `two_lane_iq_pairs`. | SDK 3.6 `mmw_cli.c:1377` (help string), `:812-815`; `mss_main.c:1867,1877-1884` |
 | `adcbufCfg` field count | 5 fields after the command on SDK 3 and MCU+ boards. 4 on `mmwave_sdk_2`, which has no subFrameIdx: this is inferred from the tracked IWR1443 cfgs (`adcbufCfg 0 1 0 1`), with no SDK 2 source checked. | |
-| `lvdsStreamCfg <subFrameIdx> <hdr> <dataFmt> <sw>` | dataFmt must be one the firmware maps in `config/firmware/<fw>.json` `lvds_data_fmts.formats` (absent: 1 = ADC only). 0 disables streaming, and 4 (CP_ADC_CQ) adds data the assembler does not expect. `iwr1843_sar_lvds` maps 2 to `adc_sar_meta` (core-24), which also needs sw 0, `adcbufCfg` complex with interleave 1 and a sampleSwap that agrees with `lvds.iq_order` (1 = `q_first`), rx x samples even, and one `profileCfg`. | SDK 3.6 `mmw_cli.c:1118-1119,1421`; `mmw_config.h:104-110`; `firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md` |
+| `lvdsStreamCfg <subFrameIdx> <hdr> <dataFmt> <sw>` | dataFmt must be one the firmware maps in `config/firmware/<fw>.json` `lvds_data_fmts.formats` (absent: 1 = ADC only). 0 disables streaming, and 4 (CP_ADC_CQ) adds data the assembler does not expect. `iwr1843_sar_lvds` maps 2 to `adc_sar_meta`, which also needs sw 0, `adcbufCfg` complex with interleave 1 and a sampleSwap that agrees with `lvds.iq_order` (1 = `q_first`), rx x samples even, and one `profileCfg`. | SDK 3.6 `mmw_cli.c:1118-1119,1421`; `mmw_config.h:104-110`; `firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md` |
 
 A missing `adcbufCfg` or `lvdsStreamCfg` is a note, not an error. The raw-capture cfgs in
 `config/radar/IWR1443/dca1000_raw/rosnode_*.cfg` have neither line.

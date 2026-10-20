@@ -27,7 +27,7 @@ USABLE_IF = 0.9           # cfggen.py USABLE_IF: ~90 % of the IF band is usable
 CASCADE = "AWR2243_CASCADE"
 BOARDS = ("IWR1443", "IWR1843", "IWR6843", "IWR6843ODS", CASCADE)
 # TX1 and TX3 are the azimuth pair on the single-chip EVMs (TX2 is the elevation-offset one); on the IWR6843ODS the
-# azimuth pair is TX1+TX2 and TX3 is the elevation TX (docs/research/iwr6843_ods_antenna_2026-10-07.md). The board's
+# azimuth pair is TX1+TX2 and TX3 is the elevation TX (docs/developer/radar_notes.md#ods-antenna). The board's
 # elevation TX bit comes from `firmware.elevation_tx_bit(board)`; the azimuth TX = the other TX of the 3-TX mask.
 # AOP modules are not modelled (see Metrics.notes).
 SINGLE_CHIP_AZ_TX_MASK = 0b101

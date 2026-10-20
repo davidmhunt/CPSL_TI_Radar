@@ -1,4 +1,4 @@
-"""Cascade DDM chirp / L3 limits (gui-09 D11; docs/research/gui_cascade_chirp_limit_2026-10-07.md)."""
+"""Cascade DDM chirp / L3 limits (gui-09 D11; docs/developer/radar_notes.md#cascade-chirp-limit)."""
 import re
 from pathlib import Path
 

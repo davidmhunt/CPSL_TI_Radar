@@ -20,7 +20,7 @@
       "n_tx": {
         "value": 6,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: SYS_CASCADE_NUM_TX_ANTENNAS 6 (syscommon.h:72)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: SYS_CASCADE_NUM_TX_ANTENNAS 6 (syscommon.h:72)",
         "confidence": "high"
       },
       "valid_tx_counts": {
@@ -31,13 +31,13 @@
           6
         ],
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: DDMA; 1 and 5 give numBandsEmpty=-1 (mss_main.c:4032-4058, rfparserDDMA.c:463-473)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: DDMA; 1 and 5 give numBandsEmpty=-1 (mss_main.c:4032-4058, rfparserDDMA.c:463-473)",
         "confidence": "high"
       },
       "n_rx": {
         "value": 8,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: 2 chips x 4 RX; 3-RX per chip rejected by the range DPU",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: 2 chips x 4 RX; 3-RX per chip rejected by the range DPU",
         "confidence": "medium"
       },
       "band_ghz": {
@@ -46,31 +46,31 @@
           81.0
         ],
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: VCO2 76-81 GHz (rl_sensor.h; datasheet SWRS223D)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: VCO2 76-81 GHz (rl_sensor.h; datasheet SWRS223D)",
         "confidence": "high"
       },
       "max_slope_mhz_us": {
         "value": 266.0,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: silicon freqSlopeConst +-5510 x 48.28 kHz/us (rl_sensor.h; SWRS223D)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: silicon freqSlopeConst +-5510 x 48.28 kHz/us (rl_sensor.h; SWRS223D)",
         "confidence": "high"
       },
       "tested_max_slope_mhz_us": {
         "value": 100.0,
         "level": "warning",
-        "source": "tools/radar_viewer/cfggen.py @ b416f61 MAX_SLOPE: repo-tested value, not a hardware bound (docs/research/gui_board_limits_cascade_multiprofile.md)",
+        "source": "tools/radar_viewer/cfggen.py @ b416f61 MAX_SLOPE: repo-tested value, not a hardware bound (docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix)",
         "confidence": "repo"
       },
       "max_sample_rate_ksps": {
         "value": 50000,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: silicon digOutSampleRate 2000..50000 ksps (rl_sensor.h; 20 MHz IF)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: silicon digOutSampleRate 2000..50000 ksps (rl_sensor.h; 20 MHz IF)",
         "confidence": "high"
       },
       "min_sample_rate_ksps": {
         "value": 2000,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: rl_sensor.h digOutSampleRate",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: rl_sensor.h digOutSampleRate",
         "confidence": "high"
       },
       "tested_sample_rates_ksps": {
@@ -79,49 +79,49 @@
           10000
         ],
         "level": "warning",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: the rates in TI's shipped cascade cfgs (cfggen.py FS_TESTED_KSPS); max tested 10000",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: the rates in TI's shipped cascade cfgs (cfggen.py FS_TESTED_KSPS); max tested 10000",
         "confidence": "repo"
       },
       "min_idle_us": {
         "value": 4.0,
         "level": "warning",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: no documented minimum found (field 0..524287 x 10 ns); 4 us is cfggen.py MIN_IDLE_US, TI cfgs use 4-5",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: no documented minimum found (field 0..524287 x 10 ns); 4 us is cfggen.py MIN_IDLE_US, TI cfgs use 4-5",
         "confidence": "unverified"
       },
       "max_loops": {
         "value": 255,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: rlFrameCfg numLoops 1..255 in legacy frame mode (rl_sensor.h)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: rlFrameCfg numLoops 1..255 in legacy frame mode (rl_sensor.h)",
         "confidence": "high"
       },
       "max_samples_silicon": {
         "value": 1024,
         "level": "error",
-        "source": "docs/research/gui_board_limits_cascade_multiprofile.md table: ADC buffer 16 kB per chip = 1024 complex samples x 4 RX (rl_sensor.h numAdcSamples)",
+        "source": "docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix table: ADC buffer 16 kB per chip = 1024 complex samples x 4 RX (rl_sensor.h numAdcSamples)",
         "confidence": "medium"
       },
       "max_samples": {
         "value": 192,
         "level": "warning",
-        "source": "tools/radar_viewer/cfggen.py @ b416f61: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps') (docs/research/gui_board_limits_cascade_multiprofile.md: not firmware-enforced)",
+        "source": "tools/radar_viewer/cfggen.py @ b416f61: TI only tested 192 samples x 256 chirps ('Chirp design is limited to 192 adc samples, 256 chirps') (docs/developer/radar_notes.md#cascade-limits-and-firmware-matrix: not firmware-enforced)",
         "confidence": "repo"
       },
       "max_chirps": {
         "value": 256,
         "level": "error",
-        "source": "docs/research/gui_cascade_chirp_limit_2026-10-07.md: Doppler FFT size N = validFFT(chirps per frame) sizes the 82 KiB DSS L2 heap (~N(2V+16Rx+8) B); 256 chirps bench-confirmed, 1024 bench-failed; applies to the full 6TX/8RX config (reduced-TX configs only warn)",
+        "source": "docs/developer/radar_notes.md#cascade-chirp-limit: Doppler FFT size N = validFFT(chirps per frame) sizes the 82 KiB DSS L2 heap (~N(2V+16Rx+8) B); 256 chirps bench-confirmed, 1024 bench-failed; applies to the full 6TX/8RX config (reduced-TX configs only warn)",
         "confidence": "medium"
       },
       "l2_heap_bytes": {
         "value": 83968,
         "level": "warning",
-        "source": "docs/research/gui_cascade_chirp_limit_2026-10-07.md: .dpc_l2Heap = 0x14800 in the DSS build map (dss_main.c:107-119)",
+        "source": "docs/developer/radar_notes.md#cascade-chirp-limit: .dpc_l2Heap = 0x14800 in the DSS build map (dss_main.c:107-119)",
         "confidence": "medium"
       },
       "l3_cube_bytes": {
         "value": 2654208,
         "level": "error",
-        "source": "docs/research/gui_cascade_chirp_limit_2026-10-07.md: .l3ram = 0x288000 in the DSS build map (dss_main.c:99); DPC_OBJECTDETECTION_ENOMEM__L3_RAM_RADAR_CUBE",
+        "source": "docs/developer/radar_notes.md#cascade-chirp-limit: .l3ram = 0x288000 in the DSS build map (dss_main.c:99); DPC_OBJECTDETECTION_ENOMEM__L3_RAM_RADAR_CUBE",
         "confidence": "medium"
       },
       "lvds_supported": {
@@ -157,67 +157,67 @@
       "hpf1_corner_khz": {
         "value": [175, 235, 350, 700],
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs223d s7.7 RF Specification fn (2) p.19-20; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E1: swrs223d s7.7 RF Specification fn (2) p.19-20; mmwavelink rlProfileCfg_t hpfCornerFreq1 (index = code)",
         "confidence": "high"
       },
       "hpf2_corner_khz": {
         "value": [350, 700, 1400, 2800],
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E1: swrs223d s7.7 RF Specification fn (2) p.19-20; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E1: swrs223d s7.7 RF Specification fn (2) p.19-20; mmwavelink rlProfileCfg_t hpfCornerFreq2 (index = code)",
         "confidence": "high"
       },
       "rx_gain_min_db": {
         "value": 32,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs223d s7.7 RF Specification (max 52, range 20, step 2); ICD 'all even values from 32 to 52'; applies to rxGain bits 5:0 only",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E3: swrs223d s7.7 RF Specification (max 52, range 20, step 2); ICD 'all even values from 32 to 52'; applies to rxGain bits 5:0 only",
         "confidence": "high"
       },
       "rx_gain_max_db": {
         "value": 52,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: swrs223d s7.7 RF Specification (max 52, range 20, step 2); ICD 'all even values from 32 to 52'; applies to rxGain bits 5:0 only",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E3: swrs223d s7.7 RF Specification (max 52, range 20, step 2); ICD 'all even values from 32 to 52'; applies to rxGain bits 5:0 only",
         "confidence": "high"
       },
       "rx_gain_step_db": {
         "value": 2,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E2/E3: mmwavelink rlProfileCfg_t rxGain 'all even values'; datasheet 'Gain step size 2 dB'",
         "confidence": "high"
       },
       "rx_gain_rf_target_db": {
         "value": [30, 33, 36, "reserved"],
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E3: forum posts only (e2e_awr2243_rf_target, e2e_mmwcas_rf_evm); the official ICD/DFP-2G rl_sensor.h text was not retrievable; index = rxGain bits 7:6, bits 7:6 are preserved on write-back; UNVERIFIED, the GUI shows the raw bits",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E3: forum posts only (e2e_awr2243_rf_target, e2e_mmwcas_rf_evm); the official ICD/DFP-2G rl_sensor.h text was not retrievable; index = rxGain bits 7:6, bits 7:6 are preserved on write-back; UNVERIFIED, the GUI shows the raw bits",
         "confidence": "unverified"
       },
       "if_band_max_mhz": {
         "value": 20,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E5/E6: swrs223d s7.7 (max IF bandwidth)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E5/E6: swrs223d s7.7 (max IF bandwidth)",
         "confidence": "high"
       },
       "if_band_frac_complex1x": {
         "value": 0.9,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
         "confidence": "high"
       },
       "if_band_frac_complex2x": {
         "value": 0.45,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
         "confidence": "high"
       },
       "if_band_frac_real": {
         "value": 0.45,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: swra553 s2.1 Eq.1 (complex 1x: IF bandwidth limited to 0.9*fs; complex 2x/real: 0.9*fs/2)",
         "confidence": "high"
       },
       "complex1x_upper_half_is_positive_if": {
         "value": true,
         "level": "warning",
-        "source": "docs/research/gui_hpf_rxgain_2026-10-15.md E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
+        "source": "docs/developer/radar_notes.md#hpf-rxgain-and-adc E6: ar_baseband_appnote s3.1.2 Fig.5 (one-sided complex-1x spectrum 0..fs; a 2015 AR1243/1642 note, shared DFE assumed)",
         "confidence": "medium"
       }
     }
@@ -228,7 +228,7 @@
     "max_chirps_per_loop": null,
     "subframes": 0,
     "note": "chirps per loop must be a multiple of 8 (DDMA bands rule, gui-13); all 6 TX fire on every chirp",
-    "source": "docs/research/gui_multichirp_tdm.md (c1ccf7a) section 3: DDMA parser ignores the chirp mask; TDM only as a compile-time variant not in the shipped build",
+    "source": "docs/developer/radar_notes.md#chirp-patterns (c1ccf7a) section 3: DDMA parser ignores the chirp mask; TDM only as a compile-time variant not in the shipped build",
     "confidence": "high"
   },
   "identify": {
@@ -266,7 +266,7 @@
     "variants": {
       "ddm": {
         "level": "source",
-        "source": "mcuplus 4.4 awr2243_cascade_ddm mmw_cli.c:643-704; docs/research/gui_cfar_detection_2026-10-07.md",
+        "source": "mcuplus 4.4 awr2243_cascade_ddm mmw_cli.c:643-704; docs/developer/radar_notes.md#cfar-commands",
         "commands": {
           "cfarCfg": {
             "per_direction": true,
@@ -330,7 +330,7 @@
               "range": 0,
               "doppler": 0
             },
-            "help": "Guard cells; must be 0 for the Doppler direction (CFAR-OS) and, as observed on the bench, for range too: range guardLen 2 (mode 3) hung sensorStart (runs 20261012T135326Z/135439Z), guardLen 0 started (135918Z; docs/bench_tests/2026-10-12_session2_iwr1843.md).",
+            "help": "Guard cells; must be 0 for the Doppler direction (CFAR-OS) and, as observed on the bench, for range too: range guardLen 2 (mode 3) hung sensorStart (runs 20261012T135326Z/135439Z), guardLen 0 started (135918Z; bench session 2, 2026-10-12; recorded in docs/RESULTS.md).",
             "cite": "dopplerprochwaDDMA.c:3993-4003; bench 2026-10-12 session 2 (range guard 2 -> sensorStart TIMEOUT)"
           },
           {

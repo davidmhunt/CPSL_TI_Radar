@@ -331,7 +331,7 @@ TEST_CASE(cascade_compact_points_are_skipped_and_flagged) {
 // ---- sdk2 (IWR1443, mmWave SDK 1.x/2.x xWR14xx demo) ----
 
 TEST_CASE(sdk2_golden_frame_from_literal_bytes) {
-    // docs/research/sdk2_uart_format_2026-10-05.md, "Recommended Experiment":
+    // docs/developer/radar_notes.md#sdk-2-uart-frame, "Golden frame":
     // 36-byte header, TLV 1 with 2 objects at xyzQFormat 7, a TLV 6, zero
     // padding to a multiple of 32. 36 + 36 + 32 = 104 bytes, padded to 128.
     const Bytes f = {

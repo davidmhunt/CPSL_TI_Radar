@@ -512,7 +512,7 @@ them with `std::isnan`. The demo does send a signed Doppler bin index, and
 `v` could be the bin times the Doppler resolution, but the driver does not
 compute the Doppler resolution from the radar cfg, so it reports NaN rather
 than guess. The format comes from TI's SDK 2.1 source
-(`docs/research/sdk2_uart_format_2026-10-05.md`); no IWR1443 has run it yet.
+(`docs/developer/radar_notes.md#sdk-2-uart-frame`); no IWR1443 has run it yet.
 A firmware that does not match `tlv_dialect` mostly yields empty clouds
 with no error; `config/boards/README.md` ("TLV dialects") says how to spot
 it from the `platform` word in the debug-level frame lines.

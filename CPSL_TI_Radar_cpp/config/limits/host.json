@@ -11,13 +11,13 @@
     "dca1000_max_mbps": {
       "value": 706,
       "level": "warning",
-      "source": "docs/research/gui_board_limits_single_chip.md row 15: DCA1000 UG Table 19, TI's theoretical maximum at 5 us packet delay (545 / 325 / 193 Mb/s at 10 / 25 / 50 us)",
+      "source": "docs/developer/radar_notes.md#single-chip-limits row 15: DCA1000 UG Table 19, TI's theoretical maximum at 5 us packet delay (545 / 325 / 193 Mb/s at 10 / 25 / 50 us)",
       "confidence": "high"
     },
     "dca1000_packet_overhead_us": {
       "value": 11.5,
       "level": "warning",
-      "source": "docs/research/gui_board_limits_single_chip.md row 15: two-parameter fit rate = packet_bytes*8 / (packet_delay_us + 11.5 us) to the four TI points (within 2 Mb/s); per-board packet_bytes and packet_delay_us come from config/boards/<board>.json dca1000",
+      "source": "docs/developer/radar_notes.md#single-chip-limits row 15: two-parameter fit rate = packet_bytes*8 / (packet_delay_us + 11.5 us) to the four TI points (within 2 Mb/s); per-board packet_bytes and packet_delay_us come from config/boards/<board>.json dca1000",
       "confidence": "medium"
     },
     "duty_warn": {

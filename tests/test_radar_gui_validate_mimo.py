@@ -186,7 +186,7 @@ def test_chirps_spanning_two_profiles_is_error():
     r = rep(bad)
     assert lv(r, "chirps_span_profiles") == ["error"] and not r.ok
     i = next(i for i in r.issues if i.code == "chirps_span_profiles")
-    assert "multiprofile" in i.message and i.confidence == "high"
+    assert "cascade-limits-and-firmware-matrix" in i.message and i.confidence == "high"
     assert not lv(rep(t), "chirps_span_profiles")      # extra profile declared but unused: warning only
     assert not lv(rep(REPEAT), "chirps_span_profiles")
 
@@ -223,7 +223,7 @@ def test_tdm_rules_do_not_apply_to_ddma():
 def test_issues_carry_source_and_confidence():
     r = rep(tdm([1, 5]))
     i = next(i for i in r.issues if i.code == "tx_pattern_invalid")
-    assert "gui_multichirp_tdm.md" in i.source and i.confidence == "high"
+    assert "radar_notes.md#chirp-patterns" in i.source and i.confidence == "high"
 
 
 def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
