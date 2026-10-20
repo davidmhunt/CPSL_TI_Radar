@@ -137,7 +137,7 @@ def test_save_refuses_errors_unless_forced(client):
 def test_list_and_load_shipped_cfg_cannot_escape(client):
     lst = client.get("/api/cfgs").json()["cfgs"]
     shipped = [c for c in lst if c["group"] == "shipped"]
-    assert len(shipped) > 50
+    assert len(shipped) > 40
     c = next(c for c in shipped if c["board"] == "AWR2243_CASCADE")
     f = client.get("/api/cfg/file", params={"id": c["id"]}).json()
     assert "frameCfg" in f["text"]

@@ -22,7 +22,7 @@ config/
   `radar_0` has none); it is not tied to ports. Outputs (TLV, DCA1000) are not in the name; the index below has them.
 - **Radar cfg:** `radar/<BOARD>/<firmware>/<purpose>[_<variant>].cfg`. The board prefix (`1843_`, `6843_`) was dropped
   because the folder gives it; project names (`RadVel_10Hz`, `IcaRAus`) are kept. Copies from `iwr_raw_rosnode` carry
-  a `rosnode_` prefix. Where two names collided in one folder the later one kept its old stem (`IWR6843/demo/6843_vel_sr.cfg`).
+  a `rosnode_` prefix.
 - `tests/test_config_tree.py` enforces the layout, the names and that this index is complete.
 
 ## System JSON index
@@ -155,9 +155,6 @@ SDK 2 demo does not need it.
 
 | Old | New |
 |---|---|
-| `radar/DCA1000/custom_configs/ISAR_1.cfg` | `ISAR_1.cfg` |
-| `radar/DCA1000/custom_configs/ISAR_2.cfg` | `ISAR_2.cfg` |
-| `radar/DCA1000/custom_configs/ISAR_mocap.cfg` | `ISAR_mocap.cfg` |
 | `radar/DCA1000/custom_configs/ISAR_mocap_revised.cfg` | `ISAR_mocap_revised.cfg` |
 | `radar/DCA1000/custom_configs/RadCloud.cfg` | `RadCloud.cfg` |
 | `radar/DCA1000/custom_configs/RadSAR.cfg` | `RadSAR.cfg` |
@@ -166,8 +163,6 @@ SDK 2 demo does not need it.
 | `radar/DCA1000/custom_configs/long_range_no_virtual_array.cfg` | `long_range_no_virtual_array.cfg` |
 | `radar/DCA1000/custom_configs/medium_range.cfg` | `medium_range.cfg` |
 | `radar/DCA1000/iwr_raw_rosnode/14xx/indoor_human_rcs.cfg` | `rosnode_indoor_human_rcs.cfg` |
-| `radar/DCA1000/iwr_raw_rosnode/14xx/outdoor_human_rcs_30m.cfg` | `rosnode_outdoor_human_rcs_30m.cfg` |
-| `radar/DCA1000/iwr_raw_rosnode/14xx/outdoor_human_rcs_50m.cfg` | `rosnode_outdoor_human_rcs_50m.cfg` |
 | `radar/DCA1000/custom_configs/short_range.cfg` | `short_range.cfg` |
 | `radar/DCA1000/custom_configs/short_range_40_chirps_10_fps.cfg` | `short_range_40_chirps_10_fps.cfg` |
 
@@ -175,17 +170,8 @@ SDK 2 demo does not need it.
 
 | Old | New |
 |---|---|
-| `radar/IWR_Demos/athena/1443_athena.cfg` | `athena.cfg` |
 | `radar/IWR_Demos/1443config.cfg` | `config.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/1443_high_v_res_config.cfg` | `high_v_res_config.cfg` |
-| `radar/IWR_Demos/indoor_scene.cfg` | `indoor_scene.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/1443_lr.cfg` | `lr.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/1443_lr_3D.cfg` | `lr_3D.cfg` |
-| `radar/IWR_Demos/radar_cfg_higher_CFAR.cfg` | `radar_cfg_higher_CFAR.cfg` |
-| `radar/IWR_Demos/radar_cfg_low_CFAR.cfg` | `radar_cfg_low_CFAR.cfg` |
 | `radar/IWR_Demos/short_range_3D.cfg` | `short_range_3D.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/1443_vel.cfg` | `vel.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/1443_vel_sr.cfg` | `vel_sr.cfg` |
 
 ### `radar/IWR1843/demo/`
 
@@ -206,11 +192,7 @@ SDK 2 demo does not need it.
 | `radar/nav_configs/1843_RadarHD.cfg` | `RadarHD.cfg` |
 | `radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg` | `demo_tlv_default.cfg` |
 | `radar/human_movement/1843_human_movement.cfg` | `human_movement.cfg` |
-| `radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_1rx_1chirp.cfg` | `mmstudio_1rx_1chirp.cfg` |
 | `radar/DCA1000/IWR1843_configs/Iwr18xx_DCA_mmStudio_original.cfg` | `mmstudio_original.cfg` |
-| `radar/DCA1000/iwr_raw_rosnode/18xx/indoor_human_rcs.cfg` | `rosnode_indoor_human_rcs.cfg` |
-| `radar/DCA1000/iwr_raw_rosnode/18xx/outdoor_human_rcs_30m.cfg` | `rosnode_outdoor_human_rcs_30m.cfg` |
-| `radar/DCA1000/iwr_raw_rosnode/18xx/outdoor_human_rcs_50m.cfg` | `rosnode_outdoor_human_rcs_50m.cfg` |
 | `radar/nav_configs/1843_stress_test.cfg` | `stress_test.cfg` |
 | `radar/nav_configs/1843_stress_test_baseline_numframes0.cfg` | `stress_test_baseline_numframes0.cfg` |
 | `radar/nav_configs/1843_vel_nav.cfg` | `vel_nav.cfg` |
@@ -226,20 +208,7 @@ SDK 2 demo does not need it.
 
 | Old | New |
 |---|---|
-| `radar/IWR_Demos/rad_nav_configs/6843_vel_sr.cfg` | `6843_vel_sr.cfg` |
-| `radar/IWR_Demos/athena/6843_athena.cfg` | `athena.cfg` |
 | `radar/IWR_Demos/6843.cfg` | `default.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_high_v_res_config.cfg` | `high_v_res_config.cfg` |
-| `radar/IWR_Demos/6843_long_range.cfg` | `long_range.cfg` |
-| `radar/IWR_Demos/6843_long_range_high_CFAR.cfg` | `long_range_high_CFAR.cfg` |
-| `radar/IWR_Demos/6843_long_range_high_v_res_CFAR.cfg` | `long_range_high_v_res_CFAR.cfg` |
-| `radar/IWR_Demos/6843_low_CFAR.cfg` | `low_CFAR.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_lr_CFAR_10dB.cfg` | `lr_CFAR_10dB.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_lr_CFAR_15dB.cfg` | `lr_CFAR_15dB.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_lr_CFAR_7dB.cfg` | `lr_CFAR_7dB.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_lr_CFAR_7dB_3D.cfg` | `lr_CFAR_7dB_3D.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_vel.cfg` | `vel.cfg` |
-| `radar/nav_configs/6843_vel_sr.cfg` | `vel_sr.cfg` |
 
 ### `radar/IWR6843ODS/demo/`
 
@@ -249,5 +218,4 @@ SDK 2 demo does not need it.
 | `radar/nav_configs/6843_RadVel_ods_10Hz.cfg` | `RadVel_ods_10Hz.cfg` |
 | `radar/nav_configs/6843_RadVel_ods_20Hz.cfg` | `RadVel_ods_20Hz.cfg` |
 | `radar/nav_configs/6843_RadVel_ods_5Hz.cfg` | `RadVel_ods_5Hz.cfg` |
-| `radar/IWR_Demos/rad_nav_configs/6843_ODS_lr_CFAR_10dB.cfg` | `lr_CFAR_10dB.cfg` |
 | `radar/IWR_Demos/rad_nav_configs/6843_ODS_lr_CFAR_7dB.cfg` | `lr_CFAR_7dB.cfg` |

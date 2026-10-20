@@ -37,7 +37,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.delenv("RADAR_GUI_SHIPPED_WRITES", raising=False)
     cfg = tmp_path / "config"
     cfg.mkdir()
-    for d in ("system", "radar", "boards", "firmware", "limits", "archive"):
+    for d in ("system", "radar", "boards", "firmware", "limits"):
         shutil.copytree(REAL / d, cfg / d)
     for f in ("README.md", "moved_paths.json"):
         shutil.copy2(REAL / f, cfg / f)
@@ -570,7 +570,7 @@ def test_listing_has_shipped_cfgs_and_folders(env):
     c, cfg, user, mgr, t = env
     j = c.get("/api/configs").json()
     cfgs = [i for i in j["configs"] if i["group"] == "shipped" and i["kind"] == "radar_cfg"]
-    assert len(cfgs) == len(list((cfg / "radar").glob("*/*/*.cfg"))) > 50
+    assert len(cfgs) == len(list((cfg / "radar").glob("*/*/*.cfg"))) > 40
     assert "IWR1843/iwr1843_sar_lvds" in j["radar_folders"]
 
 

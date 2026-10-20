@@ -230,7 +230,7 @@ def test_every_board_has_limits_with_source_and_confidence():
 # --- sweep over every shipped cfg --------------------------------------------------------------------
 
 def test_sweep_found_the_shipped_cfgs():
-    assert len(SHIPPED) >= 70
+    assert len(SHIPPED) >= 40
 
 
 @pytest.mark.parametrize("path", SHIPPED, ids=lambda p: str(p.relative_to(ROOT)))

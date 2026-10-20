@@ -166,7 +166,7 @@ def test_golden_every_shipped_cfg_unchanged():
     for p in SHIPPED:
         got[str(p.relative_to(ROOT))] = metrics(parse_cfg_file(p), board_for(p)).to_dict()
     # the untracked/extra cfgs are only compared when the fixture knows them
-    assert set(gold) <= set(got) and len(gold) == 77
+    assert set(gold) <= set(got) and len(gold) == 43
     for k, old in gold.items():
         for f, v in old.items():
             want = v if isinstance(v, str) else pytest.approx(v, rel=1e-12)
