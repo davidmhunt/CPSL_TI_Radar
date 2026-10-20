@@ -37,7 +37,7 @@ under "Same-cfg groups" below.
 | [`IWR1443_dca1000_raw_RadCloud_NetSW.json`](system/IWR1443_dca1000_raw_RadCloud_NetSW.json) | IWR1443 | dca1000_raw | DCA1000 | `IWR1443/dca1000_raw/RadCloud.cfg` | `RadCloud` raw-ADC capture (named "NetSW") |
 | [`IWR1443_dca1000_raw_RadSAR_NetSW.json`](system/IWR1443_dca1000_raw_RadSAR_NetSW.json) | IWR1443 | dca1000_raw | DCA1000 | `IWR1443/dca1000_raw/RadSAR.cfg` | `RadSAR` raw-ADC capture (named "NetSW") |
 | [`IWR1443_dca1000_raw_RadarHD_NetSW.json`](system/IWR1443_dca1000_raw_RadarHD_NetSW.json) | IWR1443 | dca1000_raw | DCA1000 | `IWR1443/dca1000_raw/RadarHD.cfg` | `RadarHD` raw-ADC capture (named "NetSW") |
-| [`IWR1843_demo_Hermes_front.json`](system/IWR1843_demo_Hermes_front.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadSAR.cfg` | Hermes project config (purpose unknown beyond the name) |
+| [`IWR1843_demo_Hermes_front.json`](system/IWR1843_demo_Hermes_front.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadSAR.cfg` | Hermes (the UAV) front radar; UAV-SAR setup using `RadSAR.cfg` |
 | [`IWR1843_demo_IcaRAus_back.json`](system/IWR1843_demo_IcaRAus_back.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/IcaRAus.cfg` | IcaRAus project config |
 | [`IWR1843_demo_IcaRAus_front.json`](system/IWR1843_demo_IcaRAus_front.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/IcaRAus.cfg` | IcaRAus project config |
 | [`IWR1843_demo_RaGNNarok_UAV_10m_front.json`](system/IWR1843_demo_RaGNNarok_UAV_10m_front.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/RaGNNarok_UAV_10m.cfg` | RaGNNarok UAV 10m project config |
@@ -53,19 +53,19 @@ under "Same-cfg groups" below.
 | [`IWR1843_demo_RadarHD_front.json`](system/IWR1843_demo_RadarHD_front.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadarHD.cfg` | RadarHD project config |
 | [`IWR1843_demo_human_movement.json`](system/IWR1843_demo_human_movement.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/human_movement.cfg` | human-movement TLV capture |
 | [`IWR1843_demo_mmstudio_r1.json`](system/IWR1843_demo_mmstudio_r1.json) | IWR1843 | demo | DCA1000, saves ADC frames | `IWR1843/demo/mmstudio_original.cfg` | mmWave Studio-derived cfg, saves ADC frames |
-| [`IWR1843_demo_nav.json`](system/IWR1843_demo_nav.json) | IWR1843 | demo | serial TLV, saves ADC frames | `IWR1843/demo/vel_nav.cfg` | purpose unknown (named "nav") |
-| [`IWR1843_demo_nav_RadSAR.json`](system/IWR1843_demo_nav_RadSAR.json) | IWR1843 | demo | DCA1000 | `IWR1843/demo/RadSAR.cfg` | nav-series config `RadSAR`, purpose unknown beyond the name |
-| [`IWR1843_demo_nav_RadSAR_lr.json`](system/IWR1843_demo_nav_RadSAR_lr.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadSAR.cfg` | nav-series config `RadSAR_lr`, purpose unknown beyond the name |
-| [`IWR1843_demo_nav_RadVel.json`](system/IWR1843_demo_nav_RadVel.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel.cfg` | nav-series config `RadVel`, purpose unknown beyond the name |
-| [`IWR1843_demo_nav_RadVel_10Hz.json`](system/IWR1843_demo_nav_RadVel_10Hz.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel_10Hz_lr.cfg` | nav-series config `RadVel_10Hz`, purpose unknown beyond the name |
-| [`IWR1843_demo_nav_RadVel_20Hz.json`](system/IWR1843_demo_nav_RadVel_20Hz.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel_20Hz.cfg` | nav-series config `RadVel_20Hz`, purpose unknown beyond the name |
-| [`IWR1843_demo_nav_RadVel_5Hz.json`](system/IWR1843_demo_nav_RadVel_5Hz.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel_5Hz.cfg` | nav-series config `RadVel_5Hz`, purpose unknown beyond the name |
-| [`IWR1843_demo_nav_r1.json`](system/IWR1843_demo_nav_r1.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_nav.cfg` | purpose unknown (named "nav") |
+| [`IWR1843_demo_nav.json`](system/IWR1843_demo_nav.json) | IWR1843 | demo | serial TLV, saves ADC frames | `IWR1843/demo/vel_nav.cfg` | early nav-series TLV setup using `vel_nav.cfg` (likely superseded; a candidate for deletion) |
+| [`IWR1843_demo_nav_RadSAR.json`](system/IWR1843_demo_nav_RadSAR.json) | IWR1843 | demo | DCA1000 | `IWR1843/demo/RadSAR.cfg` | nav-series UAV-SAR raw-ADC capture with `RadSAR.cfg` |
+| [`IWR1843_demo_nav_RadSAR_lr.json`](system/IWR1843_demo_nav_RadSAR_lr.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadSAR.cfg` | nav-series UAV-SAR capture with `RadSAR.cfg`, TLV and raw ADC (the `_lr` suffix is the old name, meaning unconfirmed) |
+| [`IWR1843_demo_nav_RadVel.json`](system/IWR1843_demo_nav_RadVel.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel.cfg` | nav-series RadVel setup (RadVel / IcaRAus line, UAV) |
+| [`IWR1843_demo_nav_RadVel_10Hz.json`](system/IWR1843_demo_nav_RadVel_10Hz.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel_10Hz_lr.cfg` | nav-series RadVel setup at 10 Hz (RadVel / IcaRAus line, UAV) |
+| [`IWR1843_demo_nav_RadVel_20Hz.json`](system/IWR1843_demo_nav_RadVel_20Hz.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel_20Hz.cfg` | nav-series RadVel setup at 20 Hz (RadVel / IcaRAus line, UAV) |
+| [`IWR1843_demo_nav_RadVel_5Hz.json`](system/IWR1843_demo_nav_RadVel_5Hz.json) | IWR1843 | demo | serial TLV, DCA1000 | `IWR1843/demo/RadVel_5Hz.cfg` | nav-series RadVel setup at 5 Hz (RadVel / IcaRAus line, UAV) |
+| [`IWR1843_demo_nav_r1.json`](system/IWR1843_demo_nav_r1.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_nav.cfg` | `radar_1` mount of the same early nav-series TLV setup as `IWR1843_demo_nav` (likely superseded; a candidate for deletion) |
 | [`IWR1843_demo_stress_test_baseline_front.json`](system/IWR1843_demo_stress_test_baseline_front.json) | IWR1843 | demo | DCA1000, saves ADC frames, saves raw LVDS | `IWR1843/demo/stress_test_baseline_numframes0.cfg` | bench: pre-rework baseline stress test (never-ending frames, writes `adc_data.bin` and `LVDS_Raw_0.bin`) |
 | [`IWR1843_demo_stress_test_front.json`](system/IWR1843_demo_stress_test_front.json) | IWR1843 | demo | DCA1000, saves ADC frames | `IWR1843/demo/stress_test.cfg` | bench: DCA1000 streaming stress test (`tools/bench/`) |
 | [`IWR1843_demo_tlv_default.json`](system/IWR1843_demo_tlv_default.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/demo_tlv_default.cfg` | default TLV point cloud on the IWR1843 demo |
-| [`IWR1843_demo_vel_sr.json`](system/IWR1843_demo_vel_sr.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_sr.cfg` | purpose unknown (named "vel_sr") |
-| [`IWR1843_demo_vel_sr_r1.json`](system/IWR1843_demo_vel_sr_r1.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_sr.cfg` | purpose unknown (named "vel_sr") |
+| [`IWR1843_demo_vel_sr.json`](system/IWR1843_demo_vel_sr.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_sr.cfg` | early RaGNNarok setup (`vel_sr.cfg`, identical to `RaGNNarok.cfg`) |
+| [`IWR1843_demo_vel_sr_r1.json`](system/IWR1843_demo_vel_sr_r1.json) | IWR1843 | demo | serial TLV | `IWR1843/demo/vel_sr.cfg` | `radar_1` mount of the early RaGNNarok setup `IWR1843_demo_vel_sr` |
 | [`IWR1843_iwr1843_sar_lvds_SAR_2ms.json`](system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json) | IWR1843_SAR | iwr1843_sar_lvds | DCA1000 | `IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg` | SAR raw-ADC capture over LVDS (iwr1843_sar_lvds firmware) |
 | [`IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json`](system/IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json) | IWR1843_SAR | iwr1843_sar_lvds | DCA1000 | `IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt2.cfg` | same capture as `SAR_2ms` with `lvdsStreamCfg ... dataFmt 2` (ADC + per-chirp SAR metadata, core-24; needs the firmware-17 image) |
 | [`IWR1843_iwr1843_sar_lvds_SAR_ugv_fmt2.json`](system/IWR1843_iwr1843_sar_lvds_SAR_ugv_fmt2.json) | IWR1843_SAR | iwr1843_sar_lvds | DCA1000 | `IWR1843/iwr1843_sar_lvds/SAR_ugv_fmt2.cfg` | SAR UGV fmt2 capture (77.05 GHz, 1.95 MHz/us slope, 50 chirps, 250.3 ms frame); promoted from the user setup `SAR_ugv_fmt2`, dataFmt 2 |
@@ -87,6 +87,23 @@ System JSONs that point at the same radar cfg (they differ in mount, ports or ou
 - `IWR1843/demo/vel_sr.cfg`: `IWR1843_demo_vel_sr`, `IWR1843_demo_vel_sr_r1`
 - `IWR6843ODS/demo/RadVel_ods_10Hz.cfg`: `IWR6843ODS_demo_RadVel`, `IWR6843ODS_demo_RadVel_10Hz_down`, `IWR6843ODS_demo_human_movement`
 
+
+### Kept cfgs with no system JSON
+
+These 12 cfgs under `radar/` are referenced by no system JSON and no firmware template. They are kept on purpose
+(docs-01 sign-off D14); the GUI lists them as shipped cfgs. Descriptions are from the docs-01 audit and are unconfirmed
+where marked.
+
+| Cfg | What it is |
+|---|---|
+| `AWR2243_CASCADE/cascade_ddm/calibration_run.cfg` | AWR2243 cascade calibration-run config (from `tools/radar_viewer`) |
+| `AWR2243_CASCADE/cascade_ddm/cascade_R15m_V5ms_20Hz.cfg` | AWR2243 cascade config named for 15 m range, 5 m/s, 20 Hz (from `tools/radar_viewer`) |
+| `AWR2243_CASCADE/cascade_ddm/shortrange_dense.cfg` | AWR2243 cascade short-range variant of `shortrange.cfg` (name only; differences not audited) |
+| `IWR1443/dca1000_raw/long_range.cfg`, `medium_range.cfg`, `short_range.cfg`, `short_range_40_chirps_10_fps.cfg` | IWR1443 raw-ADC range variants, probably the 2023 RadCloud / RadarHD development configs (unconfirmed); kept as possible paper finals |
+| `IWR1443/dca1000_raw/long_range_no_virtual_array.cfg` | IWR1443 raw-ADC config, byte-identical to the final `RadCloud.cfg` |
+| `IWR1443/demo/short_range_3D.cfg` | IWR1443 3-transmitter TDM short-range demo cfg; used as a sample by the GUI tests (`tests/test_radar_gui_mimo.py`) and the screenshot specs |
+| `IWR1843/demo/RaGNNarok.cfg` | the original RaGNNarok cfg, byte-identical to `vel_sr.cfg` (used by `IWR1843_demo_vel_sr`) |
+| `IWR6843ODS/demo/RadVel_ods_5Hz.cfg`, `RadVel_ods_20Hz.cfg` | IWR6843ODS RadVel variants named 5 Hz and 20 Hz beside the `RadVel_ods_10Hz.cfg` that two system JSONs use; kept as possible paper finals |
 
 ## Old to new: system JSONs
 
