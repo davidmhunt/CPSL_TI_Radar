@@ -9,7 +9,7 @@ Notes on reading it:
 
 - **Names are as of the run.** Config and file names are the ones used on the day (v1 layout). Where a v2 name exists it is given once, in the baseline conditions below.
 - **Evidence that is not in the repo.** `runs/gui/`, `tools/bench/runs/` and `/tmp/bench_run/` are gitignored or machine-local, so those run directories are named but cannot be re-read from a clone. The tracked artifacts are `docs/results/baseline/` and `docs/results/validation/`. Firmware bench records live in the `firmware_dev` submodule (`projects/<fw>/project.toml`, `[[bench]]` entries).
-- **Bench session notes.** The step-by-step records of the 2026-10-10 and 2026-10-12 bench sessions were removed from the tree in `cee2a5d` (last present at `968e140`); their outcomes are folded into the sections "Bench session 1" and "Bench session 2" below.
+- **Bench session notes.** The step-by-step records of the 2026-10-09 (file named 2026-10-10) and 2026-10-12 bench sessions were removed from the tree in `cee2a5d` (last present at `968e140`); their outcomes are folded into the sections "Bench session 1" and "Bench session 2" below.
 - **Commit hashes** replace the work-item labels used while the results were produced. Defect labels such as D10 and item labels such as A2 are the labels used in the bench log at the time; each is explained where it appears.
 
 ## Baseline (pre-rework), IWR1843
@@ -150,7 +150,7 @@ Not measured (needs a placed reflector; not yet run): tuned gain/HPF point; clip
 
 ## Core driver on the SAR image, dataFmt 1 and dataFmt 2 (IWR1843_SAR), 2026-10-09
 
-Bench 2026-10-09, IWR1843BOOST + DCA1000, driver `build/CPSL_TI_Radar_CPP` sha256 `751621f1b18a973081ca3d64a372e33fbda62c212b199e1b63f462c40f7390c4` (unchanged between rebuilds 3 and 4), firmware image `iwr1843_sar_lvds` sha256 `a06ee615b56b12282f2fe9b4a02bb556ceaa81a1b72176e2060cd9209a070924`. Board `IWR1843_SAR`, shipped system JSONs, no power cycle between the runs below. Values come from the raw driver logs under `tools/bench/runs/` (`core23_fmt1__...60s...`, `core23_fmt1_restart__...rep1/rep2...`, `core24_fmt2_soak__...600s...`) and the bench session of 2026-10-10 (its tests 5 to 7; the session's other tests are in "Bench session 1" below). The session record is dated 2026-10-10 while this section, as first written, dates the bench 2026-10-09; the difference was not resolved here. Run directories are gitignored.
+Bench 2026-10-09, IWR1843BOOST + DCA1000, driver `build/CPSL_TI_Radar_CPP` sha256 `751621f1b18a973081ca3d64a372e33fbda62c212b199e1b63f462c40f7390c4` (unchanged between rebuilds 3 and 4), firmware image `iwr1843_sar_lvds` sha256 `a06ee615b56b12282f2fe9b4a02bb556ceaa81a1b72176e2060cd9209a070924`. Board `IWR1843_SAR`, shipped system JSONs, no power cycle between the runs below. Values come from the raw driver logs under `tools/bench/runs/` (`core23_fmt1__...60s...`, `core23_fmt1_restart__...rep1/rep2...`, `core24_fmt2_soak__...600s...`) and the bench session of 2026-10-09 (its tests 5 to 7; the session's other tests are in "Bench session 1" below). The session record's file and first commit message say 2026-10-10, but the bench ran on 2026-10-09: its run directories are stamped `20261009T...` and the record was first committed (`8ef06d5`) on 2026-10-09. Run directories are gitignored.
 
 | Item | Result |
 |---|---|
@@ -173,7 +173,7 @@ The core driver configures the SAR image, passes the identity check, and streams
 - Each run is a single run; the restarts are separate driver processes, not in-process restarts. The ADC scene held no tuned gain or HPF point.
 - The end-of-run `sarStats` checks (capture checks 3 and 4) are not in the driver; the bench ran them through `bench_check.py` (check 3 not evaluable on the 20 s capture because of a 1,280 B tail hole).
 
-## Bench session 1, IWR1843 + DCA1000 (2026-10-10)
+## Bench session 1, IWR1843 + DCA1000 (2026-10-09)
 
 One IWR1843BOOST (XDS110 `R2101050`) plus DCA1000; the cascade was connected but its USB unplugged. Driver `CPSL_TI_Radar_cpp/build` sha256 `751621f1b18a973081ca3d64a372e33fbda62c212b199e1b63f462c40f7390c4` (Rebuild 4), a human at the bench for the flashes and the GUI items. The step-by-step record is gone from the tree (see the notes at the top); the outcomes are below. Run directories are under `runs/gui/` (gitignored), so these are not re-readable from a clone. Each item is **one run**. Tests 5 to 7 (driver on the SAR image, dataFmt 2 replay, 10-min soak) are in "Core driver on the SAR image" above.
 
@@ -375,7 +375,7 @@ Record: `[[bench]]` in `firmware_dev/projects/awr2243_cascade_ddm/project.toml` 
 
 ### `iwr1843_sar_lvds`
 
-- **Current image:** sha256 `a06ee615b56b12282f2fe9b4a02bb556ceaa81a1b72176e2060cd9209a070924` (prompt `mm_sar_lvds:/>`): flashed with `./fw flash`, `fw verify` pass, bench check accepted (`pass` record dated 2026-10-10; "Bench session 1" tests 2 to 4).
+- **Current image:** sha256 `a06ee615b56b12282f2fe9b4a02bb556ceaa81a1b72176e2060cd9209a070924` (prompt `mm_sar_lvds:/>`): flashed with `./fw flash`, `fw verify` pass, bench check accepted (`pass` record labelled 2026-10-10, run 2026-10-09; "Bench session 1" tests 2 to 4).
 - **Earlier image:** `53948f4d...` (`partial` record dated 2026-10-06) ran a 10 min no-reflector soak: 299,880 chirps, 0 gaps, 0 missing, 6.66 MB/s (section "IWR1843 SAR LVDS firmware ... Set A").
 - **Driver support:** the `IWR1843_SAR` board descriptor and `config/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json` capture this image in `lvdsStreamCfg` dataFmt 1; the image has no TLV/data UART. The driver also decodes dataFmt 2 (`adc_sar_meta`: per-chirp metadata, `SAR_2ms_fmt2.cfg`), bench-verified against `sar_parse.py` and in a 600 s live soak (section "Core driver on the SAR image").
 - **Not yet verified** (needs a reflector and the GUI): phase continuity, tuned gain/HPF point, boundary steps/Tb, ADC full scale, saturation-vs-gain. This list said "I/Q order" too when it was kept in `docs/firmware.md`; that item is now settled on the IWR1843 by finding 3 (stock demo capture; the SAR image shares the descriptor). The Tune-tab sweep above touches gain and ADC headroom on this image but placed no reflector.
