@@ -26,7 +26,7 @@ ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 
 You should see `Build type: Release` from the configure step and `100% tests passed` from `ctest` (28 tests, a short run). `ctest` reads the repo's `tests/fixtures/`, so run it from the full checkout.
 
-**Why not `--recurse-submodules`?** The repo has three submodules and only `include/json` (the JSON library) is needed to build. The other two:
+**Why not `--recurse-submodules`?** It also fetches submodules you do not need; only `include/json` (the JSON library) is needed to build. Fetch these only if you need them:
 
 | Submodule | Fetch it only if |
 |---|---|

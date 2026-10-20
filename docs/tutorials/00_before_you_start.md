@@ -1,6 +1,6 @@
 # 0. Before you start: what is in the box
 
-No commands here. Read it once so the rest makes sense. Everything in this repo runs on Linux (the steps assume Ubuntu 24.04); you need no ROS and no other repository until [tutorial 6](06_ros2.md).
+No commands here. Read it once so the rest makes sense. Everything in this repo runs on Linux (the steps assume Ubuntu 24.04); you need no ROS until [tutorial 6](06_ros2.md).
 
 ## What you need
 
