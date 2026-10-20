@@ -30,8 +30,6 @@ Also: the GUI's HTTP and WebSocket API is in [`radar_gui/README.md`](../../radar
  your code --> Radar::configure/start/stop --> CLIController --CLI UART--> radar (cfg commands)
 ```
 
-Four threads matter: RX, DCA worker, serial reader, and yours.
-
 ## The C++ driver (`CPSL_TI_Radar_cpp/src/`)
 
 | Directory | What it owns | Tests |

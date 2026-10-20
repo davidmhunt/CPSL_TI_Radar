@@ -1,6 +1,6 @@
 # Bench validation: check a board against the reference numbers
 
-Use this to check that a board streams correctly with the current driver build: no dropped packets, the right frame rate, a clean exit. The IWR1843 with a DCA1000 is the worked example. The pass thresholds come from the pre-rework baseline in [`../RESULTS.md`](../RESULTS.md).
+Use this to check that a board streams correctly with the current driver build: no dropped packets, the right frame rate, a clean exit. The IWR1843 with a DCA1000 is the worked example.
 
 Run every command from the repository root. Only one person at a time may hold the board and the DCA1000.
 
@@ -18,9 +18,9 @@ Run every command from the repository root. Only one person at a time may hold t
 
 ## 3. Choose a config
 
-Pick a system config from the table in section 8 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
+Pick a system config from section 8. The worked example, `CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
-The commands below use the example config unchanged. To use your own, copy it, and pass the copy's path to both commands. For DCA runs `output.save_adc_frames` must be `true` (the example sets it); otherwise there is no `adc_data.bin` size check. Any `runtime.log_level` works: `bench_run.py` runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
+To use your own config, copy the example and pass the copy's path to both commands. For DCA runs `output.save_adc_frames` must be `true` (the example sets it); otherwise there is no `adc_data.bin` size check. Any `runtime.log_level` works: `bench_run.py` runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json --validate
@@ -35,7 +35,7 @@ uv run tools/bench/bench_run.py CPSL_TI_Radar_cpp/config/system/IWR1843_demo_str
     --seconds 60 --rep 1 --tag validation_iwr1843_dca_release --out-dir docs/results/validation
 ```
 
-`bench_run.py` starts the driver, samples CPU once per second, sends SIGINT after `--seconds`, and prints a JSON summary. Use `--rep 1..3` for repeats and a new `--tag` per board or build. Files are never overwritten; the full driver log is `tools/bench/runs/<basename>/driver_stdout.log`. A run that used `--allow-non-release` or `--allow-missing-prereq` is not a valid validation. For other options (`--stop-mode natural`) see `--help`.
+`bench_run.py` starts the driver, samples CPU once per second, sends SIGINT after `--seconds`, and prints a JSON summary. Use `--rep 1..3` for repeats and a new `--tag` per board or build; files are never overwritten. The full driver log is `tools/bench/runs/<basename>/driver_stdout.log`. A run that used `--allow-non-release` or `--allow-missing-prereq` is not a valid validation. For other options (`--stop-mode natural`) see `--help`.
 
 ## 5. Read the results
 
@@ -43,8 +43,6 @@ Each run writes two files to `--out-dir`, with the same basename `<tag>__<config
 
 - `.csv`, one row per second: `dca_frames`, `dca_packets`, `dca_dropped_packets`, `dca_dropped_packet_events`, `dca_rx_overrun_count_cum`, `tlv_frames`, `tlv_missed_frames`, `cpu_pct`, `rss_kb`.
 - `.json` sidecar, the provenance and verdict: driver sha256, build flags, host and NIC settings, the config used, `expected` (frame size and rate), and `result` (`status`, `stop.exit_code`, `summary`, `bin_size_check`).
-
-`jq '.result' <basename>.json` prints the verdict.
 
 ## 6. Pass or fail
 
@@ -65,7 +63,7 @@ Thresholds come from the pre-rework IWR1843 baseline (3 reps of 60 s, `docs/resu
 | `adc_data.bin` size (`bin_size_check.verdict`) | `exact` (SIGINT or natural stop; the 896 B `short_sigint_tail` has been fixed) | n/a | 896 B short x3 (pre-fix); `exact` x3 after |
 | CPU % mean (guide) | below 10 (see note) | below 3 | about 4 to 5 (current driver; 2.2 to 5.6 over 8 runs) / 0.5 to 0.6 |
 
-For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The DCA CPU guide of 10 % is about twice the current driver's 4 to 5 %, with or without `cap_sys_nice` (IWR1843 10 Hz only, `docs/results/validation/validation_iwr1843_dca_core16__*`, `ab2_*`). Older drivers measured 9 to 10 % (baseline) and 16 % (an intermediate build).
+For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The DCA CPU guide of 10 % is about twice the current driver's 4 to 5 % (with or without `cap_sys_nice`; IWR1843 10 Hz only, `docs/results/validation/validation_iwr1843_dca_core16__*`, `ab2_*`). Older drivers measured 9 to 10 % (baseline) and 16 % (an intermediate build).
 
 A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 9.
 
@@ -87,7 +85,7 @@ A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, 
 | Serial baud (data) | 921600 | n/a | 921600 | 3125000 |
 | Known limits | `calibData` rejected by the flashed firmware | serial TLV (`sdk2`) unconfirmed; bench-unproven; `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (`lvds.supported: false`); never run through `bench_run.py` |
 
-Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
+Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
 Cascade (untested with `bench_run.py`): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md). Its config ships with `log_level: "info"`, which `bench_run.py` accepts. Expect 20 Hz (50 ms period) and no missed TLV frames.
 
