@@ -12,7 +12,7 @@ flowchart LR
       direction LR
       subgraph CH1["chirp Tc = idle + ramp (ramp_us)"]
         direction LR
-        I1["idle"] --> R1["ramp<br/>slope (MHz/us)"]
+        I1["idle"] --> R1["ramp (freq rising)<br/>slope (MHz/us)"]
       end
       CH1 --> NXT["idle, ramp ... (next chirps)"]
     end
