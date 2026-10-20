@@ -44,14 +44,6 @@ RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 80
 
 The first line of output is `radar_gui: source=replay  open http://127.0.0.1:8090/`. Open that address: the GUI replays a recorded IWR1843 capture with a stand-in driver, so it needs no board. Stop it with Ctrl-C. [Tutorial 4](04_first_run_gui.md) tours the tabs.
 
-Check a shipped config with the real driver, still without a radar (it opens no port):
-
-```bash
-CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json --validate
-```
-
-The last line is `OK: CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json`.
-
 ## After pulling new code
 
 ```bash

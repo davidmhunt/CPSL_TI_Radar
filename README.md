@@ -47,8 +47,6 @@ Or use the Docker image instead of a toolchain ([`docs/docker.md`](docs/docker.m
 
 ## More
 
-**ROS 2:** [tutorial 6](docs/tutorials/06_ros2.md) builds `ros2/` (`ti_radar_connect`, `raw_radar_msgs`) in a plain colcon workspace.
-
 **Also usable from [console](https://github.com/cpsl-research/console)**, the lab's robot web UI, which builds and runs this driver as one of its sensors.
 
 **Legacy (v1):** [CPSL_TI_Radar_ROS](https://github.com/davidmhunt/CPSL_TI_Radar_ROS) uses the v1 `Runner` API and does not build against v2.0; the v1 code is the `v1.0` tag.

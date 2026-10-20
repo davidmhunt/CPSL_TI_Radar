@@ -13,8 +13,6 @@ Which image a board needs, and how to flash it: [tutorial 3](../docs/tutorials/0
 | `IWR1443/dca1000_raw/iwr_raw_rosnode/firmware/xwr14xx_lvds_stream.bin` | IWR1443 | `dca1000_raw` | v1 prebuilt raw-ADC LVDS streaming image (SDK 2.1 per binary strings); inside the `iwr_raw_rosnode` submodule (https://github.com/davidmhunt/iwr_raw_rosnode, pinned commit `315e514`), which moved as a unit; its `lvds_stream/xwr14xx/` sources are in the submodule | same as above |
 | `IWR1443/dca1000_raw/iwr_raw_rosnode/firmware/xwr68xx_lvds_stream.bin` | IWR6843 | none (the 6843 demo streams LVDS natively) | v1 prebuilt, inside the submodule | not used by the driver |
 
-The submodule is initialised with `git submodule update --init shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode`.
-
 ## Images not in this directory
 
 - The IWR1843 and IWR6843 stock demos, and the IWR1843 SAR/LVDS image

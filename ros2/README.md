@@ -54,5 +54,3 @@ Put this repo under that workspace's `src/` (a git submodule works), initialise 
 source /opt/ros/jazzy/setup.bash
 colcon build --base-paths src --symlink-install --packages-select raw_radar_msgs ti_radar_connect
 ```
-
-Host settings (serial group, DCA1000 NIC, `rmem_max`, firewall) are not ROS ones: [tutorial 2](../docs/tutorials/02_host_setup.md).

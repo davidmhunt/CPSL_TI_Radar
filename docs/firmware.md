@@ -30,6 +30,5 @@ Its README is the entry point: [README](https://github.com/davidmhunt/CPSL_TI_Ra
 ## Things to know before flashing
 
 - Boards are single-user. Flashing needs a person to set the SOP switches (or the cascade's J6 jumper) and to power-cycle.
-- The cascade accepts a chirp cfg only once per power-up; power-cycle it before every run.
 - Whether TI-derived binaries may be redistributed publicly is an open question for the maintainers.
 - Bench results for each firmware are in [`RESULTS.md`](RESULTS.md).

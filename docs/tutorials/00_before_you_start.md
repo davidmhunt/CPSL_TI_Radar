@@ -17,10 +17,6 @@ No commands here. Read it once so the rest makes sense. Everything in this repo 
 
 The board table in the [README](../../README.md) lists which firmware gives which output on which board. The cascade is serial only.
 
-## The path through these tutorials
-
-[1 install](01_install.md) builds the software and needs no radar. [2 host setup](02_host_setup.md) and [3 flash](03_flash_a_radar.md) prepare the machine and the board. [4 GUI](04_first_run_gui.md) and [5 CLI](05_driver_cli_and_adc.md) run and record. [6 ROS 2](06_ros2.md), [7 several radars](07_several_radars.md) and [8 troubleshooting](08_troubleshooting.md) are for when you need them.
-
 ## Terms
 
 - **cfg vs system JSON**: a `.cfg` is TI's chirp configuration, sent to the radar line by line; a **system JSON** tells the driver which board, firmware, `.cfg`, ports and outputs to use.
