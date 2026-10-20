@@ -84,7 +84,7 @@ def test_regression_in_both_builds_fails(tmp_path, capsys):
 
 
 def test_shift_in_one_build_only_passes_with_a_note(tmp_path, capsys):
-    slow = scaled(SAMPLE, "converter (c)", 1.75)  # the P1 layout shift
+    slow = scaled(SAMPLE, "converter (c)", 1.75)  # a code-layout shift
     files = write_set(tmp_path, SAMPLE, slow, SAMPLE, SAMPLE)
     assert run_gate(files) == 0
     out = capsys.readouterr().out

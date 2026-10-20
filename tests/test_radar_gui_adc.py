@@ -231,7 +231,7 @@ def test_options_rerender_last_frame(geom):
 @pytest.mark.slow
 def test_timing_bench_shape(geom, record_property):
     """Median processing time for the bench 4x128x256 cube. Default: gross-regression guard (< 250 ms), tolerant of host
-    load (idle ~35-39 ms, loaded 54-145 ms). The < 50 ms bar (< 50 ms) is opt-in on an idle host:
+    load (idle ~35-39 ms, loaded 54-145 ms). The strict < 50 ms latency bar is opt-in on an idle host:
     `RADAR_GUI_PERF=1 uv run pytest tests/test_radar_gui_adc.py -k timing_bench -q`. Median is always recorded."""
     x = sc.cube(targets=[{"kr": 34, "kd": 10, "sin": 0.3}], noise=30)
     head, data = sc.wire(x)

@@ -9,12 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PATTERN = re.compile(
-    r"\b(radar|core|gui|sensors|release|firmware|docs|rover|nav|create3|ugv)-[0-9]{2}\b")
+    r"\b(radar|core|gui|sensors|release|firmware|docs|rover|nav|create3|ugv|plumb|docker|tf|fwstd|fwdocs)-[0-9]{2}\b")
 SKIP_PREFIXES = (".friday/", "firmware_dev/", "CPSL_TI_Radar_cpp/include/json")
 
-# path -> reason it is allowed to match.
+# (path, exact line substring) -> reason that one line is allowed to match.
 ALLOWLIST = {
-    "radar_gui/tune_api.py": (
+    ("radar_gui/tune_api.py", '"directive": "radar-' + '37"'): (
         'emitted API payload field "directive"; kept per user ruling 2026-10-20'),
 }
 
@@ -31,13 +31,12 @@ def _tracked():
 def test_no_harness_task_ids():
     hits = []
     for rel in _tracked():
-        if rel in ALLOWLIST:
-            continue
         try:
             text = (ROOT / rel).read_bytes().decode("utf-8")
         except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
             continue  # binary, deleted or a submodule path
         for n, line in enumerate(text.splitlines(), 1):
-            if PATTERN.search(line):
+            if PATTERN.search(line) and not any(
+                    rel == p and frag in line for p, frag in ALLOWLIST):
                 hits.append(f"{rel}:{n}: {line.strip()[:100]}")
     assert not hits, "harness task IDs in tracked source:\n" + "\n".join(hits)

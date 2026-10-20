@@ -22,7 +22,7 @@ files via include/json) holds, schema 2:
                    confidence: "high" | "medium" | "low" | "unverified"
   identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note, source}} what the board answers
                    to `version` / `sarStats` when this firmware runs; matched by radar_gui/fwident.py (schema checked there).
-                   source: null (prebuilt only) | {fw_project, artifact} back-reference to firmware_dev/projects (fwstd-03).
+                   source: null (prebuilt only) | {fw_project, artifact} back-reference to firmware_dev/projects.
                    level: "bench" (reply recorded on hardware) | "source" (derived from firmware source) | "unverified".
   cfg_rules        optional {board: {"skip_commands": [str], "required_commands": [str], "forbidden_commands": [str]}}
                    cfg commands this firmware on that board rejects (left in the cfg, never sent) / needs / does not implement.

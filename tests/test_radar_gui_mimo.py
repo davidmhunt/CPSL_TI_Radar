@@ -112,7 +112,7 @@ def test_validate_passes_the_firmware_scheme():
 
 # --- advFrameCfg ----------------------------------------------------------------------------
 
-# NOTE: the Step 1 oracle rows for subframes 2 and 3 used slope 100 for every profile; the cfg's profiles 2 and 3
+# NOTE: the first-draft oracle rows for subframes 2 and 3 used slope 100 for every profile; the cfg's profiles 2 and 3
 # have slope 55 and 15, so those rows are re-derived by hand here (fc = 77 + (slope*3 + B/2)/1000 GHz, B = slope*ts).
 ADV = [  # sub: chirps_per_loop, n_loops, Tc, lambda_mm, step, vmax, bins
     (0, 2, 32, 12, 3.869, 2.519, 40.30, 32),
@@ -158,8 +158,8 @@ def test_plain_cfg_has_no_subframes():
 # --- golden compare: every shipped cfg vs the pre-chirp-loop-model output ----------------------------------
 
 def test_golden_every_shipped_cfg_unchanged():
-    """The fixture is metrics() output from before the chirp-loop model (key numeric fields). The directive Log lists
-    every diff: none in these fields (only the cascade azimuth note wording, not compared here)."""
+    """The fixture is metrics() output from before the chirp-loop model (key numeric fields). Nothing changed in these
+    fields (only the cascade azimuth note wording did, and it is not compared here)."""
     from test_radar_gui_cfg import SHIPPED, board_for
     gold = json.loads((FIX / "golden_metrics_pre_gui14.json").read_text())
     got = {}

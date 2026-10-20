@@ -247,7 +247,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
             }
             if (!read_string(fail, e.at("flash_hint"), bp + "/flash_hint", ent.flash_hint)) return false;
             if (e.contains("note") && !read_string(fail, e.at("note"), bp + "/note", ent.note)) return false;
-            // source (fwstd-03): back-reference to the firmware_dev project; null for prebuilt-only images.
+            // source: back-reference to the firmware_dev project; null for prebuilt-only images.
             // Validated for shape only, not stored: the driver does not use it (parent pytest cross-checks it).
             if (e.contains("source") && !e.at("source").is_null()) {
                 std::string ignored;

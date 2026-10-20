@@ -1,4 +1,4 @@
-"""Descriptor `source` back-references (fwstd-03) resolve to firmware_dev projects.
+"""Descriptor `source` back-references resolve to firmware_dev projects.
 
 Skipped when the firmware_dev submodule is not checked out.
 """

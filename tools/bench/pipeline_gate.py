@@ -6,7 +6,7 @@ same tree: the default build and the `bench-aligned` preset build
 (`-falign-functions=64 -falign-loops=64`). Each build runs
 `bench_pipeline --frames 400` before/after interleaved x3; every run's stdout
 is saved to a file. This script reads those files and applies the gate
-(history.md, P1 ruling):
+(a row is flagged only when the slowdown reproduces across builds):
 
 * a row is a **regression** only if its mean ns/byte is more than the
   threshold (default 5%) slower **in both builds**; a shift in one build only
