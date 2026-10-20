@@ -4,7 +4,7 @@ The radar GUI (`radar_gui/`) is one process: a Python backend plus a no-build we
 
 ## Start it
 
-Demo mode, no hardware: the command from [tutorial 1](01_install.md), then open `http://127.0.0.1:8090/` (it replays a recorded IWR1843 capture through a stand-in driver, `RADAR_GUI_DRIVER`; 8090 is also the Docker demo's port). With a board, drop the demo settings and use the default port 8000:
+Demo mode, no hardware: the command in [tutorial 1](01_install.md). The demo uses port 8090 (also the Docker demo's); a real session uses the default, 8000. With a board, drop the demo settings:
 
 ```bash
 uv run python -m radar_gui               # http://127.0.0.1:8000/; the Radar tab runs CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP
@@ -20,7 +20,7 @@ All flags: `uv run python -m radar_gui --help`. This tutorial uses `--port`, `--
 
 ![Configure tab](../images/gui/configure.png)
 
-**Radar.** The session. Choose a **Saved config** (a system JSON) or **Quick setup** (board, firmware, cfg, ports, DCA1000). The **Recording** boxes (Save ADC frames, Save raw LVDS, Save serial bytes) start from the config; **Save to config** writes your choice back. Press **Validate**, then **Start**, with optional Frames or Duration. **Stop** sends SIGINT. Cards show frames, rate, and dropped / kernel drops / incomplete (DCA1000) or missed (serial). Afterwards you get the run folder `runs/gui/<UTC>_<name>/` and the `adc_data.bin` verdict (`exact` expected). A "Board commands" panel opens at the first cfg command that fails.
+**Radar.** The session. Choose a **Saved config** (a system JSON) or **Quick setup** (board, firmware, cfg, CLI and data port fields, DCA1000): no JSON editing needed. The **Recording** boxes (Save ADC frames, Save raw LVDS, Save serial bytes) start from the config; **Save to config** writes your choice back. Press **Validate**, then **Start**, with optional Frames or Duration. **Stop** sends SIGINT. Cards show frames, rate, and dropped / kernel drops / incomplete (DCA1000) or missed (serial). Afterwards you get the run folder `runs/gui/<UTC>_<name>/` and the `adc_data.bin` verdict (`exact` expected). A "Board commands" panel opens at the first cfg command that fails.
 
 ![Radar tab](../images/gui/radar.png)
 
@@ -32,7 +32,7 @@ All flags: `uv run python -m radar_gui --help`. This tutorial uses `--port`, `--
 
 ![Raw ADC tab](../images/gui/raw_adc.png)
 
-**Devices.** Read-only: serial ports grouped by board (XDS110 `-if00` = CLI, `-if03` = data; serial `00000000` = cascade) and which process holds each, plus DCA1000 host checks (NIC address, `rmem_max`). Fixes are shown as text; run `host_setup.py` ([tutorial 2](02_host_setup.md)) yourself.
+**Devices.** Read-only: serial ports grouped by board (CLI vs data: [tutorial 2](02_host_setup.md#which-port-is-the-cli-which-the-data-port); serial `00000000` = cascade) and which process holds each, plus DCA1000 host checks (NIC address, `rmem_max`). Fixes are shown as text; run `host_setup.py` ([tutorial 2](02_host_setup.md)) yourself.
 
 ![Devices tab](../images/gui/devices.png)
 
@@ -42,13 +42,13 @@ All flags: `uv run python -m radar_gui --help`. This tutorial uses `--port`, `--
 
 ## A real session: IWR1843 + DCA1000
 
-1. Board on the SDK 3.6 demo image ([tutorial 3](03_flash_a_radar.md)), DCA1000 powered and cabled, host set up ([tutorial 2](02_host_setup.md); Devices shows nothing missing).
-2. Configure: board `IWR1843`, firmware `demo`, targets (for example 10 m / 3 m/s / 10 Hz), tick "Stream raw ADC over LVDS". Save as `my_1843_dca` with the by-id CLI and data ports (`ls -l /dev/serial/by-id/`), Serial TLV on, DCA1000 on, Save ADC frames on.
+1. Board on the SDK 3.6 demo image ([tutorial 3](03_flash_a_radar.md)), DCA1000 powered and cabled, host set up ([tutorial 2](02_host_setup.md), including logging out and in after the group change; Devices shows nothing missing).
+2. Configure: board `IWR1843`, firmware `demo`, targets (for example 10 m / 3 m/s / 10 Hz), tick "Stream raw ADC over LVDS". Save as `my_1843_dca` with the by-id CLI and data ports typed into the **Save** card's two port fields (they default to `/dev/ttyACM0` and `/dev/ttyACM1`; which is which: tutorial 2), Serial TLV on, DCA1000 on, Save ADC frames on.
 3. The **Open in Run** button opens it in the Radar tab. **Validate** (expect OK; the DCA1000 line shows 192.168.33.180), then **Start**.
 4. Watch `frames` rise at the cfg rate with dropped = 0 and kernel drops = 0. **Stop**; expect verdict `exact`.
 
 Serial only: Point cloud, Board, Quick setup, board `IWR1843`, cfg `demo_tlv_default.cfg`, Start.
 
-**Cascade (AWR2243).** Power-cycle the EVM first: it accepts a cfg once per power-up, and a failed `sensorStart` also needs a power cycle. Configure `AWR2243_CASCADE` / `cascade_ddm` (at most 256 chirps per frame), save with the cascade by-id ports (ids end `CMSIS-DAP_00000000`), and Start. To start again without a power cycle use **Restart (skip cfg)**; sending the cfg again fails with `Config failed`. Setup and flashing: [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md).
+**Cascade (AWR2243).** Power-cycle it before every run, pick board `AWR2243_CASCADE` / firmware `cascade_ddm` (at most 256 chirps per frame) and use **Restart (skip cfg)** to start again without a power cycle: [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md).
 
 Next: [tutorial 5, the driver CLI and recording ADC](05_driver_cli_and_adc.md).

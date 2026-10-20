@@ -26,7 +26,7 @@ ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
 
 You should see `Build type: Release` from the configure step and `100% tests passed` from `ctest` (28 tests, a short run). `ctest` reads the repo's `tests/fixtures/`, so run it from the full checkout.
 
-**Why not `--recurse-submodules`?** The repo has four submodules and only `include/json` (the JSON library) is needed to build. The others are optional:
+**Why not `--recurse-submodules`?** The repo has four submodules and only `include/json` (the JSON library) is needed to build. The other three:
 
 | Submodule | Fetch it only if |
 |---|---|
@@ -42,7 +42,7 @@ RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 80
     --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin
 ```
 
-The first line of output is `radar_gui: source=replay  open http://127.0.0.1:8090/`. Open that address: the GUI replays a recorded IWR1843 capture with a stand-in driver, so it needs no board. Stop it with Ctrl-C. [Tutorial 4](04_first_run_gui.md) tours the tabs.
+`--source replay --file` plays a recorded IWR1843 capture instead of a live radar, and `RADAR_GUI_DRIVER` swaps the C++ driver for a stand-in, so no board is needed. The first line of output is `radar_gui: source=replay  open http://127.0.0.1:8090/`; open that address. Stop it with Ctrl-C. [Tutorial 4](04_first_run_gui.md) tours the tabs.
 
 ## After pulling new code
 

@@ -8,7 +8,7 @@ In the GUI, the same text is in the run's `driver.log` (Logs tab) and the Radar 
 
 | Message (code) | Meaning and fix |
 |---|---|
-| `cannot open the CLI port ...` / `... serial data port ...` (`open_failed`) | Wrong port, board not powered, or you are not in the group that owns the port (`dialout`, or `plugdev`; in Docker set `SERIAL_GID`, the GUI message names the group). Check `ls /dev/ttyACM*` and `ls /dev/serial/by-id` (or the GUI Devices tab). |
+| `cannot open the CLI port ...` / `... serial data port ...` (`open_failed`) | Wrong port, board not powered, or you are not in the group that owns the port (`dialout`, or `plugdev`; log out and in after adding yourself; in Docker set `SERIAL_GID`, the GUI message names the group). Check `ls /dev/ttyACM*` and `ls /dev/serial/by-id` (or the GUI Devices tab). |
 | `cannot open the DCA1000 sockets ...` (`open_failed`) | The host NIC does not have `dca1000.host_ip`, or another process holds the ports. `host_setup.py` checks the address ([tutorial 2](02_host_setup.md)). |
 | `DCA1000 did not answer ...` (`device_error`) | The capture card is unpowered, unplugged, or on another subnet. If ARP for `192.168.33.180` resolves and the card works elsewhere, an active ufw is dropping its replies: see [`dca1000_firewall.md`](../hardware/dca1000_firewall.md); `host_setup.py` has a `firewall` check. |
 | `not every config command was acknowledged with 'Done'` (`config_rejected`) | A cfg command got no `Done`: an older IWR1843 image rejects `calibData` (skip it with `board_overrides`); otherwise the firmware does not know the command, or the board is in flashing mode or wrong firmware. |

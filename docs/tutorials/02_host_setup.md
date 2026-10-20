@@ -4,8 +4,8 @@ The one place these host settings are described; the other tutorials link here. 
 
 | Need | Why | Manual fix |
 |---|---|---|
-| your user in the serial device's group (`dialout`; `plugdev` on some hosts: `stat -L -c %G /dev/ttyACM0` with a board attached) | read the radar's `/dev/ttyACM*` | `sudo usermod -a -G <group> $USER`, then log out and in |
-| DCA1000 NIC at `192.168.33.30/24` | the card is `192.168.33.180` | static IPv4 address on the wired NIC |
+| your user in the serial device's group (`dialout`; `plugdev` on some hosts: `stat -L -c %G /dev/ttyACM0` with a board attached) | read the radar's `/dev/ttyACM*` | `sudo usermod -a -G <group> $USER`, then **log out and in** (a new group applies only to new logins) |
+| DCA1000 NIC at `192.168.33.30/24` | the card is `192.168.33.180` | static IPv4 address on the wired NIC (below) |
 | `net.core.rmem_max` >= `dca1000.rcvbuf_bytes` | the kernel caps the UDP receive buffer; too small and packets drop | `sudo sysctl -w net.core.rmem_max=134217728` |
 | an allow rule for the card if `ufw` is active | the card's replies look unrelated to the host's commands and are dropped | `sudo ufw allow in on <dca-nic> from 192.168.33.180` |
 
@@ -22,11 +22,18 @@ uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them
 
 Do not put `sudo` in front: the tool calls `sudo` itself, one confirmation per fix. You should see one line per check; after `--apply` the re-check shows `OK`. Without root, the firewall line is `WARN ... cannot verify`, which is not a failure: confirm with `sudo ufw status verbose`. More on firewalls and undoing the rule: [`docs/hardware/dca1000_firewall.md`](../hardware/dca1000_firewall.md).
 
-`--apply` adds `192.168.33.30/24` to the NIC's NetworkManager profile (keeping its other addresses). If the NIC is not managed by NetworkManager, it prints the manual `nmcli` command instead. `--fpga-ip` checks another card address.
+`--apply` adds `192.168.33.30/24` to the NIC's NetworkManager profile (keeping its other addresses). `--fpga-ip` checks another card address.
 
-## Stable port names
+**By hand** (the tool's own commands for a NIC with no profile; add `sudo nmcli connection modify <profile> +ipv4.addresses 192.168.33.30/24` instead if it has one):
 
-`/dev/ttyACM*` numbers change between boots and with several boards. Either use the `/dev/serial/by-id/...` paths (`ls /dev/serial/by-id`; `-if00` is the CLI port, `-if03` the data port) or add `--udev`:
+```bash
+sudo nmcli connection add type ethernet ifname <dca-nic> con-name radar-dca ipv4.method manual ipv4.addresses 192.168.33.30/24 ipv4.never-default yes
+sudo nmcli connection up radar-dca ifname <dca-nic>
+```
+
+## Which port is the CLI, which the data port
+
+Every board's USB chip (XDS110) shows two serial ports. **CLI port**: the radar config goes here; `/dev/serial/by-id/...-if00`, the lower `/dev/ttyACM*` of the pair. **Data port**: the point cloud; `-if03`, the higher one. `/dev/ttyACM*` numbers change between boots and with several boards, so prefer the by-id paths (`ls -l /dev/serial/by-id`) or add `--udev`:
 
 ```bash
 uv run tools/setup/host_setup.py --udev --apply

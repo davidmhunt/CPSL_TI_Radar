@@ -4,7 +4,7 @@ How firmware gets onto a board, and where its sources live. The images and the b
 
 | What | Where |
 |---|---|
-| Prebuilt images (IWR1443 `demo` and `dca1000_raw`) and their provenance | [`shipped_firmware/README.md`](../shipped_firmware/README.md) |
+| Prebuilt images (IWR1443 `demo` and `dca1000_raw` only; **no IWR1843 or IWR6843 image ships**: take TI's SDK 3.6 demo or build one, [tutorial 3](tutorials/03_flash_a_radar.md)) and their provenance | [`shipped_firmware/README.md`](../shipped_firmware/README.md) |
 | Which image a board needs, and flashing with UniFlash | [tutorial 3](tutorials/03_flash_a_radar.md) |
 | Firmware sources, the Docker build environment and the `fw` command (IWR1843, IWR6843, SAR/LVDS, cascade) | the [`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo, the optional `firmware_dev/` submodule |
 

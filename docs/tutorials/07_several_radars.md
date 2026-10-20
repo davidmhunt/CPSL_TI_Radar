@@ -11,7 +11,7 @@ Those two shipped configs show what must differ (copy and edit your own in `conf
 
 | Setting | Why |
 |---------|-----|
-| `cli.port`, `serial_stream.port` | one board each; use `/dev/serial/by-id/...` or the `/dev/radar/<id>-cli` names from `host_setup.py --udev` ([tutorial 2](02_host_setup.md#stable-port-names)) |
+| `cli.port`, `serial_stream.port` | one board each; use `/dev/serial/by-id/...` or the `/dev/radar/<id>-cli` names from `host_setup.py --udev` ([tutorial 2](02_host_setup.md#which-port-is-the-cli-which-the-data-port)) |
 | `dca1000.fpga_ip`, `cmd_port`, `data_port` | each card needs its own address and ports |
 | `dca1000.host_ip` | your NIC's address on that card's subnet |
 | `output.dir` | neither shipped config sets it: give each radar its own, or both write `adc_data.bin` into the launch folder |

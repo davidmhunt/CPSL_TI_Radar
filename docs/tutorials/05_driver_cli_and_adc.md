@@ -29,13 +29,13 @@ It opens no port or socket, prints the board, ports, `frame:` shape and `bytes/f
 cp CPSL_TI_Radar_cpp/config/system/IWR1843_demo_tlv_default.json CPSL_TI_Radar_cpp/config/user/my_1843.json
 ```
 
-Edit `cli.port` (the CLI port) and `serial_stream.port` (the data port); `ls /dev/serial/by-id` lists them. Run `--validate` on the copy, put the board in functional mode, then:
+Edit `cli.port` and `serial_stream.port` (which is which: [tutorial 2](02_host_setup.md#which-port-is-the-cli-which-the-data-port)). Run `--validate` on the copy, put the board in functional mode, then:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/user/my_1843.json --frames 100 --stats
 ```
 
-With a radar streaming you should see one `TLV frame <n>: <k> detected points` line per frame and a `stats v1 serial ...` line every second ([tutorial 8](08_troubleshooting.md) reads them). The run ends after `--frames N`, `--duration S`, Ctrl-C (one press is a clean stop, exit 0) or when no frame arrives for 2 s. `--skip-configure` sends no cfg, for a board already streaming this power-up.
+With a radar streaming you should see one `TLV frame <n>: <k> detected points` line per frame and a `stats v1 serial ...` line every second ([tutorial 8](08_troubleshooting.md) reads them). The run ends after `--frames N`, `--duration S`, Ctrl-C (one press is a clean stop, exit 0) or when no frame arrives for 2 s. `--skip-configure` sends no cfg, for a board already streaming this power-up. `error: cannot open the CLI port` with a permission message: log out and in after the group change ([tutorial 2](02_host_setup.md)); other causes: [tutorial 8](08_troubleshooting.md).
 
 ## Record raw ADC data
 
@@ -45,7 +45,7 @@ Copy the DCA1000 example and edit the copy:
 cp CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_front.json CPSL_TI_Radar_cpp/config/user/my_1843_dca.json
 ```
 
-Set `cli.port`; leave `serial_stream.enabled` false; check `dca1000.host_ip` is your NIC's address (`192.168.33.30`) and `dca1000.fpga_ip` the card's (`192.168.33.180`); and set the output, relative to the JSON file (the folder is created; unset, the file lands in the launch folder): `"output": {"save_adc_frames": true, "save_raw_lvds": false, "dir": "../../../runs/cli"}`.
+The keys a DCA1000 run needs: `board`, `firmware`, `radar_cfg` (a cfg with `lvdsStreamCfg`), `cli.port`, `dca1000.enabled` with `host_ip` (your NIC, `192.168.33.30`) and `fpga_ip` (the card, `192.168.33.180`), `cmd_port` 4096 and `data_port` 4098, and `output.save_adc_frames`. Leave `serial_stream.enabled` false. Add the output folder, relative to the JSON file (created if missing; unset, the file lands in the launch folder): `"output": {"save_adc_frames": true, "save_raw_lvds": false, "dir": "../../../runs/cli"}`.
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/user/my_1843_dca.json --frames 20 --stats
@@ -54,7 +54,7 @@ stat -c %s runs/cli/adc_data.bin     # a whole multiple of 504000 (bytes/frame f
 
 `save_adc_frames` writes `adc_data.bin`; `save_raw_lvds` writes `LVDS_Raw_0.bin`, the raw LVDS stream, for debugging packet loss. A size that is not a whole number of frames means a killed process. The GUI records the same file when you tick **Save ADC frames** ([tutorial 4](04_first_run_gui.md)), into `runs/gui/<UTC>_<name>/`.
 
-The file has no header: per frame, for chirp, for rx, for sample, an int16 real part then an int16 imaginary part, little-endian. Lost packets stay as zeros. Take rx, samples and chirps from the `frame:` line (here 4 x 250 x 126):
+The file has no header: per frame, for chirp, for rx, for sample, an int16 real part then an int16 imaginary part, little-endian. Lost packets stay as zeros. Take rx, samples and chirps from the `frame:` line (here 4 x 250 x 126). Why the chirp axis moves in the last line: [`docs/raw_data/README.md`](../raw_data/README.md) section 7.
 
 ```python
 import numpy as np
@@ -63,6 +63,6 @@ raw = np.fromfile("runs/cli/adc_data.bin", dtype=np.int16).reshape(-1, chirps, r
 cube = (raw[..., 0] + 1j * raw[..., 1]).transpose(0, 2, 3, 1)   # (frame, rx, sample, chirp)
 ```
 
-For range, Doppler and azimuth, `utilities/process_adc_data.ipynb` reads this file plus the `.cfg` the run used (`CFG_FILE`, `ADC_DATA_FILE`; run it with `uv run --group notebooks jupyter`). `tests/fixtures/adc/iwr1843_bench_dca_2frames.bin` with `bench_1843_dca.cfg` is a 2-frame capture to try it on. Raw-ADC reference: [`docs/raw_data/README.md`](../raw_data/README.md).
+For range, Doppler and azimuth, `utilities/process_adc_data.ipynb` reads this file plus the `.cfg` the run used (`CFG_FILE`, `ADC_DATA_FILE`; run it with `uv run --group notebooks jupyter`). `tests/fixtures/adc/iwr1843_bench_dca_2frames.bin` with `bench_1843_dca.cfg` is a 2-frame capture to try it on.
 
 Next: [tutorial 6, ROS 2](06_ros2.md); for several DCA1000s, [tutorial 7](07_several_radars.md).

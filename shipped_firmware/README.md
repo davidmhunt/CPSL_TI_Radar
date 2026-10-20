@@ -15,6 +15,8 @@ Which image a board needs, and how to flash it: [tutorial 3](../docs/tutorials/0
 
 ## Images not in this directory
 
+No IWR1843 or IWR6843 `.bin` is here: [tutorial 3](../docs/tutorials/03_flash_a_radar.md) gives the two routes (TI's SDK install, or a `firmware_dev` build).
+
 - The IWR1843 and IWR6843 stock demos, and the IWR1843 SAR/LVDS image
   (`iwr1843_sar_lvds`), are built from `firmware_dev/` (an opt-in submodule;
   see [`docs/firmware.md`](../docs/firmware.md)).

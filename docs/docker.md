@@ -35,23 +35,14 @@ mkdir -p runs CPSL_TI_Radar_cpp/config/user   # Docker would otherwise create th
 docker compose -f docker/app/compose.yaml --profile hw up hw
 ```
 
-`setup_env.sh` picks the board from `/dev/serial/by-id/*XDS110*` (it asks when there are several), reads the group that owns the node, and asks for the GUI host (default loopback) and port. Flags: `--non-interactive`, `--print` (stdout only), `--force` (overwrite). `docker/app/.env.example` documents every key. Then open `http://127.0.0.1:8090/` (or your `GUI_HOST`). The `hw` service:
+`setup_env.sh` picks the board from `/dev/serial/by-id/*XDS110*` (it asks when there are several), reads the group that owns the node (`SERIAL_GID`; a wrong group gives "Permission denied") and asks for the GUI host (default loopback) and port. Flags: `--non-interactive`, `--print`, `--force`; `docker/app/.env.example` documents every key. Open `http://127.0.0.1:8090/` (or your `GUI_HOST`). The `hw` service uses host networking (so it reaches the DCA1000 on `192.168.33.x`), gets only the two serial devices (as `/dev/ttyACM0` and `/dev/ttyACM1`, the names the shipped JSONs use; other names via Quick setup), runs as your uid and is not `privileged`. It mounts `CPSL_TI_Radar_cpp/config/user/` and `runs/` from the host.
 
-- uses host networking, so the driver reaches the DCA1000 on `192.168.33.x`;
-- gets exactly the two serial devices `RADAR_CLI` and `RADAR_DATA`, runs as your uid, joins the group that owns them (`SERIAL_GID`; `dialout` or `plugdev`, and a wrong group gives "Permission denied" on the port), and is not `privileged`;
-- maps them to `/dev/ttyACM0` and `/dev/ttyACM1` inside, which is what the shipped system JSONs name; other names go in Quick setup or `RADAR_CLI_IN` / `RADAR_DATA_IN` in `.env`;
-- mounts `CPSL_TI_Radar_cpp/config/user/` and `runs/` from the host, so saved configs and run output survive.
-
-**Security.** The GUI has no authentication; a LAN or tailnet `GUI_HOST` lets anyone who can reach it start the radar. The GUI's `--tailscale` flag does not work in the container (no `tailscale` CLI): set `GUI_HOST` to the tailnet IP.
+The GUI has no authentication: keep `GUI_HOST` on loopback, since a LAN or tailnet address lets anyone who can reach it start the radar (the GUI's `--tailscale` flag needs a `tailscale` CLI the image lacks).
 
 ## What stays a host setting
 
-A container shares the host kernel, so [tutorial 2](tutorials/02_host_setup.md) still applies on the host: `net.core.rmem_max` at least `dca1000.rcvbuf_bytes`, the static `192.168.33.30` address on the DCA1000 NIC, the firewall rule, and membership of the device's group. The image inherits only the group id.
-
-`runtime.rx_priority` / `worker_priority` above 0 need `SYS_NICE` and an `rtprio` limit; `hw` adds both, `demo` has neither (without them the driver warns once and runs at normal priority).
-
-A device passed into a running container does not follow a USB re-plug: `up hw --force-recreate`. By-id paths survive a renumbered `/dev/ttyACM*` across restarts.
+A container shares the host kernel, so [tutorial 2](tutorials/02_host_setup.md) still applies on the host: `rmem_max`, the static `192.168.33.30` address, the firewall rule and group membership. Priorities above 0 (`runtime.rx_priority`) need `SYS_NICE` and an `rtprio` limit, which `hw` has and `demo` lacks (the driver then warns once). After a USB re-plug, run `up hw --force-recreate`.
 
 ## Not covered
 
-Publishing the image to a registry; macOS and Windows (serial passthrough and host networking to the DCA1000 do not work through Docker Desktop). The `hw` profile is built to this design; confirm it on your own board before relying on it.
+Publishing the image to a registry; macOS and Windows (serial passthrough and host networking do not work through Docker Desktop). The `hw` profile was only config-checked while writing this page, never run against a board: confirm it on yours.

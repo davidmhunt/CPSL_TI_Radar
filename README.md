@@ -28,14 +28,11 @@ git clone https://github.com/davidmhunt/CPSL_TI_Radar && cd CPSL_TI_Radar
 git submodule update --init CPSL_TI_Radar_cpp/include/json     # the only submodule the build needs
 cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j
 ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
-# GUI in demo mode (a stand-in driver, a recorded capture): open http://127.0.0.1:8090/
-RADAR_GUI_DRIVER=tests/fakes/fake_driver.py uv run python -m radar_gui --port 8090 \
-    --source replay --file tests/fixtures/replay/iwr1843_sdk3_20frames.bin
 ```
 
-Or use the Docker image instead of a toolchain ([`docs/docker.md`](docs/docker.md), after the `json` step above): `docker compose -f docker/app/compose.yaml up --build demo`.
+The demo-mode GUI (no board) is the last step of [tutorial 1](docs/tutorials/01_install.md#check-the-python-side-and-the-demo-gui). Or use the Docker image instead of a toolchain ([`docs/docker.md`](docs/docker.md), after the `json` step above): `docker compose -f docker/app/compose.yaml up --build demo`.
 
-**With a board:** read [tutorial 0](docs/tutorials/00_before_you_start.md), then set up the host ([2](docs/tutorials/02_host_setup.md)), flash ([3](docs/tutorials/03_flash_a_radar.md)) and run the GUI ([4](docs/tutorials/04_first_run_gui.md)).
+**With a board** (no IWR1843 firmware image ships here; tutorial 3 says where to get one): read [tutorial 0](docs/tutorials/00_before_you_start.md), then set up the host ([2](docs/tutorials/02_host_setup.md)), flash ([3](docs/tutorials/03_flash_a_radar.md)) and run the GUI ([4](docs/tutorials/04_first_run_gui.md)).
 
 ## Documentation
 
