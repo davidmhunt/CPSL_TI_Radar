@@ -29,7 +29,7 @@ enum class Code {
     disabled,            // that stream is not enabled in the config
     file_error,          // an output file failed to open, flush or close
     malformed_frame,     // a serial TLV frame failed validation (parse_uart_frame)
-    firmware_mismatch,   // the board runs a different firmware than the system JSON names (gui-33)
+    firmware_mismatch,   // the board runs a different firmware than the system JSON names
 };
 
 const char* to_string(Code c);

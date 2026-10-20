@@ -2,7 +2,7 @@
 #define CPSL_RADAR_UART_FRAME_HPP
 
 // parse_uart_frame: the pure parser of one TI demo frame from the serial data
-// port (directive core-16, P8). No I/O, no allocation once `out.points` has
+// port. No I/O, no allocation once `out.points` has
 // grown to the largest frame, never reads outside [data, data + len) and
 // never throws. SerialStreamer frames the byte stream (magic word, header,
 // then exactly totalPacketLen bytes) and hands each frame to it.

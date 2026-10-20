@@ -172,7 +172,7 @@ bool SystemConfigReader::load_issue(const std::string& code, const std::string& 
     return false;
 }
 
-// "firmware" checks (gui-04): descriptor exists and loads, the board lists it, the board name agrees with
+// "firmware" checks: descriptor exists and loads, the board lists it, the board name agrees with
 // the descriptor's driver_board mapping, and the enabled streams are outputs of that firmware.
 bool SystemConfigReader::check_firmware(const std::string& src, const std::string& board_dir) {
     using cpsl::radar::FirmwareDescriptor;
@@ -224,7 +224,7 @@ bool SystemConfigReader::check_firmware(const std::string& src, const std::strin
                           firmware_path);
     }
 
-    // gui-33: a board that takes a cfg once per power-up must say whether querying it is safe
+    // a board that takes a cfg once per power-up must say whether querying it is safe
     {
         auto idn = firmware.identify.find(gui_board);
         if (idn != firmware.identify.end() && board.lifecycle.config_once_per_boot && !idn->second.has_once_safe) {
@@ -376,7 +376,7 @@ bool SystemConfigReader::load() {
     }
 
     // runtime: optional; every key is applied (rx_cpu, worker_cpu, rx_priority
-    // and worker_priority since core-15: ThreadPlacement.hpp)
+    // and worker_priority: ThreadPlacement.hpp)
     if (data.contains("runtime")) {
         const json& rt = data.at("runtime");
         const std::string p = "/runtime";
@@ -461,7 +461,7 @@ bool SystemConfigReader::load() {
         return false;
     }
 
-    // The firmware decides the cfg command rules (skip/required/forbidden) and the CLI prompt (gui-33 Step 4).
+    // The firmware decides the cfg command rules (skip/required/forbidden) and the CLI prompt.
     // A board_overrides "cli.prompt" still wins over the firmware's.
     const bool keep_prompt = overrides != nullptr && overrides->contains("cli") && overrides->at("cli").is_object() &&
                              overrides->at("cli").contains("prompt");
@@ -478,7 +478,7 @@ bool SystemConfigReader::load() {
             return load_issue("firmware_descriptor", src + ": firmware: " + apply_err, firmware_path);
         }
     } else {
-        // "firmware" is required (gui-04 Step 3a): no default, the error names the board's list and the fix.
+        // "firmware" is required: no default, the error names the board's list and the fix.
         std::string supported;
         for (const std::string& f : board.firmwares) supported += (supported.empty() ? "" : ", ") + f;
         if (supported.empty()) supported = "(none listed)";
@@ -496,7 +496,7 @@ bool SystemConfigReader::load() {
     cpsl::radar::CfgCheckResult chk = cpsl::radar::cross_check_radar_cfg(board, radar_cfg_path, streams);
     cfg_notes = chk.notes;
 
-    // radar cfg vs the firmware's limits (gui-04 Step 3b): error-level rules fail the load, warnings and the
+    // radar cfg vs the firmware's limits: error-level rules fail the load, warnings and the
     // metrics are kept for --validate --json. The host limits sit next to the firmware descriptors.
     std::vector<Issue> limit_errors;
     if (limit_fw != nullptr && chk.ok()) {

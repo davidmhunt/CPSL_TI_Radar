@@ -34,7 +34,7 @@ public:
     bool sendStartCommand();
     bool sendStopCommand();
 
-    //Asks the board one question (gui-33 firmware identity): writes `cmd`, reads until the prompt follows the
+    //Asks the board one question (firmware identity): writes `cmd`, reads until the prompt follows the
     //command echo (or ack + prompt), or timeout_ms passes. Returns the raw reply (echo, text, "Done", prompt),
     //"" if the board said nothing (an I/O error also sets io_error()). One cli echo line, tag "id". Sends only
     //what the caller passes: never part of the cfg.

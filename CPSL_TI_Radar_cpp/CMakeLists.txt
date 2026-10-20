@@ -5,7 +5,7 @@ project(CPSL_TI_Radar_CPP VERSION 0.1.0)
 # find_package(CPSL_TI_Radar) provides CPSL_TI_Radar::driver
 set(PKG_NAME CPSL_TI_Radar)
 
-# Default to an optimized build (core-12). A plain
+# Default to an optimized build. A plain
 # `cmake -S CPSL_TI_Radar_cpp -B build` with no -DCMAKE_BUILD_TYPE gives
 # Release; an explicit type (-DCMAKE_BUILD_TYPE=Debug, the asan-ubsan preset)
 # is left alone. Multi-config generators choose the type at build time.
@@ -27,9 +27,9 @@ endif()
 # C++17 (design D2). The code needs no GNU extensions; CMAKE_CXX_EXTENSIONS
 # stays at its default (-std=gnu++17, as gnu++14 before) only because nothing
 # needed to change it. Strict -std=c++17 did measure 44% slower on
-# bench_pipeline's flat converter kernel (c) (core-10 Log), but that is not a
+# bench_pipeline's flat converter kernel (c), but that is not a
 # strict-mode effect: the kernel's asm is identical with and without
-# __STRICT_ANSI__ (core-10 review). It is most likely code layout/alignment on
+# __STRICT_ANSI__. It is most likely code layout/alignment on
 # a very short memory-bound loop, so it is no reason to avoid strict mode.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

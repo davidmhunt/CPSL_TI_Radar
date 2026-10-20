@@ -1,7 +1,7 @@
-# test_validate_parity_corpus (directive gui-04 Step 3b): the driver's error-level cfg limit checks against the
+# test_validate_parity_corpus: the driver's error-level cfg limit checks against the
 # seeded-bad corpus tests/fixtures/parity/ (one cfg per Python rule code, expected codes in manifest.json).
 # For every entry a system JSON is written to TMP_DIR, `driver --validate --json` is run, and the set of error
-# codes must equal the manifest's (exit 1, ok false). gui-04 Step 4 compares the same corpus against the Python
+# codes must equal the manifest's (exit 1, ok false). The same corpus is compared against the Python
 # validator; tests/test_validate_parity_corpus.py pins the manifest to the Python codes today.
 # Invoked by ctest with -DDRIVER=<binary> -DCONFIG_DIR=<config> -DCORPUS_DIR=<tests/fixtures/parity> -DTMP_DIR=<scratch dir>.
 

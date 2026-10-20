@@ -296,7 +296,7 @@
       "once_safe": true,
       "flash_hint": "./fw flash iwr1843_sar_lvds <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
       "source": {"fw_project": "iwr1843_sar_lvds", "artifact": "iwr1843_sar_lvds.bin"},
-      "note": "source-derived: version same as the demo (mmw_cli.c:761 overridePlatformString xWR18xx); sarStats answers Done on the SAR image only (mmw_cli.c:804) and the reply must end in the SAR prompt mm_sar_lvds:/> (firmware-17; the old SAR image prints mmwDemo:/> and is refused); bench-recorded 2026-10-10 (fw verify pass, capture ACCEPTED, firmware-17 image sha256 a06ee615...)",
+      "note": "source-derived: version same as the demo (mmw_cli.c:761 overridePlatformString xWR18xx); sarStats answers Done on the SAR image only (mmw_cli.c:804) and the reply must end in the SAR prompt mm_sar_lvds:/> (the old SAR image prints mmwDemo:/> and is refused); bench-recorded 2026-10-10 (fw verify pass, capture ACCEPTED, current SAR image sha256 a06ee615...)",
       "probes": [
         {
           "cmd": "version",

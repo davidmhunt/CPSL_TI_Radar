@@ -21,7 +21,7 @@
 
 // A scripted CLI: every written line is answered with "Done" + the prompt.
 // After `fail_after` writes, writes fail: by throwing (as boost::asio::write
-// did on an unplugged port before core-16), by returning EIO, or by hanging until the
+// did on an unplugged port before the termios port), by returning EIO, or by hanging until the
 // write's timeout (a wedged CDC device). reply_delay holds a command's reply
 // back; prompt_error_on drops one command's prompt and fails the next read.
 class FakeCli : public cpsl::radar::ByteStream {

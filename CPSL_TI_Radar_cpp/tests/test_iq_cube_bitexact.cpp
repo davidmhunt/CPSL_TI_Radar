@@ -1,4 +1,4 @@
-// docs-12: ADCCubeConverter output on the tracked raw frame must equal, bit for bit, the cube that the
+// ADCCubeConverter output on the tracked raw frame must equal, bit for bit, the cube that the
 // doc-only decoder docs/raw_data/decode_example.py produces from the same bytes (golden:
 // tests/data/iq/iwr1843_R0.9m_frame99.cube_int16.bin = int16 [rx][sample][chirp][re,im], little-endian).
 // Regenerate the golden only from decode_example.py (see tests/test_raw_data_doc.py), never from the converter.

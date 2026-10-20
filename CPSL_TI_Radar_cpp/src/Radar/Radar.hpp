@@ -41,7 +41,7 @@ struct AdcFrame {
     uint32_t missing_bytes = 0;                          // zero-filled bytes (lost packets)
     FrameShape shape;
     std::vector<std::vector<std::vector<std::complex<int16_t>>>> data;  // [rx][sample][chirp]
-    // shape.lvds_format adc_sar_meta (iwr1843_sar_lvds dataFmt 2, core-24): one ChirpMeta per chirp (record
+    // shape.lvds_format adc_sar_meta (iwr1843_sar_lvds dataFmt 2): one ChirpMeta per chirp (record
     // fields, validity, time, aligned saturation; SarMeta.hpp), swapped in like `data`. Empty for adc.
     ChirpMetaFrame meta;
 };
@@ -70,13 +70,13 @@ struct Stats {
     uint64_t skipped_frames = 0;      // frames never completed: no byte received, or dropped by a resync
     uint64_t implausible = 0;         // packets whose byte count was implausibly far ahead (payload discarded)
     uint64_t resyncs = 0;             // frame assembly restarted on a new byte count (DCA1000 restart)
-    uint64_t rx_overrun = 0;          // packets discarded in user space (RX ring full): 0 since core-15
+    uint64_t rx_overrun = 0;          // packets discarded in user space (RX ring full): always 0, a full ring stops the RX thread reading
     uint64_t rx_ring_full = 0;        // times the RX ring was full and the RX thread stopped reading
     uint64_t kernel_drops = 0;        // packets the kernel dropped (SO_RCVBUF full; SO_RXQ_OVFL)
     uint64_t frames = 0;              // frames completed (and saved, when saving)
     uint64_t frames_overwritten = 0;  // completed frames dropped from a full frame queue before next_adc_frame took them
     uint64_t rcvbuf_bytes = 0;        // SO_RCVBUF granted by the kernel
-    // adc_sar_meta streams only (core-24): chirps with / without a valid metadata record; records of another run
+    // adc_sar_meta streams only: chirps with / without a valid metadata record; records of another run
     uint64_t records_valid = 0;
     uint64_t records_invalid = 0;
     uint64_t records_other_run = 0;
@@ -143,7 +143,7 @@ public:
     // The same for the serial TLV stream, except that only the latest
     // frame waits (a frame replaced before it was taken counts in
     // serial_overwritten). A frame is published as soon as its last byte
-    // is read (core-16).
+    // is read.
     bool next_point_cloud(PointCloud& out, std::chrono::milliseconds timeout, Status* why = nullptr);
 
     Stats stats() const;

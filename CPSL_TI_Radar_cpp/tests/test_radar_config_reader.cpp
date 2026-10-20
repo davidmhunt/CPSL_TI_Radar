@@ -110,7 +110,7 @@ TEST_CASE(reinitialize_after_failure) {
 }
 
 TEST_CASE(non_numeric_field_is_an_error_not_an_exception) {
-    // core-02 characterized std::invalid_argument escaping; now a load error
+    // characterized std::invalid_argument escaping; now a load error
     RadarConfigReader r;
     r.initialize(cfg("bad_number.cfg"));
     CHECK(!r.initialized);
@@ -127,14 +127,14 @@ static void check_rejected(const char* file, const char* needle) {
 }
 
 TEST_CASE(short_lines_are_errors_not_out_of_bounds_reads) {
-    // core-02 UB list: too few fields on profileCfg / chirpCfg / frameCfg
+    // UB list: too few fields on profileCfg / chirpCfg / frameCfg
     check_rejected("short_profilecfg.cfg", "profileCfg has 9 fields");
     check_rejected("short_chirpcfg.cfg", "chirpCfg has 1 fields");
     check_rejected("short_framecfg.cfg", "frameCfg");
 }
 
 TEST_CASE(missing_profile_or_frame_cfg_is_an_error) {
-    // core-02 UB list: these used to leave members uninitialized
+    // UB list: these used to leave members uninitialized
     check_rejected("no_profilecfg.cfg", "no profileCfg");
     check_rejected("no_framecfg.cfg", "no frameCfg");
     check_rejected("bad_chirp_range.cfg", "not a valid frame");
@@ -160,7 +160,7 @@ TEST_CASE(default_constructed_values_are_zero) {
 }
 
 TEST_CASE(short_framecfg_is_an_error_not_ub) {
-    // core-10 review S4: the period field (5 here) is past the end of the line
+    // the period field (5 here) is past the end of the line
     RadarConfigReader r(cfg("short_framecfg.cfg"));
     CHECK(!r.initialized);
     CHECK(r.get_error().find("frameCfg") != std::string::npos);

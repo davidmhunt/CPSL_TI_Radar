@@ -55,7 +55,7 @@ void ADCCubeConverter::shape(ADCCube& cube) const {
 void ADCCubeConverter::convert(const std::vector<uint8_t>& frame_bytes, ADCCube& out)
 {
     shape(out);
-    if (packet_bytes_ != 0) {  // adc_sar_meta (core-24): its own loop, the packed paths below are untouched
+    if (packet_bytes_ != 0) {  // adc_sar_meta: its own loop, the packed paths below are untouched
         fill_packets(frame_bytes, out);
         return;
     }
@@ -144,8 +144,7 @@ void ADCCubeConverter::file_order_packed(const std::vector<uint8_t>& frame_bytes
 
 // Both fills loop in OUTPUT order (rx, sample, chirp): the innermost loop
 // walks one cube[rx][sample] vector over its chirps, so every write is
-// sequential and only the reads stride through the packed frame (core-09
-// review F1: about 0.15 ns/byte, within about 2% of a flat layout end to end).
+// sequential and only the reads stride through the packed frame (measured: about 0.15 ns/byte, within about 2% of a flat layout end to end).
 // One pass over the bytes, no intermediate buffer, no allocation.
 
 // lane_per_rx (IWR1443, SDK 2): interleaved format. Per time step
@@ -220,7 +219,7 @@ void ADCCubeConverter::fill_noninterleaved(const std::vector<uint8_t>& frame_byt
     }
 }
 
-// adc_sar_meta (core-24): chirp c's samples are packet c's ADC block, n = rx * samples + sample inside it,
+// adc_sar_meta: chirp c's samples are packet c's ADC block, n = rx * samples + sample inside it,
 // starting at word c * B/2 + H/2. Inside the block the words pair as in fill_noninterleaved: group g = [A0 A1
 // B0 B1] holds samples 2g and 2g+1 (rx * samples is even, so no pair straddles a packet). Output order as
 // there: sequential writes along cube[rx][sample], reads stride by one packet.

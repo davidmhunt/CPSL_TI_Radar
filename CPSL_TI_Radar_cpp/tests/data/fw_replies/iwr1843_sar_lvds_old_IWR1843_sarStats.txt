@@ -1,4 +1,4 @@
-# synthetic: the pre-firmware-17 SAR image (sarStats answers Done, prompt still mmwDemo:/>); not bench-recorded
+# synthetic: the earlier SAR image (sarStats answers Done, prompt still mmwDemo:/>); not bench-recorded
 sarStats
 Done
 

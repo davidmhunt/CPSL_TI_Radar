@@ -1,4 +1,4 @@
-#live tap (gui-36): the driver's optional point-cloud / ADC feed to an inherited pipe fd;
+#live tap: the driver's optional point-cloud / ADC feed to an inherited pipe fd;
 #used by main.cpp only (Radar does not know about it)
 find_package(Threads REQUIRED)
 

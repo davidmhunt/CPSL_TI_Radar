@@ -1,4 +1,4 @@
-// The cli echo line (directive gui-34 Step 2): one info-level line per command
+// The cli echo line: one info-level line per command
 // sent to the board, written after its reply. radar_gui/driver.py parses it,
 // so the four forms (DONE, ERROR, TIMEOUT, skip) and the tags are pinned here.
 #include "test_harness.hpp"
@@ -57,7 +57,7 @@ SystemConfigReader config_with_cfg(const std::string& name, const std::string& c
         std::ofstream(cfg) << text << "\n" << cfg_text;
     }
     j["radar_cfg"] = cfg;
-    // calibData is skipped by the firmware's cfg_rules (gui-33 Step 4), not by a board override: point the
+    // calibData is skipped by the firmware's cfg_rules, not by a board override: point the
     // driver at a copy of the demo descriptor whose IWR1843 rule is skip_commands instead of required_commands
     {
         const std::string fw_dir = dca_test::tmp_dir() + "/echo_firmware";

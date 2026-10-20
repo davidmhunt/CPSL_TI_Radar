@@ -2,7 +2,7 @@
 #define CPSL_RADAR_PACKET_SOURCE_HPP
 
 // PacketSource: where raw DCA1000 packets come from (driver v2 design §3
-// "Internal seams for tests"; directive core-13). A packet is the DCA1000's
+// "Internal seams for tests"). A packet is the DCA1000's
 // UDP datagram: 10-byte header (sequence number, byte count) + ADC payload,
 // at most kMaxPacketBytes.
 //
@@ -65,7 +65,7 @@ public:
     virtual void release(size_t n);
 
     // packets discarded in user space because the RX ring was full (0 since
-    // core-15: a full ring makes the RX thread wait, see ring_full_count())
+    // a full ring makes the RX thread wait, see ring_full_count())
     virtual uint32_t overrun_count() const { return 0; }
     // times the RX thread found its ring full and stopped reading
     virtual uint32_t ring_full_count() const { return 0; }

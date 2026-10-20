@@ -143,7 +143,7 @@ TEST_CASE(consecutive_frames_fully_overwrite_the_cube) {
 
 TEST_CASE(iq_order_swaps_components_on_both_layouts) {
     // The opposite iq_order of each shipped layout reads the same bytes with
-    // real and imaginary exchanged (core-17 may flip a descriptor to this).
+    // real and imaginary exchanged (a descriptor may be flipped to this).
     {
         ADCCubeConverter conv;
         conv.configure(4, 8, 3, LvdsLayout::two_lane_iq_pairs, IqOrder::i_first);
@@ -237,7 +237,7 @@ TEST_CASE(short_frame_reads_missing_words_as_zero_on_both_layouts) {
     }
 }
 
-// adc_data.bin order (core-14 P9): for chirp, rx, sample: real, imag. It
+// adc_data.bin order: for chirp, rx, sample: real, imag. It
 // must hold exactly the cube's values, which is what the v1 per-element
 // writer put in the file.
 static void check_file_order(ADCCubeConverter& conv, const Bytes& b, size_t rx, size_t samples, size_t chirps) {

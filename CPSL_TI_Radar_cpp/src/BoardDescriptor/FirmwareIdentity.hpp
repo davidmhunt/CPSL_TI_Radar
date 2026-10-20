@@ -1,7 +1,7 @@
 #ifndef CPSL_RADAR_FIRMWARE_IDENTITY_HPP
 #define CPSL_RADAR_FIRMWARE_IDENTITY_HPP
 
-// Firmware identity matcher (directive gui-33): pure, no I/O. Given what the
+// Firmware identity matcher: pure, no I/O. Given what the
 // board answered to a firmware's identify probes (FirmwareDescriptor::identify)
 // say whether it runs that firmware. Mirrors radar_gui/fwident.py; parity is
 // pinned by tests/data/fw_replies/manifest.json (test_firmware_identity.cpp

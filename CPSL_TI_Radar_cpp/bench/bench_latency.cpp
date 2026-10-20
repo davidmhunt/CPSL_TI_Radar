@@ -1,5 +1,5 @@
 // bench_latency: frame complete -> Radar::next_adc_frame return latency
-// (directive core-14 P7), hardware-free.
+// (hardware-free).
 //
 // A Radar runs over fake transports: a ReplayPacketSource stands in for the
 // DCA1000 and a scripted CLI answers every cfg command with "Done". The main

@@ -150,7 +150,7 @@ TEST_CASE(missed_frames_counted_from_frame_number_gaps) {
 }
 
 TEST_CASE(stale_high_frame_number_then_restart_counts_no_missed) {
-    // gui-37: stale bytes of an earlier run's last frame, then the new run from 1
+    // stale bytes of an earlier run's last frame, then the new run from 1
     Rig r("ss_stale");
     WarnLines w;
     for (uint32_t fn : {100u, 1u, 2u, 3u}) r.port->push(make_frame(fn, {}));
@@ -210,7 +210,7 @@ TEST_CASE(frame_with_bad_tlv_publishes_nothing) {
 }
 
 TEST_CASE(rejected_frame_number_is_never_reported_as_latest) {
-    // core-02 known bug, fixed: a rejected frame's header was visible
+    // known bug, fixed: a rejected frame's header was visible
     Rig r("ss_rejected_latest");
     Tlv odd{TLVCodes::DETECTED_POINTS, Bytes(20, 0x41)};  // not a multiple of 16
     r.port->push(make_frame(3, {}));

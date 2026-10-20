@@ -87,8 +87,8 @@ public:
     // Returns false if no packet arrives within the timeout.
     bool pop_packet(uint8_t* buf, int& len, int timeout_ms = 500);
 
-    // packets discarded in user space because the ring was full. Always 0
-    // since core-15 (P6): a full ring makes the RX thread stop reading, so
+    // packets discarded in user space because the ring was full. Always 0:
+    // a full ring makes the RX thread stop reading, so
     // the kernel buffer absorbs the burst instead
     uint32_t get_overrun_count() const;
     // times the RX thread found the ring full and waited for the worker

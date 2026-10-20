@@ -1,4 +1,4 @@
-// DCA1000Socket over loopback (directive core-15): the RX thread and packet
+// DCA1000Socket over loopback: the RX thread and packet
 // ring the DCA worker reads, with a test sender in place of the DCA1000.
 // Nothing here sends a DCA1000 command; every socket is on 127.0.0.1.
 //

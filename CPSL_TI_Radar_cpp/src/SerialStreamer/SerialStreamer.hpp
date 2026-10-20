@@ -2,8 +2,7 @@
 #define SERIALSTREAMER
 
 // SerialStreamer: reads the on-chip demo's TLV frames from the serial data
-// port and publishes each one as soon as its last byte has arrived
-// (directive core-16, P8).
+// port and publishes each one as soon as its last byte has arrived.
 //
 // Framing is length-driven: find the magic word, read the header, then read
 // exactly the rest of totalPacketLen, and only then parse (parse_uart_frame,

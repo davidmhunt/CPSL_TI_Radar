@@ -1,4 +1,4 @@
-// FirmwareDescriptor: strict loading of config/firmware/*.json (gui-04 Step 1).
+// FirmwareDescriptor: strict loading of config/firmware/*.json.
 // Every shipped descriptor must load; the rejection cases pin the strictness
 // (duplicate keys, unknown keys, bad types, inconsistent board sets).
 #include "test_harness.hpp"
@@ -96,10 +96,10 @@ TEST_CASE(sar_driver_board_alias) {
 
 TEST_CASE(gui_only_keys_are_accepted_and_listed_once) {
     const auto& keys = FirmwareDescriptor::gui_only_keys();
-    CHECK(keys.count("identify") == 0);  // parsed strictly since gui-33 (test_firmware_identity)
+    CHECK(keys.count("identify") == 0);  // parsed strictly (test_firmware_identity)
     CHECK(keys.count("mimo") == 1);
-    CHECK(keys.count("lvds_data_fmts") == 0);  // core-24: the driver reads its "formats" (still accepted)
-    CHECK(keys.count("detection") == 1);       // gui-35: on-chip CFAR schema, GUI-only, never enforced here
+    CHECK(keys.count("lvds_data_fmts") == 0);  // the driver reads its "formats" (still accepted)
+    CHECK(keys.count("detection") == 1);       // on-chip CFAR schema, GUI-only, never enforced here
     CHECK(keys.count("detection_note") == 1);
     // the cascade limit keys added in 3a032e0 are plain limit entries
     FirmwareDescriptor fw;
@@ -185,7 +185,7 @@ TEST_CASE(file_level_rejections) {
 }
 
 // ---------------------------------------------------------------------------
-// cfg_rules / cli_overrides (gui-33 Step 4): the per-firmware command rules and prompt, one accessor
+// cfg_rules / cli_overrides: the per-firmware command rules and prompt, one accessor
 // ---------------------------------------------------------------------------
 
 static std::vector<std::string> sv(std::initializer_list<const char*> l) {
@@ -203,7 +203,7 @@ static FirmwareDescriptor must_fw(const std::string& id) {
 
 TEST_CASE(cfg_rules_accessor_shipped_values) {
     // IWR1843 stock demo: SDK 3.6 xwr18xx mmw_cli.c sensorStart -> MmwDemo_isAllCfgInPendingState, which includes
-    // isCalibCfgPending (mss_main.c:1038), so a cfg without calibData is rejected (bench: gui-09 Log). The xwr68xx demo
+    // isCalibCfgPending (mss_main.c:1038), so a cfg without calibData is rejected (bench-observed). The xwr68xx demo
     // (6843 / ODS) has no such term (mss_main.c:1222-1238): no required command there.
     CHECK(must_fw("demo").cfg_rules_for("IWR1843").required_commands == sv({"calibData"}));
     CHECK(must_fw("demo").cfg_rules_for("IWR6843").required_commands.empty());
@@ -244,7 +244,7 @@ TEST_CASE(apply_firmware_to_board_sets_rules_and_prompt) {
     CHECK(has(err, "demo.json: /cfg_rules/IWR1443/skip_commands: \"sensorStart\" is board IWR1443's start/stop command"));
 }
 
-// core-24: lvds_data_fmts.formats says what each dataFmt carries; the driver reads only that sub-key
+// lvds_data_fmts.formats says what each dataFmt carries; the driver reads only that sub-key
 TEST_CASE(lvds_data_fmts_formats) {
     FirmwareDescriptor sar, demo;
     std::string err;
@@ -271,7 +271,7 @@ TEST_CASE(lvds_data_fmts_formats) {
               "expected a non-empty object"));
     CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_data_fmts"]["formats"]["1"] = 1; }),
               "/lvds_data_fmts/formats/1"));
-    // a new top-level key is still refused (formats is a sub-key so a pre-core-24 driver loads the file)
+    // a new top-level key is still refused (formats is a sub-key so a driver without adc_sar_meta support loads the file)
     CHECK(has(load_mutated("iwr1843_sar_lvds", [](json& j) { j["lvds_stream_formats"] = json::object(); }),
               "unknown key"));
 }

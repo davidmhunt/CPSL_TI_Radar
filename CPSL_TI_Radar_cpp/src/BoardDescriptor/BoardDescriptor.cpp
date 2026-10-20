@@ -258,7 +258,7 @@ bool BoardDescriptor::from_json(const json& j, const std::string& expected_name,
     {
         const json& c = j.at("cfg_dialect");
         const std::string p = "/cfg_dialect";
-        // skip_commands / required_commands / forbidden_commands moved to the firmware descriptor (gui-33 Step 4):
+        // skip_commands / required_commands / forbidden_commands moved to the firmware descriptor:
         // they depend on the image, not the silicon. Say where they went instead of "unknown key".
         if (c.is_object()) {
             for (const char* moved : {"skip_commands", "required_commands", "forbidden_commands"}) {
@@ -647,7 +647,7 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
     }
 
     // lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>. What a dataFmt carries is the firmware's
-    // (lvds.stream_formats, from the firmware descriptor; default {1: adc}); core-24 adds adc_sar_meta.
+    // (lvds.stream_formats, from the firmware descriptor; default {1: adc}); the SAR firmware adds adc_sar_meta.
     if (lvds_cfg.empty()) {
         note("no lvdsStreamCfg line: LVDS ADC streaming not confirmed by the cfg");
     }
@@ -685,7 +685,7 @@ CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& b, const std::string
         }
     }
 
-    // adc_sar_meta (core-24; firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md section 1): the
+    // adc_sar_meta (firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md section 1): the
     // firmware takes it only with complex, non-interleaved ADC output and an even rx * samples; the driver also
     // needs one profile (one packet size) and the I/Q order SampleSwap gives
     if (sar_meta) {

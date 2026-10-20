@@ -198,7 +198,7 @@ size_t RadarConfigReader::get_bytes_per_frame(){
     //number of chirps per frame
     const size_t chirps_per_frame = static_cast<size_t>(get_chirps_per_frame());
 
-    //adc: 4 bytes per complex sample, packed; adc_sar_meta: one packet of B bytes per chirp (core-24)
+    //adc: 4 bytes per complex sample, packed; adc_sar_meta: one packet of B bytes per chirp
     if (lvds_stream_format == cpsl::radar::LvdsStreamFormat::adc_sar_meta) {
         return get_chirp_packet_bytes() * chirps_per_frame;
     }
@@ -443,11 +443,11 @@ bool RadarConfigReader::read_frame_cfg(const std::vector<std::string>& values){
 }
 
 /**
- * @brief Decode lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW> (core-24); a later line
+ * @brief Decode lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>; a later line
  * replaces an earlier one, as on the CLI
  */
 bool RadarConfigReader::read_lvds_stream_cfg(const std::vector<std::string>& values){
-    //never fails the load (it did not before core-24): a short or non-numeric line is left to
+    //never fails the load (it never did): a short or non-numeric line is left to
     //cross_check_radar_cfg, which reports it when the DCA1000 stream is enabled
     if (values.size() < 4) return true;
     char* end1 = nullptr;

@@ -1,4 +1,4 @@
-// core-17 golden I/Q test: one real raw LVDS frame (IWR1843, stock demo, DCA1000, ~0.9 m reflector,
+// Golden I/Q test: one real raw LVDS frame (IWR1843, stock demo, DCA1000, ~0.9 m reflector,
 // tests/data/iq/README.md) through ADCCubeConverter::convert() with the IWR1843 board descriptor's
 // layout/iq_order; a chirp-averaged range DFT on rx0 must peak at the reflector's range bin, with its
 // mirror bin (N - peak) well below. A flipped iq_order moves the peak to the mirror bin.

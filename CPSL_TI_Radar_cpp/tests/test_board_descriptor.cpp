@@ -1,5 +1,5 @@
 // BoardDescriptor: strict loading of config/boards/*.json and the radar .cfg
-// cross-checks (driver v2 design §1, directive core-09).
+// cross-checks (driver v2 design §1).
 //
 // Required coverage: the four shipped boards load (4 cases) and six rejection
 // cases (unknown key, bad enum, lanes/layout mismatch, and three cfg
@@ -121,7 +121,7 @@ TEST_CASE(loads_IWR1843) {
     CHECK(d.sdk == Sdk::mmwave_sdk_3);
     CHECK_EQ(d.cli.baud, 115200u);
     CHECK_EQ(d.cli.ack, std::string("Done"));
-    CHECK_EQ(d.cli.prompt, std::string(":/>"));  // substring: matches mmwDemo:/> and mm_sar_lvds:/> (core-21)
+    CHECK_EQ(d.cli.prompt, std::string(":/>"));  // substring: matches mmwDemo:/> and mm_sar_lvds:/>
     CHECK_EQ(d.cli.prompt_wait_ms, 500u);
     CHECK_EQ(d.cli.start_cmd, std::string("sensorStart"));
     CHECK_EQ(d.cli.stop_cmd, std::string("sensorStop"));
@@ -264,7 +264,7 @@ TEST_CASE(rejects_dca1000_on_cascade) {
 }
 
 TEST_CASE(serial_with_sdk2_dialect_is_accepted) {
-    // core-16: the SDK 2 frame format is confirmed (docs/developer/radar_notes.md#sdk-2-uart-frame)
+    // the SDK 2 frame format is confirmed (docs/developer/radar_notes.md#sdk-2-uart-frame)
     BoardDescriptor d = must_load("IWR1443");
     std::string cfg = write_cfg("bd_1443_serial.cfg", "adcCfg 2 1\nadcbufCfg 0 1 0 1\n");
     CHECK(check(d, cfg, false, true).ok());
@@ -356,7 +356,7 @@ TEST_CASE(rejects_bad_names_files_and_json) {
 }
 
 // ---------------------------------------------------------------------------
-// Duplicate JSON keys (core-09 review F2): nlohmann keeps the last value, so
+// Duplicate JSON keys: nlohmann keeps the last value, so
 // the loader must reject them instead of silently using one.
 // ---------------------------------------------------------------------------
 
@@ -427,8 +427,8 @@ static std::vector<std::string> v(std::initializer_list<const char*> l) {
 }
 
 TEST_CASE(skip_commands_per_firmware) {
-    // The only skip is bpmCfg on the IWR1843 stock demo (SDK 3.6 xwr18xx mmw_cli.c has no such command; gui-39).
-    // The stock IWR1843 demo needs calibData for sensorStart (gui-09 bench). The rules live in config/firmware (gui-33 Step 4).
+    // The only skip is bpmCfg on the IWR1843 stock demo (SDK 3.6 xwr18xx mmw_cli.c has no such command).
+    // The stock IWR1843 demo needs calibData for sensorStart (bench-observed). The rules live in config/firmware.
     CHECK(with_firmware(must_load("IWR1843"), "demo").cfg_dialect.skip_commands == v({"bpmCfg"}));
     CHECK(with_firmware(must_load("IWR6843"), "demo").cfg_dialect.skip_commands.empty());
     CHECK(with_firmware(must_load("IWR1443"), "demo").cfg_dialect.skip_commands.empty());
@@ -438,7 +438,7 @@ TEST_CASE(skip_commands_per_firmware) {
 }
 
 TEST_CASE(board_loader_rejects_the_moved_cfg_rules_keys) {
-    // skip/required/forbidden_commands moved to config/firmware/<fw>.json cfg_rules.<board> (gui-33 Step 4)
+    // skip/required/forbidden_commands moved to config/firmware/<fw>.json cfg_rules.<board>
     for (const char* key : {"skip_commands", "required_commands", "forbidden_commands"}) {
         const std::string e = reject("IWR1843", [&](json& j) { j["cfg_dialect"][key] = json::array(); });
         CHECK(has(e, std::string("/cfg_dialect/") + key + ": moved to the firmware descriptor"));
@@ -495,7 +495,7 @@ TEST_CASE(filter_with_empty_skip_list_is_a_no_op) {
     CHECK(p.skipped.empty());
 }
 
-// cfg_dialect.required_commands / forbidden_commands and data_uart.supported (core-22 Step 1)
+// cfg_dialect.required_commands / forbidden_commands and data_uart.supported
 TEST_CASE(shipped_boards_are_unchanged_by_the_new_keys) {
     for (const char* n : {"IWR1443", "IWR1843", "IWR6843", "AWR2243_CASCADE"}) {
         BoardDescriptor d = must_load(n);
@@ -560,7 +560,7 @@ TEST_CASE(data_uart_unsupported_board) {
 TEST_MAIN()
 
 // ---------------------------------------------------------------------------
-// IWR1843_SAR descriptor (core-22 Step 3/4)
+// IWR1843_SAR descriptor
 // ---------------------------------------------------------------------------
 
 static const std::string kSarCfg = std::string(CONFIG_DIR) + "/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg";
@@ -576,10 +576,10 @@ TEST_CASE(sar_descriptor_differs_from_iwr1843_only_as_intended) {
     CHECK_EQ(sar["name"].get<std::string>(), std::string("IWR1843_SAR"));
     // apply the intended differences to the stock descriptor: the rest must be identical
     base["name"] = "IWR1843_SAR";
-    base["firmwares"] = sar["firmwares"];   // host-GUI metadata (gui-10), differs per board
+    base["firmwares"] = sar["firmwares"];   // host-GUI metadata, differs per board
     base["cli"]["stop_timeout_ms"] = 4000;
     base["data_uart"] = json{{"supported", false}};
-    base["cli"]["cmd_timeout_ms"] = 500;     // core-23 Step 4: first sensorStart ack measured 74 ms
+    base["cli"]["cmd_timeout_ms"] = 500;     // first sensorStart ack measured 74 ms
     CHECK(base == sar);
 
     BoardDescriptor d = with_firmware(must_load("IWR1843_SAR"), "iwr1843_sar_lvds");
@@ -617,7 +617,7 @@ TEST_CASE(sar_cross_check_accepts_sar_cfg_and_rejects_others) {
     for (std::string line; std::getline(in, line);)
         if (line.rfind("calibData", 0) != 0) nocal += line + "\n";
     CHECK(any_has(check(d, write_cfg("sar_nocal.cfg", nocal), true, false).errors, "required command calibData is missing"));
-    // dataFmt 2 (core-24): adc_sar_meta on this firmware, accepted
+    // dataFmt 2: adc_sar_meta on this firmware, accepted
     std::string fmt2 = text;
     const std::string a = "lvdsStreamCfg -1 0 1 0";
     fmt2.replace(fmt2.find(a), a.size(), "lvdsStreamCfg -1 1 2 0");
@@ -629,7 +629,7 @@ TEST_CASE(sar_cross_check_accepts_sar_cfg_and_rejects_others) {
     CHECK(!check(d, kSarCfg, true, true).ok());
 }
 
-// core-24: the firmware decides what a dataFmt carries; adc_sar_meta's constraints are enforced
+// the firmware decides what a dataFmt carries; adc_sar_meta's constraints are enforced
 TEST_CASE(sar_fmt2_cross_check_constraints) {
     BoardDescriptor d = with_firmware(must_load("IWR1843_SAR"), "iwr1843_sar_lvds");
     CHECK(d.lvds.stream_formats.size() == 2);

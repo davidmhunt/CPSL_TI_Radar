@@ -1,4 +1,4 @@
-// adc_data.bin is exact after stop() (directive core-11 Step 5).
+// adc_data.bin is exact after stop().
 //
 // RESULTS.md Finding 1: a SIGINT stop left adc_data.bin 896 B short on every
 // DCA baseline run (303408000 B expected, 303407104 written = the largest
@@ -41,7 +41,7 @@ TEST_CASE(adc_data_bin_is_exact_after_stop) {
     const long long expected = static_cast<long long>(N) * static_cast<long long>(B);
 
     // the bug's mechanism was an ofstream buffer tail never flushed. Since
-    // core-14 P9 a frame is one frame-sized write that bypasses the buffer,
+    // a frame is one frame-sized write that bypasses the buffer,
     // so the file may already be whole here; stop() must make it whole either way
     const long long before = file_size(bin);
     std::cout << "    before stop(): " << before << " of " << expected << " B on disk" << std::endl;

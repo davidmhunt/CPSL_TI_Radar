@@ -20,7 +20,7 @@
 // skipped_frames. Data for a frame that was already emitted is late: it is
 // counted and dropped.
 //
-// Plausibility and resync (core-11 review S1, directive core-15). Once the
+// Plausibility and resync. Once the
 // stream has started, a packet is implausible when
 //   - ahead:  its byte count is more than the window W past the end of the
 //     furthest payload, beyond what its sequence number explains (each
@@ -105,7 +105,7 @@ public:
     void configure(size_t bytes_per_frame, size_t reorder_slack_bytes = 0);
 
     void set_frame_sink(FrameSink sink);
-    // keep the received ranges of each incomplete emitted frame for get_frame_received() (core-24); off by
+    // keep the received ranges of each incomplete emitted frame for get_frame_received(); off by
     // default. Call after configure().
     void set_keep_received(bool keep);
 
@@ -121,7 +121,7 @@ public:
     const std::vector<uint8_t>& get_frame_bytes() const;
     uint64_t get_frame_index() const;
     // The most recently emitted frame's number in the current recording: its stream offset / bytes_per_frame
-    // (the index without the resync bias; it starts again at 0 after a resync). core-24 uses it for the chirp
+    // (the index without the resync bias; it starts again at 0 after a resync). adc_sar_meta uses it for the chirp
     // position k = number * chirps per frame.
     uint64_t get_frame_number() const { return completed_number_; }
     // With set_keep_received(true): the byte ranges [begin, end) of that frame that arrived (sorted, disjoint)
@@ -186,7 +186,7 @@ private:
 
     Stats stats_;
 
-    // core-24, at the end so the members above keep their offsets: the emitted frame's number (no resync bias)
+    // at the end so the members above keep their offsets: the emitted frame's number (no resync bias)
     // and, for an incomplete frame, its received ranges
     uint64_t completed_number_ = 0;
     bool keep_received_ = false;
@@ -203,7 +203,7 @@ private:
     bool complete(const Slot& s) const;
     // emit (or skip, if empty) base_, then advance it
     int close_base();
-    // place a plausible packet's payload (the core-11 P1 path)
+    // place a plausible packet's payload (the byte-offset placement path)
     int place(const uint8_t* payload, uint64_t first, uint64_t end, SeqKind kind);
     // add an implausible packet to the run (or start a new run); resync at kResyncPackets
     int hold(const uint8_t* data, int len, uint64_t first, uint64_t end, bool late, bool implausible);

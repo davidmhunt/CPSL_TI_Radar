@@ -13,7 +13,7 @@
 //                      paired into complex values.
 //   iq_order says which component comes first on the wire. The shipped
 //   descriptors keep the v1 behaviour: lane_per_rx i_first, two_lane_iq_pairs
-//   q_first (design §1; core-17 settles it from a bench capture).
+//   q_first (design §1; settled from a bench capture).
 //
 // Call configure() once after the radar parameters are known, then convert()
 // for each received frame. convert(bytes, out) writes into a caller-owned
@@ -21,7 +21,7 @@
 // buffer is not reallocated. The conversion is one pass over the packed
 // bytes in output order (rx, sample, chirp): writes are sequential along each
 // cube[rx][sample] vector, reads stride through the frame. No intermediate
-// buffer and no allocation per frame (core-14 P3). A frame shorter than the
+// buffer and no allocation per frame. A frame shorter than the
 // configured shape reads the missing words as 0.
 
 #include <vector>
@@ -39,7 +39,7 @@ public:
                    size_t chirps_per_frame, cpsl::radar::LvdsLayout layout,
                    cpsl::radar::IqOrder iq_order);
 
-    // core-24, lvds stream format adc_sar_meta: the frame is chirps_per_frame packets of `packet_bytes` (B)
+    // lvds stream format adc_sar_meta: the frame is chirps_per_frame packets of `packet_bytes` (B)
     // each, chirp c's ADC samples starting at byte c * B + header_bytes (H); the rest of a packet (HSI header,
     // metadata record slots) is skipped. B and H must be multiples of 8 (the DCA1000's byte order is per
     // 8-byte group, so the two_lane_iq_pairs pairing then holds inside each chirp) and the layout
@@ -58,7 +58,7 @@ public:
     // missing words of a short frame as 0). One sequential pass over the
     // packed bytes; `out` is resized to 2 * rx * samples * chirps (no
     // allocation once it has that size). The driver writes it with a single
-    // write() per frame (core-14 P9).
+    // write() per frame.
     void file_order(const std::vector<uint8_t>& frame_bytes, std::vector<std::int16_t>& out) const;
 
     // Give `cube` the configured [rx][sample][chirp] shape; no allocation
@@ -74,10 +74,10 @@ private:
     size_t packet_bytes_ = 0;  // 0: packed adc stream
     size_t header_bytes_ = 0;
 
-    // the adc_data.bin order of the packed (adc) stream: the pre-core-24 file_order() body
+    // the adc_data.bin order of the packed (adc) stream: the file_order() body from before adc_sar_meta
     __attribute__((noinline)) void file_order_packed(const std::vector<uint8_t>& frame_bytes,
                                                      std::vector<std::int16_t>& out) const;
-    // kept out of line so the packed (dataFmt 1) loops they sit beside compile as before core-24
+    // kept out of line so the packed (dataFmt 1) loops they sit beside compile as before adc_sar_meta
     __attribute__((noinline)) void fill_packets(const std::vector<uint8_t>& frame_bytes, ADCCube& cube) const;
     __attribute__((noinline)) void file_order_packets(const std::vector<uint8_t>& frame_bytes,
                                                       std::vector<std::int16_t>& out) const;

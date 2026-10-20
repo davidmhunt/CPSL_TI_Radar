@@ -1,5 +1,5 @@
 // bench_pipeline: hardware-free replay benchmark of the DCA1000 raw-ADC path
-// (driver v2 design §5, directive core-09).
+// (driver v2 design §5).
 //
 // Replays synthetic DCA1000 UDP packets through the driver's FrameAssembler and an
 // ADC converter, and reports frames/s, CPU ns per ADC byte and heap
@@ -13,7 +13,7 @@
 //   2. pipeline replay: FrameAssembler + converter over a packet stream, for
 //      three scenarios (clean, 1% dropped packets, duplicates + reordering),
 //      again for all three variants
-//   3. driver replay (rows "drv_*", variant (d)), added for the core-14 perf
+//   3. driver replay (rows "drv_*", variant (d)), added for the driver perf
 //      gate: the same kind of packet stream through the driver's own
 //      DCA1000Handler (configure_pipeline + ingest_packet: assembler,
 //      converter, publish, adc_data.bin), as the DCA worker thread runs it.
@@ -27,7 +27,7 @@
 //
 // Compare two builds with tools/bench/pipeline_gate.py (the perf gate).
 //
-// --udp (loopback mode, directive core-15) replaces the three measurements
+// --udp (loopback mode) replaces the three measurements
 // above with one run of the real RX path: a sender thread replays the clean
 // synthetic stream over 127.0.0.1 into a real DCA1000Socket (its RX thread
 // and packet ring), and a worker thread runs DCA1000Handler::process_next_packet
@@ -493,7 +493,7 @@ ThreadUsage usage_delta(const rusage& a, const rusage& b) {
 }
 
 struct UdpOptions {
-    double rate = 3460;  // packets/s, 0 = max; 3460 = the core-04 IWR1843 baseline
+    double rate = 3460;  // packets/s, 0 = max; 3460 = the IWR1843 baseline
     uint32_t stall_ms = 0;
     uint32_t stall_every = 0;
     size_t rcvbuf = 64 * 1024 * 1024;  // dca1000.rcvbuf_bytes default
@@ -766,7 +766,7 @@ int main(int argc, char** argv) {
 #else
     const char* opt = "NO (numbers are not comparable with optimized builds)";
 #endif
-    std::printf("bench_pipeline (core-09)\n");
+    std::printf("bench_pipeline\n");
     const char* build_type = std::strlen(BENCH_BUILD_TYPE) ? BENCH_BUILD_TYPE : "(none)";
     std::printf("  build type : %s   optimized: %s   compiler: %s %s\n", build_type, opt, cc, __VERSION__);
     std::printf("  host       : %s, %s, %s %s\n", un.nodename, cpu_model().c_str(), un.sysname, un.release);
@@ -935,7 +935,7 @@ int main(int argc, char** argv) {
     std::printf("\n  ns/byte: wall-clock time per ADC payload byte on one thread. allocs/frame: operator new\n"
                 "  calls in the timed region / frames converted. x (a): how many times faster than (a), by\n"
                 "  median ns/byte. Replay rows include the driver's FrameAssembler (byte-offset placement,\n"
-                "  core-11 P1; flushed at end of stream), identical for every variant. drv_* rows (d) run the\n"
+                "  flushed at end of stream), identical for every variant. drv_* rows (d) run the\n"
                 "  driver's DCA1000Handler instead (no flush: a clean tail closes the last frame). Every replay\n"
                 "  row must complete exactly the requested number of frames (\"= golden\"). Compare variants\n"
                 "  within a row group, not across groups.\n");

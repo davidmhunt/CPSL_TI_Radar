@@ -1,7 +1,7 @@
 #ifndef CPSL_RADAR_FIRMWARE_DESCRIPTOR_HPP
 #define CPSL_RADAR_FIRMWARE_DESCRIPTOR_HPP
 
-// Firmware descriptor (directive gui-04): what one firmware image provides per
+// Firmware descriptor: what one firmware image provides per
 // board, loaded from config/firmware/<id>.json (schema 2). The same files feed
 // the host GUI (radar_gui/cfg/firmware.py), so the driver and the GUI share one
 // source of truth for the per-firmware limits.
@@ -11,10 +11,10 @@
 // Nothing here throws, prints or exits.
 //
 // The driver reads: id, outputs, templates, driver_board, system_enables,
-// limits, identify (gui-33: what the board answers when asked, see
-// FirmwareIdentity.hpp), cfg_rules and cli_overrides (gui-33 Step 4: the cfg command rules
+// limits, identify (what the board answers when asked, see
+// FirmwareIdentity.hpp), cfg_rules and cli_overrides (the cfg command rules
 // and CLI prompt that depend on the firmware image, not the silicon). Keys that only the GUI
-// uses are listed in gui_only_keys() (the one place to extend: gui-35 adds "detection") and
+// uses are listed in gui_only_keys() (the one place to extend, e.g. "detection") and
 // are accepted but not interpreted; every other unknown key is an error.
 //
 // cfg_rules_for()/cli_prompt_for() are the one accessor for "firmware X on board Y"; the
@@ -52,7 +52,7 @@ struct FirmwareDescriptor {
     };
     using BoardLimits = std::map<std::string, Limit>;
 
-    // identify.<board> (gui-33): the probes that tell this firmware from the others. Regexes use the
+    // identify.<board>: the probes that tell this firmware from the others. Regexes use the
     // subset shared by Python `re` and C++ std::regex ECMAScript (checked at load).
     struct IdentifyProbe {
         std::string cmd;
@@ -71,7 +71,7 @@ struct FirmwareDescriptor {
         std::string note;
     };
 
-    // cfg_rules.<board> (gui-33 Step 4): commands the firmware rejects (left in the cfg file, never
+    // cfg_rules.<board>: commands the firmware rejects (left in the cfg file, never
     // sent), needs, or does not implement. Each entry is one command word.
     struct CfgRules {
         std::vector<std::string> skip_commands;
@@ -100,7 +100,7 @@ struct FirmwareDescriptor {
     // mimo.scheme ("tdm" | "ddma"; "" = no mimo block): the only part of the GUI-owned `mimo` block the driver reads,
     // because the TX count of the cfg limit checks depends on it. The rest of `mimo` stays GUI-only.
     std::string mimo_scheme;
-    // lvds_data_fmts.formats (core-24): lvdsStreamCfg dataFmt -> what the LVDS stream carries on this image.
+    // lvds_data_fmts.formats: lvdsStreamCfg dataFmt -> what the LVDS stream carries on this image.
     // Empty = key absent = {1: adc}. apply_firmware_to_board copies it to BoardDescriptor::Lvds::stream_formats.
     std::map<int, LvdsStreamFormat> lvds_stream_formats;
 

@@ -1,7 +1,7 @@
 #ifndef CPSL_RADAR_LIVETAP_HPP
 #define CPSL_RADAR_LIVETAP_HPP
 
-// Live tap (gui-36): an optional feed of the run's point clouds (and, every
+// Live tap: an optional feed of the run's point clouds (and, every
 // K-th, ADC frames) to a file descriptor the parent process handed over
 // (`--tap-fd N`, a pipe's write end). It exists for the GUI; nothing else
 // reads it. Wire format, per message:

@@ -1,5 +1,5 @@
 {
-  "comment": "Shared by pytest (radar_gui/fwident.py) and ctest (gui-33 Step 2). replies: probe cmd -> fixture file in this directory (null = board did not answer). level: demo/IWR1843 version is bench-recorded; every other entry is source-derived or a hypothesis.",
+  "comment": "Shared by pytest (radar_gui/fwident.py) and ctest. replies: probe cmd -> fixture file in this directory (null = board did not answer). level: demo/IWR1843 version is bench-recorded; every other entry is source-derived or a hypothesis.",
   "cases": [
     {
       "id": "demo_1843_on_demo",
@@ -21,7 +21,7 @@
         "sarStats": "demo_IWR1843_sarStats.txt"
       },
       "verdict": "mismatch",
-      "note": "the gui-09 A1 case, inverted"
+      "note": "the stock-demo bench case, inverted"
     },
     {
       "id": "demo_expected_on_sar_board",
@@ -54,7 +54,7 @@
         "sarStats": "iwr1843_sar_lvds_old_IWR1843_sarStats.txt"
       },
       "verdict": "mismatch",
-      "note": "pre-firmware-17 SAR image: sarStats Done but the prompt is mmwDemo:/>"
+      "note": "earlier SAR image: sarStats Done but the prompt is mmwDemo:/>"
     },
     {
       "id": "demo_1843_on_6843_board",

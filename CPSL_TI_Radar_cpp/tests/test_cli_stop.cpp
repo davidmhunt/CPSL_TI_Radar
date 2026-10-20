@@ -1,4 +1,4 @@
-// No-throw stop path (directive core-11 Step 6; RESULTS.md Finding 2).
+// No-throw stop path (RESULTS.md Finding 2).
 //
 // Unplugging the radar's USB mid-capture made the sensorStop write throw an
 // uncaught boost::system::system_error ("write: Input/output error") and the
@@ -84,11 +84,11 @@ TEST_CASE(uninitialized_controller_does_not_throw) {
     CHECK(!cli.send_config_to_IWR());
 }
 
-// ---- Step 3 of core-13: sensorStop ack window, per-command io_error, timed write ----
+// ---- sensorStop ack window, per-command io_error, timed write ----
 
 // The IWR1843 fixture: cmd_timeout_ms 100, frame period 100 ms. sensorStop is
 // acknowledged only after the current frame ends, so a 100 ms window missed
-// it on every healthy bench stop (core-06 review S1).
+// it on every healthy bench stop.
 TEST_CASE(sensorStop_ack_after_1_5x_cmd_timeout_is_no_warning) {
     SystemConfigReader sys = serial_free_config("cli_slow_stop");
     std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
@@ -126,7 +126,7 @@ TEST_CASE(stop_timeout_override_and_floor) {
     CHECK_EQ(cli2.stop_timeout_ms(), 200);  // no frame period known: max(100, 0 + 200)
 }
 
-// core-11 review S2: io_error_ was sticky, so a prompt-read hiccup after a
+// io_error_ was sticky, so a prompt-read hiccup after a
 // "Done" made a later plain timeout look like an I/O error.
 TEST_CASE(prompt_read_error_then_timeout_is_reported_as_a_timeout) {
     SystemConfigReader sys = serial_free_config("cli_sticky");
@@ -145,7 +145,7 @@ TEST_CASE(prompt_read_error_then_timeout_is_reported_as_a_timeout) {
     CHECK(!w.empty() && w[0].find("no 'Done' for 'sensorStop'") != std::string::npos);
 }
 
-// core-11 review S5: a blocking write could hang stop() on a wedged device.
+// a blocking write could hang stop() on a wedged device.
 TEST_CASE(write_that_never_completes_returns_within_the_timeout) {
     SystemConfigReader sys = serial_free_config("cli_hang");
     std::shared_ptr<FakeCli> fake = std::make_shared<FakeCli>();
@@ -166,7 +166,7 @@ TEST_CASE(write_that_never_completes_returns_within_the_timeout) {
 // The real SerialPortStream: a pty whose master never reads fills up and
 // blocks the writer; the timed write must give up. The write runs on a
 // thread with a 5 s deadline, so an unbounded write fails this test instead
-// of hanging ctest (core-13 review S7): closing the master then ends it.
+// of hanging ctest: closing the master then ends it.
 TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
     int master = -1, slave = -1;
     char name[256] = {0};
@@ -200,7 +200,7 @@ TEST_CASE(serial_port_write_times_out_on_a_full_pty) {
 }
 
 // The real SerialPortStream on a pty: bytes both ways, a read timeout, and
-// the raw mode and baud rate it sets (the core-16 termios rewrite of the
+// the raw mode and baud rate it sets (the termios rewrite of the
 // boost::asio port).
 TEST_CASE(serial_port_reads_writes_and_sets_raw_mode_on_a_pty) {
     int master = -1, slave = -1;
@@ -248,7 +248,7 @@ TEST_CASE(serial_port_reads_writes_and_sets_raw_mode_on_a_pty) {
     close(master);
 }
 
-// core-13 review S3: an acknowledged cfg command whose prompt read fails is
+// an acknowledged cfg command whose prompt read fails is
 // a warning, not an I/O error of the whole cfg.
 TEST_CASE(prompt_read_error_after_done_does_not_fail_the_cfg) {
     SystemConfigReader sys = serial_free_config("cli_cfg_prompt");
@@ -392,7 +392,7 @@ TEST_CASE(radar_stop_survives_an_unplugged_cli_and_still_closes_the_bin) {
     CHECK(!threw);
 }
 
-// core-21: the IWR1843 descriptor's prompt is the substring ":/>", so both the
+// the IWR1843 descriptor's prompt is the substring ":/>", so both the
 // stock demo's "mmwDemo:/>" and the SAR image's "mm_sar_lvds:/>" end the
 // prompt wait at once instead of stalling cli.prompt_wait_ms (500 ms).
 TEST_CASE(both_demo_and_sar_prompts_satisfy_the_prompt_wait) {
@@ -411,7 +411,7 @@ TEST_CASE(both_demo_and_sar_prompts_satisfy_the_prompt_wait) {
     }
 }
 
-// firmware-17 Step 3: the identity probes' "require" list can match the prompt
+// the identity probes' "require" list can match the prompt
 // only if query() hands back the reply with the trailing prompt still on it.
 TEST_CASE(query_returns_the_reply_with_the_prompt_included) {
     SystemConfigReader sys = serial_free_config("cli_query_prompt");

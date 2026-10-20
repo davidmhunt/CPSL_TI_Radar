@@ -24,8 +24,8 @@ add_driver_test(test_system_config_v2     LIBS Utilities)
 add_driver_test(test_dca1000_commands      LIBS DCA1000Commands)
 add_driver_test(test_frame_assembler       LIBS FrameAssembler)
 add_driver_test(test_adc_cube_converter    LIBS ADCCubeConverter)
-add_driver_test(test_iq_golden            LIBS ADCCubeConverter BoardDescriptor)  # core-17: real raw frame, tests/data/iq
-add_driver_test(test_iq_cube_bitexact   LIBS ADCCubeConverter BoardDescriptor)  # docs-12: converter cube == decode_example.py golden
+add_driver_test(test_iq_golden            LIBS ADCCubeConverter BoardDescriptor)  # real raw frame, tests/data/iq
+add_driver_test(test_iq_cube_bitexact   LIBS ADCCubeConverter BoardDescriptor)  # converter cube == decode_example.py golden
 add_driver_test(test_tlv_processing        LIBS TLVProcessing)
 add_driver_test(test_serial_streamer_frames LIBS SerialStreamer)
 add_driver_test(test_board_descriptor     LIBS BoardDescriptor)
@@ -60,7 +60,7 @@ add_test(NAME test_validate_all_configs
                  -DTMP_DIR=${CMAKE_CURRENT_BINARY_DIR}/validate_tmp
                  -P ${CMAKE_CURRENT_LIST_DIR}/validate_all_configs.cmake)
 
-# gui-04 Step 3b: the error-level cfg limit checks against the seeded-bad corpus (one cfg per rule code).
+# the error-level cfg limit checks against the seeded-bad corpus (one cfg per rule code).
 add_test(NAME test_validate_parity_corpus
          COMMAND ${CMAKE_COMMAND}
                  -DDRIVER=$<TARGET_FILE:CPSL_TI_Radar_CPP>

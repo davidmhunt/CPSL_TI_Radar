@@ -67,7 +67,7 @@ struct BoardDescriptor {
     struct CfgDialect {
         std::vector<uint32_t> rx_mask_fields;  // channelCfg field indices (command = 0)
         uint32_t frame_period_field = 0;       // frameCfg field index of the period
-        // NOT read from the board JSON (gui-33 Step 4: the loader rejects these keys). They are filled from
+        // NOT read from the board JSON (the loader rejects these keys). They are filled from
         // the firmware descriptor's cfg_rules.<board> by apply_firmware_to_board (SystemConfigReader), so
         // filter_cfg_commands / cross_check_radar_cfg keep reading them from here. Default empty.
         // skip_commands: cfg commands the firmware rejects; left in the .cfg file but never sent.
@@ -93,7 +93,7 @@ struct BoardDescriptor {
         LvdsLayout layout = LvdsLayout::two_lane_iq_pairs;
         IqOrder iq_order = IqOrder::i_first;
         // lvdsStreamCfg dataFmt -> what the stream carries. Not a board JSON key: a firmware property, set by
-        // apply_firmware_to_board from the firmware descriptor's lvds_stream_formats (core-24). Default {1: adc}.
+        // apply_firmware_to_board from the firmware descriptor's lvds_stream_formats. Default {1: adc}.
         std::map<int, LvdsStreamFormat> stream_formats{{1, LvdsStreamFormat::adc}};
         // the format of dataFmt `data_fmt`; false if this firmware has none for it
         bool stream_format_for(int data_fmt, LvdsStreamFormat& out) const {
@@ -120,7 +120,7 @@ struct BoardDescriptor {
     Lvds lvds;
     Dca1000 dca1000;
     // Optional. Ids of the firmware descriptors (config/firmware/<id>.json) this board supports, default
-    // first. Empty = key absent. The system config's "firmware" must be one of them (gui-04).
+    // first. Empty = key absent. The system config's "firmware" must be one of them.
     std::vector<std::string> firmwares;
     // Optional chirp-mask bit of the elevation TX (default 0b010 = TX2; IWR6843ODS 0b100).
     uint32_t elevation_tx_bit = 2;
@@ -187,7 +187,7 @@ struct CfgCheckResult {
 //   - DCA1000: adcCfg must be 16-bit and complex; adcbufCfg must be complex
 //     and its chanInterleave must match lvds.layout; lvdsStreamCfg's dataFmt
 //     must be one lvds.stream_formats maps (default 1 = adc); for adc_sar_meta
-//     (core-24) also enableSW 0, an adcbufCfg with chanInterleave 1 and a
+//     also enableSW 0, an adcbufCfg with chanInterleave 1 and a
 //     sampleSwap matching lvds.iq_order, rx * samples even, one profileCfg
 CfgCheckResult cross_check_radar_cfg(const BoardDescriptor& board, const std::string& cfg_path,
                                      const StreamSelection& streams);

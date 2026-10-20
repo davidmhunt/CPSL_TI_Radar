@@ -1,4 +1,4 @@
-bench_pipeline (core-09)
+bench_pipeline
   build type : Release   optimized: yes   compiler: gcc 13.3.0
   host       : cpsl-gmk-6, Intel(R) N150, Linux 7.0.0-34-generic
   frame      : 4 rx x 250 samples x 126 chirps = 504000 B (345 packets of 1472 B), from CPSL_TI_Radar_cpp/config/radar/nav_configs/1843_stress_test.cfg
@@ -36,7 +36,7 @@ bench_pipeline (core-09)
   ns/byte: wall-clock time per ADC payload byte on one thread. allocs/frame: operator new
   calls in the timed region / frames converted. x (a): how many times faster than (a), by
   median ns/byte. Replay rows include the driver's FrameAssembler (byte-offset placement,
-  core-11 P1; flushed at end of stream), identical for every variant. drv_* rows (d) run the
+  flushed at end of stream), identical for every variant. drv_* rows (d) run the
   driver's DCA1000Handler instead (no flush: a clean tail closes the last frame). Every replay
   row must complete exactly the requested number of frames ("= golden"). Compare variants
   within a row group, not across groups.

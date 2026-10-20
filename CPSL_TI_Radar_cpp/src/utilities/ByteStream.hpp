@@ -2,8 +2,7 @@
 #define CPSL_RADAR_BYTE_STREAM_HPP
 
 // ByteStream: the minimal byte-level seam under the CLI controller and the
-// serial TLV reader (design §3 "Internal seams for tests"; directive
-// core-11, reused by core-13 and core-16). Read and write only.
+// serial TLV reader (design §3 "Internal seams for tests"). Read and write only.
 // SerialPortStream is the real serial port; tests substitute a fake to
 // script replies and inject I/O errors (e.g. a USB unplug).
 //

@@ -134,7 +134,7 @@ bool DCA1000Handler::configure_pipeline(
     if(radar_config_reader.initialized == false){
         return false;
     }
-    //what the cfg's lvdsStreamCfg dataFmt carries on this firmware (core-24)
+    //what the cfg's lvdsStreamCfg dataFmt carries on this firmware
     radar_config_reader.apply_stream_formats(system_config_reader.getBoard().lvds);
     sar_meta_ = radar_config_reader.get_lvds_stream_format() == cpsl::radar::LvdsStreamFormat::adc_sar_meta;
     init_buffers();
@@ -322,7 +322,7 @@ void DCA1000Handler::init_buffers()
         converter_.configure(num_rx_channels, samples_per_chirp, chirps_per_frame,
                              system_config_reader.getBoard().lvds.layout,
                              system_config_reader.getBoard().lvds.iq_order);
-        //adc_sar_meta (core-24): one packet of B bytes per chirp, ADC block at H, records after M
+        //adc_sar_meta: one packet of B bytes per chirp, ADC block at H, records after M
         sar_resyncs_seen_ = 0;
         sar_records_valid_ = sar_records_invalid_ = sar_records_other_run_ = 0;
         sar_chirps_per_frame_ = chirps_per_frame;
@@ -397,7 +397,7 @@ void DCA1000Handler::save_frame_byte_buffer(uint64_t index, size_t missing_bytes
     //convert in place into the work buffer, outside the lock (only this
     //thread touches work_)
     converter_.convert(assembler_.get_frame_bytes(), work_.cube);
-    //adc_sar_meta (core-24): the per-chirp records; a resync starts a new recording (k from 0, a new run)
+    //adc_sar_meta: the per-chirp records; a resync starts a new recording (k from 0, a new run)
     bool write_meta = false;
     if(sar_meta_){
         if(assembler_.resync_count() != sar_resyncs_seen_){
@@ -530,7 +530,7 @@ void DCA1000Handler::write_adc_frame_to_file(){
 }
 
 // chirp_meta.csv: the columns and number format of sar_parse.py write_outputs() (_meta.csv), CRLF line ends as
-// Python's csv module writes them, so a capture parsed by both can be compared byte for byte (core-24 Step 3)
+// Python's csv module writes them, so a capture parsed by both can be compared byte for byte
 static const char* const kMetaCsvHeader =
     "chirp,frame,chirpInFrame,record_valid,adc_complete,version,flags,frameIdx,rec_chirpInFrame,"
     "numChirpsPerFrame,globalChirpIdx,runIdx,satSlices,satRefLag,tsTicks,t_s,t_interpolated,late,"

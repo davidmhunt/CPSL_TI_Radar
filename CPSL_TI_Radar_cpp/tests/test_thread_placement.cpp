@@ -1,4 +1,4 @@
-// Thread placement (design P11, directive core-15): runtime.rx_cpu /
+// Thread placement (design P11): runtime.rx_cpu /
 // worker_cpu pin a thread, rx_priority / worker_priority ask for SCHED_RR.
 // Hardware- and privilege-free: affinity is real (any process may narrow its
 // own threads' CPU set); SCHED_RR goes through a fake pthread_setschedparam,

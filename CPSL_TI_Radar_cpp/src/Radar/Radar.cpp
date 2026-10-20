@@ -40,7 +40,7 @@ std::set<std::string>& configured_once() {
     return s;
 }
 
-// The firmware identity check (gui-33): ask the board what it runs before any cfg line is sent. Returns
+// The firmware identity check: ask the board what it runs before any cfg line is sent. Returns
 // firmware_mismatch when the board answers as another firmware (policy auto); every other outcome is ok
 // (unknown / skipped / match, or a mismatch under policy warn) and is logged as a "firmware:" line.
 Status check_firmware_identity(CLIController& cli, const RadarConfig& cfg) {
@@ -140,7 +140,7 @@ struct Radar::Impl {
 
     // a worker thread that ended on an exception (or the serial port's I/O
     // error) leaves its reason here; next_adc_frame / next_point_cloud
-    // report it as Code::io_error (core-13 review S8)
+    // report it as Code::io_error
     mutable std::mutex fail_m;
     std::string dca_failure, serial_failure;
 
@@ -443,7 +443,7 @@ Status Radar::stop() {
         }
 
         if (m.sensor_started && m.cfg.board().lifecycle.config_once_per_boot) {
-            // gui-09 D10: this demo never acknowledges sensorStop and keeps streaming (waiting would
+            // this demo never acknowledges sensorStop and keeps streaming (waiting would
             // only burn the CLI timeout), so it is left running; the next run uses --skip-configure
             log_info("Radar: sensorStop not sent: the ", m.cfg.board().name,
                      " never acknowledges it and keeps streaming (config_once_per_boot); power-cycle it before "

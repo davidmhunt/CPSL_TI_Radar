@@ -1,4 +1,4 @@
-// SystemConfigReader, schema v2 (driver v2 design §2, directive core-10):
+// SystemConfigReader, schema v2 (driver v2 design §2):
 // parsing, defaults, board_overrides, optional sections, the v1 migration
 // message, type/range/unknown-key rejection and the radar .cfg cross-check.
 #include "test_harness.hpp"
@@ -117,7 +117,7 @@ TEST_CASE(minimal_config_defaults_and_optional_sections) {
     CHECK_EQ(r.get_stall_timeout_ms(), 0u);
     CHECK_EQ(r.get_rx_cpu(), -1);
     CHECK_EQ(r.get_worker_cpu(), -1);
-    CHECK_EQ(r.get_rx_priority(), 0u);      // SCHED_RR is opt-in (core-20)
+    CHECK_EQ(r.get_rx_priority(), 0u);      // SCHED_RR is opt-in
     CHECK_EQ(r.get_worker_priority(), 0u);
 
     // a disabled section may omit everything but "enabled"
@@ -137,9 +137,9 @@ TEST_CASE(board_overrides_merge_over_descriptor) {
     CHECK_EQ(r.getRadarCliBaudRate(), 115200u);  // untouched sibling from the descriptor
     CHECK_EQ(r.getRadarDataBaudRate(), 460800u);
     CHECK_EQ(r.getRadarDataTimeoutMs(), 2500);
-    // the IWR1843 stock demo has no bpmCfg (gui-39): the firmware skips it
+    // the IWR1843 stock demo has no bpmCfg: the firmware skips it
     CHECK(r.getBoard().cfg_dialect.skip_commands == std::vector<std::string>({"bpmCfg"}));
-    // the cfg command rules come from the firmware (gui-33 Step 4): no firmware key -> the board's default (demo)
+    // the cfg command rules come from the firmware: no firmware key -> the board's default (demo)
     CHECK(r.getBoard().cfg_dialect.required_commands == std::vector<std::string>({"calibData"}));
     // ... and are no longer valid board_overrides: the error names the new place
     json moved = base_config();
@@ -314,7 +314,7 @@ TEST_CASE(cross_check_errors_fail_the_load) {
     CHECK(has(e, "cascade_ddm"));
     CHECK(has(e, "LVDS"));
 
-    // serial on the IWR1443 is accepted since core-16 (sdk2 dialect confirmed)
+    // serial on the IWR1443 is accepted (sdk2 dialect confirmed)
     j = base_config();
     j["board"] = "IWR1443";
     j["firmware"] = "demo";
@@ -327,8 +327,8 @@ TEST_CASE(cross_check_errors_fail_the_load) {
 }
 
 TEST_CASE(malformed_json_is_an_error_not_an_exception) {
-    // core-02 characterized nlohmann::parse_error escaping; core-10's strict
-    // parser returns it as a load error, pinned here for core-11
+    // the old parser let nlohmann::parse_error escape; the strict
+    // parser returns it as a load error, pinned here
     const char* bad[] = {"{ \"schema_version\": 2, ", "not json", "", "{\"schema_version\": 2,}"};
     int k = 0;
     for (const char* text : bad) {
@@ -357,7 +357,7 @@ TEST_CASE(copy_keeps_state) {
     CHECK_EQ(c.getRadarConfigPath(), a.getRadarConfigPath());
 }
 
-// ---- "firmware" key (gui-04 Step 1: optional, checked against the board list and the SAR alias) ----
+// ---- "firmware" key (optional, checked against the board list and the SAR alias) ----
 
 static std::string reject_code(const std::string& name, const json& j, const std::string& code) {
     SystemConfigReader r(write_json(name, j));
@@ -369,7 +369,7 @@ static std::string reject_code(const std::string& name, const json& j, const std
 }
 
 TEST_CASE(firmware_key_required_message) {
-    // gui-04 Step 3a: no default; the error names the key, the board's list and the migration command
+    // no default; the error names the key, the board's list and the migration command
     json j = base_config();
     j.erase("firmware");
     const std::string path = write_json("fw_none.json", j);

@@ -1,11 +1,11 @@
-// DCA1000Handler frame publish ordering (audit (a) G2, directive core-11) and
-// the frame queue (core-14 P2, P7).
+// DCA1000Handler frame publish ordering (audit (a) G2) and
+// the frame queue.
 //
 // A frame must never be visible before the cube it announces: the handler
 // converts a frame, then puts the cube in the queue under one lock. A test
 // hook runs in that window (after convert, before publish). A consumer must
 // never get the previous frame again, and never a cube mixing two frames.
-// core-11 pinned this for "latest frame wins"; since core-14 the same cases
+// This was first pinned for "latest frame wins"; the same cases
 // run against the drop-oldest queue (depth runtime.frame_queue_depth, default
 // 4), plus the queue's own rules: drop-oldest counting, in-order delivery,
 // and a blocked consumer woken only after its frame is in the queue.
@@ -303,7 +303,7 @@ TEST_CASE(debug_status_is_periodic_not_per_frame_or_per_packet) {
 }
 
 TEST_CASE(dca1000_restart_resyncs_with_one_warning) {
-    // core-15 (core-11 review S1): a DCA1000 restart mid-capture sends byte
+    // a DCA1000 restart mid-capture sends byte
     // counts and sequence numbers from 0 / 1 again. The handler warns once,
     // and the new stream's frames are published with increasing indices.
     Fixture f("publish_restart");

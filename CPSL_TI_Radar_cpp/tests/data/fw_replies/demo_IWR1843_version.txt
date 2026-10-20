@@ -1,4 +1,4 @@
-# bench-recorded 2026-10-07 (IWR1843 stock demo, SDK 3.6): values from gui-09 Log / bench_flash_iwr1843_demo.md s6;
+# bench-recorded 2026-10-07 (IWR1843 stock demo, SDK 3.6): values from the bench log / bench_flash_iwr1843_demo.md s6;
 # line layout from SDK 3.6 cli_mmwave.c:326-400 (the raw capture itself was not kept). Lot/Wafer/X/Y lines omitted.
 version
 Platform                : xWR18xx

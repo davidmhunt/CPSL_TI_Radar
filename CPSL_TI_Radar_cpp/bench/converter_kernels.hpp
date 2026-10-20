@@ -1,4 +1,4 @@
-// Bench-local ADC converter kernels for bench_pipeline (directive core-09).
+// Bench-local ADC converter kernels for bench_pipeline.
 //
 // These exist ONLY to put numbers on design decision D5 (nested vs flat
 // AdcFrame). They are not driver code and nothing in src/ uses them.
@@ -11,9 +11,9 @@
 //     sample k   = complex(real = w2, imag = w0)
 //     sample k+1 = complex(real = w3, imag = w1)
 // Equivalence with variant (a) is checked at bench start-up on random data.
-// Since core-14 P3, (a) is the driver's own nested converter looping in
+// (a) is the driver's own nested converter looping in
 // output order; (b) keeps the input-order loop it was compared with in the
-// core-09 review (F1).
+// original converter review.
 #ifndef BENCH_CONVERTER_KERNELS_HPP
 #define BENCH_CONVERTER_KERNELS_HPP
 
@@ -49,7 +49,7 @@ public:
 
 // (a) the driver's ADCCubeConverter, called the way DCA1000Handler calls it:
 //     converter_.convert(assembler_.get_frame_bytes(), work_.cube);
-//     into a reused (pooled) buffer (core-14 P2)
+//     into a reused (pooled) buffer
 class TodayKernel : public Kernel {
 public:
     const char* id() const override { return "a"; }

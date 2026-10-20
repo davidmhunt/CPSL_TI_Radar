@@ -1,4 +1,4 @@
-// Radar with serial streaming over fake transports (directive core-16): a
+// Radar with serial streaming over fake transports: a
 // scripted CLI (FakeCli) and a scripted data port (uart_test::FakeDataPort)
 // through Transports. No serial port is opened.
 #include "test_harness.hpp"
@@ -134,7 +134,7 @@ TEST_CASE(frames_replaced_before_they_are_taken_count_as_overwritten) {
     r.stop();
 }
 
-// ---- gui-36 D14: skip_configure; gui-09 D10: no sensorStop on a once-per-boot board ----
+// ---- skip_configure; no sensorStop on a once-per-boot board ----
 
 TEST_CASE(skip_configure_sends_no_cfg_no_start_and_no_stop) {
     Rig rig("rs_skip", "IWR1843", true);

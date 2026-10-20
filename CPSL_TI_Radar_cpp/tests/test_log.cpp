@@ -1,5 +1,5 @@
-// Log sink and level filtering (directive core-13 Step 1; core-10 review S5:
-// log_level error/warn behaved like info).
+// Log sink and level filtering (log_level error/warn used to behave like
+// info).
 #include "test_harness.hpp"
 #include "Log.hpp"
 #include "RadarConfigReader.hpp"

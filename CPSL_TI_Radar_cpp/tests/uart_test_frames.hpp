@@ -208,7 +208,7 @@ inline std::string write_serial_config(const std::string& name, const std::strin
     if (board == "IWR6843") cfg = std::string(TEST_DATA_DIR) + "/radar/iwr6843.cfg";
     if (board == "AWR2243_CASCADE") cfg = std::string(TEST_DATA_DIR) + "/radar/awr2243_cascade.cfg";
     const std::string path = dir + "/" + name + ".json";
-    const std::string firmware = board == "AWR2243_CASCADE" ? "cascade_ddm" : "demo";  // required key (gui-04)
+    const std::string firmware = board == "AWR2243_CASCADE" ? "cascade_ddm" : "demo";  // required key
     std::ofstream(path) << "{\"schema_version\": 2, \"board\": \"" << board << "\", \"firmware\": \""
                         << firmware << "\", \"radar_cfg\": \"" << cfg
                         << "\", \"cli\": {\"port\": \"/dev/null-not-opened\"}, "

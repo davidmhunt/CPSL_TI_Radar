@@ -1,8 +1,8 @@
 #ifndef CPSL_RADAR_THREAD_PLACEMENT_HPP
 #define CPSL_RADAR_THREAD_PLACEMENT_HPP
 
-// CPU affinity and real-time priority for the driver's threads (design P11,
-// directive core-15): the DCA1000 RX thread (runtime.rx_cpu / rx_priority)
+// CPU affinity and real-time priority for the driver's threads (design P11):
+// the DCA1000 RX thread (runtime.rx_cpu / rx_priority)
 // and the DCA worker thread (runtime.worker_cpu / worker_priority).
 //
 // cpu -1 (the key null or unset) leaves the thread on every CPU; priority

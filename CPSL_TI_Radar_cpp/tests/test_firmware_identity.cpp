@@ -1,4 +1,4 @@
-// Firmware identity check (directive gui-33 Step 2).
+// Firmware identity check.
 //
 // Part 1: the pure matcher over tests/data/fw_replies/manifest.json, the same
 // cases radar_gui/fwident.py runs in pytest (parity), plus the identify block's
@@ -265,7 +265,7 @@ TEST_CASE(off_writes_no_version) {
 }
 
 TEST_CASE(config_without_a_firmware_key_is_refused) {
-    // gui-04 Step 3a: the key is required, so there is no "asks nothing" mode any more
+    // the key is required, so there is no "asks nothing" mode any more
     const std::string path = uart_test::write_serial_config("fwid_nokey", TEST_TMP_DIR, "IWR1843", 300);
     json j = json::parse(read_file(path));
     j.erase("firmware");

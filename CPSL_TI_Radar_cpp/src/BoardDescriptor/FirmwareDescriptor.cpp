@@ -89,10 +89,10 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
 
     std::set<std::string> optional = gui_only_keys();
     optional.insert("driver_board");
-    optional.insert("identify");    // parsed strictly since gui-33 (no longer GUI-only)
-    optional.insert("cfg_rules");   // gui-33 Step 4
+    optional.insert("identify");    // parsed strictly (no longer GUI-only)
+    optional.insert("cfg_rules");
     optional.insert("cli_overrides");
-    optional.insert("lvds_data_fmts");  // GUI-owned list; the driver reads its optional "formats" (core-24)
+    optional.insert("lvds_data_fmts");  // GUI-owned list; the driver reads its optional "formats"
     if (!check_object(fail, j, "", {"schema", "id", "description", "outputs", "templates", "system_enables", "limits"},
                       optional)) {
         return false;
@@ -208,7 +208,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
-    // identify (gui-33): board -> {level, timeout_ms, once_safe, probes, flash_hint, note}
+    // identify: board -> {level, timeout_ms, once_safe, probes, flash_hint, note}
     if (j.contains("identify")) {
         const json& id = j.at("identify");
         if (!id.is_object()) return fail("/identify", "expected an object (board -> entry)");
@@ -308,7 +308,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
-    // cfg_rules (gui-33 Step 4): board -> {skip_commands, required_commands, forbidden_commands}, each optional
+    // cfg_rules: board -> {skip_commands, required_commands, forbidden_commands}, each optional
     if (j.contains("cfg_rules")) {
         const json& cr = j.at("cfg_rules");
         if (!cr.is_object()) return fail("/cfg_rules", "expected an object (board -> rules)");
@@ -353,7 +353,7 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
-    // cli_overrides (gui-33 Step 4): board -> {prompt}
+    // cli_overrides: board -> {prompt}
     if (j.contains("cli_overrides")) {
         const json& co = j.at("cli_overrides");
         if (!co.is_object()) return fail("/cli_overrides", "expected an object (board -> overrides)");
@@ -367,10 +367,10 @@ bool FirmwareDescriptor::from_json(const json& j, const std::string& expected_id
         }
     }
 
-    // lvds_data_fmts (gui-24 list, GUI-checked) + its optional "formats" (core-24):
+    // lvds_data_fmts (GUI-owned list, GUI-checked) + its optional "formats":
     // {value: [dataFmt...], formats: {"<dataFmt>": "adc" | "adc_sar_meta"}, source, confidence}. The driver reads
     // only "formats" (each key must be in value); the rest stays the GUI's. Sub-key, not a new top-level key, so a
-    // driver built before core-24 (which rejects unknown top-level keys) still loads the file.
+    // a driver built before the "formats" sub-key (which rejects unknown top-level keys) still loads the file.
     if (j.contains("lvds_data_fmts") && j.at("lvds_data_fmts").is_object() &&
         j.at("lvds_data_fmts").contains("formats")) {
         const std::string p = "/lvds_data_fmts/formats";
@@ -437,7 +437,7 @@ bool apply_firmware_to_board(const FirmwareDescriptor& fw, const std::string& fw
     board.cfg_dialect.forbidden_commands = rules.forbidden_commands;
     const std::string prompt = fw.cli_prompt_for(board.name);
     if (!prompt.empty() && !keep_prompt) board.cli.prompt = prompt;
-    // what each lvdsStreamCfg dataFmt carries is a property of the image (core-24); absent = {1: adc}
+    // what each lvdsStreamCfg dataFmt carries is a property of the image; absent = {1: adc}
     if (!fw.lvds_stream_formats.empty()) board.lvds.stream_formats = fw.lvds_stream_formats;
     return true;
 }

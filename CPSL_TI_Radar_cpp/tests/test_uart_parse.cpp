@@ -202,7 +202,7 @@ TEST_CASE(header_values_out_of_range_are_rejected) {
     CHECK(rejected(make_frame(1, {}, many), "numTLVs 1000000 cannot fit"));
 }
 
-// ---- payload checks (core-11 review: lengths and numDetectedObj) ----
+// ---- payload checks (lengths and numDetectedObj) ----
 
 TEST_CASE(points_tlv_length_not_divisible_by_4_or_16_is_rejected) {
     CHECK(rejected(make_frame(1, {{1, Bytes(6, 0x41)}}), "not a multiple of 16"));   // not of 4

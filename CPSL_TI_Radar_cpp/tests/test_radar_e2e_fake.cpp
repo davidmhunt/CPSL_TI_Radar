@@ -1,5 +1,5 @@
-// cpsl::radar::Radar end to end over fake transports (driver v2 design §6,
-// directive core-13 Step 5): a ReplayPacketSource stands in for the DCA1000
+// cpsl::radar::Radar end to end over fake transports (driver v2 design §6):
+// a ReplayPacketSource stands in for the DCA1000
 // and a scripted FakeCli for the radar's CLI port. Nothing is opened but
 // files under the test's build directory.
 #include "test_harness.hpp"
@@ -209,7 +209,7 @@ TEST_CASE(frame_queue_depth_one_is_latest_wins) {
     r.stop();
 }
 
-// Publish ordering through the queue (core-14 P7): a consumer racing the
+// Publish ordering through the queue: a consumer racing the
 // producer never sees a stale, duplicate or torn frame, indices strictly
 // increase, and every frame it did not get was counted in frames_overwritten.
 static void race(const std::string& name, int depth, int frames) {
@@ -288,7 +288,7 @@ TEST_CASE(concurrent_stop_waits_for_the_first_and_shares_its_status) {
     CHECK_EQ(rig.cli->count("sensorStop\n"), size_t(2));  // cfg + one stop
 }
 
-// core-13 review S1: destroying a running Radar stops it (sensorStop sent,
+// destroying a running Radar stops it (sensorStop sent,
 // threads joined) without an explicit stop()
 TEST_CASE(destructor_stops_a_running_radar) {
     Rig rig(load("dtor"));
@@ -303,7 +303,7 @@ TEST_CASE(destructor_stops_a_running_radar) {
     CHECK(!rig.packets->started());                        // the packet source was stopped
 }
 
-// core-13 review S1: a consumer blocked in next_adc_frame (on the frame
+// a consumer blocked in next_adc_frame (on the frame
 // queue's condition variable) returns Code::stopped as soon as stop() runs,
 // not at the end of its timeout
 TEST_CASE(stop_wakes_a_consumer_blocked_in_next_adc_frame) {
@@ -350,7 +350,7 @@ private:
     std::atomic<int> pops_{0};
 };
 
-// core-13 review S8: an exception in the DCA worker thread ends the stream,
+// an exception in the DCA worker thread ends the stream,
 // not the process; next_adc_frame reports it and stop() still works
 TEST_CASE(worker_exception_is_reported_not_fatal) {
     const RadarConfig cfg = load("worker_throws");
@@ -512,7 +512,7 @@ TEST_CASE(moved_radar_keeps_working_and_the_source_is_empty) {
     CHECK(static_cast<bool>(moved.stop()));
 }
 
-// core-15 P11: runtime.worker_cpu pins the DCA worker thread. The packet
+// runtime.worker_cpu pins the DCA worker thread. The packet
 // source's pop() runs on that thread, so it records the thread's affinity.
 class AffinityRecordingSource : public ReplayPacketSource {
 public:
@@ -568,7 +568,7 @@ TEST_CASE(worker_cpu_pins_the_dca_worker_thread) {
 TEST_MAIN()
 
 TEST_CASE(sar_board_sends_calibdata_and_frame_is_3366000_bytes) {
-    // core-22: IWR1843_SAR board + the shipped SAR cfg (dataFmt 1)
+    // IWR1843_SAR board + the shipped SAR cfg (dataFmt 1)
     Rig rig(load("sar", [](json& j) {
         j["board"] = "IWR1843_SAR";
         j["firmware"] = "iwr1843_sar_lvds";

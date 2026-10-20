@@ -1,6 +1,5 @@
-// RadarConfig::load and output.dir handling (directive core-13 Step 2;
-// core-10 review S3: a config could validate but fail at run time because
-// output.dir did not exist).
+// RadarConfig::load and output.dir handling (a config could validate but
+// fail at run time because output.dir did not exist).
 #include "test_harness.hpp"
 #include "RadarConfig.hpp"
 

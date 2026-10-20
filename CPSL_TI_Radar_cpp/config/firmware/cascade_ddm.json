@@ -227,7 +227,7 @@
     "bpm": false,
     "max_chirps_per_loop": null,
     "subframes": 0,
-    "note": "chirps per loop must be a multiple of 8 (DDMA bands rule, gui-13); all 6 TX fire on every chirp",
+    "note": "chirps per loop must be a multiple of 8 (DDMA bands rule); all 6 TX fire on every chirp",
     "source": "docs/developer/radar_notes.md#chirp-patterns (c1ccf7a) section 3: DDMA parser ignores the chirp mask; TDM only as a compile-time variant not in the shipped build",
     "confidence": "high"
   },
@@ -238,7 +238,7 @@
       "once_safe": false,
       "flash_hint": "./fw flash awr2243_cascade_ddm <cli port> (J6 on the bottom two pins = UART boot, power-cycle, flash, then J6 to the top two pins = QSPI run, power-cycle; see firmware_dev/projects/awr2243_cascade_ddm/README.md)",
       "source": {"fw_project": "awr2243_cascade_ddm", "artifact": "am273x_cascade.appimage"},
-      "note": "HYPOTHESIS: overridePlatformString AM273X (cascade mmw_cli.c:2228); mcuplus CLI source not on this host; the cascade takes a cfg once per power-up, so it is not queried until bench-checked (gui-33 Step 7)",
+      "note": "HYPOTHESIS: overridePlatformString AM273X (cascade mmw_cli.c:2228); mcuplus CLI source not on this host; the cascade takes a cfg once per power-up, so it is not queried until bench-checked",
       "probes": [
         {
           "cmd": "version",

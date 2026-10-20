@@ -1,5 +1,5 @@
 // SIGINT/SIGTERM set a stop flag and return; they never end the process
-// (directive core-11 Step 5). The old handler called exit(0), which skipped
+// The old handler called exit(0), which skipped
 // the destructors and left adc_data.bin short (RESULTS.md Finding 1).
 //
 // Registered with PASS_REGULAR_EXPRESSION on the harness summary line, so a

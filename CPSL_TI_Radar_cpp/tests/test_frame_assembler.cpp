@@ -183,7 +183,7 @@ TEST_CASE(byte_count_uses_all_six_header_bytes) {
 }
 
 TEST_CASE(byte_count_gap_does_not_zero_fill_the_next_packet) {
-    // core-02 known bug, fixed by byte-offset placement (P1): a byte-count gap
+    // known bug, fixed by byte-offset placement: a byte-count gap
     // used to leave the counter behind so the next in-order packet got
     // spurious zero padding.
     FrameAssembler fa;
@@ -203,7 +203,7 @@ TEST_CASE(byte_count_gap_does_not_zero_fill_the_next_packet) {
 }
 
 TEST_CASE(late_duplicate_is_counted_not_dropped) {
-    // core-02 known bug, fixed: a duplicate / reordered packet used to
+    // known bug, fixed: a duplicate / reordered packet used to
     // underflow dropped_packets (~4e9) and emit a spurious frame.
     FrameAssembler fa;
     fa.configure(100);
@@ -219,7 +219,7 @@ TEST_CASE(late_duplicate_is_counted_not_dropped) {
 }
 
 TEST_CASE(gap_spanning_a_frame_boundary_keeps_next_frame_aligned) {
-    // core-02 known bug, fixed: zero fill past a frame boundary used to be
+    // known bug, fixed: zero fill past a frame boundary used to be
     // lost, so every later byte landed too early in its frame.
     FrameAssembler fa;
     fa.configure(100);
@@ -270,7 +270,7 @@ TEST_CASE(duplicate_inside_an_open_frame_changes_nothing) {
 
 TEST_CASE(reorder_inside_a_frame_is_recovered) {
     // packet 3 arrives before packet 2: counted as a drop, then the late
-    // packet fills the gap and the drop (and, since core-15, its event) is
+    // packet fills the gap and the drop (and its event) is
     // taken back
     FrameAssembler fa;
     fa.configure(120);
@@ -359,7 +359,7 @@ TEST_CASE(huge_byte_count_jump_is_bounded) {
 }
 
 // ---------------------------------------------------------------------------
-// Plausibility and resync (core-11 review S1, directive core-15)
+// Plausibility and resync
 // ---------------------------------------------------------------------------
 
 // frames from a sink: index, bytes, missing
@@ -378,7 +378,7 @@ struct Sunk {
 
 TEST_CASE(single_wild_forward_byte_count_costs_only_its_packet) {
     // 10 packets per frame; packet seq 24 (frame 2) carries a byte count
-    // 2^40 ahead with an in-order sequence number. Before core-15 this closed
+    // 2^40 ahead with an in-order sequence number. Before the resync rule this closed
     // every open frame and left the stream "late" for good.
     const size_t B = 1000, P = 100;
     FrameAssembler fa;
@@ -409,7 +409,7 @@ TEST_CASE(single_wild_forward_byte_count_costs_only_its_packet) {
 TEST_CASE(restart_to_byte_count_zero_mid_stream_recovers) {
     // a DCA1000 restart mid-frame: sequence numbers and byte counts start
     // again at 1 and 0 after 75 packets (frames 0..6, frame 7 half done).
-    // Before core-15 every packet after the restart was late, forever.
+    // Before the resync rule every packet after the restart was late, forever.
     const size_t B = 1000, P = 100;
     FrameAssembler fa;
     fa.configure(B, 2 * P);
@@ -495,8 +495,8 @@ TEST_CASE(sporadic_late_packets_never_resync) {
     }
 }
 
-// The core-11 P1 fuzz invariants (review/core-11 "Fuzz"), re-run with the
-// core-15 resync rule in place; run under the asan-ubsan preset too. For
+// The fuzz invariants of the byte-offset placement, re-run with the
+// resync rule in place; run under the asan-ubsan preset too. For
 // any input: indices strictly increase, missing_bytes equals the zero bytes
 // (stream bytes are never 0), the return values plus flush() equal the sink
 // calls. Streams without a restart or adversarial header also keep every
@@ -569,7 +569,7 @@ TEST_CASE(fuzz_invariants_hold_with_resync) {
         }
         const FrameAssembler::Stats st = fa.get_stats();
         if (mode <= 4 && (st.resyncs != 0 || st.implausible_packets != 0)) ok = false;
-        // core-15 S3: with no packet lost, reorders leave no drop event
+        // with no packet lost, reorders leave no drop event
         if ((mode == 0 || mode == 2 || mode == 3) && st.dropped_packets == 0 && st.dropped_packet_events != 0) ok = false;
         if (mode <= 4 && st.dropped_packet_events > st.dropped_packets + 1) ok = false;  // + 1: a first seq >= 2^31
         const bool golden = mode == 0 || mode == 4 || (mode == 2 && std::min(slack, B - 1) >= 2 * P);  // configure() clamps the slack below B
@@ -597,7 +597,7 @@ TEST_CASE(fuzz_invariants_hold_with_resync) {
 }
 
 TEST_CASE(a_gap_filled_by_late_packets_is_not_a_drop_event) {
-    // core-11 review S3: dropped_packet_events counts only gaps that end with
+    // dropped_packet_events counts only gaps that end with
     // missing packets; a reorder (the gap filled later) takes its event back
     FrameAssembler fa;
     fa.configure(1000, 500);
@@ -712,7 +712,7 @@ TEST_CASE(golden_replay_with_drops_duplicates_and_reordering) {
     CHECK_EQ(st.dropped_packets, static_cast<uint32_t>(n_drop));
     CHECK_EQ(st.duplicate_packets, static_cast<uint32_t>(n_dup));
     CHECK_EQ(st.skipped_frames, 0u);
-    // core-15: swaps fill their own gaps, so only real losses are events
+    // swaps fill their own gaps, so only real losses are events
     CHECK(st.dropped_packet_events <= static_cast<uint32_t>(n_drop));
 }
 

@@ -1,12 +1,12 @@
-# test_validate_all_configs (directive core-10): run the driver's --validate
+# test_validate_all_configs: run the driver's --validate
 # path over every tracked system config, and check the two fixed outcomes:
 #   - every config/system/*.json exits 0 (schema v2, board descriptor, radar cfg
 #     cross-checks, frame shape)
 #   - an IWR1843 config does not skip calibData (the SDK 3.6 demo needs it)
 #   - a v1 file exits non-zero and names the migration script
-#   - output.dir under a regular file fails and names the path (core-13)
+#   - output.dir under a regular file fails and names the path
 #   - at the default log level nothing but the summary is printed: no
-#     "[RadarConfig]" load chatter (core-13)
+#     "[RadarConfig]" load chatter
 # Invoked by ctest with -DDRIVER=<binary> -DCONFIG_DIR=<config> -DV1_FIXTURE=<v1 .json>
 # -DTMP_DIR=<scratch dir>.
 
@@ -41,7 +41,7 @@ if(NOT rc EQUAL 0 OR out MATCHES "skipped: +calibData")
   message(FATAL_ERROR "IWR1843 --validate skips calibData (it must be sent):\n${out}${err}")
 endif()
 
-# core-22: the SAR system config validates (exit 0 is covered by the glob above);
+# the SAR system config validates (exit 0 is covered by the glob above);
 # the same board with a stock cfg is rejected naming the forbidden command
 execute_process(COMMAND "${DRIVER}" --validate "${CONFIG_DIR}/system/IWR1843_iwr1843_sar_lvds_SAR_2ms.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
@@ -82,7 +82,7 @@ if(rc EQUAL 0 OR NOT err MATCHES "a_file/captures cannot be created: .*a_file is
   message(FATAL_ERROR "output.dir under a file was not rejected with its path (exit ${rc}):\n${out}${err}")
 endif()
 
-# gui-04: --validate --json. Good config: exit 0, one JSON object with the specified shape.
+# --validate --json. Good config: exit 0, one JSON object with the specified shape.
 execute_process(COMMAND "${DRIVER}" --validate --json "${CONFIG_DIR}/system/IWR1843_demo_stress_test_front.json"
                 RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0 OR NOT "${err}" STREQUAL "")
@@ -103,7 +103,7 @@ if(NOT ok STREQUAL "ON" AND NOT ok STREQUAL "true" OR NOT board STREQUAL "IWR184
    OR NOT rx GREATER 0 OR NOT bpf GREATER 0 OR NOT cfgname MATCHES "IWR1843_demo_stress_test_front.json$")
   message(FATAL_ERROR "--validate --json good-config shape is wrong:\n${out}")
 endif()
-# gui-04 Step 3b: metrics carry the cfg limit numbers; warning-level limits land in warnings[], not errors[]
+# metrics carry the cfg limit numbers; warning-level limits land in warnings[], not errors[]
 string(JSON m_rx GET "${out}" metrics n_rx)
 string(JSON m_bpf GET "${out}" metrics bytes_per_frame)
 if(NOT m_rx EQUAL rx OR NOT m_bpf EQUAL bpf)

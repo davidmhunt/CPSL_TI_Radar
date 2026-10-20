@@ -1,5 +1,5 @@
-// bench_serial_latency: serial TLV frame latency over a pty (directive core-16
-// P8), hardware-free.
+// bench_serial_latency: serial TLV frame latency over a pty,
+// hardware-free.
 //
 // A Radar runs with serial streaming on. Its data port is the slave side of a
 // pseudo-terminal (the real SerialPortStream path: open, termios, poll, read);

@@ -39,7 +39,7 @@ class RadarConfigReader{
         size_t get_num_rx_antennas();
         float get_frame_period_ms();
 
-        //LVDS stream format (core-24). lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>, last
+        //LVDS stream format. lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>, last
         //line wins; -1 / false when the cfg has none. The format a dataFmt carries depends on the firmware
         //(BoardDescriptor::Lvds::stream_formats); the owner sets it, default adc (bytes per frame unchanged).
         int get_lvds_data_fmt() const { return lvds_data_fmt; }
@@ -113,7 +113,7 @@ class RadarConfigReader{
         int16_t frameCfG_num_loops = 0;
         float frameCfg_frame_period = 0;
 
-        //lvdsStreamCfg and the stream format (core-24)
+        //lvdsStreamCfg and the stream format
         int lvds_data_fmt = -1;
         bool lvds_header_enabled = false;
         cpsl::radar::LvdsStreamFormat lvds_stream_format = cpsl::radar::LvdsStreamFormat::adc;

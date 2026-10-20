@@ -1002,7 +1002,7 @@
       "IWR1843": {
         "bpm": false,
         "confidence": "high",
-        "source": "SDK 3.6 xwr18xx demo mmw_cli.c registers no bpmCfg (the xwr68xx demo does, mmw_cli.c:1473): firmware_dev/projects/ti_stock_demos/build/sdk/packages/ti/demo/. Source-derived; bench session 1 saw the board reject the line (gui-39)"
+        "source": "SDK 3.6 xwr18xx demo mmw_cli.c registers no bpmCfg (the xwr68xx demo does, mmw_cli.c:1473): firmware_dev/projects/ti_stock_demos/build/sdk/packages/ti/demo/. Source-derived; bench session 1 saw the board reject the line"
       },
       "IWR1443": {
         "bpm": false,
@@ -1030,7 +1030,7 @@
       "once_safe": true,
       "flash_hint": "./fw flash ti_stock_demos <cli port> (docs/firmware.md Commands: SOP 101, flash, SOP 001, power-cycle)",
       "source": {"fw_project": "ti_stock_demos", "artifact": "iwr1843_demo.bin"},
-      "note": "version: bench-recorded 2026-10-07 (SDK 3.6 demo, xWR18xx, 03.06.02.00; gui-09 Log, bench_flash_iwr1843_demo.md s6). sarStats \"'sarStats' is not recognized as a CLI command\": bench-recorded 2026-10-08 (runs/gui/20261008T021450Z_overnight_mismatch/); version also bench-recorded there with device string 'IWR18xx non-secure ES 02.00' (the show regexes match it).",
+      "note": "version: bench-recorded 2026-10-07 (SDK 3.6 demo, xWR18xx, 03.06.02.00; bench log, bench_flash_iwr1843_demo.md s6). sarStats \"'sarStats' is not recognized as a CLI command\": bench-recorded 2026-10-08 (runs/gui/20261008T021450Z_overnight_mismatch/); version also bench-recorded there with device string 'IWR18xx non-secure ES 02.00' (the show regexes match it).",
       "probes": [
         {
           "cmd": "version",

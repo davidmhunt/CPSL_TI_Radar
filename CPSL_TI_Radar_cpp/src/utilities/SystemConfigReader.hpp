@@ -19,7 +19,7 @@
 // $CPSL_TI_RADAR_BOARDS_DIR if set, otherwise <JSON dir>/../boards (the
 // layout of CPSL_TI_Radar_cpp/config/).
 //
-// "firmware" (gui-04) names the firmware descriptor
+// "firmware" names the firmware descriptor
 // (<boards dir>/../firmware/<id>.json, or $CPSL_TI_RADAR_FIRMWARE_DIR) the
 // config is meant for. When present it must be in the board's "firmwares" list
 // and agree with the descriptor's driver_board mapping (firmware
@@ -28,7 +28,7 @@
 // this version of the driver and becomes required in a later commit.
 //
 // The firmware also supplies the cfg command rules (cfg_rules: skip / required / forbidden commands) and the
-// CLI prompt (cli_overrides) of the board it runs on (gui-33). Without a "firmware" key the board's default
+// CLI prompt (cli_overrides) of the board it runs on. Without a "firmware" key the board's default
 // firmware (first of its "firmwares" list) is used; getBoard() already carries the result.
 
 #include <cstdint>
@@ -82,7 +82,7 @@ class SystemConfigReader {
         const std::vector<Issue>& getIssues() const { return issues; }
         // cross_check_radar_cfg notes (a check that could not be made; not fatal)
         const std::vector<std::string>& getCfgCheckNotes() const { return cfg_notes; }
-        // warning-level cfg limit findings of a successful load (gui-04 Step 3b; `source` = the violated limit's source)
+        // warning-level cfg limit findings of a successful load (`source` = the violated limit's source)
         const std::vector<Issue>& getCfgWarnings() const { return cfg_warnings; }
         // cheap subset of the GUI metrics for --validate --json (empty object when the limits were not checked)
         const nlohmann::ordered_json& getCfgMetrics() const { return cfg_metrics; }
@@ -126,7 +126,7 @@ class SystemConfigReader {
         // no sensorStart and no sensorStop; for a board already configured and streaming this power-up
         bool get_skip_configure() const { return skip_configure; }
         void set_skip_configure(bool v) { skip_configure = v; }
-        // runtime.firmware_check (gui-33): auto (default) | warn | off; see Radar::configure
+        // runtime.firmware_check: auto (default) | warn | off; see Radar::configure
         cpsl::radar::FirmwareCheck get_firmware_check() const { return firmware_check; }
         int get_rx_cpu() const { return rx_cpu; }          // -1 = null (not pinned)
         int get_worker_cpu() const { return worker_cpu; }  // -1 = null (not pinned)

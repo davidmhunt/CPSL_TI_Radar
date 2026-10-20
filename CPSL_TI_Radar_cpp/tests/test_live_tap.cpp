@@ -1,4 +1,4 @@
-// Live tap (gui-36 Step 1): the wire encoder against golden bytes, and the
+// Live tap: the wire encoder against golden bytes, and the
 // mailbox/writer over a real pipe pair: a slow reader costs skipped frames but
 // push never blocks, a closed reader disables the tap without killing the
 // process (SIGPIPE), --tap-adc-every K sends frames 0, K, 2K ...

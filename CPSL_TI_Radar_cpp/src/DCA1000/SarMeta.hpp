@@ -1,8 +1,8 @@
 #ifndef CPSL_RADAR_SAR_META_HPP
 #define CPSL_RADAR_SAR_META_HPP
 
-// Per-chirp metadata of the iwr1843_sar_lvds firmware's LVDS dataFmt 2 (lvds stream format adc_sar_meta,
-// directive core-24). The wire format is defined in
+// Per-chirp metadata of the iwr1843_sar_lvds firmware's LVDS dataFmt 2 (lvds stream format adc_sar_meta).
+// The wire format is defined in
 // firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md ("the format doc"); its reference parser is
 // firmware_dev/projects/iwr1843_sar_lvds/tools/sar_parse.py, which this decoder matches chirp for chirp
 // (tests/test_sar_meta.cpp compares against its output).

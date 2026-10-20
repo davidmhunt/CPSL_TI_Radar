@@ -1,7 +1,7 @@
 #ifndef CPSL_RADAR_CFG_LIMITS_HPP
 #define CPSL_RADAR_CFG_LIMITS_HPP
 
-// Radar .cfg limit checks (directive gui-04 Step 3b): the error-level (and, reported separately, warning-level)
+// Radar .cfg limit checks: the error-level (and, reported separately, warning-level)
 // rules of the GUI validator (radar_gui/cfg/validate.py + metrics.py), driven by the same data: the firmware
 // descriptor's `limits.<board>` (FirmwareDescriptor) and config/limits/host.json (HostLimits). Every issue
 // carries the Python rule `code`, so the driver and the GUI agree code for code.

@@ -160,7 +160,6 @@ bool CLIController::send_config_to_IWR() {
             }
             //an acknowledged command whose prompt read failed is only a
             //warning (logged by sendCommand), not an I/O error of the cfg
-            //(core-13 review S3)
         }
         //for the whole cfg, io_error() says whether a command that failed hit an I/O error
         io_error_ = any_io_error;
@@ -324,7 +323,7 @@ std::error_code CLIController::read_until_with_timeout(
  */
 bool CLIController::sendCommand(const string& command, int timeout_ms, const string& tag) {
 
-    //io_error() describes this command only (core-11 review S2: it used to stick)
+    //io_error() describes this command only (it used to stick)
     io_error_ = false;
 
     if (!stream) {
@@ -337,7 +336,7 @@ bool CLIController::sendCommand(const string& command, int timeout_ms, const str
     try {
         //send the command over the serial port
         const string line = command + "\n";
-        //bounded: a wedged CDC device must not hang the stop path (core-11 review S5)
+        //bounded: a wedged CDC device must not hang the stop path
         std::error_code wec = stream->write(reinterpret_cast<const uint8_t*>(line.data()), line.size(),
                                             std::chrono::milliseconds(timeout_ms));
         if (wec) {
