@@ -1,4 +1,4 @@
-# Bench validation (runbook)
+# Bench validation: check a board against the reference numbers
 
 Use this to check that a board streams correctly with the current driver build: no dropped packets, the right frame rate, a clean exit. The IWR1843 with a DCA1000 is the worked example. The pass thresholds come from the pre-rework baseline in [`../RESULTS.md`](../RESULTS.md).
 
@@ -6,58 +6,49 @@ Run every command from the repository root. Only one person at a time may hold t
 
 ## 1. Prerequisites
 
-1. Build the driver (Release; the harness refuses other builds) and check the host by following [tutorial 1](01_install.md); repeat after every rebuild. Nothing may show MISSING; the host needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
-2. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
+1. Build the driver (Release; `bench_run.py` refuses other builds) and check the host by following [tutorial 1](../tutorials/01_install.md) (build) and [tutorial 2](../tutorials/02_host_setup.md) (host); repeat after every rebuild. Nothing may show MISSING; the host needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
+2. The board runs the matching image: SDK 3.6 mmWave demo on the IWR1843. For flashing and building see [`../firmware.md`](../firmware.md) and [`firmware_dev/README.md`](../../firmware_dev/README.md). For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
+3. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
 
 ## 2. Hardware setup (IWR1843 + DCA1000)
 
-1. Power the board off. Set the S1 switch to **functional mode**: SOP2 = 0, SOP1 = 0, SOP0 = 1 (SOP mode 4); flashing mode is 101. The board reads the switch only at power-up. See [`docs/images/boot_modes/IWR1843_SOP_nodes.png`](../images/boot_modes/IWR1843_SOP_nodes.png), which labels the ON side of S1.
+1. Power the board off (and power-cycle it before a run if the firmware was just flashed or the last run crashed). Set the S1 switch to **functional mode**: SOP2 = 0, SOP1 = 0, SOP0 = 1 (SOP mode 4); flashing mode is 101. The board reads the switch only at power-up. See [`docs/images/boot_modes/IWR1843_SOP_nodes.png`](../images/boot_modes/IWR1843_SOP_nodes.png), which labels the ON side of S1.
 2. Connect the board by USB. `ls /dev/ttyACM*` should show `/dev/ttyACM0` (CLI) and `/dev/ttyACM1` (data), the ports in the config below; otherwise edit `cli.port` and `serial_stream.port`.
-3. For raw ADC, connect the DCA1000 to the LVDS connector and by Ethernet to the host NIC, then power both. `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` pings `192.168.33.180` (report only). A working DCA1000 may not answer ping (the IWR1843 bench's does not), so the real check is the first run in section 5.
-4. Power-cycle the board before a run if the firmware was just flashed or the last run crashed.
+3. For raw ADC, connect the DCA1000 to the LVDS connector and by Ethernet to the host NIC, then power both. `uv run tools/setup/host_setup.py --nic <dca-nic> --ping` pings `192.168.33.180` (report only). A working DCA1000 may not answer ping (the IWR1843 bench's does not), so the real check is the first run in section 4.
 
-## 3. Firmware
+## 3. Choose a config
 
-The board must run the SDK 3.6 mmWave demo (IWR1843) or the matching image for your board. For flashing and building see [`../firmware.md`](../firmware.md) and [`firmware_dev/README.md`](../../firmware_dev/README.md). For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
+Pick a system config from the table in section 8 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
 
-## 4. Choose a config
-
-Pick a system config from the table in section 9 or copy one. The worked example, `CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json`, streams 4 RX x 250 samples x 126 chirps at 10 Hz (504000 B per frame) through the DCA1000.
-
-The commands below use the example config unchanged. To use your own, copy it, and pass the copy's path to both commands. For DCA runs `output.save_adc_frames` must be `true` (the example sets it); otherwise there is no `adc_data.bin` size check. Any `runtime.log_level` works: the harness runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
+The commands below use the example config unchanged. To use your own, copy it, and pass the copy's path to both commands. For DCA runs `output.save_adc_frames` must be `true` (the example sets it); otherwise there is no `adc_data.bin` size check. Any `runtime.log_level` works: `bench_run.py` runs the driver with `--stats` and reads its `stats v1` lines. The radar `.cfg` needs `frameCfg ... numFrames 0`. Check it without hardware:
 
 ```bash
 CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json --validate
 ```
 
-It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the values the harness compares against. `calibData` is sent on the IWR1843 (the SDK 3.6 demo needs it).
+It must print `OK:` and exit 0. The `frame:` and `bytes/frame:` lines are the values `bench_run.py` compares against. `calibData` is sent on the IWR1843 (the SDK 3.6 demo needs it).
 
-## 5. Run the harness
+## 4. Run the bench script
 
 ```bash
 uv run tools/bench/bench_run.py CPSL_TI_Radar_cpp/config/system/IWR1843_demo_stress_test_baseline_front.json \
     --seconds 60 --rep 1 --tag validation_iwr1843_dca_release --out-dir docs/results/validation
 ```
 
-The harness starts the driver, samples CPU once per second, sends SIGINT after `--seconds`, and prints a JSON summary. Use `--rep 1..3` for repeats and a new `--tag` per board or build. Files are never overwritten; the full driver log is `tools/bench/runs/<basename>/driver_stdout.log`. A run that used `--allow-non-release` or `--allow-missing-prereq` is not a valid validation. For other options (`--stop-mode natural`) see `--help`.
+`bench_run.py` starts the driver, samples CPU once per second, sends SIGINT after `--seconds`, and prints a JSON summary. Use `--rep 1..3` for repeats and a new `--tag` per board or build. Files are never overwritten; the full driver log is `tools/bench/runs/<basename>/driver_stdout.log`. A run that used `--allow-non-release` or `--allow-missing-prereq` is not a valid validation. For other options (`--stop-mode natural`) see `--help`.
 
-## 6. Read the results
+## 5. Read the results
 
 Each run writes two files to `--out-dir`, with the same basename `<tag>__<config>__rep<k>__<N>s__<UTC>`:
 
 - `.csv`, one row per second: `dca_frames`, `dca_packets`, `dca_dropped_packets`, `dca_dropped_packet_events`, `dca_rx_overrun_count_cum`, `tlv_frames`, `tlv_missed_frames`, `cpu_pct`, `rss_kb`.
 - `.json` sidecar, the provenance and verdict: driver sha256, build flags, host and NIC settings, the config used, `expected` (frame size and rate), and `result` (`status`, `stop.exit_code`, `summary`, `bin_size_check`).
 
-Quick read:
+`jq '.result' <basename>.json` prints the verdict.
 
-```bash
-jq '{status: .result.status, exit: .result.stop.exit_code, bin: .result.bin_size_check.verdict, s: .result.summary}' \
-    docs/results/validation/<basename>.json
-```
+## 6. Pass or fail
 
-## 7. Pass or fail
-
-Thresholds come from the pre-rework IWR1843 baseline (3 reps of 60 s, `docs/results/baseline/`, summarized in `../RESULTS.md`), rounded by the Author, except CPU (measured on the current driver). Every row must pass. Rows marked (guide) are loose limits from only three reps, not guarantees.
+Thresholds come from the pre-rework IWR1843 baseline (3 reps of 60 s, `docs/results/baseline/`, summarized in `../RESULTS.md`), rounded, except CPU (measured on the current driver). Every row must pass. Rows marked (guide) are loose limits from only three reps, not guarantees.
 
 | Check | DCA1000 raw-ADC | Serial TLV | Baseline value |
 |---|---|---|---|
@@ -76,31 +67,31 @@ Thresholds come from the pre-rework IWR1843 baseline (3 reps of 60 s, `docs/resu
 
 For other frame rates, scale the fps rows by `expected_fps` from the sidecar; the baseline covers 10 Hz only. The DCA CPU guide of 10 % is about twice the current driver's 4 to 5 %, with or without `cap_sys_nice` (IWR1843 10 Hz only, `docs/results/validation/validation_iwr1843_dca_core16__*`, `ab2_*`). Older drivers measured 9 to 10 % (baseline) and 16 % (an intermediate build).
 
-A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 10.
+A DCA run that is `INCOMPLETE`, shows any drop, overrun, kernel drop or resync, or exits nonzero is a fail: record it and see section 9.
 
-## 8. Record results
+## 7. Record results
 
 1. Keep the CSV and JSON in `docs/results/validation/` (or `baseline/` for a new reference) and commit them; `tools/bench/runs/` is not tracked.
 2. Add a row to `docs/RESULTS.md` under a heading for the board, following the baseline tables: fps mean/min/max, dropped packets, `rx_overrun_count`, kernel drops, CPU, the sidecar basename, and the driver sha256 and commit. Record failures and caveats too.
 3. Delete the large `adc_data.bin` and `LVDS_Raw_0.bin` in `tools/bench/runs/<basename>/` when done.
 
-## 9. Per-board differences
+## 8. Per-board differences
 
 | | IWR1843 | IWR1443 (untested) | IWR6843 (untested) | AWR2243 cascade (untested) |
 |---|---|---|---|---|
 | Board descriptor | `config/boards/IWR1843.json` | `IWR1443.json` | `IWR6843.json` | `AWR2243_CASCADE.json` |
-| LVDS lanes | 2, `q_first` (bench-verified, core-17) | 4, `lane_per_rx`, `i_first` | 2, `q_first` | none (`lvds.supported: false`) |
+| LVDS lanes | 2, `q_first` (bench-verified) | 4, `lane_per_rx`, `i_first` | 2, `q_first` | none (`lvds.supported: false`) |
 | Example system config | `IWR1843_demo_stress_test_baseline_front.json` (DCA), `IWR1843_demo_tlv_default.json` (serial) | `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json` | `IWR6843ODS_demo_RadVel.json` | `AWR2243_CASCADE_cascade_ddm_shortrange.json` |
 | DCA1000 needed | yes for raw ADC; no for serial | yes (serial TLV rejected) | yes for raw ADC; no for serial | no (serial only) |
 | One cfg per boot | no | no | no | **yes**: power-cycle (12 V off and on) before every run |
 | Serial baud (data) | 921600 | n/a | 921600 | 3125000 |
-| Known limits | `calibData` rejected by the flashed firmware | serial TLV (`sdk2`) unconfirmed; bench-unproven; `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (D4); never run through `bench_run.py` |
+| Known limits | `calibData` rejected by the flashed firmware | serial TLV (`sdk2`) unconfirmed; bench-unproven; `IWR1443_dca1000_raw_ISAR_mocap_revised_r1.json`'s cfg has no `lvdsStreamCfg` | not yet run on the bench | raw ADC unsupported (`lvds.supported: false`); never run through `bench_run.py` |
 
 Config paths are under `CPSL_TI_Radar_cpp/config/system/`; ports in them are the lab's. Only the IWR1843 has baseline numbers: for other boards treat the pass table as a guide and record the first good run as that board's reference.
 
-Cascade (untested with the harness): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md). Its config ships with `log_level: "info"`, which the harness accepts. Expect 20 Hz (50 ms period) and no missed TLV frames.
+Cascade (untested with `bench_run.py`): use the by-id ports and the J6 jumper (bottom two pins flash, top two run) from [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md). Its config ships with `log_level: "info"`, which `bench_run.py` accepts. Expect 20 Hz (50 ms period) and no missed TLV frames.
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause and fix |
 |---|---|
@@ -110,9 +101,19 @@ Cascade (untested with the harness): use the by-id ports and the J6 jumper (bott
 | `not every config command was acknowledged` | An older IWR1843 image rejects `calibData` (skip it via `board_overrides`); the SDK 3.6 demo needs it. Otherwise the cfg has a command the firmware does not know. |
 | `dropped` > 0 with `kernel_drops` > 0 | The socket buffer overflowed: the consumer or the worker stalled longer than `SO_RCVBUF` holds (`ring_full` > 0 says the RX ring filled first). Check `rcvbuf=` (134217728 expected; `rmem_max` below 128 MB lowers it), a slow consumer, or CPU load; pin the threads (`runtime.rx_cpu` / `worker_cpu`, see `CPSL_TI_Radar_cpp/Readme.md` "Choosing CPUs"). |
 | `dropped` > 0 with `kernel_drops` = 0 | Lost before the host socket: the NIC, its ring or the cable/DCA1000 (no retransmission). Check `ethtool -S <dca-nic>` for rx drops and the link speed. |
-| `overrun` > 0 | Not possible on the current driver (the RX thread never discards); an old driver binary. Rebuild. |
-| `drop_events` > 0 with `dropped` = 0 | Not possible on the current driver (a reordered gap that fills in takes its event back); an old driver binary. |
+| `overrun` > 0, or `drop_events` > 0 with `dropped` = 0 | Not possible on the current driver (the RX thread never discards; a reordered gap that fills in takes its event back): an old driver binary. Rebuild. |
 | `resyncs` > 0 (and a `frame assembly resynchronised` warning) | The DCA1000 restarted its byte count mid-capture (power glitch, a second recordStart from another tool) or sent a corrupt header, or (not on a direct link) a burst of 4 or more packets arrived more than a frame late. The stream recovers by itself; the frames open at the time are dropped (`skipped`). `implausible` > 0 alone means single packets with a wild byte count were discarded. |
 | Warning `could not set SCHED_RR ...` | The config sets `runtime.rx_priority` or `worker_priority` without `cap_sys_nice`. Remove the key (default 0) or grant the capability. The run continues at normal priority. |
 | Run ends early (`INCOMPLETE`) | The cfg has `numFrames` above 0, or the board lost power or USB. |
-| Non-zero exit after a USB unplug | The driver now exits 1 with `sensorStop could not be sent` instead of crashing. Reconnect, power-cycle, rerun. |
+
+## 10. A hands-on bench session (flashing included)
+
+Use this when a session also flashes or changes firmware. One person holds the board; the person at the bench does the switch and power steps, whoever types the commands records the result.
+
+1. Write the plan first: for each test its goal, who does what, the pass criterion, then fill in status and result as you go. Record the board, driver sha256 and image sha256 at the top.
+2. Identify before you flash: `fw verify <project>` (in `firmware_dev/`) reports which image the board runs. With two XDS110 boards plugged in, name the port by its `/dev/serial/by-id/...-if00` path (also for `--cli-port` of the capture tools); `/dev/ttyACM0` is ambiguous.
+3. Flash dry-run, then flash: `fw flash <project> <by-id port> --dry-run` prints the image sha256 and size; compare them with the build. For the real flash set SOP 101 (the cascade: J6 bottom pins), power-cycle, run `fw flash` in your own terminal and type `FLASH MODE CONFIRMED`; then back to functional mode (SOP 001; cascade J6 top) and power-cycle. Record every power-cycle and why.
+4. Verify after the flash, then run: 60 s streaming plus two 15 s restarts without a power-cycle (not on the cascade, which takes one cfg per boot), comparing dropped packets, kernel drops, resyncs and `sensorStart`/`sensorStop` ack times with the table in section 6. `sensorStop` is governed by `cli.stop_timeout_ms`, not `cmd_timeout_ms`.
+5. End on the stock demo (`ti_stock_demos`) unless the next user needs the other image: flash it back and `fw verify` it.
+6. In a Docker run the container needs the serial device's group, not `dialout`: `docker/app/setup_env.sh` reads it into `SERIAL_GID`.
+7. Keep a follow-up list of what the session found (stale labels, rejected commands, missing docs), and move the numbers to `docs/RESULTS.md`.

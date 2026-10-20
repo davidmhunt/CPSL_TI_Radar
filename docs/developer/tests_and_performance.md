@@ -1,6 +1,6 @@
-# 13. Write a test, measure performance
+# Write a test, measure performance
 
-Run from the repository root, with the build from [tutorial 1](01_install.md).
+Run from the repository root, with the build from [tutorial 1](../tutorials/01_install.md).
 
 ## Write a test
 
@@ -94,4 +94,8 @@ uv run tools/bench/pipeline_gate.py /tmp/perf/p_*.txt
 
 Exit 0 passes; a regression in one build only is printed as layout noise.
 
-**On a board** (needs the board and a DCA1000): follow [`14_bench_validation.md`](14_bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`.
+**On a board** (needs the board and a DCA1000): follow [`bench_validation.md`](bench_validation.md): it runs the real driver on a board, reads the `stats v1` lines and compares them with the reference numbers in `docs/RESULTS.md`.
+
+## The Python tests
+
+`uv run pytest -q -m "not slow"` runs the GUI, config-tree, migration and tooling tests (no hardware); drop `-m "not slow"` to include the subprocess, driver and live-server tests. Tests that pin a limit or a format cite where the value comes from in [`radar_notes.md`](radar_notes.md) (for example `test_radar_gui_cascade_limits.py`, `test_radar_gui_analog.py`); when you change such a number, change the note and the test together.

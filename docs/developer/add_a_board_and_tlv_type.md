@@ -1,6 +1,6 @@
-# 11. Add a board, add a TLV type
+# Add a board, add a TLV type
 
-Two small changes, each with a test; the last section undoes both. Run from the repository root, with the build from [tutorial 1](01_install.md).
+Two small changes, each with a test; the last section undoes both. Run from the repository root, with the build from [tutorial 1](../tutorials/01_install.md).
 
 ## Add or tune a board (no rebuild of the driver)
 
@@ -15,7 +15,7 @@ sed 's/"board": "IWR1843"/"board": "TOY1843"/' config/system/IWR1843_demo_tlv_de
 cd ..
 ```
 
-The `cli:` line must now say `300 ms per command`. Fields and where each value comes from: `config/boards/README.md`. To change one value for one run only, use `"board_overrides"` in the system config instead of a new file. A new serial dialect or LVDS layout needs code, not just JSON.
+The `cli:` line must now say `300 ms per command`. Fields and where each value comes from: `config/boards/README.md` (schema and evidence). The TLV layouts the dialects decode are in [`radar_notes.md`](radar_notes.md#sdk-2-uart-frame) and `config/boards/README.md` "TLV dialects". To change one value for one run only, use `"board_overrides"` in the system config instead of a new file. A new serial dialect or LVDS layout needs code, not just JSON.
 
 Now pin it with a test. In `CPSL_TI_Radar_cpp/tests/test_board_descriptor.cpp`, add this above `TEST_CASE(loads_IWR6843)`:
 
