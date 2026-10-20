@@ -1,7 +1,7 @@
 """gui-38: the shape of CPSL_TI_Radar_cpp/config/ (hardware-free).
 
 radar cfgs sit at radar/<BOARD>/<firmware>/<name>.cfg; system JSONs are named <BOARD>_<fw>_<purpose>[_<mount>].json;
-config/archive/ is never referenced; config/moved_paths.json maps every pre-reorganisation name to its new one.
+config/moved_paths.json maps every pre-reorganisation name to its new one.
 config/user/ is the user's own and exempt.
 """
 from __future__ import annotations
@@ -81,8 +81,6 @@ def test_d_nothing_points_into_archive_and_moved_targets_exist():
         for old, new in MOVED[kind].items():
             assert (base / new).is_file(), (kind, old, new)
             assert not (base / old).exists(), f"{old} still exists"
-    # the archive holds exactly the 2 archived cfgs
-    assert sorted(p.name for p in (CONFIG / "archive").rglob("*.cfg")) == ["standard.cfg", "vel_detection.cfg"]
 
 
 def _name_pattern() -> re.Pattern:

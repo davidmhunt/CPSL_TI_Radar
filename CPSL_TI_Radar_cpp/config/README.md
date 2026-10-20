@@ -10,7 +10,6 @@ config/
   boards/  firmware/  limits/           descriptors (unchanged)
   system/<BOARD>_<fw>_<purpose>[_<mount>].json    flat; the driver finds <JSON dir>/../boards
   radar/<BOARD>/<firmware>/<name>.cfg   BOARD = a board descriptor name, firmware = a firmware descriptor id
-  archive/radar/<BOARD>/<firmware>/     legacy cfgs kept out of the live tree (see archive/README.md)
   moved_paths.json                      {"radar": {old: new}, "system": {old: new}}, paths relative to config/ (radar) and config/system/ (system)
   user/                                 gitignored, the GUI's saved configs
 ```
@@ -142,13 +141,6 @@ Run directories, results and old launch scripts cite the old names. `IWR6843ODS_
 Old paths are relative to `config/`; new paths are too. The cfg contents did not change. The 18 cfgs that never
 carried `calibData` (the old `DCA1000/custom_configs/` and `IWR_Demos/` SDK-2 cfgs) are now under `IWR1443/`, where the
 SDK 2 demo does not need it.
-
-### `archive/radar/IWR1443/dca1000_raw/`
-
-| Old | New |
-|---|---|
-| `radar/DCA1000/custom_configs/archived_configs/standard.cfg` | `standard.cfg` |
-| `radar/DCA1000/custom_configs/archived_configs/vel_detection.cfg` | `vel_detection.cfg` |
 
 ### `radar/AWR2243_CASCADE/cascade_ddm/`
 

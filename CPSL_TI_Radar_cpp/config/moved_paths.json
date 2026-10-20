@@ -12,8 +12,6 @@
   "radar/DCA1000/custom_configs/RadCloud.cfg": "radar/IWR1443/dca1000_raw/RadCloud.cfg",
   "radar/DCA1000/custom_configs/RadSAR.cfg": "radar/IWR1443/dca1000_raw/RadSAR.cfg",
   "radar/DCA1000/custom_configs/RadarHD.cfg": "radar/IWR1443/dca1000_raw/RadarHD.cfg",
-  "radar/DCA1000/custom_configs/archived_configs/standard.cfg": "archive/radar/IWR1443/dca1000_raw/standard.cfg",
-  "radar/DCA1000/custom_configs/archived_configs/vel_detection.cfg": "archive/radar/IWR1443/dca1000_raw/vel_detection.cfg",
   "radar/DCA1000/custom_configs/long_range.cfg": "radar/IWR1443/dca1000_raw/long_range.cfg",
   "radar/DCA1000/custom_configs/long_range_no_virtual_array.cfg": "radar/IWR1443/dca1000_raw/long_range_no_virtual_array.cfg",
   "radar/DCA1000/custom_configs/medium_range.cfg": "radar/IWR1443/dca1000_raw/medium_range.cfg",
