@@ -1,8 +1,8 @@
 # Architecture
 
 The main source directory is `CPSL_TI_Radar_cpp/` (C++, CMake). This doc
-describes the driver as of the start of the v2.0 rework (`release/v2.0`);
-update it as the rework changes structure. Firmware is described in
+describes the shipped v2.0 driver (`release/v2.0`);
+update it when the structure changes. Firmware is described in
 `docs/firmware.md`.
 
 ## Build
@@ -39,7 +39,7 @@ sink.
 |------|------|
 | `RadarConfig::load(path)` | `Result<RadarConfig>`: system JSON + board descriptor (with `board_overrides`) + parsed radar cfg, cross-checked; `board()`, `frame_shape()`, `commands()` |
 | `Radar::open(cfg[, transports])` | `Result<unique_ptr<Radar>>`: creates `output.dir`, opens the output files, the DCA1000 sockets, the data UART and the CLI port; sends nothing; sets the log level from `runtime.log_level`. `Transports{cli, packets, data}` swaps in a fake CLI `ByteStream`, a `ReplayPacketSource` or a fake serial data `ByteStream` |
-| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured`. With `runtime.skip_configure` (`--skip-configure`): the DCA1000 setup only, no radar cfg. Order (gui-33): the `already_configured` guard, then the firmware identity check (below), then the DCA1000 setup, then the cfg and the once-per-boot mark, so a fatal mismatch spends nothing |
+| `configure()` | DCA1000 FPGA setup, then the radar cfg. With `lifecycle.config_once_per_boot`, a second call in the process (same CLI port) sends nothing and returns `already_configured`. With `runtime.skip_configure` (`--skip-configure`): the DCA1000 setup only, no radar cfg. Order: the `already_configured` guard, then the firmware identity check (below), then the DCA1000 setup, then the cfg and the once-per-boot mark, so a fatal mismatch spends nothing |
 | `start()` | `recordStart` and the RX thread, the DCA worker and serial reader threads (CPUs and priorities from `runtime.*`, see "DCA1000 RX path"), then `sensorStart` (not with `skip_configure`) |
 | `next_adc_frame(f, timeout[, &why])` / `next_point_cloud(...)` | ADC: the oldest queued frame, blocking until one is ready (`AdcFrame`: `[rx][sample][chirp]` buffer swapped into `data`, not copied, plus `index`, `completed_at`, `missing_bytes`, `shape`, and `meta`, the per-chirp metadata of an `adc_sar_meta` stream, see "LVDS stream formats"); serial: the latest `PointCloud` (`frame_number`, `completed_at`, and `Point{x,y,z,v,snr_db,noise_db}` swapped into `points`, not copied; see "Serial TLV path"). false with `why` = `timeout`, `stalled`, `stopped` (also when `stop()` begins during the wait), `io_error` (the stream's worker thread failed), `invalid_state` or `disabled` |
 | `stats()` | the counters of the `stats v1` lines below |
@@ -85,7 +85,7 @@ returns false with `stalled`, once per stall (later calls in the same stall
 time out normally). `main` stops the run on it. 0 (the default) turns it
 off, and `main` keeps its 2 s no-frame exit.
 
-**Firmware identity check** (gui-33, `Radar.cpp` `check_firmware_identity`, `BoardDescriptor/FirmwareIdentity.cpp`). Before any cfg line
+**Firmware identity check** (`Radar.cpp` `check_firmware_identity`, `BoardDescriptor/FirmwareIdentity.cpp`). Before any cfg line
 `configure()` sends the probe commands of `config/firmware/<fw>.json` `identify.<board>` (`CLIController::query`, echoed with tag `[id]`,
 e.g. `version`; `sarStats` tells the stock demo from the SAR image) and matches the replies with the entry's `require`/`reject`
 regexes (`match_firmware_identity`; the Python mirror `radar_gui/fwident.py` is pinned to it by `tests/data/fw_replies/manifest.json`).
@@ -96,7 +96,7 @@ the cfg anyway; `off` sends nothing. `--skip-configure` never runs the check. Th
 `firmware: <match|mismatch|skipped|unknown> expected=<fw> found=<fields | not queried | no reply>`, which the GUI backend parses into
 `status.firmware_check`. `--validate` only loads the `identify` block and prints a `firmware check: ...` note.
 
-**Skip-configure and once-per-boot stop** (gui-36 D14, gui-09 D10). The
+**Skip-configure and once-per-boot stop.** The
 cascade demo accepts a cfg once per power-up, never acknowledges
 `sensorStop` and keeps streaming after it. So on a `lifecycle.config_once_per_boot`
 board `stop()` sends no `sensorStop` (it would only wait out the CLI timeout;
@@ -111,7 +111,7 @@ run it logs a warning, because nothing will arrive unless that board is
 already configured and streaming. Skipped on a fresh power-up, the cascade
 sends no frames: run once without it.
 
-**Live tap** (gui-36; `src/LiveTap/`, used by `main.cpp` only). `--tap-fd N`
+**Live tap** (`src/LiveTap/`, used by `main.cpp` only). `--tap-fd N`
 makes the driver write each completed point cloud to file descriptor `N`, a pipe
 whose write end the parent (the GUI, `radar_gui/driver.py`, via `pass_fds`)
 inherited into the driver. It taps in the consumer loop of `main.cpp`,
@@ -139,8 +139,8 @@ which `tests/test_radar_gui_tap_wire.py` parses with `radar_gui/tap.py`.
 `stop()`, one line per enabled stream, counters cumulative since `start()`
 and `t` in seconds since `start()`. `tools/bench` reads only these lines;
 the format is versioned (`v1`): keys may be appended (readers skip keys
-they do not know; core-15 appended `kernel_drops` … `resyncs`), and a key
-may be narrowed to its documented meaning (core-15: `drop_events`), but
+they do not know; a later driver appended `kernel_drops` … `resyncs`), and a key
+may be narrowed to its documented meaning (`drop_events`), but
 renaming or removing a key needs a new version:
 
 ```
@@ -148,7 +148,7 @@ stats v1 dca t=<s> frames=<n> packets=<n> dropped=<n> drop_events=<n> late=<n> d
 stats v1 serial t=<s> frames=<n> missed=<n> overwritten=<n> stalls=<n>
 ```
 
-On an `adc_sar_meta` run (core-24) the dca line also ends with
+On an `adc_sar_meta` run the dca line also ends with
 `records_valid=<n> records_invalid=<n> records_other_run=<n>`: chirps with and without
 a valid metadata record, and records that carry another run's `runIdx`.
 
@@ -156,8 +156,8 @@ a valid metadata record, and records that carry another run's `runIdx`.
 serial: valid TLV frames). `packets` … `skipped` are the `FrameAssembler`
 counters (see "DCA1000 UDP packet format"), sampled at each completed frame
 and at stop (`drop_events` counts only gaps that stayed missing since
-core-15; a reorder is no longer one). `overrun` counts packets discarded in
-user space because the RX ring was full; since core-15 the RX thread never
+now; a reorder is no longer one). `overrun` counts packets discarded in
+user space because the RX ring was full; the RX thread never
 discards, so it stays 0 (kept so the key keeps its meaning). `kernel_drops`
 counts packets the kernel dropped on the data socket (`sk_drops`: almost
 always a full `SO_RCVBUF`, the one place a slow consumer loses data now;
@@ -199,7 +199,7 @@ the tests) replays synthetic DCA1000 packets, with injected drops, duplicates
 and reordering, through `FrameAssembler` and an ADC converter. It reports
 frames/s, ns per ADC byte and heap allocations per frame for three converter
 variants: today's `ADCCubeConverter`, and two bench-local kernels (nested with a
-reused buffer, and flat `[chirp][rx][sample]`) kept as data for design D5. The
+reused buffer, and flat `[chirp][rx][sample]`) kept as data for the nested layout. The
 default `ctest` run never lists it (registered with `CONFIGURATIONS bench`);
 `ctest -C bench -L bench` runs it. Build with
 Release (the default build type) for comparable numbers.
@@ -280,16 +280,16 @@ termios2/`BOTHER` for others (the cascade's 3,125,000 baud data port).
 in place of the DCA1000) and reports discards, kernel drops, CPU and context
 switches; see `CPSL_TI_Radar_cpp/Readme.md`.
 
-**Frame queue** (core-14 P7, design D10). Completed frames wait in a
+**Frame queue.** Completed frames wait in a
 drop-oldest single-producer queue of `runtime.frame_queue_depth` frames
 (default 4; `1` keeps only the newest frame). The worker converts a frame
 outside any lock into its work buffer, then, under one mutex, swaps that
 buffer into the queue's next slot; if the queue is full it first drops the
 oldest frame and counts it in `frames_overwritten`. Only after that does it
 notify a condition variable, so a frame is never visible before its cube
-(core-11 G2) and a woken consumer always finds it (`test_dca_frame_publish`).
+and a woken consumer always finds it (`test_dca_frame_publish`).
 `Radar::next_adc_frame` blocks on that condition variable (it returns tens
-of µs after the frame is published, where the core-13 timer loop cost
+of µs after the frame is published, where the earlier timer loop cost
 about 3 ms on average) and takes
 the oldest frame by swapping buffers with the caller's `AdcFrame`. Frames
 therefore come out in order and once each; every frame a consumer did not
@@ -320,13 +320,13 @@ Counters (sequence numbers, 64-packet window): a forward gap adds its
 packets to `dropped_packets` and is one `dropped_packet_events`; an older
 packet is `duplicate` if already seen, else `late`, and a late packet that
 fills a gap takes its drop back. Once every packet of a gap has arrived
-late, the gap's event is taken back too (core-15): `dropped_packet_events`
+late, the gap's event is taken back too: `dropped_packet_events`
 counts gaps that end with packets missing, so a reorder is not a drop
 event (bench `dup_reorder`: 695 events before, 0 after). Data for an
 already-emitted frame is dropped and counted late. `incomplete_frames` /
 `skipped_frames` count frames emitted with zeros / never emitted.
 
-**Plausibility and resync** (core-15, core-11 review S1). Once the stream
+**Plausibility and resync**. Once the stream
 has started, a packet is *implausible* when its byte count is more than
 one frame (the window W) past the furthest payload, beyond what its
 sequence number explains (each sequence number it moves on allows one more
@@ -363,14 +363,14 @@ longer byte offset / `bytes_per_frame`.
 ## ADC cube layout
 
 Indexed `[Rx channel][sample][chirp]` as `complex<int16_t>`: `AdcFrame::data`
-is the same nested `std::vector` type as in v1 (design D5; core-14 kept it).
+is the same nested `std::vector` type as in v1.
 The board descriptor's `lvds.layout` picks the decoder in `ADCCubeConverter`:
 `lane_per_rx` (interleaved, IWR1443) or `two_lane_iq_pairs`
 (non-interleaved, IWR1843/6843), and `lvds.iq_order` says which component
 comes first. With SDK 3+ and a single RX channel, use an even number of ADC
 samples.
 
-**I/Q order (core-17).** The IWR1843 value `q_first` (TI SWRA581B §6) is
+**I/Q order.** The IWR1843 value `q_first` (TI SWRA581B §6) is
 bench-verified: on a real 0.9 m reflector capture (run tag
 `core17_iq_raw_R0.9m`, 2026-10-12) the range DFT peaks in the expected bin and
 the mirror bin is about 31 dB down; the order is pinned by the ctest
@@ -378,7 +378,7 @@ the mirror bin is about 31 dB down; the order is pinned by the ctest
 IWR6843ODS share the layout and value but are inferred, not bench-verified.
 Numbers and caveats: RESULTS.md finding 3.
 
-**Buffers (core-14 P2, P3).** The cubes are a pool of nested buffers,
+**Buffers.** The cubes are a pool of nested buffers,
 allocated when the radar is opened: one per frame-queue slot plus the
 worker's work buffer. They are swapped, never copied: the converter writes
 a frame into the work buffer in place, the work buffer is swapped into the
@@ -390,13 +390,13 @@ converter makes one pass over the packed bytes in output order: for each
 the reads stride (0.19 ns/byte on an Intel N150, against 1.6 for the v1
 four-pass converter). A frame shorter than its shape reads as zeros.
 
-### LVDS stream formats (core-24)
+### LVDS stream formats
 
 What an `lvdsStreamCfg` dataFmt carries is a firmware property: the firmware
 descriptor's optional `lvds_data_fmts.formats` (`{"<dataFmt>": "adc" | "adc_sar_meta"}`,
 absent = `{"1": "adc"}`) is copied by `apply_firmware_to_board` into
 `BoardDescriptor::Lvds::stream_formats`. It is a sub-key, not a new top-level key, so a
-driver built before core-24 still loads the file. Only `iwr1843_sar_lvds` maps 2, to
+driver built before `dataFmt 2` support still loads the file. Only `iwr1843_sar_lvds` maps 2, to
 `adc_sar_meta`. `RadarConfigReader` reads `hdr` and dataFmt from the cfg (last line
 wins); `FrameShape::lvds_format` and `chirp_packet_bytes` say what was chosen.
 
@@ -442,7 +442,7 @@ enforces this). Next to it `chirp_meta.csv` gets one row per chirp in
 frame's rows are written when the next frame completes, so they include the
 carried saturation; the last frame's rows are written at `stop()`.
 The frame is written with **one** `write()` from a staging buffer that the
-converter fills in file order in one sequential pass (core-14 P9; v1 made
+converter fills in file order in one sequential pass (v1 made
 two 2-byte writes per sample, about 252 000 per frame). The write happens
 after the frame is queued, so the consumer does not wait for the disk. With
 `output.save_raw_lvds`, `LVDS_Raw_0.bin` gets every packet's payload as it
@@ -464,15 +464,14 @@ SDK 2), then `numTLVs` x `{u32 type, u32 length, payload}` where `length`
 excludes the 8-byte TLV header, then zero to 31 padding bytes
 (`totalPacketLen` is a multiple of 32).
 
-**Framing (core-16, P8).** `SerialStreamer` (reader thread, `Radar`'s serial
+**Framing.** `SerialStreamer` (reader thread, `Radar`'s serial
 worker) reads from a `ByteStream`: it finds the magic word (skipping any
 bytes before it), reads the header, then reads **exactly** the rest of
 `totalPacketLen`, parses, and publishes at once. It never waits for the
 next frame's magic word, which v1 did, so v1 delivered every frame one frame
 period late (50 ms at 20 Hz). `bench/bench_serial_latency` writes frames to
 a pty at the frame period and measures last byte written ->
-`next_point_cloud` return: 52.6 ms median before, 0.17 ms after (core-16
-Log); its short run is the ctest test `test_serial_latency_pty`. A frame
+`next_point_cloud` return: 52.6 ms median before, 0.17 ms after (bench log); its short run is the ctest test `test_serial_latency_pty`. A frame
 cut off by `data_uart.timeout_ms` keeps its bytes for the next call. A
 `totalPacketLen` outside [header, 1 MiB] or a frame that fails parsing is
 dropped with a warning and the search restarts one byte after its magic
@@ -533,7 +532,7 @@ Three files describe a run (design §1, §2):
    read by `SystemConfigReader`): `"schema_version": 2`, `board`,
    `firmware` (required), `board_overrides`, `radar_cfg`, `cli.port`, `serial_stream`, `dca1000`,
    `output` (`dir`, `save_adc_frames`, `save_raw_lvds`) and `runtime`
-   (`log_level`, `stall_timeout_ms`, `frame_queue_depth`, and since core-15
+   (`log_level`, `stall_timeout_ms`, `frame_queue_depth`, and in the current driver
    `rx_cpu`, `worker_cpu`, `rx_priority`, `worker_priority`; all applied). `Radar::open` creates `output.dir`. Paths resolve against the JSON file's directory. Loading
    is strict (unknown keys, bad types, repeated keys are errors with a JSON
    path). A v1 file is rejected with the name of
@@ -553,10 +552,10 @@ Three files describe a run (design §1, §2):
    `board_overrides` is deep-merged over it before the strict
    `cpsl::radar::BoardDescriptor::load` validates it. Field sources are in
    `config/boards/README.md`.
-3. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): the TI chirp config. Shipped cfgs sit at `radar/<BOARD>/<firmware>/<name>.cfg` and system JSONs are named `<BOARD>_<fw>_<purpose>[_<mount>].json` (gui-38); `config/README.md` indexes every system JSON and maps the pre-reorganisation names to the new ones (`config/moved_paths.json`).
+3. **Radar .cfg** (`CPSL_TI_Radar_cpp/config/radar/`): the TI chirp config. Shipped cfgs sit at `radar/<BOARD>/<firmware>/<name>.cfg` and system JSONs are named `<BOARD>_<fw>_<purpose>[_<mount>].json`; `config/README.md` indexes every system JSON and maps the pre-reorganisation names to the new ones (`config/moved_paths.json`).
    DCA1000 streaming needs `lvdsStreamCfg -1 0 1 0` (ADC only) or
    `lvdsStreamCfg -1 1 1 1` (all data); on `iwr1843_sar_lvds` also
-   `lvdsStreamCfg -1 <hdr> 2 0` (ADC + per-chirp metadata, core-24).
+   `lvdsStreamCfg -1 <hdr> 2 0` (ADC + per-chirp metadata).
 
 When the system config loads, `cross_check_radar_cfg` checks the radar .cfg
 against the board for the enabled streams (16-bit complex ADC, `adcbufCfg`
@@ -607,7 +606,7 @@ lanes/layout, but `calibData` is required (not skipped), the stock-demo
 commands the SAR image rejects (`guiMonitor`, `cfarCfg`, ...) are forbidden,
 there is no data UART, and `cli.stop_timeout_ms` is about 4000 (firmware
 `sensorStop` waits up to 3 s). LVDS `dataFmt 1` (plain ADC, one driver frame =
-Nc chirps) and, since core-24, `dataFmt 2` (`adc_sar_meta`, see "LVDS stream
+Nc chirps) and `dataFmt 2` (`adc_sar_meta`, see "LVDS stream
 formats") are supported. For `adc_sar_meta` the cross-check also requires an
 `adcbufCfg` with complex output, chanInterleave 1, and a sampleSwap that agrees
 with `lvds.iq_order` (1 = `q_first`). It also requires rx·samples even, one

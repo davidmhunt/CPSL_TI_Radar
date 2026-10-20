@@ -2,56 +2,13 @@
 
 ## Installation
 
-### Pre-requisite packages
-Before building and installing this package, you must first have the following software installed:
-1. C++ compiler (supporting C++ 17)
-2. CMake
+Prerequisites (C++17 compiler, CMake, `uv`), cloning and building are in
+[tutorial 1](../docs/tutorials/01_install.md). Serial-port access, the DCA1000 network address and stable
+port names are in [tutorial 2](../docs/tutorials/02_host_setup.md) (`tools/setup/host_setup.py`). The driver has
+no other library dependency: nlohmann/json is a git submodule (`include/json`), and the serial ports use the
+Linux termios and `poll` calls directly.
 
-The driver has no other library dependency: nlohmann/json is a git submodule (`include/json`), and
-the serial ports use the Linux termios and `poll` calls directly.
-
-The following installation instructions will work for linux devices, but should be similar for Windows and Mac devices as well.
-
-#### 1. Install C++ compiler
-1. First check to see if c+ is installed by running the following command
-```
-g++ --version
-```
-If this returns at least version 7 (the first with C++17), you can move onto the next step
-
-2. If you don't have c++ installed or if your c++ version is out of date, run the following command to install c++ (for linux).
-```
-sudo apt update
-sudo apt install build-essential
-```
-
-#### 2. Install CMake
-1. Next, confirm that CMake is installed. To do this, run the following command:
-```
-cmake --version
-```
-2. If it isn't installed, run the following command to install it (for debian based systems including ubuntu)
-```
-sudo apt update
-sudo apt install cmake
-```
-
-> **Quick setup.** Steps 3 and 4, and the DCA1000 static IP under "Preparing your hardware", are checked by one command. Run it from the repository root:
-> ```bash
-> uv run tools/setup/host_setup.py --nic <dca-nic>                    # read-only report: OK / MISSING / WARN / N-A, with the fix for each
-> uv run tools/setup/host_setup.py --nic <dca-nic> --apply --dry-run  # print the exact commands and file contents, run nothing
-> uv run tools/setup/host_setup.py --nic <dca-nic> --apply            # run them (sudo per command, one confirmation per check)
-> ```
-> `<dca-nic>` is the wired interface cabled to the DCA1000, for example `enp3s0`. The tool never picks it for you. Without `--nic` it lists the candidates. The report exits 1 while anything is MISSING. Don't run the tool with `sudo`: it calls `sudo` itself for each command, so you see every prompt. Add `--udev` for stable `/dev/radar/<id>-cli` and `-data` names for XDS110 and CP2105 boards. `<id>` is the USB serial, or the USB port path when boards share a serial. The manual commands below still work if you'd rather do it by hand.
-
-#### 3. Allow access to serial ports
-1. Finally, to ensure that your system has access to the serial ports to connect to the radar, run the following command
-```
-sudo usermod -a -G dialout $USER
-```
-2. To allow the command to take effect, simply reboot or log out and then log back in on your system
-
-#### 4. System settings for high-rate DCA1000 streaming
+### System settings for high-rate DCA1000 streaming
 
 At high ADC sampling rates, the default Linux UDP receive buffer (~128 KB) is too small and causes packet drops. The driver never discards a packet itself: when its 512-packet ring is full (the consumer or the worker fell behind) the RX thread stops reading and the socket's receive buffer holds the backlog. So that buffer is what absorbs a stall, and what overflows it shows up as `kernel_drops` in `--stats`. The driver asks for `dca1000.rcvbuf_bytes` (default 64 MB), and the kernel caps that at `net.core.rmem_max` (the granted size, twice the capped value, is the `rcvbuf=` stat and the `SO_RCVBUF granted` line). Keep `rmem_max` at least `rcvbuf_bytes`. At the IWR1843 baseline (~3460 packets/s, ~5 MB/s), 64 MB holds over 10 s of data, so a stall of a few hundred ms loses nothing. Raise the system-wide cap with:
 ```bash
@@ -155,7 +112,7 @@ build-release/bench/bench_serial_latency --period-ms 50       # serial frame ove
 
 The `drv_*` rows (variant `(d)`) replay the same kind of stream through the driver's own `DCA1000Handler` (assembler, converter, frame publish and, for `drv_save`, `adc_data.bin`), the code the DCA worker thread runs. `drv_save` writes to a temp directory (`--tmp-dir`, default `/dev/shm`). Driver log messages go to a counting sink at `--log-level` (default `info`); the count per rep is in the "replay input" notes.
 
-**Perf gate (before/after a change).** Code placement alone can move a short kernel by tens of percent (core-11 measured +76% on unchanged code). So a change is measured in two Release builds of each tree, the default one and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`, a measurement build only), with `bench_pipeline --frames 400` run before/after interleaved three times per build. Save each run's stdout under a name with `before`/`after` and `default`/`aligned` in it, then:
+**Perf gate (before/after a change).** Code placement alone can move a short kernel by tens of percent (one measured +76% on unchanged code). So a change is measured in two Release builds of each tree, the default one and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`, a measurement build only), with `bench_pipeline --frames 400` run before/after interleaved three times per build. Save each run's stdout under a name with `before`/`after` and `default`/`aligned` in it, then:
 
 ```bash
 cmake --preset bench-aligned && cmake --build --preset bench-aligned -j --target bench_pipeline
@@ -177,42 +134,11 @@ build-release/bench/bench_pipeline --udp --frames 100 --stall-ms 1000 --udp-rcvb
 
 ## Preparing your hardware
 
-To stream samples from the DCA1000, the following steps must be completed
-1. Configure your machine's I.P address for the DCA1000
-2. Flash the correct firmware onto the IWR1443
-
-### 1.Setup Static IP Address
-`uv run tools/setup/host_setup.py --nic <dca-nic>` checks this and, with `--apply`, adds the address to the NIC's NetworkManager profile without removing its other addresses (see "Quick setup" above). To do it by hand, configure the TCP/IPv4 to have the following settings:
-1. Static IP Address
-2. IP address: 192.168.33.30
-3. Subnet mask: 255.255.255.0
-
-### 2.Flash the correct firmware onto the device
-To flash the correct firmware onto the IWR1443, you will need the UNIFLASH tool from Texas Instruments. Start by downloading the correct version of the tool from the [downloads page](https://www.ti.com/tool/UNIFLASH#downloads). Next, follow the instructions below corresponding to the board that you are using.
-
-#### [IWR1443] DCA Streaming
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../docs/images/boot_modes/IWR_SOP_modes.png)
-3. Use the Uniflash tool to install the binary in [`shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode/firmware`](../shipped_firmware/IWR1443/dca1000_raw/iwr_raw_rosnode/firmware) (`xwr14xx_lvds_stream.bin`; see the [shipped_firmware README](../shipped_firmware/README.md)). Make sure you use the firmware in [`shipped_firmware/IWR1443/demo`](../shipped_firmware/IWR1443/demo) if streaming data directly from the IWR
-
-#### [IWR1443] IWR Streaming
-1. Power off the IWR1443, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR_SOP_Modes](../docs/images/boot_modes/IWR_SOP_modes.png)
-3. Use the Uniflash tool to install the mmWave SDK found as part of the [TI mmWave SDK 2.01.00.04](https://www.ti.com/tool/download/MMWAVE-SDK/02.01.00.04)
-
-#### [IWR1843] DCA Streaming and IWR Demos
-1. Power off the IWR1843, and place it into Flashing Mode mode. Refer to the following diagram for placing the IWR in flashing mode ![IWR1843_Modes](../docs/images/boot_modes/IWR1843_SOP_nodes.png)
-2. For the IWR1843 (or any radar that can run the mmWave SDK demo), you should be able to load the default "demo" firmware provided by TI onto the board to stream samples to the DCA1000 board.
-
-    a.We developed this pipeline using mmWave 3.6. Using a different pipeline may require slight changes in the code.
-    b. NOTE: additional documentation on the demo firmware can be found in the index.html file located in (ti/mmwave_sdk_03_06_02_00-LTS/packages/ti/demo/xwr18xx/mmw/docs/doxygen/html)
-
-
-#### [AWR2243 2-chip cascade] IWR Demo (serial TLV)
-The cascade EVM (AM273x + 2× AWR2243) runs TI's 2-chip cascade DDM demo. Build and flash it with the
-[`CPSL_TI_Radar_Firmware_Dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev) repo
-(`./fw flash awr2243_cascade_ddm <port>`, J6 jumper on the bottom pins to flash and on the top pins to run), then check it with
-`firmware_dev/projects/awr2243_cascade_ddm/tools/cascade_serial_check.py` before using this driver.
-
-Once the correct firmware is flashed onto your board, power cycle the board and place it into functional mode.
+The DCA1000 host address is set by [tutorial 2](../docs/tutorials/02_host_setup.md) (static IP
+192.168.33.30/24 on the DCA1000 NIC). Which firmware image each board needs, how to put it in flashing mode
+and how to flash it with UniFlash (IWR1443, IWR1843, AWR2243 cascade) is in
+[tutorial 3](../docs/tutorials/03_flash_a_radar.md); the shipped binaries are described in the
+[shipped_firmware README](../shipped_firmware/README.md).
 
 ## Library use
 
@@ -308,7 +234,7 @@ The tracked configs are in [`config/`](./config/README.md): system JSONs are nam
 | `output.save_serial_bytes` | no | Write the serial data-port bytes, exactly as read, to `serial_data.bin` (default `false`; for replaying a capture). A write error warns once and the stream continues. |
 | `runtime.log_level` | no | `error`, `warn`, `info` (default) or `debug`: the least severe message printed. `debug` adds a DCA1000 counter line once a second (the v1 `"verbose": true` printed a block per frame), every CLI command and reply, and each skipped cfg command. |
 | `runtime.stall_timeout_ms` | no | `0` (default) is off. Above 0: when no frame arrives for that many ms while streaming, the driver warns and the run stops (instead of after 2 s without frames). |
-| `runtime.firmware_check` | no | `auto` (default), `warn` or `off` (gui-33). Before any cfg line `configure()` asks the board what it runs (the probes in `config/firmware/<fw>.json` `identify.<board>`, e.g. `version`, `sarStats`) and compares the reply with the system JSON's `firmware`. `auto`: a wrong image is fatal (`firmware_mismatch`, nothing is sent: the message names the expected and found firmware and the flash command); no reply or an `unverified` entry is one warning and the run continues; a once-per-power-up board (the cascade) is skipped until its entry is `once_safe`. `warn`: a mismatch is a warning and the cfg is sent. `off`: nothing is sent. The verdict is one line: `firmware: match\|mismatch\|skipped\|unknown expected=<fw> found=<fields>`. `--validate` never opens a port; it prints `firmware check: ...`. |
+| `runtime.firmware_check` | no | `auto` (default), `warn` or `off`. Before any cfg line `configure()` asks the board what it runs (the probes in `config/firmware/<fw>.json` `identify.<board>`, e.g. `version`, `sarStats`) and compares the reply with the system JSON's `firmware`. `auto`: a wrong image is fatal (`firmware_mismatch`, nothing is sent: the message names the expected and found firmware and the flash command); no reply or an `unverified` entry is one warning and the run continues; a once-per-power-up board (the cascade) is skipped until its entry is `once_safe`. `warn`: a mismatch is a warning and the cfg is sent. `off`: nothing is sent. The verdict is one line: `firmware: match\|mismatch\|skipped\|unknown expected=<fw> found=<fields>`. `--validate` never opens a port; it prints `firmware check: ...`. |
 | `runtime.skip_configure` | no | `false` (default). `true` (or the `--skip-configure` flag): open the ports but send no radar cfg, no `sensorStart` and no `sensorStop`, just stream. For a board already configured and streaming this power-up (the cascade accepts a cfg once per power-up); on a board that takes a cfg every run it only logs a warning. |
 | `runtime.frame_queue_depth` | no | Completed ADC frames waiting for `next_adc_frame` (1-1024, default 4). When the queue is full the oldest frame is dropped and counted in `frames_overwritten` (`overwritten=` in `--stats`); `1` keeps only the latest frame. Each slot holds one frame buffer, allocated when the radar is opened. Dropped frames are still in `adc_data.bin`. |
 | `runtime.rx_cpu`, `.worker_cpu` | no | Pin the DCA1000 RX thread / the DCA worker thread to one CPU (0-1023; default `null`: not pinned). See "Choosing CPUs" above; a CPU that cannot be used is a warning. |
@@ -356,7 +282,7 @@ For the `iwr1843_sar_lvds` firmware (see [`docs/firmware.md`](../docs/firmware.m
 DCA1000 on, `serial_stream` off) with
 [`IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg`](./config/radar/IWR1843/iwr1843_sar_lvds/SAR_2ms_fmt1.cfg). Set the CLI port
 for your EVM. The board requires `calibData` and rejects stock-demo commands such as `guiMonitor`, so a
-stock cfg fails the load naming the command. `lvdsStreamCfg ... dataFmt 1` (plain ADC) and, since core-24,
+stock cfg fails the load naming the command. `lvdsStreamCfg ... dataFmt 1` (plain ADC) and
 `lvdsStreamCfg -1 <hdr> 2 0` (ADC + per-chirp metadata) are supported. With dataFmt 2 each `AdcFrame` also carries
 `meta` (record fields, validity, time, lag-aligned saturation per chirp), `--stats` adds `records_valid` /
 `records_invalid` / `records_other_run`, and with `save_adc_frames` the driver writes `chirp_meta.csv` beside
@@ -409,7 +335,7 @@ cd CPSL_TI_Radar/CPSL_TI_Radar_cpp/build
 | Flag | Effect |
 |------|--------|
 | `--validate` | Check the config as above, then exit. |
-| `--stats` | Print a `stats v1 dca ...` / `stats v1 serial ...` line per stream every second and once after the stop: frames, packets, drops, late and duplicate packets, user-space discards (`overrun`, always 0 since core-15), overwritten frames, stalls, granted `SO_RCVBUF`, kernel drops, ring-full waits, implausible packets and resyncs (format and meanings in `docs/ARCHITECTURE.md`). `tools/bench` reads these lines. |
+| `--stats` | Print a `stats v1 dca ...` / `stats v1 serial ...` line per stream every second and once after the stop: frames, packets, drops, late and duplicate packets, user-space discards (`overrun`, always 0 in the current driver), overwritten frames, stalls, granted `SO_RCVBUF`, kernel drops, ring-full waits, implausible packets and resyncs (format and meanings in `docs/ARCHITECTURE.md`). `tools/bench` reads these lines. |
 | `--frames N` | Stop after N completed frames (DCA1000 frames if enabled, otherwise TLV frames). |
 | `--duration S` | Stop after S seconds of streaming. |
 

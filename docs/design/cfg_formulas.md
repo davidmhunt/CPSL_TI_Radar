@@ -1,6 +1,6 @@
 # Cfg performance formulas
 
-Hand-check sheet for every number `radar_gui/cfg/metrics.py` derives from a `.cfg`, plus the inverse solver in `radar_gui/cfg/generate.py` (gui-12, #51). Migrates to `mmwave_radar_processing` (gui-17).
+Hand-check sheet for every number `radar_gui/cfg/metrics.py` derives from a `.cfg`, plus the inverse solver in `radar_gui/cfg/generate.py` (#51). Migrates to `mmwave_radar_processing`.
 
 ## Chirp timeline
 
@@ -48,7 +48,7 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 3. **Range resolution uses sampled bandwidth** `B = slope*N/fs`, not the swept `slope*ramp` (`sweep_mhz`).
 4. **TDM `n_TX` and `vmax`** use `n_TX*Tc` per `mimo_modes.md`, not `chirps_per_loop*Tc`. Solver still uses `popcount(tx_mask)`.
 5. **DDMA slow time.** `dv` uses `n_chirps = chirps_per_loop * loops` as the Doppler observation length (total active frame time; cascade: 8 chirps per loop). Confirmed by the cascade memo (M2 s4, `rfparserDDMA.c:786-807`).
-6. **Azimuth `2/N_az` is a boresight small-angle approximation**: `lambda / (N_az * d * cos(theta))` with `d = lambda/2`, `theta = 0`. Degrades off-boresight (`1/cos(theta)`); ignores windowing. FUTURE(gui-12): replace the uniform half-wavelength virtual array with real per-board geometry (6843 ODS/AOP, 2-chip cascade).
+6. **Azimuth `2/N_az` is a boresight small-angle approximation**: `lambda / (N_az * d * cos(theta))` with `d = lambda/2`, `theta = 0`. Degrades off-boresight (`1/cos(theta)`); ignores windowing. FUTURE: replace the uniform half-wavelength virtual array with real per-board geometry (6843 ODS/AOP, 2-chip cascade).
 7. **Real-only ADC.** Only `fmt 0` halves `Rmax` and uses 2 B/sample; any other fmt is treated as complex 4 B/sample.
 8. **`fc` and `lambda`.** Textbook uses `fc = start`; code uses the sampled-band centre `start + slope*adcStart + B/2`, so `lambda` is shorter (B = 4 GHz: `fc` shifts 2 GHz, ~2.6 %).
 9. **Duty cycle** ignores frame-start jitter and inter-loop gaps; `inf` when period `<= 0`.
@@ -59,4 +59,4 @@ Symbols (cfg field, unit): `N` profileCfg numAdcSamples; `fs` digOutSampleRate (
 |---|---|---|
 | 1 | Complex ADC unless `fmt 0` (item 7); cascade = DDMA, single chip = TDM (item 4) | `Rmax`, bytes, `vmax` off |
 | 2 | Uniform half-wavelength virtual array at boresight; cascade: all 6 TX x 8 RX one aperture; single chip: `TX1`/`TX3` azimuth pair (item 6) | azimuth optimistic; 6843 ODS/AOP wrong |
-| 3 | `dataFmt 2` adds 64 B/chirp (`docs/firmware.md`); metrics read first `profileCfg` only (gui-14) | bytes off; multi-profile misreported |
+| 3 | `dataFmt 2` adds 64 B/chirp (`docs/firmware.md`); metrics read first `profileCfg` only | bytes off; multi-profile misreported |

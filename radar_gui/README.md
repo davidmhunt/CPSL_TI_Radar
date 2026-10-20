@@ -1,7 +1,7 @@
 # radar_gui
 
-Single-process radar GUI prototype (gui-01): FastAPI + uvicorn backend, plain-JS ES-module frontend (no bundler,
-no build step). The look, layout and point-cloud views were ported from the retired v1 cascade viewer (removed in rel-02).
+Single-process radar GUI prototype: FastAPI + uvicorn backend, plain-JS ES-module frontend (no bundler,
+no build step). The look, layout and point-cloud views were ported from the retired v1 cascade viewer (since removed).
 
     uv run python -m radar_gui                      # http://127.0.0.1:8000/
     uv run python -m radar_gui --source replay --file tests/fixtures/sample_frames.bin
@@ -22,7 +22,7 @@ Wire format on `/stream` (JSON text messages): `status`, `cfg` (page hints: `max
 `frame` (`frame`, `n`, `pts` = `[x, y, z, v, snr, noise]`, `rate`, `gaps`, `errors`).
 New sources subclass `Source` and yield frame dicts from `async frames()`.
 
-## Configure tab (gui-03)
+## Configure tab
 
 Open `http://127.0.0.1:8000/#configure` (or the **Configure** tab). Pick a board and a firmware (the firmware list is filtered by board; its outputs show read-only), enter targets
 (max range / velocity required; range / velocity resolution, frame rate and advanced overrides optional) and the
@@ -45,13 +45,13 @@ repo's usual values (`/dev/ttyACM0` CLI, `/dev/ttyACM1` data, DCA1000 192.168.33
 | `POST /api/cfg/generate` | `{board, targets, firmware?}` -> same shape (`targets`, `achieved`, `name` included); `firmware` = descriptor id, default the board's; `output_mode` in targets is a deprecated alias (backend only; the UI no longer sends it) |
 | `GET /api/cfg/firmware[?board=]` | firmware descriptors (id, boards, outputs, system_enables, pending), default first for a board. Descriptors: `CPSL_TI_Radar_cpp/config/firmware/<id>.json` (schema in `radar_gui/cfg/firmware.py`); limits are loaded from them |
 | `GET /api/cfgs`, `GET /api/cfg/file?id=` | shipped (`config/radar`) + user cfgs; read one |
-| `POST /api/cfg/params` | `{board, base_cfg_text, params, firmware?}` -> analyze shape + `report`, `params` (gui-11): `params` (schema in `radar_gui/cfg/params.py`) is applied to the base cfg's profile/chirp/frame/channel lines, then validated; bad values are error issues, not 4xx/5xx |
+| `POST /api/cfg/params` | `{board, base_cfg_text, params, firmware?}` -> analyze shape + `report`, `params`: `params` (schema in `radar_gui/cfg/params.py`) is applied to the base cfg's profile/chirp/frame/channel lines, then validated; bad values are error issues, not 4xx/5xx |
 | `POST /api/cfg/save` | write the `.cfg` + system JSON (new names only) |
 
 Tests: `uv run pytest tests/test_radar_gui_skeleton.py tests/test_radar_gui_cfgapi.py` (the driver `--validate` test
 skips when `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` is absent).
 
-**Driver verdict on Save (gui-04).** `POST /api/cfg/save` also returns `driver`: the real driver's
+**Driver verdict on Save.** `POST /api/cfg/save` also returns `driver`: the real driver's
 `<json> --validate --json` verdict on the file just written (`available`, `ok`, `errors[]`, `warnings[]`, `text`), and Configure
 shows it under the Saved message ("Driver check: OK" or the error codes). `available: false` when no driver binary is found (the
 Python verdict above it still stands). The driver, not the Python validator, is the final gate: both read the same
@@ -61,7 +61,7 @@ without `--json`. A saved system JSON carries `firmware`; a `config/user/*.json`
 with the Radar tab's **Add firmware** button or `tools/migrate_config_v1_to_v2.py --add-firmware`. Shots:
 `tools/gui_shots_specs/gui04_save.json`.
 
-## Detection (CFAR) card (gui-35)
+## Detection (CFAR) card
 
 The Configure tab's "Detection (CFAR)" card edits the on-chip detector: `cfarCfg`, `cfarFovCfg` (FOV) and, on the IWR1443,
 `peakGrouping`. It is drawn only from the firmware descriptor, `CPSL_TI_Radar_cpp/config/firmware/<fw>.json` -> `detection`
@@ -88,7 +88,7 @@ until "Manual field of view" is ticked; the cascade DDM build has no `cfarFovCfg
 - Screenshots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui35.json` (1843, 1443, cascade, SAR note,
   an error state, Chirp-parameters mode with a manual FOV; each at 1400 and 800 px).
 
-## MIMO panel and chirp table (gui-16)
+## MIMO panel and chirp table
 
 The Configure tab's MIMO card shows the scheme badge (TDM / TDM+BPM / DDMA), a loop timing diagram and each derived number with its
 formula, all read from `metrics` (`scheme`, `chirp_sequence`, `derivations`, ...). Under the diagram, the **chirp table** lists one row per
@@ -97,19 +97,19 @@ chirp of the loop with TX1/TX2/TX3 checkboxes, add / remove / move-up / move-dow
 `mimo.bpm` is true. Editing the table switches to the chirp-parameter mode and posts only the difference from the seed to
 `POST /api/cfg/params`: `chirp_tx_masks` (list of ints), or `{"bpm": true}` for the BPM preset (the backend writes masks `[5, 5]` and enables
 `bpmCfg`; `{"bpm": false}` leaves BPM). Warnings and errors come back in `issues` (e.g. `tx_pattern_invalid`, `bpm_unsupported`); chirp-pattern
-codes outline the table. Below the rows, a **phase table** (gui-23) lists every chirp of the loop with one degree column per TX (headers coloured like the timing diagram; `metrics.chirp_phases`/`phase_tx`/`phase_source`/`phase_note`; `—` = not BPM-coded; scrolls with a sticky header past 12 rows): BPM 0/180, plain TDM 0. On the cascade (DDMA) the table is read-only: every chirp is listed with the firmware-derived per-TX phases, labelled unverified (chirp order may be reversed), since the phases are set by firmware, not cfg
+codes outline the table. Below the rows, a **phase table** lists every chirp of the loop with one degree column per TX (headers coloured like the timing diagram; `metrics.chirp_phases`/`phase_tx`/`phase_source`/`phase_note`; `—` = not BPM-coded; scrolls with a sticky header past 12 rows): BPM 0/180, plain TDM 0. On the cascade (DDMA) the table is read-only: every chirp is listed with the firmware-derived per-TX phases, labelled unverified (chirp order may be reversed), since the phases are set by firmware, not cfg
 (`chirp_tx_masks` edits there are ignored with `cascade_chirp_mask_ignored`). `tests/test_radar_gui_cfgapi.py::test_chirp_table_payloads`
 pins the payload shapes (no browser harness).
 
-## Session, header bar and tabs (gui-37)
+## Session, header bar and tabs
 
-The board has **one engine and one session**: every board Start, from the header, the Radar tab or the Point cloud tab, runs the C++ driver through `POST /api/driver/start`. The Python serial source was deleted (gui-37 Step 6): `POST /api/source {"kind":"serial"}` answers 410 "start a driver session". Tabs: **Configure** (`#configure`), **Radar** (`#run`, the backend session), **Point cloud** (`#live`), **Raw ADC** (`#adc`), **Devices** (`#settings`) and **Logs** (`#logs`); the internal `data-tab` ids and old hashes still work, `#radar`/`#pointcloud`/`#devices` are aliases. With no hash the page lands on Point cloud if a session is live, else on Radar. Tabs are an ARIA tablist: arrow keys, Home/End and digits 1-N (when focus is not in a field). There is deliberately **no global Start/Stop hotkey**.
+The board has **one engine and one session**: every board Start, from the header, the Radar tab or the Point cloud tab, runs the C++ driver through `POST /api/driver/start`. The Python serial source was deleted: `POST /api/source {"kind":"serial"}` answers 410 "start a driver session". Tabs: **Configure** (`#configure`), **Radar** (`#run`, the backend session), **Point cloud** (`#live`), **Raw ADC** (`#adc`), **Devices** (`#settings`) and **Logs** (`#logs`); the internal `data-tab` ids and old hashes still work, `#radar`/`#pointcloud`/`#devices` are aliases. With no hash the page lands on Point cloud if a session is live, else on Radar. Tabs are an ARIA tablist: arrow keys, Home/End and digits 1-N (when focus is not in a field). There is deliberately **no global Start/Stop hotkey**.
 
 **Header session bar** (`web/js/session.js`): a status pill (`role=status`, `aria-live=polite`, text always carries the state: `No session`, `Starting`, `Configuring 5/27 · IWR1843`, `IWR1843 · cfg · pid N`, `Stopping`, `Replay · file`, `Ended`, `Died`, `Config failed`, `Wrong firmware`), a `● saving` / `not saving` badge (while idle, `will save: ADC frames` when the recording boxes differ from the config's own), a description line and one button: **Stop** while a session runs, else **Start <last setup>** (or **Set up...** before the first start). After this GUI process sent the cfg to a once-per-boot board (the cascade) the button becomes **Restart (skip cfg)** with **Send cfg (after a power-cycle)** next to it; the evidence is keyed on the backend's `boot` id (`/api/driver/status`), so a restarted GUI or an older backend never skips on its own. One session at a time: Start is disabled with "Stop <current> first" while one runs; starting a board session replaces a running replay.
 
 **Radar tab** holds the setup both tabs share (`spec`, kept in `localStorage`): **Saved config** (a system JSON from `config/user/` or `config/system/`) or **Quick setup** (board, firmware, cfg, CLI/data ports, DCA1000 on where the firmware streams LVDS; the backend writes `runs/gui/<UTC>_<name>/session.json` + `radar.cfg`). **Recording** boxes (Save ADC frames, Save raw LVDS, Save serial bytes) start from the selected config's own values (`saves` in `/api/driver/configs`) and are sent as `overrides` only when they differ; ADC/LVDS need a DCA1000 stream, serial bytes need `caps.save_serial_bytes`. **Save to config** writes the flags back (`POST /api/driver/config/save`): a `config/user/` file is overwritten after a confirm with the previous version kept as `<name>.json.bak` (indent 4, atomic write, re-validated); a shipped `config/system/` file is never overwritten, only copied into `config/user/` under a name you choose; paths are confined to the user directory (422 otherwise). The JSON writer is `radar_gui/sysjson.py`.
 
-**Firmware check card** (gui-33). The driver asks the board what it runs before it sends the cfg (`runtime.firmware_check`: `auto` default, `warn`, `off`; `docs/ARCHITECTURE.md` "Firmware identity check") and prints one `firmware: <match|mismatch|skipped|unknown> expected=<fw> found=<fields>` line. `radar_gui/driver.py` (`parse_firmware_line`, `parse_firmware_extra`) folds it, and the flash hint from the mismatch message, into `status.firmware_check = {verdict, expected, found, hint?, detail?}` (`null` before a line, after a new run starts, or on a driver build with no check) and sends a `driver_firmware` WebSocket message when it changes. `status.firmware` stays the config's firmware id. The **Radar** tab shows it under the Start row, and the **Point cloud** Board card on its firmware line: green match, red mismatch with the "Flash it: ..." command (the run has ended `failed`, nothing was sent to the board), amber skipped (once-per-power-up board, not yet bench-checked) or not confirmed (no reply; the cfg was sent anyway). A backend with no `firmware_check` field keeps the old "Firmware: <id> - checked by the driver at start" line (`web/js/session.js` `fwVerdictView`). The check mode is the Radar tab's firmware-check selector; **Save to config** and the start request write `runtime.firmware_check` only when it is not `auto` and the driver build accepts the key (`caps.firmware_check`, `radar_gui/sysjson.py`, `session_cfg.py`).  Tests: `tests/test_radar_gui_driver.py` (fake driver `FAKE_DRIVER_FW=match|mismatch|skipped|unknown|by-config`), shots `tools/gui_shots_specs/gui33.json`.
+**Firmware check card**. The driver asks the board what it runs before it sends the cfg (`runtime.firmware_check`: `auto` default, `warn`, `off`; `docs/ARCHITECTURE.md` "Firmware identity check") and prints one `firmware: <match|mismatch|skipped|unknown> expected=<fw> found=<fields>` line. `radar_gui/driver.py` (`parse_firmware_line`, `parse_firmware_extra`) folds it, and the flash hint from the mismatch message, into `status.firmware_check = {verdict, expected, found, hint?, detail?}` (`null` before a line, after a new run starts, or on a driver build with no check) and sends a `driver_firmware` WebSocket message when it changes. `status.firmware` stays the config's firmware id. The **Radar** tab shows it under the Start row, and the **Point cloud** Board card on its firmware line: green match, red mismatch with the "Flash it: ..." command (the run has ended `failed`, nothing was sent to the board), amber skipped (once-per-power-up board, not yet bench-checked) or not confirmed (no reply; the cfg was sent anyway). A backend with no `firmware_check` field keeps the old "Firmware: <id> - checked by the driver at start" line (`web/js/session.js` `fwVerdictView`). The check mode is the Radar tab's firmware-check selector; **Save to config** and the start request write `runtime.firmware_check` only when it is not `auto` and the driver build accepts the key (`caps.firmware_check`, `radar_gui/sysjson.py`, `session_cfg.py`).  Tests: `tests/test_radar_gui_driver.py` (fake driver `FAKE_DRIVER_FW=match|mismatch|skipped|unknown|by-config`), shots `tools/gui_shots_specs/gui33.json`.
 
 **Point cloud tab** "Now showing" card: **Board** (a compact picker bound to the same setup, Start/Stop, firmware line, board commands, "More options in Radar") or **Replay** (a TLV file and dialect; the list includes `runs/gui/*/serial_data.bin` run captures, dialect from the run's `session.json`). Controls whose capability the backend lacks are hidden, and an older backend still offers saved configs (JS tolerates a missing `caps`, `/api/driver/boards` or `config/save`).
 
@@ -117,15 +117,15 @@ API (additive): `POST /api/driver/start` takes `config` + `overrides` or `setup`
 
 **Logs tab** (`#logs`, `radar_gui/logs_api.py`): lists the run folders under the run root (`runs/gui/`, or `RADAR_GUI_RUN_DIR`), newest first, with start time, board/firmware (from `session.json`), size, files and a `saving` badge; **View** shows `driver.log` (last 200/500/5000 lines), `session.json` or `radar.cfg` as plain text (`textContent`); **Replay** (when `serial_data.bin` exists) shows that capture in the Point cloud tab; **Delete selected** asks for a confirm that names the folders and total size, then `POST /api/logs/delete {names}`. Server rules: a session is addressed by its folder name only (`<UTC>_<name>`, no `/` or `..`), must be a real directory directly under the run root (symlinks rejected), all names are validated before anything is removed (422), the running session is refused (409), and `config/user/`, `runs/gui/dumps/` and everything else outside the run root are not addressable. No auto-pruning. Tests: `tests/test_radar_gui_logs.py` (temp run root only), shots `tools/gui_shots_specs/gui37_logs.json` (`run_files` seeds the scratch run root).
 
-**Tune tab** (`#tune`, `radar_gui/tune.py` core + `radar_gui/tune_api.py`; radar-37): sweeps profileCfg `rxGain` bits 5:0 over a range prefilled from the board's radar-36 `rx_gain_db` {min, max, step} (off-step / out-of-range -> 422), captures N frames per gain of raw ADC and SUGGESTS a gain: the highest gain whose strongest return (outside a DC/leakage exclusion of 5 range bins) still tracks 1 dB/dB within 1 dB, with no firmware-saturated chirp (`out/chirp_meta.csv`) and no ADC sample at the rails, minus a margin (default 3 dB), floored to the board's step grid; "no compression observed up to X dB; headroom Y dB" when it never compressed. Each step is a full reconfigure by a fresh driver run on temporary cfg + system JSON copies (sensorStop flushes the board's config, so a profileCfg-only restart is rejected: runs/radar37_gate); no power cycle. `POST /api/tune/start|cancel`, `GET /api/tune/info|status`; the radar and DCA1000 must be free (409 otherwise) and a driver start is refused during a sweep. A sweep is saved in `runs/gui/<UTC>_tune_<config>/` (`tune.json`, `tune.csv`, `plot.json`, `radar.cfg`, `step_g<NN>/`). It never applies a gain and never writes `config/user/`. Headroom is dB below the digital full scale derived from adcCfg numADCBits (12/14/16 bit; 16 with a note when absent; `adc_bits` overrides). Tests: `tests/test_radar_gui_tune.py`, `tests/test_radar_gui_tune_api.py` (fake driver `FAKE_DRIVER_ADC=gain`); shots `tools/gui_shots_specs/radar37_tune.json`.
+**Tune tab** (`#tune`, `radar_gui/tune.py` core + `radar_gui/tune_api.py`): sweeps profileCfg `rxGain` bits 5:0 over a range prefilled from the board's `rx_gain_db` {min, max, step} (off-step / out-of-range -> 422), captures N frames per gain of raw ADC and SUGGESTS a gain: the highest gain whose strongest return (outside a DC/leakage exclusion of 5 range bins) still tracks 1 dB/dB within 1 dB, with no firmware-saturated chirp (`out/chirp_meta.csv`) and no ADC sample at the rails, minus a margin (default 3 dB), floored to the board's step grid; "no compression observed up to X dB; headroom Y dB" when it never compressed. Each step is a full reconfigure by a fresh driver run on temporary cfg + system JSON copies (sensorStop flushes the board's config, so a profileCfg-only restart is rejected: runs/radar37_gate); no power cycle. `POST /api/tune/start|cancel`, `GET /api/tune/info|status`; the radar and DCA1000 must be free (409 otherwise) and a driver start is refused during a sweep. A sweep is saved in `runs/gui/<UTC>_tune_<config>/` (`tune.json`, `tune.csv`, `plot.json`, `radar.cfg`, `step_g<NN>/`). It never applies a gain and never writes `config/user/`. Headroom is dB below the digital full scale derived from adcCfg numADCBits (12/14/16 bit; 16 with a note when absent; `adc_bits` overrides). Tests: `tests/test_radar_gui_tune.py`, `tests/test_radar_gui_tune_api.py` (fake driver `FAKE_DRIVER_ADC=gain`); shots `tools/gui_shots_specs/radar37_tune.json`.
 
-## Settings tab (gui-32)
+## Settings tab
 
 A read-only **Settings** tab (`#settings`). **Serial ports** lists `/dev/serial/by-id/*` grouped by XDS110 serial (`-if00` = CLI, `-if03` = data, ttyACM node, and the process holding each port from a `/proc` scan, via `ports.py`); serial `00000000` is labelled as the cascade. Nothing is opened or probed. "Use for Configure -> Save" / "Use for Quick setup (Radar tab)" only fill the existing port fields. **DCA1000 host check** runs `tools/setup/host_setup.py`'s `check_dca_nic` (never confirmed, so no fix is ever applied) and `check_sysctl` (`rmem_max`), plus an optional single ping of 192.168.33.180; fix commands are shown as text only. Changing the host stays a terminal job (`uv run tools/setup/host_setup.py --nic <nic> --apply`).
 
 API: `GET /api/settings/ports`, `GET /api/settings/dca?nic=<wired NIC>&ping=0|1` (a `nic` that is not a wired ethernet interface is 422). Tests: `tests/test_radar_gui_settings.py` (fake by-id dir mirroring the bench, host_setup's FakeHost). Shots: `tools/gui_shots_specs/gui32.json`.
 
-## Radar tab: driver runs (gui-05; the tab was called Run)
+## Radar tab: driver runs (the tab was called Run)
 
 Open `http://127.0.0.1:8000/#run` (or the **Run** tab): pick a system JSON (saved ones from `config/user/` first, then `config/system/`;
 Configure's Save result has an **Open in Radar** link that preselects the file), **Validate** (runs `<driver> <json> --validate`; shows
@@ -148,12 +148,12 @@ Runs happen in `runs/gui/<UTC>_<json stem>/` (gitignored; override `RADAR_GUI_RU
     uv run python -m radar_gui --driver-bin tests/fakes/fake_driver.py   # no hardware
 
 Wire format (additions to `/stream`): `driver_state` (full status minus the log; also sent on connect), `driver_stats` (`stream`, `stats`
-with `rate_hz`), `driver_log_batch` (`lines`, `run`: output lines buffered and sent every 150 ms, in order; a backend older than gui-09 Step 4c sent one `driver_log` with `line` per line, which the page still accepts), `driver_cli` (`entry`, `run`, `first_fail`: one board command and its reply; see below). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
+with `rate_hz`), `driver_log_batch` (`lines`, `run`: output lines buffered and sent every 150 ms, in order; a backend older than the batched log sent one `driver_log` with `line` per line, which the page still accepts), `driver_cli` (`entry`, `run`, `first_fail`: one board command and its reply; see below). Endpoints: `GET /api/driver/configs`, `GET /api/driver/status`, `POST /api/driver/{validate,start,stop}`
 (body `{config, frames?, duration?}`; only configs listed by `/configs` are accepted). Tests: `tests/test_radar_gui_driver.py` (fake driver
 `tests/fakes/fake_driver.py`, modes via `FAKE_DRIVER_MODE`). Shots: `uv run python tools/gui_shots.py --scenarios tools/gui_shots_specs/gui05.json`
 (own server, fake driver; the spec's `user_cfgs` carry the system JSONs, `@PORT@` stands for a scratch file used as the CLI port).
 
-**Board command transcript (gui-34).** The driver's CLI traffic is parsed into `status.cli` (`[{seq, i, n, tag, cmd, ok, verdict
+**Board command transcript.** The driver's CLI traffic is parsed into `status.cli` (`[{seq, i, n, tag, cmd, ok, verdict
 DONE|ERROR|TIMEOUT|SKIP, reply, ms}]`, first 500) and `cli_first_fail` (the first failing `seq`), from either the info-level
 `cli [i/N] <cmd> -> DONE|ERROR|TIMEOUT (<ms> ms) "<reply>"` line or, for older binaries at `log_level` debug, the `Sent command:` /
 `Received response:` pair plus the reply lines up to the prompt (the removed Python serial source recorded the same shape).
@@ -180,7 +180,7 @@ If tailscale is missing, logged out, or the address cannot be bound, it prints t
 > The GUI has **no authentication**. Anyone your Tailscale ACLs allow to reach this machine's tailnet IP (bind mode) or the serve URL can save cfgs and (once run control exists) start radar runs.
 > Restrict access with Tailscale ACLs, and never expose it with `tailscale funnel` (public internet).
 
-**Live follows the driver run (gui-36).** A run started from the Run tab hands the Live tab its point cloud: the GUI creates a pipe and
+**Live follows the driver run.** A run started from the Run tab hands the Live tab its point cloud: the GUI creates a pipe and
 spawns the driver with `--tap-fd <n>`, so there is no second connection to the board. The tap is used only when the driver's usage text
 (`<driver> --help`, checked once per binary path + mtime) lists `--tap-fd`; an older build runs untapped and Live says "driver run has no
 live tap (rebuild the driver)". On a successful start the Hub switches to a `DriverSource`; the Source card becomes read-only ("driver run
@@ -191,9 +191,9 @@ Wire format (`radar_gui/tap.py`): `u32 len (LE)`, `u8 type`, payload; 1 hello (J
 int16 I/Q; counted and parsed, not displayed yet). Tests: `tests/test_radar_gui_tap.py` (fake driver modes `tap`/`no-tap`). Shots:
 `tools/gui_shots_specs/gui36.json` (running, ended, died) and `gui36_notap.json`.
 
-**No source by default (gui-36 3b).** `python -m radar_gui` starts with `--source none`: the Live tab says "pick Replay, or start a driver session in the Radar tab". `--source mock` remains (hidden from the UI) for tests and `tools/gui_shots.py`. The Replay card has a **TLV dialect** select (sdk2 / sdk3 / mcuplus_cascade), preset from the file name (`AWR2243_CASCADE_*` -> mcuplus_cascade, `IWR1443*` -> sdk2, else sdk3); `POST /api/source` takes `dialect` (default: the same detection). **Skip cfg (Run tab):** for once-per-boot boards (the cascade) the Run tab offers "Already configured this power-up (skip cfg)", sent as `skip_configure` and passed to the driver as `--skip-configure` only when its usage text lists the flag; otherwise the box is disabled ("rebuild the driver") and the API answers 422. `GET /api/driver/configs` carries `caps` (`tap`, `skip_configure`) and per-config `once_per_boot`.
+**No source by default.** `python -m radar_gui` starts with `--source none`: the Live tab says "pick Replay, or start a driver session in the Radar tab". `--source mock` remains (hidden from the UI) for tests and `tools/gui_shots.py`. The Replay card has a **TLV dialect** select (sdk2 / sdk3 / mcuplus_cascade), preset from the file name (`AWR2243_CASCADE_*` -> mcuplus_cascade, `IWR1443*` -> sdk2, else sdk3); `POST /api/source` takes `dialect` (default: the same detection). **Skip cfg (Run tab):** for once-per-boot boards (the cascade) the Run tab offers "Already configured this power-up (skip cfg)", sent as `skip_configure` and passed to the driver as `--skip-configure` only when its usage text lists the flag; otherwise the box is disabled ("rebuild the driver") and the API answers 422. `GET /api/driver/configs` carries `caps` (`tap`, `skip_configure`) and per-config `once_per_boot`.
 
-## ADC tab (gui-07)
+## ADC tab
 
 Live range profile, range-Doppler, range-azimuth and raw-ADC diagnostics from the driver tap's `adc` messages, so `save_adc_frames` can stay off.
 Needs a Run-tab driver run with a DCA1000 config and a driver whose usage text lists `--tap-fd` and `--tap-adc-every` (Rebuild 1 or later).

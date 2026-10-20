@@ -91,7 +91,7 @@ System JSONs that point at the same radar cfg (they differ in mount, ports or ou
 ### Kept cfgs with no system JSON
 
 These 12 cfgs under `radar/` are referenced by no system JSON and no firmware template. They are kept on purpose
-(docs-01 sign-off D14); the GUI lists them as shipped cfgs. Descriptions are from the docs-01 audit and are unconfirmed
+(a deliberate choice); the GUI lists them as shipped cfgs. Descriptions are from the config audit and are unconfirmed
 where marked.
 
 | Cfg | What it is |
@@ -107,7 +107,7 @@ where marked.
 
 ## Old to new: system JSONs
 
-Run directories, results and old launch scripts cite the old names. `IWR6843ODS_demo_RadVel_down.json` (a gui-38 name) was a byte-identical duplicate of `_10Hz_down` and was removed in rel-01. `moved_paths.json` holds the same map.
+Run directories, results and old launch scripts cite the old names. `IWR6843ODS_demo_RadVel_down.json` (a pre-reorganisation name) was a byte-identical duplicate of `_10Hz_down` and was removed in the config reorganisation. `moved_paths.json` holds the same map.
 
 | Old (`system/`) | New |
 |---|---|
