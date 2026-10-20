@@ -1,9 +1,9 @@
-// Board command transcript panel (gui-34), shared by the Radar tab (under the log) and the Live Source card.
+// Board command transcript panel, shared by the Radar tab (under the log) and the Live Source card.
 // Entry shape (driver `cli` list): {seq, i, n, tag, cmd, ok, verdict: DONE|ERROR|TIMEOUT|SKIP, reply, ms}.
 // Collapsed when every command was answered Done; auto-opened (once per failure) with the first failing row red and
 // scrolled into view. Tolerates a backend that sends no transcript: the panel just stays hidden.
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const isProbe = e => !!e.probe || e.tag === 'id';   // gui-39: firmware identify questions, not cfg commands
+const isProbe = e => !!e.probe || e.tag === 'id';   // firmware identify questions, not cfg commands
 const bad = e => !isProbe(e) && (e.verdict === 'ERROR' || e.verdict === 'TIMEOUT');
 
 export function mountCliPanel(host, opts = {}) {   // opts.compact: stacked rows for a narrow card (Live Source)

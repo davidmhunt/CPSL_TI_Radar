@@ -1,5 +1,5 @@
-// Tune tab (radar-37): RX-gain sweep. GET /api/tune/info?config=, POST /api/tune/start | cancel, GET /api/tune/status (polled).
-// The board's valid gain min/max/step come from the server (radar-36 limits) and prefill the inputs; off-step / out-of-range
+// Tune tab: RX-gain sweep. GET /api/tune/info?config=, POST /api/tune/start | cancel, GET /api/tune/status (polled).
+// The board's valid gain min/max/step come from the server (the gain limits) and prefill the inputs; off-step / out-of-range
 // values are refused here and again by the server. The result is a SUGGESTION shown as text: there is deliberately no control
 // that applies a gain. All server text goes in through textContent. A server without these endpoints shows a "restart" hint.
 import { $, css } from './state.js';

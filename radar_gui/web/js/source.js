@@ -1,4 +1,4 @@
-// Point cloud tab "Now showing" card (gui-06, gui-37). Board = the C++ driver session: a compact picker bound to the same
+// Point cloud tab "Now showing" card. Board = the C++ driver session: a compact picker bound to the same
 // setup as the Radar tab (session.js `spec`) plus Start/Stop. Replay = a recorded TLV file shown through /api/source.
 // Status text arrives through main.js (setStatus) -> srcStatus().
 import { $ } from './state.js';
@@ -11,7 +11,7 @@ let cmdPanel = null, cliSig = '';
 
 function msg(text, cls) { const m = $('srcMsg'); m.hidden = !text; m.textContent = text || ''; m.className = 'runmsg ' + (cls || 'bad'); }
 
-// gui-09 D16: the dialect follows the capture (backend `dialect`) or its file name; editable.
+// the dialect follows the capture (backend `dialect`) or its file name; editable.
 function autoDialect() {
   const f = C.files.find(x => x.path === $('srcFile').value);
   if (f) $('srcDialect').value = f.dialect || (/^awr2243_cascade/i.test(f.name) ? 'mcuplus_cascade' : /^iwr1443/i.test(f.name) ? 'sdk2' : 'sdk3');
@@ -45,7 +45,7 @@ const recSummary = () => {
   const on = FLAGS.filter(([k, ovk]) => flagEff(k, ovk)).map(f => f[2]);
   return on.length ? `Recording: ${on.join(', ')} (change in Radar)` : 'Recording: off (change in Radar)';
 };
-// gui-33: the driver's firmware check; its verdict is in the log until the driver reports it as a field.
+// the driver's firmware check; its verdict is in the log until the driver reports it as a field.
 function showFirmware() {
   const el = $('srcFw'), d = SS.drv, show = boardLive() || ['exited', 'failed'].includes(d.state);
   const fw = d.firmware; el.hidden = !(show && fw);

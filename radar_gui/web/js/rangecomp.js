@@ -1,11 +1,11 @@
-// Range compensation (radar-38): a DISPLAY-ONLY dB gain that lifts far returns so they can be compared with near ones.
+// Range compensation: a DISPLAY-ONLY dB gain that lifts far returns so they can be compared with near ones.
 // Pure functions, no DOM: adc.js applies them at draw time to the profile (dB floats) and the range-Doppler u8 map. Backend stats,
 // the peak markers, recordings and the tune sweep never see it. r2 = +20 log10(R/Rref) (amplitude-like / distributed scaling),
 // r4 = +40 log10(R/Rref) (point-target radar equation: power falls as 1/R^4).
 export const COMP_MODES = { off: 0, r2: 20, r4: 40 };
 export const COMP_LABEL = { off: 'off', r2: 'R^2', r4: 'R^4' };
 
-// Reference range: past the HPF1 corner when the frame header says where it is (radar-36 `bands.hpf_m`), never under 1 m.
+// Reference range: past the HPF1 corner when the frame header says where it is (`bands.hpf_m`), never under 1 m.
 export function rangeRef(bands) {
   const h = bands && bands.hpf_m > 0 ? bands.hpf_m : 0;
   return Math.max(1, h);

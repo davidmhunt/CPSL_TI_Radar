@@ -1,4 +1,4 @@
-// One session store (gui-37): the board has one engine (the C++ driver) and one session. This module merges the driver's
+// One session store: the board has one engine (the C++ driver) and one session. This module merges the driver's
 // status / driver_* WebSocket messages, the Live source (/api/source) and the stream status into one view, owns the shared
 // "setup" (saved config + overrides, or a quick setup) that the Radar tab and the Point cloud tab both edit, builds the
 // start request, and renders the header session bar. Every field is optional: a backend without an endpoint or capability
@@ -36,10 +36,10 @@ export const D = { configs: [], orphans: [], caps: null, boards: [], cfgs: [], f
 export async function loadData() {
   const [c, b, g, f] = await Promise.all([api('/api/driver/configs'), api('/api/driver/boards'), api('/api/cfgs'), api('/api/source/files')]);
   D.configs = (c.j && c.j.configs) || [];
-  D.orphans = (c.j && c.j.orphans) || [];   // gui-39: user .cfg files with no system JSON
+  D.orphans = (c.j && c.j.orphans) || [];   // user .cfg files with no system JSON
   D.caps = (c.j && c.j.caps) || null;           // absent on an older backend
   let boards = b.ok && b.j && b.j.boards;
-  if (!boards) boards = ((await api('/api/source/boards')).j || {}).boards || [];   // backend older than gui-37: board list only
+  if (!boards) boards = ((await api('/api/source/boards')).j || {}).boards || [];   // older backend: board list only
   D.boards = boards;
   D.cfgs = (g.j && g.j.cfgs) || []; D.files = (f.j && f.j.files) || [];
   D.loaded = true;
@@ -143,7 +143,7 @@ function evidence() {
   const bad = SS.cli.some(e => e.verdict === 'ERROR' || e.verdict === 'TIMEOUT');
   if (bad) markSent(b, false); else if (SS.cli.some(e => e.verdict === 'DONE')) markSent(b, true);
 }
-// gui-33: the driver's firmware identity verdict (status.firmware_check = {verdict, expected, found, hint?, detail?}) as one
+// the driver's firmware identity verdict (status.firmware_check = {verdict, expected, found, hint?, detail?}) as one
 // line + a colour class, shared by the Radar and Point cloud tabs. null = no verdict (older driver or backend, or no check yet).
 export function fwVerdictView(fc) {
   if (!fc || !fc.verdict) return null;
@@ -255,7 +255,7 @@ function buildBody(opts) {
 export async function startSession(opts = {}) {
   const why = blockedReason(); if (why) return { ok: false, text: why };
   const body = buildBody(opts); if (typeof body === 'string') return { ok: false, text: body };
-  // gui-41: a once-per-power-up board this GUI already configured would be sent the cfg again and not start (bench 2026-10-12)
+  // a once-per-power-up board this GUI already configured would be sent the cfg again and not start (bench 2026-10-12)
   if (onceBoard() && cfgSentHere(specBoard()) && !body.skip_configure
       && !confirm(`The ${specBoard()} accepts a cfg once per power-up. Power-cycle it first, or it will not start. Continue?`)) return { ok: false, text: '' };
   SS.startErr = ''; SS.busy = true; changed();
@@ -266,7 +266,7 @@ export async function startSession(opts = {}) {
   SS.run = run; SS.cli = []; SS.runId = null;
   spec.started = true; spec.skipSet = false; saveSpec();
   mergeDrv(res.j); SS.cli = (res.j.cli || []).slice();
-  if (body.skip_configure) markSent(run.board, true);   // gui-41 A1: an accepted skip-cfg start proves the board is configured this power-up
+  if (body.skip_configure) markSent(run.board, true);   // an accepted skip-cfg start proves the board is configured this power-up
   dispatchEvent(new CustomEvent('session-started', { detail: res.j }));
   refreshSrc(); changed();
   return { ok: true, text: '' };

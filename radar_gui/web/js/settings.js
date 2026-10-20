@@ -1,4 +1,4 @@
-// Settings tab (gui-32): read-only serial-port list grouped by board + DCA1000 host checks (/api/settings/*).
+// Settings tab: read-only serial-port list grouped by board + DCA1000 host checks (/api/settings/*).
 // "Use" buttons only fill the existing port fields (Configure -> Save, Radar-tab Quick setup); nothing is written to a radar or the host.
 import { $ } from './state.js';
 import { spec, specChanged, hasSetup } from './session.js';

@@ -40,7 +40,7 @@ function onMessage(m) {
     if (m.max_range_m && !S.rangeTouched) { $('range').value = Math.round(m.max_range_m); $('range').dispatchEvent(new Event('input')); }
     redraw();
   } else if (m.type === 'frame') {
-    // gui-09 D8: while a driver run is live the Live view is not drawn (the mock/serial stream would only compete for the main thread)
+    // while a driver run is live the Live view is not drawn (the mock/serial stream would only compete for the main thread)
     if (driverHeader()) { S.last = m; lastFrame = m; return; }
     S.last = m;
     S.counts.push(m.pts.length); if (S.counts.length > 200) S.counts.shift();
@@ -123,7 +123,7 @@ cv.addEventListener('wheel', e => {
 addEventListener('resize', redraw);
 
 // ---------- tabs ----------
-// Internal ids (data-tab values) are unchanged by the gui-37 renames; the labels are Configure, Radar (run), Point cloud (live),
+// Internal ids (data-tab values) are unchanged by the tab renames; the labels are Configure, Radar (run), Point cloud (live),
 // Raw ADC (adc), Devices (settings) and Logs. Old hashes (#run, #settings, ...) keep working next to the new names.
 const HASH = { cfg: '#configure', run: '#run', adc: '#adc', tune: '#tune', settings: '#settings', logs: '#logs', configs: '#configs' };
 const ALIAS = { '#configure': 'cfg', '#cfg': 'cfg', '#run': 'run', '#radar': 'run', '#live': 'live', '#pointcloud': 'live', '#adc': 'adc', '#tune': 'tune',

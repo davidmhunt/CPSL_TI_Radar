@@ -1,6 +1,6 @@
-// Chirp-construction diagram (gui-27): a pure render of the analysed metrics -> SVG string.
+// Chirp-construction diagram: a pure render of the analysed metrics -> SVG string.
 // Top: frequency-vs-time of one chirp (idle, TX start, ADC window, ramp end, sampled/full bandwidth, Tc).
-// Bottom: the frame strip (active vs idle, zoomed into ONE loop of chirps (gui-31)), TX-coloured like the MIMO card.
+// Bottom: the frame strip (active vs idle, zoomed into ONE loop of chirps), TX-coloured like the MIMO card.
 // Profile 0 / subframe 0 only (the metrics' flat fields). Text is laid out in CSS pixels (viewBox width = container width).
 
 // Every Metrics field this file reads; tests/test_radar_gui_profile.py checks the backend supplies each one.
@@ -181,7 +181,7 @@ export function renderProfile(m, width) {
   g += `<g>${ttl(`Frame period ${num(per, 5)} ms (${num(m.frame_rate_hz, 4)} Hz)`)}<rect class="fidle" x="${fx0}" y="${fyTop}" width="${bw}" height="${barH}"/></g>`;
   g += `<g>${ttl(`Active ${num(m.active_ms, 5)} ms`)}<rect class="fact" x="${fx0}" y="${fyTop}" width="${aw.toFixed(1)}" height="${barH}"/></g>`;
   y = fyTop + barH + 2;
-  // zoom: ONE loop (gui-31). A loop-sized slice of the active segment (1/NL of it) is blown up to the full width below,
+  // zoom: ONE loop. A loop-sized slice of the active segment (1/NL of it) is blown up to the full width below,
   // showing its chirps in order (TX-coloured ramp, blank idle gap = the Tc slot), instead of every chirp of the frame.
   const zy = y + 16, zh = 22, sw = Math.max(3, Math.min(aw, aw / NL)), tLoop = M * m.chirp_us, tRev = m.loop_period_us || tLoop;   // loop duration (every chirp), vs the per-TX revisit period
   g += `<path class="zoom" d="M${fx0} ${fyTop + barH} L${fx0 + sw} ${fyTop + barH} L${fx0 + bw} ${zy} L${fx0} ${zy} Z"/>`;

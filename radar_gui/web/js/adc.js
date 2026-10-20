@@ -1,4 +1,4 @@
-// ADC tab (gui-07): range profile, range-Doppler, range-azimuth (cartesian/polar) and raw-ADC diagnostics from the
+// ADC tab: range profile, range-Doppler, range-azimuth (cartesian/polar) and raw-ADC diagnostics from the
 // driver tap, over the binary /adc WebSocket. Message = u32 LE header length + JSON header + arrays (radar_gui/adc.py `encode`).
 // The socket is only open while the tab is shown. An older backend without /adc degrades to a message in each panel.
 import { $ } from './state.js';
@@ -53,7 +53,7 @@ function connect() {
   ws.onclose = () => {
     A.ws = null; A.open = false;
     if (!A.visible) return;
-    if (!got && A.retry++ >= 2) A.noBackend = true;   // /adc missing: the backend predates gui-07 (restart the GUI)
+    if (!got && A.retry++ >= 2) A.noBackend = true;   // /adc missing: the backend predates the ADC endpoint (restart the GUI)
     schedule();
     setTimeout(connect, A.noBackend ? 5000 : 1500);
   };
@@ -105,7 +105,7 @@ function nR(step, bins, b) {
   if (A.crop && b && b.if_m > 0) lim = Math.min(lim, b.if_m);
   return isFinite(lim) ? Math.max(2, Math.min(bins, Math.ceil(lim / step))) : bins;
 }
-// Shade what the analog front end makes unreliable (radar-36). Edges come from the frame header `bands` (backend:
+// Shade what the analog front end makes unreliable. Edges come from the frame header `bands` (backend:
 // radar_gui/cfg/analog.py from the per-chip limits data + the cfg's slope, fs, ADC mode and HPF1 code); null edge = no shading.
 function shadeBands(g, b, x0, y0, pw, ph, span) {
   if (!b || !(span > 0)) return;
@@ -136,7 +136,7 @@ function drawProfile(m) {
   const { g, w, h } = fit($('adcProf')); g.clearRect(0, 0, w, h);
   if (!m) return;
   const raw = m.arr.profile, step = m.h.profile_step_m || m.h.range_step_m, n = nR(step, raw.length, m.h.bands);
-  // display-only range compensation (radar-38): added per bin at the bin's range; stats and the peak text stay raw
+  // display-only range compensation: added per bin at the bin's range; stats and the peak text stay raw
   const bd = m.h.bands, rref = rangeRef(bd), edge = bd && bd.if_m > 0 ? bd.if_m : null;
   const p = A.comp === 'off' ? raw : Float32Array.from(raw, (v, i) => v + rangeComp(A.comp, (i + .5) * step, rref, edge));
   const x0 = PAD.l, y0 = PAD.t, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;

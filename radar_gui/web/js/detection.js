@@ -1,4 +1,4 @@
-// Configure tab: "Detection (CFAR)" card, rendered only from the schema the backend sends (gui-35).
+// Configure tab: "Detection (CFAR)" card, rendered only from the schema the backend sends.
 // renderDetection(d, issues, onEdit): d = the `detection` block of /api/cfg/{analyze,params,detection}
 // ({schema, values, editable, note, context}); onEdit(group, key, value) reports a user edit
 // (group range|doppler|shared; group fov: key null, value {mode, range, doppler}).

@@ -1,4 +1,4 @@
-// Radar tab (gui-05, gui-37): the backend session. Pick a saved system JSON (plus overrides) or a quick setup, validate,
+// Radar tab: the backend session. Pick a saved system JSON (plus overrides) or a quick setup, validate,
 // start/stop the C++ driver, watch stats + log. The setup is the one shared with the Point cloud tab and the header bar
 // (session.js `spec`). Backend: /api/driver/* (see radar_gui/README.md); live updates arrive as driver_state / driver_stats /
 // driver_log messages on the shared /stream WebSocket (routed here by main.js).
@@ -33,7 +33,7 @@ function renderSetup() {
   $('rSavedBox').hidden = quick; $('rQuickBox').hidden = !quick;
   fill($('rCfg'), D.configs.length ? splitBy(D.configs, 'group', [['user', 'Saved from Configure (config/user)'], ['system', 'Shipped (config/system)']])
     .map(([l, xs]) => [l, xs.map(c => [c.path, c.name + (c.board ? `  [${c.board}]` : '')])]) : [[null, [['', '(no system JSONs found)']]]], spec.config);
-  const orph = $('rOrphans'), ol = quick ? [] : D.orphans;   // gui-39 Q1: cfg-only user files, greyed, with a way to Configure
+  const orph = $('rOrphans'), ol = quick ? [] : D.orphans;   // cfg-only user files, greyed, with a way to Configure
   orph.hidden = !ol.length;
   fill_orphans(orph, ol);
   if (quick || (D.boards.length && hasSetup())) {
@@ -74,7 +74,7 @@ function renderSetup() {
   renderFwMark(!quick && c);
   renderState();
 }
-// gui-04: a system JSON without the mandatory "firmware" key is marked (firmware === null; undefined = an older backend, no mark).
+// a system JSON without the mandatory "firmware" key is marked (firmware === null; undefined = an older backend, no mark).
 // A config/user file gets an Add firmware button: pick from the board's list (the migration tool's inference preselected).
 let fwPickFor = null;
 async function renderFwMark(c) {
@@ -93,7 +93,7 @@ async function renderFwMark(c) {
   fill($('rFwPick'), [[null, ids.map(i => [i, i])]], c.firmware_hint && ids.includes(c.firmware_hint) ? c.firmware_hint : ids[0] || '');
   $('rFwAddBtn').disabled = !ids.length || boardLive();
 }
-// gui-41: the add-firmware / save result stays until the list is reloaded or the selection changes (a later save or add writes a fresh one)
+// the add-firmware / save result stays until the list is reloaded or the selection changes (a later save or add writes a fresh one)
 function clearSaveMsg() { const m = $('rSaveMsg'); m.hidden = true; m.textContent = ''; }
 async function addFirmware() {
   const c = savedCfg(); if (!c || c.firmware !== null || c.group !== 'user') return;
@@ -120,7 +120,7 @@ export async function openInRun(path) {
   if (c) { spec.mode = 'saved'; spec.config = c.path; spec.skipSet = false; specChanged(); }
 }
 
-// ---------- ADC views setting (gui-07): every frame (default) | every K | off, remembered per config ----------
+// ---------- ADC views setting: every frame (default) | every K | off, remembered per config ----------
 const adcKey = () => 'radar_gui.adc_every:' + cfgPath();
 function adcValue() { const v = $('rAdc').value; return v === 'k' ? Math.max(2, parseInt($('rAdcK').value, 10) || 2) : +v; }
 function adcSave() { try { localStorage.setItem(adcKey(), String(adcValue())); } catch (e) { /* private mode */ } }
@@ -235,7 +235,7 @@ function applyStatus(st) {
   if (st.log && st.log.length) { R.log = st.log.slice(-LOG_MAX); renderLog(); }
   sawRun(st.run);
   if (cliPanel && st.firmware_check !== undefined) cliPanel.setFirmware(st.firmware_check);
-  if (cliPanel && Array.isArray(st.cli)) cliPanel.merge(st.cli);   // absent on a backend older than gui-34
+  if (cliPanel && Array.isArray(st.cli)) cliPanel.merge(st.cli);   // absent on a backend without the CLI panel
   render();
 }
 function render() {
@@ -247,7 +247,7 @@ function render() {
   if (s === 'failed' || (s === 'exited' && st.exit_code)) msg((st.error || `driver exited with code ${st.exit_code}`) + (noFrames() ? ' ' + ZERO_HINT : ''));
   else if (s === 'exited' && noFrames()) msg(ZERO_HINT, 'warn');
   else if (s === 'running' || s === 'stopping' || s === 'idle') { if ($('rMsg').classList.contains('bad') && s !== 'idle') msg(''); }
-  if (st.adc_geom_err && (s === 'running' || s === 'stopping')) msg(st.adc_geom_err, 'warn');   // gui-44: same text as the Raw ADC panels
+  if (st.adc_geom_err && (s === 'running' || s === 'stopping')) msg(st.adc_geom_err, 'warn');   // same text as the Raw ADC panels
   const out = $('rOutCard'), done = s === 'exited' || s === 'failed';
   out.hidden = !done;
   if (done) renderOutput(st);
@@ -262,7 +262,7 @@ function noFrames() {
 // Returns null when no run is live; tolerant of old backends (missing fields -> null).
 export function driverHeader() {
   if (R.state !== 'running' && R.state !== 'stopping') return null;
-  if ((R.st || {}).tap === 'on') return null;   // gui-36: the run is tapped, so the header shows the Live numbers (the run's own cloud)
+  if ((R.st || {}).tap === 'on') return null;   // the run is tapped, so the header shows the Live numbers (the run's own cloud)
   const s = (R.stats || {}).serial || (R.stats || {}).dca || Object.values(R.stats || {})[0] || {};
   return { frame: s.frames == null ? null : s.frames, rate: s.rate_hz == null ? null : s.rate_hz };
 }
@@ -313,7 +313,7 @@ function renderOutput(st) {
 }
 
 // ---------- log ----------
-// gui-09 D8: WebSocket messages only mark state dirty; the DOM is updated at most once per animation frame. The log is
+// WebSocket messages only mark state dirty; the DOM is updated at most once per animation frame. The log is
 // appended to (with a line cap), not rebuilt: a full rebuild happens only when the whole log is replaced or the filter flips.
 export const PERF = window.__perf = { renderLog: 0, appendLog: 0, renderStreams: 0, logMs: 0, msgs: 0 };
 const pend = { rebuild: false, lines: [], streams: false, raf: 0 };
@@ -359,7 +359,7 @@ function addLines(lines) {
 let seenState = false, cliSync = null;
 export function onDriverMessage(m) {
   PERF.msgs++;
-  if (m.type === 'driver_log') {            // one line (backend older than gui-09 Step 4c)
+  if (m.type === 'driver_log') {            // one line (backend that sends driver output as single lines)
     addLines([m.line]);
   } else if (m.type === 'driver_log_batch') {
     addLines(m.lines);
@@ -382,7 +382,7 @@ export function onDriverMessage(m) {
 async function refresh() { const { ok, j } = await api('/api/driver/status'); if (ok) applyStatus(j); }
 
 export function showRun() {
-  if (R.ready) { clearSaveMsg(); refresh(); loadData().then(renderSetup); return; }   // gui-39: re-list on every show (the selection is kept)
+  if (R.ready) { clearSaveMsg(); refresh(); loadData().then(renderSetup); return; }   // re-list on every show (the selection is kept)
   R.ready = true; cliPanel = mountCliPanel($('rCli'));
   $('rMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; spec.mode = b.dataset.m; spec.skipSet = false; clearSaveMsg(); specChanged(); });
   const on = (id, fn, resetSkip = false) => $(id).addEventListener('change', () => { fn($(id)); if (resetSkip) spec.skipSet = false; specChanged(); });

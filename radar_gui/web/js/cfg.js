@@ -6,7 +6,7 @@ import { renderDetection, resetDetectionUi } from './detection.js';
 const C = { det: {}, detDirty: {}, mode: 'targets', base: '', seed: null, fw: [], source: 'targets', text: '', name: '', loadedName: '', metrics: null, ok: true, seq: 0, timer: null, ready: false };
 const TARGETS = ['max_range_m', 'max_velocity_ms', 'range_res_m', 'velocity_res_ms', 'frame_rate_hz',
   'num_samples', 'num_loops', 'tx_mask', 'rx_mask'];
-// On-chip CFAR edits (gui-35): C.det = every edit since the cfg was loaded / the board changed (sent with the targets or
+// On-chip CFAR edits: C.det = every edit since the cfg was loaded / the board changed (sent with the targets or
 // the direct-mode params, so regenerating keeps them); C.detDirty = edits not yet written into a loaded cfg's text.
 const hasEdits = e => !!e && Object.keys(e).length > 0;
 
@@ -34,7 +34,7 @@ function setSource(kind, name) {
 }
 
 
-// ---------- direct chirp-parameter mode (gui-11) ----------
+// ---------- direct chirp-parameter mode ----------
 // [key, label, unit, group, kind]; kind: p = profiles[0].<key>, t = top-level number, m = chirp_tx_masks list.
 const PF = [
   ['start_ghz', 'Start frequency', 'GHz', 'Profile (chirp)', 'p'], ['slope_mhz_us', 'Chirp slope', 'MHz/us', 'Profile (chirp)', 'p'],
@@ -79,13 +79,13 @@ function buildParams() {
       const inp = mountControl(null, k, kind === 'm' ? 'text' : 'number');
       lab.append(inp); grid.append(lab);
     }
-    if (g === 'Profile (chirp)') {   // gui-26: lowPower 0 <0|1>; shown only when the seed has low_power
+    if (g === 'Profile (chirp)') {   // lowPower 0 <0|1>; shown only when the seed has low_power
       const lab = el('label', '', 'ADC mode <span class="unit">lowPower</span>'); lab.id = 'pl_low_power';
       const sel = el('select'); sel.id = 'p_low_power'; sel.innerHTML = '<option value="0">regular</option><option value="1">low power</option>';
       sel.addEventListener('change', () => { if (C.mode === 'direct') schedule(); });
       lab.append(sel); grid.append(lab);
-      { const h = el('div', 'muted lvdshint'); h.id = 'pGainBox'; h.style.gridColumn = '1 / -1'; grid.append(h); }   // radar-36: RX gain split (dB + RF target) and its range
-      { const h = el('div', 'muted lvdshint'); h.id = 'pCornerBox'; h.style.gridColumn = '1 / -1'; grid.append(h); }   // radar-36: HPF corner -> range, unverified note
+      { const h = el('div', 'muted lvdshint'); h.id = 'pGainBox'; h.style.gridColumn = '1 / -1'; grid.append(h); }   // RX gain split (dB + RF target) and its range
+      { const h = el('div', 'muted lvdshint'); h.id = 'pCornerBox'; h.style.gridColumn = '1 / -1'; grid.append(h); }   // HPF corner -> range, unverified note
       { const h = el('div', 'muted lvdshint', 'ADC mode: default regular (0); low power caps the ADC rate at 9375 ksps (IWR1443/1843) or 12500 ksps (IWR6843). Over the cap is a warning, not an error.'); h.style.gridColumn = '1 / -1'; grid.append(h); }
     }
     const dg = el('div', 'dgrid');
@@ -95,7 +95,7 @@ function buildParams() {
 }
 const lval = k => $(pid(k)).value.trim();
 
-// ---------- HPF corners (kHz) and RX gain, from the board's `analog` limits (radar-36) ----------
+// ---------- HPF corners (kHz) and RX gain, from the board's `analog` limits ----------
 // The tables live in the firmware descriptors (config/firmware/<id>.json limits, with source + confidence), reaching here
 // through GET /api/cfg/firmware?board= as `analog`. Nothing about corner frequencies or gain ranges is written down in JS.
 const C_LIGHT = 299792458;
@@ -257,7 +257,7 @@ async function analyzeDirect(seq) {
   applyDirect(j);
 }
 // Board or firmware changed while in direct mode: the seeded cfg belongs to the old board/template, so regenerate the
-// new firmware's template from the targets and re-seed every parameter field from it (gui-28).
+// new firmware's template from the targets and re-seed every parameter field from it.
 async function reseedDirect() {
   const seq = ++C.seq;
   const { ok, j } = await api('/api/cfg/analyze', { board: $('cBoard').value, firmware: $('cFw').value, targets: targets() });
@@ -357,7 +357,7 @@ function render(j) {
   if (!$('sName').dataset.touched && j.name) $('sName').value = j.name.replace(/\.cfg$/, '');
 }
 
-// Chirp-construction diagram (gui-27): pure render of the analysed metrics, laid out for the column's current width.
+// Chirp-construction diagram: pure render of the analysed metrics, laid out for the column's current width.
 function drawProfile() {
   const box = $('profDiagram'), w = Math.round(box.clientWidth) || 460;
   C.profW = w;
@@ -391,10 +391,10 @@ function showFirmware() {
   $('sSerial').checked = f.system_enables.serial && !noTlv; $('sDca').checked = f.system_enables.dca1000;
   dcaVis(); lvdsVis();
 }
-// ---------- LVDS stream (cfg) group (gui-22): shown only where the firmware has an LVDS output on this board ----------
+// ---------- LVDS stream (cfg) group: shown only where the firmware has an LVDS output on this board ----------
 const curFw = () => C.fw.find(x => x.id === $('cFw').value);
 const DATA_FMT_NAMES = { 0: 'off', 1: 'ADC data', 2: 'ADC + metadata (SAR fw)', 4: 'CP ADC + chirp quality' };
-function fillDataFmt(cur) {   // HW-stream options = the dataFmt values the selected firmware accepts (gui-24); a cfg's other value stays visible
+function fillDataFmt(cur) {   // HW-stream options = the dataFmt values the selected firmware accepts; a cfg's other value stays visible
   const f = curFw(), sel = $('l_data_fmt');
   const set = (f && f.lvds_data_fmts) || [0, 1];
   const keep = cur == null ? +sel.value : +cur;
@@ -413,7 +413,7 @@ function lvdsVis() {
   if (o && o.lvds && $('l_data_fmt').options.length) fillDataFmt();
   $('lvdsTargets').hidden = !(o && o.tlv && o.lvds);          // raw-ADC firmwares always stream; nothing to toggle in the targets view
   $('lvdsParams').hidden = !(o && o.lvds && C.seed && C.seed.lvds_stream);
-  // raw-only firmware whose template has no lvdsStreamCfg: say why the group is absent (gui-28)
+  // raw-only firmware whose template has no lvdsStreamCfg: say why the group is absent
   $('lvdsNote').hidden = !(f && f.id === 'dca1000_raw' && o && o.lvds && !o.tlv && C.seed && !C.seed.lvds_stream);
   lvdsWarn();
 }
@@ -431,7 +431,7 @@ function lvdsWarn() {   // cfg LVDS vs DCA1000 system setting: separate settings
   }
   w.textContent = msg; w.hidden = !msg;
 }
-// ---------- MIMO panel (gui-16): scheme badge, loop timing diagram, derived numbers with formula + scheme ----------
+// ---------- MIMO panel: scheme badge, loop timing diagram, derived numbers with formula + scheme ----------
 const SCHEME = { tdm: 'TDM', ddma: 'DDMA' };
 function schemeName(m) { return m.scheme === 'tdm' && m.bpm_enabled ? 'TDM+BPM' : (SCHEME[m.scheme] || String(m.scheme).toUpperCase()); }
 function diagram(m) {
@@ -504,7 +504,7 @@ function renderMimo(m) {
   if (sub) list.append(el('div', 'muted', `advFrameCfg: ${m.subframes.length} subframes (display only).`));
 }
 
-// ---------- TDM chirp table (gui-16 step 2): one row per chirp, TX1..TX3 checkboxes, presets ----------
+// ---------- TDM chirp table: one row per chirp, TX1..TX3 checkboxes, presets ----------
 // C.tbl = {masks, bpm} mirrors the loop as last analysed (renderMimo) or as just edited; collectParams sends only its difference from the seed.
 const TX_PRESETS = [['SIMO (1 TX)', [1], 'simo'], ['2-TX TDM', [1, 4], 'tdm2'], ['3-TX with elevation (1,4,2)', [1, 4, 2], 'tdm3'], ['BPM (2 TX)', null, 'bpm']];
 const TBL_CODES = new Set(['tx_pattern_invalid', 'tx_not_in_channelcfg', 'bpm_unsupported', 'tx_order_convention', 'tx_pattern_not_periodic',
@@ -524,7 +524,7 @@ async function tableEdit(masks, bpm) {
   if (C.mode !== 'direct') await setMode('direct');   // editing the table = direct mode (seeds from the current cfg)
   C.tbl = { masks, bpm }; C.tblDirty = true; C.tblStale = true; drawTable(); schedule();   // tblDirty: differs from the seed (sent on); tblStale: not analysed yet (phase readout hidden)
 }
-// Per-TX phase readout (gui-23): one row per chirp of the loop (backend `chirp_phases`), TX columns coloured like the MIMO diagram.
+// Per-TX phase readout: one row per chirp of the loop (backend `chirp_phases`), TX columns coloured like the MIMO diagram.
 const ROWS_SCROLL = 12;
 const txColor = l => TX_COLORS[l % TX_COLORS.length];
 function phaseTable(m) {
@@ -625,7 +625,7 @@ async function onLoad() {
   $('cBoard').value = j.board; C.text = j.text; C.det = {}; C.detDirty = {}; resetDetectionUi(); setSource('cfg', j.name);
   $('t_lvds').checked = cfgLvdsOn(j.text); $('t_lvds').dataset.touched = '1';   // a loaded cfg's LVDS choice survives regenerating
   await loadFirmware(j.board); const fw = inferFirmware(j.text); if (fw) { $('cFw').value = fw; showFirmware(); }
-  $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + (id.startsWith('user:') ? '' : '_copy');   // gui-39 Q3: a user cfg keeps its name (Save -> Overwrite), a shipped one is saved as a copy
+  $('sName').dataset.touched = ''; $('sName').value = j.name.split('/').pop().replace(/\.cfg$/, '') + (id.startsWith('user:') ? '' : '_copy');   // a user cfg keeps its name (Save -> Overwrite), a shipped one is saved as a copy
   if (C.mode === 'direct') seedDirect(); else analyze();
 }
 function toTargets() {
@@ -651,7 +651,7 @@ async function save(overwrite = false) {
   if (!ok) {
     const d = j && j.detail; msg.className = 'bad';
     msg.textContent = typeof d === 'string' ? d : d && d.message ? d.message : Array.isArray(d) ? d.map(x => x.msg).join('; ') : 'save failed';
-    if (!overwrite && typeof d === 'string' && /already exists/.test(d)) {   // gui-39: offer to replace the .cfg (the system JSON is kept)
+    if (!overwrite && typeof d === 'string' && /already exists/.test(d)) {   // offer to replace the .cfg (the system JSON is kept)
       const name = body.name;
       msg.insertAdjacentHTML('beforeend', '<br><button class="btn" id="sOverwrite" type="button">Overwrite</button>');
       $('sOverwrite').onclick = () => {
@@ -663,7 +663,7 @@ async function save(overwrite = false) {
   msg.className = 'ok';
   msg.innerHTML = `${j.overwritten ? `Overwritten (.cfg replaced; ${j.json_kept ? 'system JSON kept unchanged' : 'no system JSON existed, created'})` : 'Saved'}<br>${esc(j.cfg_path)}<br>${esc(j.json_path)}<br>` +
     (j.warnings || []).map(w => `<span class="warnline">${esc(w)}</span><br>`).join('') + `<span class="muted">check: ${esc(j.validate_cmd)}</span><br><a href="#run" id="sOpenRun">Open in Radar</a>`;
-  const dv = j.driver;   // gui-04: the real driver's verdict on the saved system JSON (absent from an older server)
+  const dv = j.driver;   // the real driver's verdict on the saved system JSON (absent from an older server)
   if (dv) {
     const line = !dv.available ? `Driver check unavailable: ${esc(dv.message)}`
       : dv.ok ? `Driver check: OK${dv.warnings.length ? ` (${dv.warnings.length} warning${dv.warnings.length > 1 ? 's' : ''})` : ''}`
@@ -696,7 +696,7 @@ async function init() {
   for (const k of ['subframe', 'data_fmt', 'header', 'sw']) $('l_' + k).addEventListener('input', () => { if (C.mode === 'direct') schedule(); });
   dcaVis(); analyze();
 }
-export function showConfigure() { if (!C.ready) { C.ready = true; C.initP = init(); } else loadList(); }   // gui-39: re-list on every show (keeps the selection)
+export function showConfigure() { if (!C.ready) { C.ready = true; C.initP = init(); } else loadList(); }   // re-list on every show (keeps the selection)
 // Radar tab -> a user cfg that has no system JSON: load it here (Save then creates the JSON)
 export async function openInConfigure(id) {
   await C.initP; await loadList(id);

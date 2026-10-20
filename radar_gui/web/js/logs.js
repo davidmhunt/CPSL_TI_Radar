@@ -1,4 +1,4 @@
-// Logs tab (gui-37 Step 2b): list / view / delete the run folders under runs/gui/ (GET /api/logs, /api/logs/<name>/file,
+// Logs tab: list / view / delete the run folders under runs/gui/ (GET /api/logs, /api/logs/<name>/file,
 // POST /api/logs/delete). All server text goes in through textContent (never innerHTML). Delete needs a confirm that names
 // the folders and their total size; the running session cannot be selected. Replay opens a run's serial_data.bin in the
 // Point cloud tab. A server without these endpoints shows a "restart the GUI" hint and nothing else breaks.

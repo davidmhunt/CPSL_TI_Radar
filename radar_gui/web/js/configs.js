@@ -1,4 +1,4 @@
-// Configs tab (radar-40): browse every saved (config/user/) and shipped (config/system, config/radar) configuration, promote a
+// Configs tab: browse every saved (config/user/) and shipped (config/system, config/radar) configuration, promote a
 // saved setup to a shipped one, delete saved or shipped files. GET /api/configs, /api/configs/file, POST /api/configs/promote
 // and /api/configs/delete (each with ?dry=1 for the exact preview shown before any confirm). All server text goes in through
 // textContent. The GUI never runs git: it shows what changed in the tree and says what to commit. A server without these
@@ -14,7 +14,7 @@ const byId = id => C.items.find(i => i.id === id);
 const label = id => { const i = byId(id); return i ? `${i.group === 'user' ? 'saved' : 'shipped'} ${i.rel.replace(/^(system|radar)\//, '')}` : id; };
 const writesOff = () => C.data && C.data.shipped_writes && !C.data.shipped_writes.enabled;
 
-// owner warning (radar-48): a file or folder owned by someone other than the repo owner. Shows the suggested command; never runs it.
+// owner warning: a file or folder owned by someone other than the repo owner. Shows the suggested command; never runs it.
 function ownerBox(w) {
   if (!w) return null;
   const box = el('div', 'cgowner');
