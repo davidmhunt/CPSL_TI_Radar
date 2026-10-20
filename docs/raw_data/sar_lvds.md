@@ -33,7 +33,7 @@ Only what differs from the [pipeline](README.md). Not a TI-published format: TI'
   | 24 | u64 | `tsTicks`, 10 ns ticks |
 
   In packet k, slot k mod 2 holds record k: use it only if magic, version = 1 and `globalChirpIdx` = k hold. The other slot usually holds the next chirp's record (k+1) and is ignored; the saturation result lags 1-2 chirps.
-- CQ2 reports ADC saturation. `dataFmt` 4 packets (13 616 B with both monitors) need a CQ block and carry no metadata record.
+- CQ2 reports ADC saturation. `dataFmt` 4 packets (for R = 1, Ns = 3300: 13 616 B with both monitors; the firmware's `lvds_data_format.md` has the general rule) need a CQ block and carry no metadata record.
 - Bench-measured: the HSI ID read correctly in 30 090 of 30 090 packets; a 600 s soak ran.
 
 ## Unverified
@@ -42,4 +42,4 @@ Only what differs from the [pipeline](README.md). Not a TI-published format: TI'
 
 ## `chirp_meta.csv` (converter output)
 
-One row per chirp, written by the driver's converter, not part of the wire format. The columns `version` ... `tsTicks` repeat the record fields above (empty if the record is invalid). The rest are derived: `chirp` = k, `frame` = k // Nc, `chirpInFrame` = k mod Nc (Nc = numChirpsPerFrame), `record_valid` (record k passed the check above), `adc_complete` (every byte of the chirp's ADC block arrived), `t_s` (seconds since the run's first valid record, (tsTicks - first) x 10 ns, interpolated when the record is invalid), `t_interpolated` (1 if `t_s` was interpolated), `late` (record flag bit 2), `sat_slices_this_chirp` (saturation result aligned to this chirp via `satRefLag`, empty if unknown). Only whole frames are written, so a trailing partial frame has no rows.
+One row per chirp, written by the driver's converter, not part of the wire format. The columns `version` ... `tsTicks` repeat the record fields above (empty if the record is invalid). The rest are derived: `chirp` = k, `frame` = k // Nc, `chirpInFrame` = k mod Nc (Nc = the cfg's chirps per frame, as the driver computes it; the record's own field is the column `rec_chirpInFrame`, and `numChirpsPerFrame` is the record's), `record_valid` (record k passed the check above), `adc_complete` (every byte of the chirp's ADC block arrived), `t_s` (seconds since the run's first valid record, (tsTicks - first) x 10 ns, interpolated when the record is invalid), `t_interpolated` (1 if `t_s` was interpolated), `late` (record flag bit 2), `sat_slices_this_chirp` (saturation result aligned to this chirp via `satRefLag`, empty if unknown). Only whole frames are written, so a trailing partial frame has no rows.

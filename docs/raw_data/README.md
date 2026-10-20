@@ -125,7 +125,7 @@ The LVDS interface on the IWR1843/6843 is a debug interface, not a production on
 |---|---|---|
 | Studio / DCA1000 CLI `*_Raw_0.bin`, packet headers kept | Per UDP packet: seq + length + byte count + payload | Strip the per-packet headers (place payloads by byte count), then as below |
 | Studio / CLI file, payload only | The LVDS bytes in order | Start at section 7 |
-| Our driver's `LVDS_Raw_0.bin` | Payload only (packet header stripped), SAR: whole packets of B bytes | Section 9 (demo) or [sar_lvds](sar_lvds.md) |
+| Our driver's `LVDS_Raw_0.bin` | Payload only (packet header stripped), written in arrival order, so a lost UDP packet shifts every byte after it (unlike byte-count placement); SAR: packets of B bytes, may end in a partial packet | Section 9 (demo) or [sar_lvds](sar_lvds.md) |
 | Our driver's `adc_data.bin` | Already decoded: `[chirp][rx][sample][re,im]` int16, whole frames only | Nothing to undo |
 
 ## 7. Host reassembly and array axes
@@ -171,7 +171,7 @@ Input: R, Ns, Nc from the cfg, and one frame of B = 4 x R x Ns x Nc bytes. `deco
 2. **Undo the 2-lane order.** Cut the words into groups of four (8 bytes). The file order is u0 u2 u1 u3; swap the middle two words to get memory order u0 u1 u2 u3.
 3. **Pair Q and I.** SampleSwap 1: Q first. Each memory pair (u0, u1) is (Q, I) of one sample; (u2, u3) is (Q, I) of the next.
 4. **Reshape** to `[chirp][rx][sample]` (memory order: chirp, then RX, then sample; Nc counts all TX slots).
-5. **Output cube** `[rx][sample][chirp]` of complex, re = I, im = Q. For HDF5, store `[..., 0] = I`, `[..., 1] = Q`: the pair is swapped relative to the wire (wire is Q, I; HDF5 index 0 is I).
+5. **Output cube** `[rx][sample][chirp]` of complex, re = I, im = Q. For HDF5 (shape (N, 2, rx, sample, chirp)), I/Q is axis 1: `data[:, 0] = I`, `data[:, 1] = Q`: the pair is swapped relative to the wire (wire is Q, I; HDF5 index 0 is I).
 
 Worked example: the first 16 bytes of `CPSL_TI_Radar_cpp/tests/data/iq/iwr1843_R0.9m_frame99.bin` (R = 4, Ns = 128, Nc = 256), decoded with `decode_example.py`.
 
@@ -181,7 +181,7 @@ Worked example: the first 16 bytes of `CPSL_TI_Radar_cpp/tests/data/iq/iwr1843_R
  undo:   u0=183 u1=211 u2=173 u3=81 | u0=172 u1=14 u2=-182 u3=-63   memory order
  pairs:  (Q,I) = (183,211) (173,81) | (172,14) (-182,-63)       samples 0 1 | 2 3 of chirp 0, rx 0
  cube[rx0][sample 0..3][chirp 0] = 211+183j, 81+173j, 14+172j, -63-182j
- HDF5 [I,Q] for sample 0..3     = [211,183] [81,173] [14,172] [-63,-182]
+ HDF5 (I,Q) for sample 0..3     = [211,183] [81,173] [14,172] [-63,-182]
 ```
 
 ## Unverified
