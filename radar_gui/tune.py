@@ -1,4 +1,4 @@
-"""RX-gain sweep core (radar-37): per-gain ADC metrics and the gain suggestion. Pure Python + numpy; no driver, no HTTP.
+"""RX-gain sweep core: per-gain ADC metrics and the gain suggestion. Pure Python + numpy; no driver, no HTTP.
 
 A sweep changes ONE field of a temporary copy of the profileCfg line, `rxGain` (arg 13: bits 5:0 = gain in dB, bits 7:6 = RF
 gain target code, kept as they are), captures a few raw ADC frames per gain, and measures them. The capture itself is a
@@ -30,9 +30,9 @@ import numpy as np
 from . import adc
 from .cfg.parse import CfgError, parse_cfg
 
-GAIN_MASK = 0x3F                 # rxGain bits 5:0: gain in dB (radar-36: bits 7:6 RF target code, 15:8 reserved)
+GAIN_MASK = 0x3F                 # rxGain bits 5:0: gain in dB (bits 7:6 RF target code, 15:8 reserved)
 RXGAIN_ARG = 13                  # profileCfg arg index of rxGain
-DEFAULT_FRAMES = 8               # approved defaults (radar-37, 2026-10-15)
+DEFAULT_FRAMES = 8               # approved defaults (2026-10-15)
 DEFAULT_MARGIN_DB = 3.0
 DEFAULT_TOL_DB = 1.0
 DEFAULT_MIN_SNR_DB = 10.0
@@ -103,8 +103,8 @@ def adc_bits_from_cfg(cfg_text: str) -> tuple[int, str]:
 
 # ---- request validation -----------------------------------------------------------------------------------
 def gain_grid(lo, hi, step, rng: dict | None) -> list[int]:
-    """The gains of a sweep lo..hi (inclusive) every `step` dB, validated against the board's {min, max, step} (radar-36
-    `analog.gain_range`; None = no limits known, only 0-63). Whole dB only; off-step or out-of-range values raise TuneError."""
+    """The gains of a sweep lo..hi (inclusive) every `step` dB, validated against the board's {min, max, step}
+    (`analog.gain_range`; None = no limits known, only 0-63). Whole dB only; off-step or out-of-range values raise TuneError."""
     vals = []
     for name, v in (("min", lo), ("max", hi), ("step", step)):
         if isinstance(v, bool) or not isinstance(v, (int, float)) or v != int(v):

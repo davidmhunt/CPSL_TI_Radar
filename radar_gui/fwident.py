@@ -1,4 +1,4 @@
-"""Firmware identity matcher (gui-33): pure, no I/O. Given what the board answered to a firmware's `identify` probes
+"""Firmware identity matcher: pure, no I/O. Given what the board answered to a firmware's `identify` probes
 (config/firmware/<fw>.json -> identify.<board>), say whether it runs that firmware.
 
   identify(fw, board, replies) -> {verdict, fields, found, detail, flash_hint, level, probes}

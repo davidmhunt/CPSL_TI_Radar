@@ -1,4 +1,4 @@
-"""radar_gui.cfg.params + POST /api/cfg/params (gui-11 Step 1). Hardware-free."""
+"""radar_gui.cfg.params + POST /api/cfg/params. Hardware-free."""
 from pathlib import Path
 
 import pytest
@@ -142,7 +142,7 @@ def test_endpoint_honours_firmware_and_board(client):
     assert client.post("/api/cfg/params", json={"board": "nope", "base_cfg_text": "x"}).status_code == 422
 
 
-# ---- lvdsStreamCfg (gui-22) ----
+# ---- lvdsStreamCfg ----
 def _lvds_cfgs():
     out = []
     for p in sorted((ROOT / "CPSL_TI_Radar_cpp" / "config" / "radar").rglob("*.cfg")) + \
@@ -191,7 +191,7 @@ def test_iwr1443_demo_with_lvds_on_flags_not_in_firmware():
     assert "lvds_not_in_firmware" in {i.code for i in validate(cfg, "IWR1443", "demo").errors}
 
 
-# ---- lowPower 0 <adcMode> (gui-26) ----
+# ---- lowPower 0 <adcMode> ----
 def _lowpower_cfgs():
     out = []
     for p in sorted((RADAR).rglob("*.cfg")) + sorted((ROOT / "firmware_dev" / "projects").rglob("*.cfg")):

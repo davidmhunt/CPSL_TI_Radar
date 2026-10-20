@@ -1,4 +1,4 @@
-"""radar-36: per-chip HPF corner / rxGain / IF-band data (config/firmware/*.json limits), its validation, the Raw ADC band
+"""Per-chip HPF corner / rxGain / IF-band data (config/firmware/*.json limits), its validation, the Raw ADC band
 edges and the Configure UI's "no tables in JS" rule. Hardware-free; reads config/user/ with read access only."""
 import json
 import re

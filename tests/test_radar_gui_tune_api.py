@@ -1,4 +1,4 @@
-"""radar-37 Step 4: the Tune API (radar_gui/tune_api.py) against the fake driver in `gain` mode; no hardware.
+"""The Tune API (radar_gui/tune_api.py) against the fake driver in `gain` mode; no hardware.
 Validation (off-step, out-of-range, busy), a full sweep end to end, the saved run folder, cancel, a failing step, and that the
 user's config directory is never opened for write."""
 import builtins

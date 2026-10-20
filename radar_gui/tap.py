@@ -1,4 +1,4 @@
-"""Driver live tap reader (gui-36). The GUI creates a pipe and spawns the driver with `--tap-fd <write end>`; the driver
+"""Driver live tap reader. The GUI creates a pipe and spawns the driver with `--tap-fd <write end>`; the driver
 writes length-prefixed messages: `u32 len (LE, bytes after this field)`, `u8 type`, payload.
   1 hello   JSON {"version":1,"board":..,"streams":[..],"adc_every":K}
   2 points  JSON in the Live wire format {"type":"frame","frame","n","t","pts":[[x,y,z,v,snr,noise],...]} (NaN -> null)

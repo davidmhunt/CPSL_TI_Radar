@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the core-24 dataFmt 2 (adc_sar_meta) fixtures that tests/test_sar_meta.cpp replays through the driver.
+"""Regenerate the dataFmt 2 (adc_sar_meta) fixtures that tests/test_sar_meta.cpp replays through the driver.
 
     uv run python CPSL_TI_Radar_cpp/tests/data/sar_fmt2/make_fixtures.py [OUT_DIR]
 
@@ -165,7 +165,7 @@ def main(argv=None):
             [gold("dca_restart_a", dga, c64, 48, 1), gold("dca_restart_b", dgb, c64, 24, 2)],
             "recording A (48 chirps, run 1, %d datagrams) + recording B (24 chirps, run 2, counts from 0)" % len(dga))
 
-    manifest = {"generator": "CPSL_TI_Radar_cpp/tests/data/sar_fmt2/make_fixtures.py (core-24)",
+    manifest = {"generator": "CPSL_TI_Radar_cpp/tests/data/sar_fmt2/make_fixtures.py",
                 "tools": "firmware_dev/projects/iwr1843_sar_lvds/tools (sar_synth.py, sar_parse.py)",
                 "chirps_per_frame": NC, "scenarios": scen}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")

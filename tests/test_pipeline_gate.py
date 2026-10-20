@@ -1,4 +1,4 @@
-"""tools/bench/pipeline_gate.py: the layout-robust perf gate (directive core-14 Step 1).
+"""tools/bench/pipeline_gate.py: the layout-robust perf gate.
 
 The fixture is a real `bench_pipeline` stdout; the tests derive before/after
 runs from it by scaling one row's ns/byte (or allocs/frame, or the frame
@@ -84,7 +84,7 @@ def test_regression_in_both_builds_fails(tmp_path, capsys):
 
 
 def test_shift_in_one_build_only_passes_with_a_note(tmp_path, capsys):
-    slow = scaled(SAMPLE, "converter (c)", 1.75)  # the core-11 P1 layout shift
+    slow = scaled(SAMPLE, "converter (c)", 1.75)  # the P1 layout shift
     files = write_set(tmp_path, SAMPLE, slow, SAMPLE, SAMPLE)
     assert run_gate(files) == 0
     out = capsys.readouterr().out

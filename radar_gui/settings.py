@@ -1,4 +1,4 @@
-"""Settings tab backend (gui-32): read-only host facts for bench setup.
+"""Settings tab backend: read-only host facts for bench setup.
 
 GET /api/settings/ports  radar serial ports grouped by board (from /dev/serial/by-id names; nothing is opened)
 GET /api/settings/dca    DCA1000 host checks (NIC address, rmem_max, optional FPGA ping) reusing tools/setup/host_setup.py

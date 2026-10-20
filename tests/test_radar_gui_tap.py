@@ -1,4 +1,4 @@
-"""gui-36 Steps 2-3: Live follows a GUI-started driver run over the tap pipe. Fake driver `tap` / `no-tap` modes
+"""Live follows a GUI-started driver run over the tap pipe. Fake driver `tap` / `no-tap` modes
 (tests/fakes/fake_driver.py); no hardware. Wire format: radar_gui/tap.py."""
 import json
 import os
@@ -125,7 +125,7 @@ def test_sigkill_is_died(env):
 
 
 def test_adc_messages_are_counted():
-    """The page does not ask for adc yet (gui-07 is not approved); the reader still parses and counts them."""
+    """The page does not ask for adc yet (the ADC views are not enabled); the reader still parses and counts them."""
     r, w = os.pipe()
     from radar_gui.sources import DriverSource
 

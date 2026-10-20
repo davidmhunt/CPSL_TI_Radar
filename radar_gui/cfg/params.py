@@ -1,27 +1,27 @@
-"""Direct chirp-parameter editing (gui-11): cfg <-> a flat, JSON-friendly params dict.
+"""Direct chirp-parameter editing: cfg <-> a flat, JSON-friendly params dict.
 
 `params_from_cfg(cfg)` reads the editable fields; `apply_params(base_text, params)` writes them back into
 `base_text`, rewriting only the profileCfg / chirpCfg / frameCfg / channelCfg lines (everything else, comments
 included, is kept verbatim). A token is only rewritten when its value changed, so the round trip of an
 unedited dict is a text-level identity, not just a metrics one.
 
-Schema (single profile; the profile fields live in `profiles[0]`, so gui-14..16 can add entries):
+Schema (single profile; the profile fields live in `profiles[0]`, so more profiles can be added):
 
     profiles: [ {id, start_ghz, slope_mhz_us, idle_us, adc_start_us, ramp_us, tx_start_us,
                  num_samples, sample_rate_ksps, hpf1, hpf2, rx_gain_db} ]   # hpf*/rx_gain: when profileCfg has them
     rx_mask, tx_mask            channelCfg enables (cascade: also rx_mask2, tx_mask2 for the second chip)
     chirp_tx_masks              TX mask of each chirp of the loop, frameCfg chirpStart..chirpEnd order
     n_loops, frame_period_ms, frames
-    bpm                         bool: bpmCfg enabled (single chip only; gui-15). Writing true needs a board + firmware whose
+    bpm                         bool: bpmCfg enabled (single chip only). Writing true needs a board + firmware whose
                                 descriptor says `mimo.bpm` (else ParamsError); default/false = plain TDM, bpmCfg disabled
-    lvds_stream                 {subframe, header, data_fmt, sw} = lvdsStreamCfg (gui-22); only when the cfg has the
+    lvds_stream                 {subframe, header, data_fmt, sw} = lvdsStreamCfg; only when the cfg has the
                                 line. data_fmt 0 = HW (ADC) stream off, 1 = ADC data, 2 = ADC + metadata (SAR firmware)
-    low_power                   0 = regular ADC, 1 = low-power ADC = `lowPower 0 <adcMode>` (gui-26); single chip only, and
+    low_power                   0 = regular ADC, 1 = low-power ADC = `lowPower 0 <adcMode>`; single chip only, and
                                 only when the cfg has the line (the cascade cfgs carry `lowPower 0 0` but it is not offered)
-    detection                   optional on-chip CFAR values (gui-35, radar_gui/cfg/detection.py), applied last with `detection.apply`
+    detection                   optional on-chip CFAR values (radar_gui/cfg/detection.py), applied last with `detection.apply`
     derived                     read-only (ignored by apply_params): metrics-derived bandwidth, ramp, sample window ...
 
-Coupling (gui-15, docs/design/mimo_modes.md s4): single chip -> channelCfg tx_mask = OR(chirp_tx_masks) whenever
+Coupling (docs/design/mimo_modes.md s4): single chip -> channelCfg tx_mask = OR(chirp_tx_masks) whenever
 chirp_tx_masks is given; a tx_mask-only edit regenerates the chirps in TI's azimuth-first order (TX1, TX3, TX2 =
 1,4,2); `bpm: true` writes mask 5 on both chirps and enables bpmCfg. Cascade (DDMA): chirp_tx_masks edits are
 ignored (all TX fire every chirp; the firmware overwrites the chirp masks); a warning is appended to `warnings`.
@@ -270,7 +270,7 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any], *, board: str | 
             _set(tok, i, params[key], kind, key)
     new[fc.line] = " ".join(tok)
 
-    # lvdsStreamCfg (gui-22): only the changed fields
+    # lvdsStreamCfg: only the changed fields
     lv, lv_in = cfg.first("lvdsStreamCfg"), params.get("lvds_stream")
     if lv_in is not None:
         if not isinstance(lv_in, Mapping):
@@ -283,7 +283,7 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any], *, board: str | 
                 _set(tok, i, lv_in[key], int, "lvds_stream." + key)
         new[lv.line] = " ".join(tok)
 
-    # lowPower 0 <adcMode> (gui-26): only when changed
+    # lowPower 0 <adcMode>: only when changed
     lpc = cfg.first("lowPower")
     if params.get("low_power") is not None:
         if "low_power" not in base:
@@ -309,7 +309,7 @@ def apply_params(base_cfg_text: str, params: Mapping[str, Any], *, board: str | 
         else:
             out.append(raw)
     text = "\n".join(out) + "\n"
-    if params.get("detection") is not None:       # gui-35: on-chip CFAR values, see radar_gui/cfg/detection.py
+    if params.get("detection") is not None:       # on-chip CFAR values, see radar_gui/cfg/detection.py
         if not board:
             raise ParamsError("detection: needs a board")
         text = detection.apply(text, params["detection"], firmware, board)

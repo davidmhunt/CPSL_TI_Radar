@@ -89,10 +89,10 @@ class Metrics:
     chirp_avg_rate_mbps: float    # bytes_per_chirp / chirp time (ADC buffer drains between chirps)
     lvds_data_fmt: int | None     # lvdsStreamCfg dataFmt, None when no lvdsStreamCfg
     num_frames: int | None = None
-    tx_start_us: float = 0.0      # profileCfg txStartTime (chirp diagram, gui-27)
-    adc_end_us: float = 0.0       # adc_start + sampling window: must stay inside the ramp (gui-11)
+    tx_start_us: float = 0.0      # profileCfg txStartTime (chirp diagram)
+    adc_end_us: float = 0.0       # adc_start + sampling window: must stay inside the ramp
     notes: list[str] = field(default_factory=list)
-    # MIMO / chirp loop (gui-14); `mode` is the scheme ("tdm" | "ddma")
+    # MIMO / chirp loop; `mode` is the scheme ("tdm" | "ddma")
     scheme: str = "tdm"
     bpm_enabled: bool = False
     chirp_sequence: list[dict] = field(default_factory=list)   # [{"index", "tx_mask"}] of the frame's loop
@@ -106,7 +106,7 @@ class Metrics:
     n_bands: int = 1                  # DDMA Doppler sub-bands (8); 1 for TDM
     derivations: dict = field(default_factory=dict)   # metric -> {"formula", "scheme", "confidence"}
     subframes: list[dict] = field(default_factory=list)   # advFrameCfg: one summary per subframe (empty otherwise)
-    # per-chirp TX phase readout (gui-23): [{"index", "phase_deg": [one value per `phase_tx` column; None = unknown]}]
+    # per-chirp TX phase readout: [{"index", "phase_deg": [one value per `phase_tx` column; None = unknown]}]
     chirp_phases: list[dict] = field(default_factory=list)
     phase_tx: list[str] = field(default_factory=list)     # column labels of chirp_phases ("TX1".."TX6")
     phase_source: str = ""
@@ -170,7 +170,7 @@ def default_scheme(board: str | None, cascade: bool) -> str:
     return "ddma" if cascade else "tdm"
 
 
-# Cascade DDMA phase-shifter model (gui-23). Firmware: MmwDemo_configPhaseShifterChirps,
+# Cascade DDMA phase-shifter model. Firmware: MmwDemo_configPhaseShifterChirps,
 # firmware_dev/projects/awr2243_cascade_ddm/src/ti/demo/am273x/mmw/mss/mss_main.c:3796-3880.
 # TX index (0-based, dev1 = 0..2, dev2 = 3..5) -> phase rank m: array {2,0,5,4,3,1} lists TX in rank order
 # (mmwdemo_rfparserDDMA.c:143), phaseShiftMultiplier[tx] = rank (mss_main.c:3830-3841, txAntMaskEnable = 63 at :3825).
@@ -423,7 +423,7 @@ def _one(cfg: Cfg, board: str | None, cascade: bool, scheme: str, fr: dict) -> M
     if adc_fmt == 0:
         ideal /= 2                    # real-only sampling: only fs/2 of IF band
     range_res = C / (2 * bw * 1e6)
-    # FUTURE(gui-12): real per-board antenna geometry (6843 ODS/AOP, 2-chip cascade) instead of the uniform half-wavelength virtual array
+    # FUTURE: real per-board antenna geometry (6843 ODS/AOP, 2-chip cascade) instead of the uniform half-wavelength virtual array
     az_res = math.degrees(2.0 / n_az)
 
     active_ms = n_chirps * tc * 1e-3

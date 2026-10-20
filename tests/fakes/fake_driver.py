@@ -3,16 +3,16 @@
 
 argv: <system.json> [--validate] [--stats] [--frames N] [--duration S]
 Mode comes from FAKE_DRIVER_MODE (default "run"): run | crash | ignore-sigint | validate-invalid |
-write-bin | stall | tap | no-tap.  FAKE_DRIVER_FW=match|mismatch|skipped|unknown|by-config prints the driver's `firmware:` check lines (gui-33).  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
+write-bin | stall | tap | no-tap.  FAKE_DRIVER_FW=match|mismatch|skipped|unknown|by-config prints the driver's `firmware:` check lines.  FAKE_DRIVER_RATE (frames/s, default 20), FAKE_DRIVER_BPF (bytes/frame, default 1000),
 FAKE_DRIVER_PERIOD_MS (default 100). FAKE_DRIVER_CLI=debug|info|ok (or by-config: ok when the config name contains "_ok", else debug) replays the board command transcript of
 tests/fixtures/cli_<kind>_run.txt (stats lines dropped) right after "Using config", ending in a rejected sensorStart.
-Mode "tap" writes the gui-36 live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
+Mode "tap" writes the live-tap protocol (hello + one points message per frame, adc with --tap-adc-every K) to the
 inherited `--tap-fd N`, and its usage text lists --tap-fd; every other mode's usage text does not (an old binary). A config whose
 name (or run folder name) contains "_die" SIGKILLs itself after FAKE_DRIVER_DIE_S (default 4) seconds (a crashed driver for the page).
-Tap ADC messages (--tap-adc-every K): FAKE_DRIVER_ADC=tiny (default, a 2x4x2 ramp) or gain (radar-37: amplitude follows the cfg's rxGain; FAKE_DRIVER_KNEE, FAKE_DRIVER_SAT_GAIN) or bench (a synthetic 4x128x256 cube
+Tap ADC messages (--tap-adc-every K): FAKE_DRIVER_ADC=tiny (default, a 2x4x2 ramp) or gain (amplitude follows the cfg's rxGain; FAKE_DRIVER_KNEE, FAKE_DRIVER_SAT_GAIN) or bench (a synthetic 4x128x256 cube
 matching tests/fixtures/adc/bench_1843_dca.*: a mover at range bin 34, Doppler +10, ~20 deg, and a static reflector at bin 60,
 0 deg; FAKE_DRIVER_ADC_AMP scales both, e.g. 30000 for clipping). FAKE_DRIVER_STATS_MS (stats cadence, default 200) and FAKE_DRIVER_LOG_LPS (extra debug-style log lines per second,
-default 0) imitate a log_level debug run for the GUI lag measurement (gui-09 D8).
+default 0) imitate a log_level debug run for the GUI lag measurement.
 """
 import json
 import math
@@ -43,7 +43,7 @@ if "--help" in args or "-h" in args:
     sys.exit(0)
 
 if "--validate" in args:
-    # gui-37: FAKE_DRIVER_KEYS = comma list of the optional system-JSON keys this "build" accepts (default: all; "" = Rebuild 1).
+    # FAKE_DRIVER_KEYS = comma list of the optional system-JSON keys this "build" accepts (default: all; "" = Rebuild 1).
     # A key outside it is "unknown", like the real reader's `<path>: /firmware: unknown key (allowed: ...)`.
     accepted = os.environ.get("FAKE_DRIVER_KEYS", "firmware,firmware_check,save_serial_bytes").split(",")
     try:
@@ -86,7 +86,7 @@ if os.environ.get("FAKE_DRIVER_CLI"):
         for ln in f.read().split("\n"):
             if ln and not ln.startswith(("stats v1", "Using config")):
                 print(ln.replace("\r", "\r"), flush=True)
-# gui-33: FAKE_DRIVER_FW=match|mismatch|skipped|unknown prints the real driver's `firmware:` lines (Radar.cpp) before the run;
+# FAKE_DRIVER_FW=match|mismatch|skipped|unknown prints the real driver's `firmware:` lines (Radar.cpp) before the run;
 # mismatch ends the run like the real driver does (firmware_mismatch, exit 1, no cfg sent).
 _fw = os.environ.get("FAKE_DRIVER_FW")
 if _fw == "by-config":   # the verdict comes from the config path (session.json sits in a run folder named after the config)
@@ -123,7 +123,7 @@ if mode == "tap" and adc_every and os.environ.get("FAKE_DRIVER_ADC") == "bench":
                                                          {"kr": 60, "kd": 0, "sin": 0.0, "amp": amp * 0.4}], noise=25.0))
 meta_f, sat_on = None, False
 if mode == "tap" and adc_every and os.environ.get("FAKE_DRIVER_ADC") == "gain":
-    # radar-37: amplitude follows the run's cfg rxGain (bits 5:0), 1 dB/dB (a mover at range bin 34 + a static reflector at 60),
+    # amplitude follows the run's cfg rxGain (bits 5:0), 1 dB/dB (a mover at range bin 34 + a static reflector at 60),
     # compressing above FAKE_DRIVER_KNEE dB at 0.3 dB/dB; FAKE_DRIVER_SAT_GAIN = the gain from which chirp_meta.csv reports
     # saturated chirps (the file is written into output.dir when output.save_adc_frames is set).
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

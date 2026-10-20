@@ -1,4 +1,4 @@
-"""profileCfg analog front-end facts (radar-36): the HPF corner tables, the rxGain word and the usable IF band.
+"""profileCfg analog front-end facts: the HPF corner tables, the rxGain word and the usable IF band.
 
 All values come from the per-board `limits` of the firmware descriptors (config/firmware/<id>.json, each with
 level/source/confidence; memo docs/developer/radar_notes.md#hpf-rxgain-and-adc); nothing here is a table. This module
@@ -35,7 +35,7 @@ def _num(x) -> bool:
 
 
 def check_entries(entries: dict) -> list[str]:
-    """Shape problems of the radar-36 keys in one board's raw limits dict ([] = fine; other keys are not looked at)."""
+    """Shape problems of the analog front-end keys in one board's raw limits dict ([] = fine; other keys are not looked at)."""
     bad: list[str] = []
     for k in HPF_KEYS:
         if k in entries:

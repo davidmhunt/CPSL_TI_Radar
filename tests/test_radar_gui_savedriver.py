@@ -1,4 +1,4 @@
-"""gui-04 Step 4: Configure Save returns the real driver's `--validate --json` verdict (`driver`), and
+"""Configure Save returns the real driver's `--validate --json` verdict (`driver`), and
 radar_gui.driver.validate_config falls back to the plain text on a driver without --json."""
 import os
 import stat

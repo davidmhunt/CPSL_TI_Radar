@@ -1,4 +1,4 @@
-"""Configs tab backend (radar-40): browse every saved (`config/user/`) and shipped (`config/system/*.json`,
+"""Configs tab backend: browse every saved (`config/user/`) and shipped (`config/system/*.json`,
 `config/radar/<BOARD>/<fw>/*.cfg`) configuration, promote a user setup to a shipped one, delete a user or shipped file.
 
 It never runs a git write. It shows `git status` for the two shipped trees and says what to commit.
@@ -67,7 +67,7 @@ def _plain(p: Path) -> bool:
     return p.is_file() and not p.is_symlink()
 
 
-# --- ownership (radar-48): warn, never fix -----------------------------------------------------------------------
+# --- ownership: warn, never fix -----------------------------------------------------------------------
 
 MAX_OWNER_SCAN = 2000
 

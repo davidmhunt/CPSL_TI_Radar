@@ -1,4 +1,4 @@
-"""core-24: the committed dataFmt 2 fixtures (CPSL_TI_Radar_cpp/tests/data/sar_fmt2/) are exactly what the firmware
+"""The committed dataFmt 2 fixtures (CPSL_TI_Radar_cpp/tests/data/sar_fmt2/) are exactly what the firmware
 project's sar_synth.py / sar_parse.py produce today. test_sar_meta.cpp compares the driver against those goldens; if
 the firmware tools change, this fails until make_fixtures.py is re-run and the C++ test passes against the result."""
 import subprocess

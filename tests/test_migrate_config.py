@@ -1,4 +1,4 @@
-"""Migration golden test for tools/migrate_config_v1_to_v2.py (directive core-10).
+"""Migration golden test for tools/migrate_config_v1_to_v2.py.
 
 tests/fixtures/v1_configs/ holds every tracked v1 system config exactly as it
 was before the migration (``git show 177e61b:CPSL_TI_Radar_cpp/config/system/<f>``).
@@ -25,17 +25,17 @@ sys.path.insert(0, str(SCRIPT.parent))
 import migrate_config_v1_to_v2 as mig  # noqa: E402
 
 V1_FILES = sorted(FIXTURES.glob("*.json"))
-# gui-38: the tracked files were renamed and their radar cfgs moved; the v1 fixtures keep their old names as history.
+# the tracked files were renamed and their radar cfgs moved; the v1 fixtures keep their old names as history.
 MOVED = json.loads((REPO / "CPSL_TI_Radar_cpp/config/moved_paths.json").read_text())
 TRACKED = {p.name: MOVED["system"][p.name] for p in V1_FILES}      # v1 fixture name -> tracked v2 name
 
 # Deliberate edits made to a tracked v2 file (keyed by its current name) after the scripted migration
 # (merged over the script's output before comparing):
 # - the bench baseline keeps writing LVDS_Raw_0.bin, as the pre-rework
-#   baseline runs did, so later runs do the same disk I/O (core-10 step 7)
+#   baseline runs did, so later runs do the same disk I/O
 HAND_EDITS = {
     "IWR1843_demo_stress_test_baseline_front.json": {"output": {"save_raw_lvds": True}},
-    # gui-25: the ODS configs were re-pointed from IWR6843 to IWR6843ODS after migration
+    # the ODS configs were re-pointed from IWR6843 to IWR6843ODS after migration
     **{n: {"board": "IWR6843ODS"} for n in (
         "IWR6843ODS_demo_IcaRAus_10Hz_down.json", "IWR6843ODS_demo_RadVel_10Hz_down.json",
         "IWR6843ODS_demo_RadVel.json",
@@ -63,7 +63,7 @@ def run(*args, cwd=REPO):
 def test_fixtures_cover_every_tracked_config():
     assert len(V1_FILES) == 39
     # configs born in v2 (no v1 form, so no migration fixture)
-    # (radar-40: the Configs pane adds more, so the native set is derived: everything no v1 fixture converts to)
+    # (the Configs pane adds more, so the native set is derived: everything no v1 fixture converts to)
     native_v2 = {p.name for p in SYSTEM.glob("*.json")} - set(TRACKED.values())
     assert {"IWR1843_iwr1843_sar_lvds_SAR_2ms.json", "IWR1843_iwr1843_sar_lvds_SAR_2ms_fmt2.json"} <= native_v2
     assert all(mig.is_v2(json.loads((SYSTEM / n).read_text())) for n in native_v2)   # each one is a v2 document
@@ -86,7 +86,7 @@ def test_golden_conversion_matches_tracked_v2(v1, tmp_path):
     if TRACKED[v1.name] in HAND_EDITS:
         got = mig.dumps(merge(json.loads(got), HAND_EDITS[TRACKED[v1.name]]))
     tracked = json.loads((SYSTEM / TRACKED[v1.name]).read_text())
-    # the tracked file may predate the firmware key (gui-04): compare byte for byte without it, then check the key itself
+    # the tracked file may predate the firmware key: compare byte for byte without it, then check the key itself
     fw = json.loads(got).pop("firmware")
     assert fw in json.loads((BOARDS / f"{tracked['board']}.json").read_text())["firmwares"]
     assert tracked.get("firmware", fw) == fw
@@ -173,7 +173,7 @@ def test_unmapped_key_is_reported_and_blocks_conversion(tmp_path):
     assert json.loads(work.read_text())["schema_version"] == 2
 
 
-# ---- gui-04: the mandatory "firmware" key ----
+# ---- the mandatory "firmware" key ----
 V2_BASE = {"schema_version": 2, "board": "IWR1843", "radar_cfg": "a.cfg", "cli": {"port": "/dev/ttyACM0"},
            "dca1000": {"enabled": False}}
 

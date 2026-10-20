@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""radar_gui server for gui_shots (gui-37) with the quick-setup port allowlist and the port-busy check lifted, so a quick setup
+"""radar_gui server for gui_shots with the quick-setup port allowlist and the port-busy check lifted, so a quick setup
 can name the scratch "port" file and start the fake driver (tests/fakes/fake_driver.py). Test scaffolding only: never use it with a
 real radar. Same argv as `python -m radar_gui`."""
 import re

@@ -1,5 +1,5 @@
-"""gui-33 Step 1: firmware identity matcher over the shared fw_replies manifest and descriptor schema (the Python
-serial-source pre-cfg check was removed in gui-37 Step 6; the driver checks now)."""
+"""Firmware identity matcher over the shared fw_replies manifest and descriptor schema (the Python
+serial-source pre-cfg check was removed; the driver checks now)."""
 import json
 from pathlib import Path
 

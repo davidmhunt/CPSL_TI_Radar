@@ -1,4 +1,4 @@
-"""Pure-Python TI mmWave cfg tools: parse, metrics, per-board validation, generation (gui-02)."""
+"""Pure-Python TI mmWave cfg tools: parse, metrics, per-board validation, generation."""
 from . import detection, firmware
 from .generate import GenResult, generate
 from .limits import BOARD_LIMITS, limits_dict

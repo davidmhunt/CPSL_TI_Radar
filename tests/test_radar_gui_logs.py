@@ -1,4 +1,4 @@
-"""gui-37 Step 2b: Logs tab backend. Every test uses a temp run root (create_app(run_root=...)): the real runs/gui/ is never listed or deleted."""
+"""Logs tab backend. Every test uses a temp run root (create_app(run_root=...)): the real runs/gui/ is never listed or deleted."""
 import json
 import time
 from pathlib import Path

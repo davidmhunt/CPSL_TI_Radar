@@ -1,4 +1,4 @@
-"""Logs tab backend (gui-37 Step 2b): list, view and delete the GUI's run folders under the run root (`runs/gui/`).
+"""Logs tab backend: list, view and delete the GUI's run folders under the run root (`runs/gui/`).
 
 Every path is confined: a session is addressed by the folder NAME only (`<UTC>_<name>[-N]`, a strict pattern: no `/`, no `..`),
 the folder must be a real directory (not a symlink) whose realpath is a direct child of the run root, and only a fixed set of

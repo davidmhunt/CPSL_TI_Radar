@@ -1,4 +1,4 @@
-"""radar-41: stable /dev/radar port names (whitelist, defaults, Save, Devices API) and no-cache on web/ files."""
+"""Stable /dev/radar port names (whitelist, defaults, Save, Devices API) and no-cache on web/ files."""
 import json
 
 import pytest

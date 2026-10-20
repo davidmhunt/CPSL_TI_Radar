@@ -1,4 +1,4 @@
-"""HTTP API for the Configure tab (gui-03): analyse / generate / save TI cfgs plus the driver's system JSON.
+"""HTTP API for the Configure tab: analyse / generate / save TI cfgs plus the driver's system JSON.
 
 Everything here is a thin layer over `radar_gui.cfg`; no cfg maths lives in this file.
 """
@@ -91,7 +91,7 @@ class SaveReq(BaseModel):
     save_adc_frames: bool = False
     save_raw_lvds: bool = False
     log_level: str = "info"
-    overwrite: bool = False                # gui-39: replace the existing user .cfg (the system JSON is kept); default = refuse with 409
+    overwrite: bool = False                # replace the existing user .cfg (the system JSON is kept); default = refuse with 409
 
 
 def _bad_board(board):
@@ -140,15 +140,15 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
     fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
     en = fw["system_enables"] if fw else {"serial": True, "dca1000": False}
     serial = en["serial"] if req.serial_enabled is None else req.serial_enabled
-    dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled   # never inferred from the cfg (gui-22)
+    dca = en["dca1000"] if req.dca1000_enabled is None else req.dca1000_enabled   # never inferred from the cfg
     from . import session_cfg   # lazy: session_cfg imports this module
     one = list(session_cfg.radar_links().values())
     dcli, ddata = one[0] if len(one) == 1 and req.board != "AWR2243_CASCADE" else session_cfg.FALLBACK_PORTS   # as before: ACM0/1
     cli_port, data_port = req.cli_port or dcli, req.data_port or ddata
     doc = {
         "schema_version": 2,
-        "board": fwmod.driver_board(fw, req.board) if fw else req.board,   # gui-30: IWR1843 + SAR -> IWR1843_SAR
-        "firmware": fw["id"] if fw else None,   # gui-04: mandatory in the driver; the resolved descriptor id
+        "board": fwmod.driver_board(fw, req.board) if fw else req.board,   # IWR1843 + SAR -> IWR1843_SAR
+        "firmware": fw["id"] if fw else None,   # mandatory in the driver; the resolved descriptor id
         "radar_cfg": cfg_name,
         "cli": {"port": cli_port},
         "serial_stream": {"enabled": serial, "port": data_port},
@@ -163,7 +163,7 @@ def system_json(req: SaveReq, cfg_name: str) -> dict:
 
 
 def lvds_mismatch_warnings(req: SaveReq, dca: bool) -> list[str]:
-    """gui-22: cfg LVDS and the DCA1000 system enable are separate settings; say so when they disagree.
+    """Cfg LVDS and the DCA1000 system enable are separate settings; say so when they disagree.
     Only for a TLV firmware that has an LVDS output on this board (the demo on 1843/6843)."""
     fw = fwmod.get(req.firmware) if req.firmware else fwmod.default_for(req.board)
     if not fw or req.board not in fw["outputs"]:
@@ -186,7 +186,7 @@ def lvds_mismatch_warnings(req: SaveReq, dca: bool) -> list[str]:
 
 
 def driver_verdict(driver_bin, json_path: Path) -> dict | None:
-    """gui-04: what the real driver says about the saved system JSON (`--validate --json`), trimmed for the Save
+    """What the real driver says about the saved system JSON (`--validate --json`), trimmed for the Save
     message; None when no driver binary is available (the Python verdict above still stands)."""
     b = drv.driver_bin(driver_bin)
     try:
@@ -232,7 +232,7 @@ def make_router(user_dir: Path | None = None, driver_bin=None, driver_mgr=None) 
 
     @r.post("/api/cfg/params")
     def params(req: ParamsReq):
-        """Direct chirp-parameter mode (gui-11): apply `params` to `base_cfg_text`, then validate as usual.
+        """Direct chirp-parameter mode: apply `params` to `base_cfg_text`, then validate as usual.
         Bad values come back as error issues (ok false), never as a 5xx."""
         _bad_board(req.board)
         try:
@@ -258,7 +258,7 @@ def make_router(user_dir: Path | None = None, driver_bin=None, driver_mgr=None) 
 
     @r.post("/api/cfg/detection")
     def detection_edit(req: DetectionReq):
-        """On-chip CFAR editing (gui-35): apply `values` to `base_cfg_text`, then analyse. Same shape as /api/cfg/params;
+        """On-chip CFAR editing: apply `values` to `base_cfg_text`, then analyse. Same shape as /api/cfg/params;
         bad values come back as error issues (ok false), never as a 5xx."""
         _bad_board(req.board)
         try:
@@ -346,7 +346,7 @@ def make_router(user_dir: Path | None = None, driver_bin=None, driver_mgr=None) 
                 "validate_cmd": f"CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP {json_path} --validate"}
 
     def _live_uses(json_path: Path) -> bool:
-        """A driver session that is starting/running/stopping on this system JSON (gui-39)."""
+        """A driver session that is starting/running/stopping on this system JSON."""
         if driver_mgr is None:
             return False
         st = driver_mgr.status(log=False)
@@ -356,7 +356,7 @@ def make_router(user_dir: Path | None = None, driver_bin=None, driver_mgr=None) 
         return any(c and Path(c).resolve() == mine for c in (st.get("config"), getattr(driver_mgr, "session_json", None)))
 
     def _overwrite(req: SaveReq, cfg_path: Path, json_path: Path, text: str, res: dict):
-        """gui-39 Q2: replace the user .cfg only; an existing system JSON (ports, DCA, saves) is kept, a missing one is
+        """Replace the user .cfg only; an existing system JSON (ports, DCA, saves) is kept, a missing one is
         created from the form. The target must already exist in config/user/ and no live session may use its JSON."""
         root = udir.resolve()
         if cfg_path.is_symlink() or cfg_path.resolve().parent != root or json_path.resolve().parent != root:

@@ -1,16 +1,16 @@
-"""Per-firmware descriptors (gui-10): the cfg template per board, what the firmware outputs on each board, the
+"""Per-firmware descriptors: the cfg template per board, what the firmware outputs on each board, the
 system-JSON enables it implies, the per-board limits (with their sources) and its MIMO scheme.
 
 Each BOARD lists the firmwares it supports (`firmwares`, default first, in config/boards/<board>.json); a
 firmware descriptor at CPSL_TI_Radar_cpp/config/firmware/<id>.json (JSON so the C++ driver can read the same
-files via include/json; gui-04) holds, schema 2:
+files via include/json) holds, schema 2:
 
   id               file stem
   description      one line
   outputs          {board: {"tlv": bool, "lvds": bool}}   what the firmware provides on that board (TLV over
                    serial / ADC over LVDS). One `demo` serves 1443/1843/6843; its LVDS output is switched on by
                    the cfg (lvdsStreamCfg) on 1843/6843 and does not exist on the 1443.
-  lvds_data_fmts   {"value": [int], "source", "confidence"}   lvdsStreamCfg dataFmt values the firmware accepts (gui-24);
+  lvds_data_fmts   {"value": [int], "source", "confidence"}   lvdsStreamCfg dataFmt values the firmware accepts;
                    required when any board output has lvds, absent otherwise
   templates        {board: cfg path relative to config/}   one per board
   system_enables   {"serial": bool, "dca1000": bool}       what a system JSON for it turns on by default
@@ -18,21 +18,21 @@ files via include/json; gui-04) holds, schema 2:
                    confidence: "repo" | "high" | "medium" | "low" | "unverified" ("recalled" is legacy); level: "error" | "warning"
   mimo             {"scheme": "tdm"|"ddma", "bpm": bool, "max_chirps_per_loop": int|null, "subframes": int|null,
                     "source", "confidence", optional "note", optional "boards": {board: {overrides of the above}}}
-                   the MIMO scheme is a property of the firmware, not inferred from the board (gui-10 ruling);
+                   the MIMO scheme is a property of the firmware, not inferred from the board;
                    confidence: "high" | "medium" | "low" | "unverified"
-  identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note, source}}  (gui-33) what the board answers
+  identify         optional {board: {level, timeout_ms, once_safe, probes, flash_hint, note, source}} what the board answers
                    to `version` / `sarStats` when this firmware runs; matched by radar_gui/fwident.py (schema checked there).
                    source: null (prebuilt only) | {fw_project, artifact} back-reference to firmware_dev/projects (fwstd-03).
                    level: "bench" (reply recorded on hardware) | "source" (derived from firmware source) | "unverified".
-  cfg_rules        optional {board: {"skip_commands": [str], "required_commands": [str], "forbidden_commands": [str]}}  (gui-33 Step 4)
+  cfg_rules        optional {board: {"skip_commands": [str], "required_commands": [str], "forbidden_commands": [str]}}
                    cfg commands this firmware on that board rejects (left in the cfg, never sent) / needs / does not implement.
                    Read through `cfg_rules(board, firmware)`; the C++ driver reads the same block. Absent board = no rules.
   cli_overrides    optional {board: {"prompt": str}}  the CLI prompt this firmware prints on that board; overrides the board
                    descriptor's `cli.prompt` (the prompt of the board's default firmware). Read through `cfg_rules(...)["prompt"]`.
-  detection        optional (gui-35) null (+ `detection_note`) or {boards, variants, notes}: the on-chip CFAR command schema per board;
+  detection        optional null (+ `detection_note`) or {boards, variants, notes}: the on-chip CFAR command schema per board;
                    format and rules in radar_gui/cfg/detection.py. GUI-only: the C++ driver ignores it and never enforces its rules.
   pending          optional string; present = stub (no cfg generation/validation yet)
-  driver_board     optional {gui board: driver board}  (gui-30) the C++ driver board (config/boards/<name>.json) a system JSON
+  driver_board     optional {gui board: driver board} the C++ driver board (config/boards/<name>.json) a system JSON
                    writes for this firmware on that GUI board, and whose cfg_dialect (required/forbidden commands) the cfg is
                    validated against. Host-GUI metadata; absent = the GUI board is the driver board. E.g. iwr1843_sar_lvds
                    {"IWR1843": "IWR1843_SAR"}: the SAR image is a separate driver board with its own dialect.
@@ -51,7 +51,7 @@ from . import analog
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "CPSL_TI_Radar_cpp" / "config"
 FIRMWARE_DIR = CONFIG_DIR / "firmware"
 BOARDS_DIR = CONFIG_DIR / "boards"
-CONFIDENCES = ("repo", "high", "medium", "low", "recalled", "unverified")   # gui-13: memo vocabulary added
+CONFIDENCES = ("repo", "high", "medium", "low", "recalled", "unverified")   # memo vocabulary added
 LEVELS = ("error", "warning")
 
 
@@ -189,7 +189,7 @@ def check_descriptor(d: dict, stem: str | None = None) -> list[str]:
                 elif e["level"] not in LEVELS or e["confidence"] not in CONFIDENCES or not e["source"]:
                     bad.append(f"limits[{b}][{name}]: bad level/confidence/source")
             if all(isinstance(e, dict) and "value" in e for e in entries.values()):
-                bad += [f"limits[{b}]: {m}" for m in analog.check_entries(entries)]   # radar-36 keys (HPF / rxGain / IF band)
+                bad += [f"limits[{b}]: {m}" for m in analog.check_entries(entries)]   # analog front-end keys (HPF / rxGain / IF band)
     m = d.get("mimo")
     bad += _check_mimo_entry(m, "mimo", True) if m is not None else ["mimo block missing"]
     if isinstance(m, dict):
@@ -227,7 +227,7 @@ def default_firmware_id(board: str) -> str | None:
 
 
 def cfg_rules(board: str, firmware: str | None = None) -> dict:
-    """THE accessor for what a firmware changes about the cfg and the CLI on a board (gui-33 Step 4; used by the cfg
+    """THE accessor for what a firmware changes about the cfg and the CLI on a board (used by the cfg
     validator, the serial source and the GUI error checks). `board` is the GUI board or the driver board
     (IWR1843_SAR is looked up as IWR1843 under iwr1843_sar_lvds); `firmware` None = `default_firmware_id(board)`.
     Returns {"firmware": id|None, "skip_commands": [...], "required_commands": [...], "forbidden_commands": [...],
@@ -408,7 +408,7 @@ def summary(board: str | None = None) -> list[dict]:
              "driver_board": driver_board(d, board) if board else d.get("driver_board"),
              "default": bool(board and fws and d is fws[0]),
              "template": d["templates"].get(board) if board else None,
-             # radar-36: the analog front-end entries of the board (HPF corner tables, rxGain range/target, IF band), raw
+             # the analog front-end entries of the board (HPF corner tables, rxGain range/target, IF band), raw
              # {value, level, source, confidence} dicts; only with a board (the Configure tab's direct mode reads them)
              "analog": ({k: e for k, e in d["limits"].get(board, {}).items() if k in analog.ANALOG_KEYS} if board else None)}
             for d in fws]

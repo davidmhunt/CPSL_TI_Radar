@@ -1,4 +1,4 @@
-"""gui-40: docker/app/setup_env.sh, the hw compose wiring and the serial permission hint (no hardware)."""
+"""Docker/app/setup_env.sh, the hw compose wiring and the serial permission hint (no hardware)."""
 import os
 import shutil
 import subprocess

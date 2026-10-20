@@ -1,4 +1,4 @@
-"""gui-37 Step 1: the effective session.json of a driver start (saved config + overrides, or a quick setup), the caps
+"""The effective session.json of a driver start (saved config + overrides, or a quick setup), the caps
 that gate its optional keys, /api/driver/boards and driver.log in the run folder. Fake driver, no hardware."""
 import json
 import os

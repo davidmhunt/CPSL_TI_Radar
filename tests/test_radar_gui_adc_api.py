@@ -1,4 +1,4 @@
-"""gui-07 Step 2: ADC views plumbing: --tap-adc-every pass-through (gate), the /adc binary WebSocket, panel states.
+"""ADC views plumbing: --tap-adc-every pass-through (gate), the /adc binary WebSocket, panel states.
 Fake driver (tests/fakes/fake_driver.py) in `tap` mode with FAKE_DRIVER_ADC=bench; no hardware."""
 import json
 import shutil

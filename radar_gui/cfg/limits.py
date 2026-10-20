@@ -4,13 +4,13 @@
   "repo"        taken from this repo (board descriptor, cfggen.py, docs/firmware.md, docs/RESULTS.md,
                 or the shipped cfgs themselves)
   "high" / "medium" / "low"
-                verified against TI documents / SDK sources by the gui-13 memos (docs/developer/radar_notes.md#single-chip-limits and #cascade-limits-and-firmware-matrix);
+                verified against TI documents / SDK sources by the limits memos (docs/developer/radar_notes.md#single-chip-limits and #cascade-limits-and-firmware-matrix);
                 the memo row is cited in `source`
   "unverified"  best-effort estimate no source could confirm; a violation is only ever a warning (so is "low")
 
 Nothing is hard-coded here: board/firmware limits live in CPSL_TI_Radar_cpp/config/firmware/<id>.json (see
 firmware.py) and host-side ones in CPSL_TI_Radar_cpp/config/limits/host.json. The driver stays the authority;
-gui-04 makes the C++ driver read the same files.
+The C++ driver reads the same files.
 """
 from __future__ import annotations
 

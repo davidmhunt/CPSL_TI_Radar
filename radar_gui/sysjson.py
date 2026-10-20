@@ -1,6 +1,6 @@
-"""Writing a system JSON back to config/user/ (gui-37): "Save to config" for the recording flags and other run overrides.
+"""Writing a system JSON back to config/user/: "Save to config" for the recording flags and other run overrides.
 
-Shareable helper (gui-04 Step 2b's Add-firmware button writes the same file kind): `update_user_json` overwrites a file that lives
+Shareable helper (the Add-firmware button writes the same file kind): `update_user_json` overwrites a file that lives
 in the user dir, keeping a `<name>.json.bak` of the previous bytes; `copy_to_user` writes a new file there from any listed config.
 Both write atomically (temp file + rename) as indent-4 JSON with a trailing newline and keep key order.
 """
@@ -28,7 +28,7 @@ def dumps(doc: dict) -> str:
     return json.dumps(doc, indent=4) + "\n"
 
 
-# Firmware a system JSON means when it does not name one (gui-04): the migration tool and the Add-firmware button
+# Firmware a system JSON means when it does not name one: the migration tool and the Add-firmware button
 # both preselect this. IWR1443 depends on the DCA1000 enable (the 1443 demo has no LVDS); None = ambiguous.
 INFERRED_FIRMWARE = {"AWR2243_CASCADE": "cascade_ddm", "IWR1843_SAR": "iwr1843_sar_lvds", "IWR1843": "demo",
                      "IWR6843": "demo", "IWR6843ODS": "demo"}
@@ -142,7 +142,7 @@ def copy_to_user(src: Path, user_dir: Path, name: str, ov: dict, caps: dict) -> 
 
 
 def add_firmware_to_user(path: Path, user_dir: Path, firmware: str, allowed: list[str], board: str | None = None) -> Path:
-    """gui-04 Step 2b: add `"firmware"` to a config/user system JSON that lacks it. Never overwrites an existing key (409);
+    """Add `"firmware"` to a config/user system JSON that lacks it. Never overwrites an existing key (409);
     keeps the previous bytes as `<name>.json.bak` (409 if one exists); the result is exactly what the migration tool's
     `--add-firmware --in-place` writes."""
     p, root = Path(path).resolve(), Path(user_dir).resolve()

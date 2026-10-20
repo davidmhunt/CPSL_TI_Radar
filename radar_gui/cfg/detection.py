@@ -1,4 +1,4 @@
-"""On-chip detection (CFAR) editing from the firmware descriptor (gui-35).
+"""On-chip detection (CFAR) editing from the firmware descriptor.
 
 The schema is data: `config/firmware/<fw>.json` -> `detection` (read with the rest of the descriptor by
 `firmware.py`, ignored by the C++ driver as a GUI-only key). Rule *logic* lives here, keyed by `code`; the
@@ -590,7 +590,7 @@ def _r_dop_guard0(ctx, rule):
 
 
 def _r_ddm_range_guard(ctx, rule):
-    # gui-41: observed on the cascade (bench session 2, 2026-10-12): range cfarCfg guardLen 2 with mode 3 hung sensorStart
+    # observed on the cascade (bench session 2, 2026-10-12): range cfarCfg guardLen 2 with mode 3 hung sensorStart
     # (TIMEOUT 5000 ms, runs 20261012T135326Z/135439Z); the same cfg with guardLen 0 started (DONE, 20261012T135918Z).
     # Only guard 2 / mode 3 was observed; other guard values are a HYPOTHESIS, rule is deliberately broader.
     return [f"line {r['line']}: range CFAR guardLen {r['vals']['guardLen']:g} must be 0 on the cascade DDM image; with guardLen 2 "
@@ -612,7 +612,7 @@ _RULES = {
 
 def issues(cfg: Cfg, board: str, firmware, m=None) -> list[tuple[str, str, str, str, str]]:
     """Detection-rule findings of `cfg` as (level, code, message, source, confidence); [] when the firmware has none.
-    GUI-only: the C++ driver does not enforce these (gui-35 ruling)."""
+    GUI-only: the C++ driver does not enforce these."""
     v = variant(firmware, board)
     if v is None:
         return []

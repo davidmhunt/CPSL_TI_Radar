@@ -152,7 +152,7 @@ def test_parsers_on_captured_output():
 # ------------------------------------------------------- captured bench host
 
 def test_doctor_on_captured_bench_host():
-    """The real host: rmem set at runtime only; no realtime check (core-20)."""
+    """The real host: rmem set at runtime only; no realtime check."""
     h = bench_host()
     rc, out = run_main(h, "--nic", "enp3s0")
     c = by_name(hs.run_checks(h, args("--nic", "enp3s0")))
@@ -699,7 +699,7 @@ def test_runs_piped_via_stdin_without_file_and_without_nmcli(tmp_path):
     assert "firewall" in names and names["firewall"]["status"] in ("N-A", "OK", "WARN", "MISSING")
 
 
-# ---------------------------------------------------------------- firewall (radar-22)
+# ---------------------------------------------------------------- firewall
 
 UFW_RULE = "### tuple ### allow any any 0.0.0.0/0 any 192.168.33.180 in_enp3s0 comment=4443413130303"
 UFW_OTHER = "### tuple ### allow tcp 22 0.0.0.0/0 any 0.0.0.0/0 in\n"

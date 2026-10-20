@@ -1,4 +1,4 @@
-"""radar-38: Raw ADC range compensation is a display-only frontend transform.
+"""Raw ADC range compensation is a display-only frontend transform.
 
 No JS engine in the test environment, so the pure function in web/js/rangecomp.js is mirrored in Python with its constants
 parsed out of the JS (a drift in the exponent table or the formula fails the static checks below), and the display-only

@@ -1,4 +1,4 @@
-"""On-chip CFAR editing from the firmware descriptor (gui-35): schema, round trip over every shipped cfg, one seeded-bad cfg
+"""On-chip CFAR editing from the firmware descriptor: schema, round trip over every shipped cfg, one seeded-bad cfg
 per `cfar_` rule code, SAR/raw notes, generation and the HTTP endpoints. Hardware-free."""
 import re
 
@@ -211,7 +211,7 @@ SEEDED = {
                              lambda t: sub_line(t, "cfarCfg", lambda k: k.__setitem__(3, "2"), 0), "error"),
     "cfar_doppler_os_guard0": ("cascade_ddm", "AWR2243_CASCADE",
                                lambda t: sub_line(t, "cfarCfg", lambda k: k.__setitem__(5, "2"), 0), "error"),
-    # gui-41: range line (second cfarCfg in the cascade template) with guardLen 2
+    # range line (second cfarCfg in the cascade template) with guardLen 2
     "cfar_ddm_range_guard": ("cascade_ddm", "AWR2243_CASCADE",
                              lambda t: sub_line(t, "cfarCfg", lambda k: k.__setitem__(5, "2"), 1), "error"),
 }

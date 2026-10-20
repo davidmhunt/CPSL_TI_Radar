@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""USB-unplug test (core-11 Step 8b): pull the board's USB cable mid-run and
+"""USB-unplug test: pull the board's USB cable mid-run and
 check the driver ends cleanly (exit 1 + 'sensorStop could not be sent'),
 not crashing (134/139/negative) or hanging (needing SIGKILL).
 

@@ -1,4 +1,4 @@
-"""ADC views from the driver tap (gui-07): range profile, range-Doppler, range-azimuth, raw ADC diagnostics.
+"""ADC views from the driver tap: range profile, range-Doppler, range-azimuth, raw ADC diagnostics.
 
 Hand-written numpy; no dependency on mmwave_radar_processing. The input is a tap `adc` message (radar_gui/tap.py):
 header {"index","shape":[rx,samples,chirps],"missing_bytes","layout":"rx,sample,chirp","iq_order":"IQ"} + int16 (I,Q)
@@ -89,7 +89,7 @@ class Geometry:
     az_sign: int = AZ_SIGN_DEFAULT   # see AZ_SIGN_BY_BOARD
     ra_reason: str = ""              # non-empty = the range-azimuth view is disabled, with the reason
     notes: list[str] = field(default_factory=list)
-    bands: dict = field(default_factory=dict)   # radar-36: analog.band_edges(...) (HPF1-corner / usable-IF-band edges in m), see below
+    bands: dict = field(default_factory=dict)   # analog.band_edges(...) (HPF1-corner / usable-IF-band edges in m), see below
 
     @property
     def n_chirps(self) -> int:

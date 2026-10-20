@@ -42,7 +42,7 @@ class Cfg:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    # --- chirp-loop model (gui-14) -----------------------------------------------------------
+    # --- chirp-loop model -----------------------------------------------------------
     @property
     def chirp_sequence(self) -> list[tuple[int, int]]:
         """Every chirp the cfg defines as (chirp index, TX enable mask), sorted by index; masks of

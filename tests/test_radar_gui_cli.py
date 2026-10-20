@@ -1,4 +1,4 @@
-"""gui-34 Step 1: board command transcript (driver CLI echo lines in both formats)."""
+"""Board command transcript (driver CLI echo lines in both formats)."""
 import json
 import time
 from pathlib import Path

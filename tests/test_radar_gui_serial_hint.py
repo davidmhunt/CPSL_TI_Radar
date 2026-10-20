@@ -1,4 +1,4 @@
-"""gui-40: permission hint for a driver open_failed on a serial port (no hardware)."""
+"""Permission hint for a driver open_failed on a serial port (no hardware)."""
 
 
 def test_permission_hint(tmp_path, monkeypatch):

@@ -1,4 +1,4 @@
-"""Closed-form synthetic ADC cube for the gui-07 tests and the fake driver (independent of radar_gui.adc).
+"""Closed-form synthetic ADC cube for the ADC-view tests and the fake driver (independent of radar_gui.adc).
 
 Cube [rx, sample, chirp] complex, chirp c = loop c // cpl, TX slot c % cpl. A target is
   A * exp(j * (2*pi*kr*n/N + 2*pi*kd*l/L + pi*sin(theta) * m)),  m = az_slot_index * n_rx + rx,

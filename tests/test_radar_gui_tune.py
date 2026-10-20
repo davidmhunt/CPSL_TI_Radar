@@ -1,4 +1,4 @@
-"""radar-37 Step 4: the RX-gain sweep core (radar_gui/tune.py) on synthetic data; no driver, no hardware."""
+"""The RX-gain sweep core (radar_gui/tune.py) on synthetic data; no driver, no hardware."""
 import copy
 import sys
 from pathlib import Path
@@ -189,7 +189,7 @@ def test_run_sweep_cancel_returns_rows_so_far_and_no_suggestion(geom):
     assert res["cancelled"] and len(res["rows"]) == 2 and res["suggestion"] is None
 
 
-# ---- ADC full scale from adcCfg (radar-37 follow-up) ----------------------------------------------------------
+# ---- ADC full scale from adcCfg ----------------------------------------------------------
 def test_adc_bits_derived_from_adccfg():
     assert tune.adc_bits_from_cfg("adcCfg 2 1\n") == (16, "adcCfg numADCBits 2")
     assert tune.adc_bits_from_cfg("adcCfg 0 1 % x\n")[0] == 12 and tune.adc_bits_from_cfg("adcCfg 1 1\n")[0] == 14

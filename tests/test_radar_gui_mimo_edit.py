@@ -1,4 +1,4 @@
-"""gui-15 Step 2: MIMO-scheme-aware params/generate (docs/design/mimo_modes.md s4). Hardware-free."""
+"""MIMO-scheme-aware params/generate (docs/design/mimo_modes.md s4). Hardware-free."""
 from pathlib import Path
 
 import pytest

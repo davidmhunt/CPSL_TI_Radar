@@ -24,7 +24,7 @@ class Source:
 
 
 class NoSource(Source):
-    """No source yet (the default since gui-36 Step 3b): the Point cloud tab waits for Serial, Replay or a driver run."""
+    """No source yet (the default): the Point cloud tab waits for Serial, Replay or a driver run."""
     name = "none"
     drives_status = True
     MSG = "pick Replay, or start a driver session in the Radar tab"
@@ -39,7 +39,7 @@ class NoSource(Source):
 
 
 def detect_dialect(name: str) -> str:
-    """TLV dialect of a replay dump from its file name (gui-09 D16): AWR2243_CASCADE_* -> mcuplus_cascade, IWR1443* -> sdk2."""
+    """TLV dialect of a replay dump from its file name: AWR2243_CASCADE_* -> mcuplus_cascade, IWR1443* -> sdk2."""
     n = os.path.basename(name).lower()
     return "mcuplus_cascade" if n.startswith("awr2243_cascade") else "sdk2" if n.startswith("iwr1443") else "sdk3"
 
@@ -109,7 +109,7 @@ class ReplaySource(Source):
 
 
 class DriverSource(Source):
-    """Follows a GUI-started driver run (gui-36): the point cloud comes off the run's tap pipe (radar_gui/tap.py), so the
+    """Follows a GUI-started driver run: the point cloud comes off the run's tap pipe (radar_gui/tap.py), so the
     Point cloud tab shows the board the driver owns without a second connection. Holds no radar lock (the run does). `state`:
     running -> ended | died, decided from the DriverManager status once the pipe hits EOF. Never falls back to a serial
     source by itself. `tapped` False = the binary has no `--tap-fd` (nothing to read; status says to rebuild)."""
@@ -134,7 +134,7 @@ class DriverSource(Source):
         self.state, self.msg = "running", "" if self.tapped else self.NO_TAP_MSG
         self.hello = None
         self.frames_in = self.adc_in = self.adc_bad = self.skipped = 0
-        self.last_adc = None          # header of the newest adc message (plumbing for gui-07; the data is not kept)
+        self.last_adc = None          # header of the newest adc message (plumbing for the ADC views; the data is not kept)
         self.on_status = lambda s, m: None
         self._slot, self._mu, self._eof, self._stop = None, threading.Lock(), False, False
         self._loop = self._wake = self._thread = None

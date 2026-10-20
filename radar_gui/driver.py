@@ -1,4 +1,4 @@
-"""Run control for the C++ driver (gui-05): validate, start/stop as a subprocess, live stats and log.
+"""Run control for the C++ driver: validate, start/stop as a subprocess, live stats and log.
 
 The driver binary is `CPSL_TI_Radar_cpp/build/CPSL_TI_Radar_CPP` unless `--driver-bin` / `RADAR_GUI_DRIVER`
 says otherwise. `stats v1` lines are parsed with `tools/bench/bench_lib.Parser` (not re-implemented here).
@@ -29,12 +29,12 @@ import bench_lib  # noqa: E402
 DEFAULT_BIN = REPO / "CPSL_TI_Radar_cpp" / "build" / "CPSL_TI_Radar_CPP"
 DEFAULT_RUN_ROOT = REPO / "runs" / "gui"
 LOG_LINES = 500
-LOG_FLUSH_S = 0.15   # driver_log lines are sent to the page as one driver_log_batch per this interval (gui-09 D8)
+LOG_FLUSH_S = 0.15   # driver_log lines are sent to the page as one driver_log_batch per this interval
 _FRAME_RE = re.compile(r"^frame:\s+(\d+) rx x (\d+) samples x (\d+) chirps, ([\d.]+) ms period")
 _BPF_RE = re.compile(r"^bytes/frame:\s*(\d+)")
 CLI_MAX = 500          # transcript entries kept (the beginning of the run: that is where a rejected cfg shows)
 CLI_REPLY_MAX = 200
-# Board CLI transcript (gui-34). Two driver formats: the info-level echo (one line per command, written after the reply)
+# Board CLI transcript. Two driver formats: the info-level echo (one line per command, written after the reply)
 #   cli [3/27] channelCfg 15 7 0 -> Done (12 ms)
 #   cli [27/27] sensorStart -> ERROR (8 ms) "Error: Full configuration ... | Error -1"
 #   cli [5/27] foo -> TIMEOUT no 'Done' in 100 ms "<partial reply>"       cli [skip] calibData 0 0 0 (skip_commands)
@@ -52,7 +52,7 @@ _ERR_TOKENS = ("Error", "not recognized")
 _STOP_PENDING = ("stats v1", "warning:", "error:", "SerialStreamer", "Received ", "no frame")
 
 
-# gui-33: the driver's firmware identity check (Radar.cpp check_firmware_identity). One verdict line per run:
+# the driver's firmware identity check (Radar.cpp check_firmware_identity). One verdict line per run:
 #   [warning: ]firmware: <match|mismatch|skipped|unknown> expected=<fw> found=<fields | not queried | no reply>
 # and detail lines: the fatal/warn mismatch message (carries the flash hint), the skipped reason, the unknown reason.
 _FW_RE = re.compile(r"^(?:warning: |error: )?firmware: (?P<verdict>match|mismatch|skipped|unknown) expected=(?P<exp>\S+) found=(?P<found>.*)$")
@@ -85,13 +85,13 @@ def clean_reply(lines, drop_done: bool) -> str:
 
 
 def first_fail(cli) -> int | None:
-    """1-based position (seq) of the first ERROR/TIMEOUT entry, else None. Firmware-identify probes (tag `id`, gui-39) are
+    """1-based position (seq) of the first ERROR/TIMEOUT entry, else None. Firmware-identify probes (tag `id`) are
     questions to the board, not cfg commands: an ERROR reply there is an expected answer and never counts."""
     return next((e["seq"] for e in cli if e["verdict"] in ("ERROR", "TIMEOUT") and not e.get("probe")), None)
 
 
 def serial_permission_hint(lines) -> str | None:
-    """gui-40: a driver `cannot open the ... port <p>` line whose port exists but is not readable/writable by this
+    """A driver `cannot open the ... port <p>` line whose port exists but is not readable/writable by this
     process -> a hint naming the owning group (the usual Docker cause: the container lacks the device's gid)."""
     for ln in lines:
         m = _OPEN_FAIL_RE.search(ln)
@@ -175,7 +175,7 @@ def parse_validate_json(text: str, exit_code: int) -> dict | None:
 
 
 def validate_config(binary: Path, config: str | os.PathLike, env: dict | None = None) -> dict:
-    """Run `<binary> <config> --validate --json` (gui-04) and return the validate() dict; a driver without --json
+    """Run `<binary> <config> --validate --json` and return the validate() dict; a driver without --json
     (exit 2 / non-JSON output) falls back to the plain-text `--validate` and parse_validate."""
     def run(*flags):
         try:
@@ -197,16 +197,16 @@ class DriverManager:
     def __init__(self, bin_override=None, run_root_override=None, lock=radar_lock, emit=None,
                  min_stop_grace: float = 5.0, on_run=None):
         self.bin_override, self.root_override, self.lock = bin_override, run_root_override, lock
-        self.extern_busy = None                   # radar-37: callable() -> str | None; a reason to refuse a start (a Tune sweep)
-        self.on_run = on_run                      # gui-36: called with the run info after the spawn; True = tap fd taken over
+        self.extern_busy = None                   # callable() -> str | None; a reason to refuse a start (a Tune sweep)
+        self.on_run = on_run                      # called with the run info after the spawn; True = tap fd taken over
         self._tap_cache = {}                      # (binary path, mtime) -> supports --tap-fd
         self._caps_cache = {}                     # (binary path, mtime) -> session_cfg.probe_caps()
         self.emit, self.min_grace = emit or (lambda m: None), min_stop_grace
         self._mu = threading.RLock()
         self._reset()
         self.state = "idle"
-        self.run_id = 0     # counts runs; the page clears its transcript when it changes (gui-34)
-        self.boot = uuid.uuid4().hex[:12]   # this GUI process: the page keys "this GUI configured the board" evidence on it (gui-37)
+        self.run_id = 0     # counts runs; the page clears its transcript when it changes
+        self.boot = uuid.uuid4().hex[:12]   # this GUI process: the page keys "this GUI configured the board" evidence on it
 
     def _reset(self):
         self.proc = None
@@ -220,13 +220,13 @@ class DriverManager:
         self.expect = {}
         self.sigint_sent = False
         self.t_start = 0.0
-        self.label = self.session_json = self._logf = None   # gui-37: display label, the run's session.json, driver.log handle
+        self.label = self.session_json = self._logf = None   # display label, the run's session.json, driver.log handle
         self.saving, self.fw_id, self.notes = {}, None, []
-        self.fw_check = None      # gui-33: the driver's `firmware:` verdict line, parsed (parse_firmware_line); None = no line seen
+        self.fw_check = None      # the driver's `firmware:` verdict line, parsed (parse_firmware_line); None = no line seen
         self.tap = None   # "on" = run started with --tap-fd, "off" = the binary has no tap, None = no run yet
-        self.adc_every = 0        # gui-07: K passed as --tap-adc-every (0 = not passed)
+        self.adc_every = 0        # K passed as --tap-adc-every (0 = not passed)
         self.adc_reason = None    # why not: "off" | "no_dca" | "no_adc_tap" | "no_tap"; None = ADC tap on
-        self.adc_geom_err = ""    # gui-44: why the ADC views cannot build their geometry from this run's cfg ("" = they can)
+        self.adc_geom_err = ""    # why the ADC views cannot build their geometry from this run's cfg ("" = they can)
 
     # ---- validate -------------------------------------------------------------------------------
     def _bin(self) -> Path:
@@ -284,7 +284,7 @@ class DriverManager:
     def start(self, config: str | os.PathLike | None = None, frames: int | None = None, duration: float | None = None,
               skip_configure: bool = False, adc_every: int | None = None, setup: dict | None = None,
               overrides: dict | None = None) -> dict:
-        """Start a run from a saved system JSON (`config`, plus `overrides`) or a quick `setup` (gui-37). Either way the
+        """Start a run from a saved system JSON (`config`, plus `overrides`) or a quick `setup`. Either way the
         driver runs `<run folder>/session.json`, written here with the cfg copy; a refused start leaves no folder."""
         if (config is None) == (setup is None):
             raise DriverError("give exactly one of config (a saved system JSON) or setup (a quick setup)", 422)
@@ -342,7 +342,7 @@ class DriverManager:
                     self.t_start = time.time()
                     rfd = wfd = None
                     tap_ok = self.tap_supported(b)
-                    # gui-07 ADC views: K = None -> every frame (1), 0 = off. Passed only when the run has a DCA1000 stream and
+                    # ADC views: K = None -> every frame (1), 0 = off. Passed only when the run has a DCA1000 stream and
                     # the binary's usage text lists --tap-adc-every (an older build keeps working without it).
                     k = 1 if adc_every is None else max(0, int(adc_every))
                     reason = None
@@ -517,7 +517,7 @@ class DriverManager:
             self.emit(fw_msg)
 
     def _firmware_line(self, line):
-        """gui-33: fold the driver's firmware-check output into `fw_check`; returns the driver_firmware event on a change.
+        """Fold the driver's firmware-check output into `fw_check`; returns the driver_firmware event on a change.
         Caller holds the lock."""
         new = parse_firmware_line(line)
         if new is not None:
@@ -538,12 +538,12 @@ class DriverManager:
             if lines:
                 self.emit({"type": "driver_log_batch", "run": self.run_id, "lines": lines})
 
-    # ---- board command transcript (gui-34) -------------------------------------------------------
+    # ---- board command transcript -------------------------------------------------------
     def _cli_add(self, **e) -> dict:
         self._cli_seq += 1
         entry = {"seq": self._cli_seq, "i": None, "n": None, "tag": None, "cmd": "", "ok": False, "verdict": "ERROR",
                  "reply": "", "ms": None, **e}
-        entry["probe"] = entry.get("tag") == "id"   # gui-39: `cli [id] sarStats -> ERROR` is a firmware probe, not a failed command
+        entry["probe"] = entry.get("tag") == "id"   # `cli [id] sarStats -> ERROR` is a firmware probe, not a failed command
         if len(self.cli) < CLI_MAX:
             self.cli.append(entry)
         return {"type": "driver_cli", "run": self.run_id, "entry": entry, "first_fail": first_fail(self.cli)}

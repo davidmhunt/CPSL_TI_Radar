@@ -1,4 +1,4 @@
-"""radar-40 Step 3: the Configs tab is declared, wired and has the markup its script looks up (static, no browser)."""
+"""The Configs tab is declared, wired and has the markup its script looks up (static, no browser)."""
 import re
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""HTTP API for driver run control (gui-05): /api/driver/{configs,validate,start,stop,status}."""
+"""HTTP API for driver run control: /api/driver/{configs,validate,start,stop,status}."""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,7 @@ class ConfigReq(BaseModel):
 
 
 class Overrides(BaseModel):
-    """What a start may change in a saved config (gui-37). null = leave the saved value."""
+    """What a start may change in a saved config. null = leave the saved value."""
     model_config = ConfigDict(extra="forbid")
     save_adc_frames: bool | None = None
     save_raw_lvds: bool | None = None
@@ -66,7 +66,7 @@ class StartReq(BaseModel):
     frames: int | None = Field(None, ge=1)
     duration: float | None = Field(None, gt=0)
     skip_configure: bool = False   # the board was already configured this power-up (once-per-boot boards): just stream
-    adc_every: int | None = Field(None, ge=0)   # gui-07 ADC views: null = every frame (K=1), 0 = off, K = every K-th frame
+    adc_every: int | None = Field(None, ge=0)   # ADC views: null = every frame (K=1), 0 = off, K = every K-th frame
 
 
 def once_per_boot(board) -> bool:
@@ -94,10 +94,10 @@ def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
                 o = j.get("output") if isinstance(j.get("output"), dict) else {}
                 fw = j.get("firmware") if isinstance(j.get("firmware"), str) else None
                 out.append({"name": p.stem, "group": group, "path": rel, "board": j.get("board"),
-                            "firmware": fw,        # null = the file lacks the mandatory key (gui-04): the Radar tab marks it
+                            "firmware": fw,        # null = the file lacks the mandatory key: the Radar tab marks it
                             "firmware_hint": None if fw else sysjson.infer_firmware(j),   # what the Add-firmware button preselects
                             "once_per_boot": once_per_boot(j.get("board")),
-                            # what the file records on its own (gui-37: the Radar tab's recording boxes start from these)
+                            # what the file records on its own (the Radar tab's recording boxes start from these)
                             "saves": {k: bool(o.get(k)) for k in session_cfg.SAVE_KEYS},
                             "dca": bool((j.get("dca1000") or {}).get("enabled")),
                             "serial": bool((j.get("serial_stream") or {}).get("enabled"))})
@@ -105,7 +105,7 @@ def list_configs(user_dir: Path, system_dir: Path) -> list[dict]:
 
 
 def list_orphan_cfgs(user_dir: Path) -> list[dict]:
-    """gui-39 Q1: user .cfg files that no JSON in config/user names as its radar_cfg (a JSON resolves its cfg next to itself),
+    """User .cfg files that no JSON in config/user names as its radar_cfg (a JSON resolves its cfg next to itself),
     so the saved-config list cannot show them. The Radar tab greys them out with an "Open in Configure" link; Save there
     creates the JSON."""
     root = Path(user_dir)
@@ -211,7 +211,7 @@ def make_router(mgr: DriverManager, user_dir=None, system_dir=None) -> APIRouter
 
     @r.post("/configs/firmware")
     def add_firmware(req: AddFirmwareReq):
-        """gui-04 Step 2b: add the mandatory "firmware" key to a config/user system JSON that lacks it (never overwrites a key; the
+        """Add the mandatory "firmware" key to a config/user system JSON that lacks it (never overwrites a key; the
         previous bytes stay as <name>.json.bak). The only path that edits an existing config/user file besides config/save."""
         src = resolve(req.config)
         try:

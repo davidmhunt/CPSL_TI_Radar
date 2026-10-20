@@ -1,4 +1,4 @@
-"""gui-29 Step 1: IWR6843ODS antenna pairing (azimuth TX1+TX2, elevation TX3) vs IWR6843 ISK (azimuth TX1+TX3,
+"""IWR6843ODS antenna pairing (azimuth TX1+TX2, elevation TX3) vs IWR6843 ISK (azimuth TX1+TX3,
 elevation TX2) in metrics / validate / generate (docs/developer/radar_notes.md#ods-antenna). Hardware-free."""
 import math
 

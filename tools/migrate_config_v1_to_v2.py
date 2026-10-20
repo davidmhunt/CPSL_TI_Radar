@@ -19,7 +19,7 @@ v2 are left alone, so running it twice changes nothing. Without
 reported and the file is not converted (``--drop-unmapped`` converts it
 anyway, dropping the key).
 
-``--add-firmware`` also handles v2 files that lack the mandatory ``firmware`` key (gui-04): it inserts the id right
+``--add-firmware`` also handles v2 files that lack the mandatory ``firmware`` key: it inserts the id right
 after ``board`` (inferred: a board with one firmware -> it, IWR1843/IWR6843/IWR6843ODS -> demo, IWR1443 -> dca1000_raw
 if dca1000.enabled else demo; ``--firmware`` overrides), is idempotent, and with ``--check`` reports the files still
 missing it (exit 1). A v1 conversion always writes ``firmware`` (same inference).
@@ -27,7 +27,7 @@ missing it (exit 1). A v1 conversion always writes ``firmware`` (same inference)
 Mapping (v1 -> v2):
     verbose                                   -> runtime.log_level ("debug" if true, else "info")
     TI_Radar_Config_Management.TI_Radar_config_path -> radar_cfg (same relative path; a shipped cfg that moved in
-                                                 the gui-38 reorganisation is rewritten via config/moved_paths.json,
+                                                 the config reorganisation is rewritten via config/moved_paths.json,
                                                  and so is a v2 file's radar_cfg under --in-place / --check)
     CLI_Controller.CLI_port                   -> cli.port
     CLI_Controller.{baud_rate,cmd_timeout_ms} -> board_overrides.cli.{baud,cmd_timeout_ms}
@@ -69,7 +69,7 @@ MOVED_PATHS = Path(__file__).resolve().parent.parent / "CPSL_TI_Radar_cpp" / "co
 
 
 def remap_radar_cfg(value):
-    """gui-38: a radar_cfg that points at a pre-reorganisation shipped cfg (config/moved_paths.json "radar") is
+    """A radar_cfg that points at a pre-reorganisation shipped cfg (config/moved_paths.json "radar") is
     rewritten to its new <BOARD>/<firmware>/ location. Any other value, and an already-new one, comes back unchanged."""
     if not isinstance(value, str) or "radar/" not in value or not MOVED_PATHS.is_file():
         return value

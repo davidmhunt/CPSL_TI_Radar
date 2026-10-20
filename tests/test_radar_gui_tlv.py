@@ -1,4 +1,4 @@
-"""TLV dialect parsing (gui-06) and runtime source switching. The Python serial source was deleted in gui-37 Step 6: a board
+"""TLV dialect parsing and runtime source switching. The Python serial source was deleted: a board
 session is always the C++ driver. Frames mirror CPSL_TI_Radar_cpp/tests/uart_test_frames.hpp."""
 import struct
 import time
@@ -115,7 +115,7 @@ def frames_from(ws, n, timeout=8):
 
 @pytest.mark.parametrize("body", [{"kind": "serial"}, {"kind": "serial", "board": "IWR1843", "cfg_id": "user:rig1843.cfg"}])
 def test_serial_source_removed_410(api, body):
-    """gui-37 Step 6: the Python serial source is gone; a board session is POST /api/driver/start."""
+    """The Python serial source is gone; a board session is POST /api/driver/start."""
     with api as c:
         r = c.post("/api/source", json=body)
         assert r.status_code == 410 and "driver" in r.json()["detail"]

@@ -1,9 +1,9 @@
-"""Tune API (radar-37): an RX-gain sweep as a background job, /api/tune/{info,start,status,cancel}.
+"""Tune API: an RX-gain sweep as a background job, /api/tune/{info,start,status,cancel}.
 
 One sweep = one run folder `runs/gui/<UTC>_tune_<config>/` holding the base cfg copy (`radar.cfg`), `tune.json` (params, rows,
 suggestion), `tune.csv`, `plot.json`, and one `step_g<NN>/` per gain (the cfg copy at that gain, its temporary system JSON,
 the driver run folder with session.json / driver.log, and out/chirp_meta.csv). A step is a FULL reconfigure by a fresh driver run on a temporary cfg copy + system
-JSON copy (a profileCfg-only change between sensorStop/sensorStart is rejected by the firmware: radar-37 Step 1, runs/radar37_gate)
+JSON copy (a profileCfg-only change between sensorStop/sensorStart is rejected by the firmware; see runs/radar37_gate)
 -- no power cycle. The sweep never applies anything to the user's setup and never opens `config/user/` for write: that
 directory is only read (the base system JSON and its cfg are copied from it).
 
@@ -55,7 +55,7 @@ def _board_firmware(doc: dict) -> tuple[str | None, str | None]:
 
 
 def gain_range_of(doc: dict) -> dict | None:
-    """The board's {min, max, step, ...} RX gain (radar-36) for a system JSON's board/firmware, or None."""
+    """The board's {min, max, step, ...} RX gain for a system JSON's board/firmware, or None."""
     gb, fw = _board_firmware(doc)
     if not gb:
         return None

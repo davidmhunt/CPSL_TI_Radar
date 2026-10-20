@@ -1,4 +1,4 @@
-"""radar_gui.cfg: parse, metrics and per-board validation (gui-02 Step 1). Hardware-free."""
+"""radar_gui.cfg: parse, metrics and per-board validation. Hardware-free."""
 import json
 import re
 from pathlib import Path
@@ -239,14 +239,14 @@ def test_shipped_cfg_parses_and_validates(path):
     rep = validate(parse_cfg_file(path), board, firmware_for(path))
     json.dumps(rep.to_dict())
     assert rep.metrics is not None, [i.message for i in rep.issues]
-    # shipped cfgs run on hardware: any error here is either a real cfg problem or a wrong rule (gui-33: every shipped
-    # IWR1843 cfg now carries calibData, which the stock SDK 3.6 demo requires; gui-38: the SDK 2 cfgs live under IWR1443/).
+    # shipped cfgs run on hardware: any error here is either a real cfg problem or a wrong rule (every shipped
+    # IWR1843 cfg now carries calibData, which the stock SDK 3.6 demo requires; the SDK 2 cfgs live under IWR1443/).
     errs = list(rep.errors)
     assert not errs, [i.message for i in errs]
 
 
 # ---------------------------------------------------------------------------------------------
-# generate() (gui-02 Step 2)
+# generate()
 
 import time
 
@@ -277,7 +277,7 @@ def test_generate_round_trips_targets_and_validates_clean(board, fw, targets):
     assert m.duty_cycle <= 0.9
     # no warnings for the typical targets either, apart from the cascade's standing notes
     # (cascade at 5 m needs a sample rate between TI's tested 5000/10000 ksps, which is a legitimate warning)
-    # radar-36: the cascade generator's built-in rxGain 30 is below the AWR2243 datasheet minimum of 32 dB; it runs on the bench
+    # the cascade generator's built-in rxGain 30 is below the AWR2243 datasheet minimum of 32 dB; it runs on the bench
     # (docs/developer/radar_notes.md#hpf-rxgain-and-adc, "Cascade rxGain 30"), so it is a standing, honest warning, not a defect to fix here
     assert not [i for i in r.report.warnings if i.code not in ("sample_rate_untested", "rx_gain")], \
         [i.message for i in r.report.warnings]
@@ -344,7 +344,7 @@ def test_generate_output_mode_is_a_deprecated_alias():
         == "bad_output_mode"
 
 
-# --- firmware descriptors (gui-10) --------------------------------------------------------------------
+# --- firmware descriptors --------------------------------------------------------------------
 
 def _descriptor_files():
     from radar_gui.cfg import firmware as fwmod
@@ -395,7 +395,7 @@ def test_boards_list_their_firmwares_and_agree_with_the_descriptors():
     assert fwmod.check_boards() == []
     for p in sorted(fwmod.BOARDS_DIR.glob("*.json")):   # every board (incl. IWR1843_SAR) lists >= 1 firmware
         assert fwmod.board_firmwares(p.stem), p.name
-    assert fwmod.board_firmwares("IWR1843") == ["demo", "iwr1843_sar_lvds"]   # gui-30: dca1000_raw is IWR1443-only
+    assert fwmod.board_firmwares("IWR1843") == ["demo", "iwr1843_sar_lvds"]   # dca1000_raw is IWR1443-only
     assert fwmod.board_firmwares("IWR1443") == ["demo", "dca1000_raw"]
     assert fwmod.board_firmwares("IWR6843") == fwmod.board_firmwares("IWR6843ODS") == ["demo"]
     assert set(fwmod.get("dca1000_raw")["templates"]) == {"IWR1443"}
@@ -433,7 +433,7 @@ def test_mimo_block_on_every_descriptor():
             assert m["scheme"] in ("tdm", "ddma") and isinstance(m["bpm"], bool) and m["source"] and m["confidence"], (fw["id"], b)
             assert {"max_chirps_per_loop", "subframes"} <= set(m)
             assert m["scheme"] == ("ddma" if fw["id"] == "cascade_ddm" else "tdm")
-    assert not fwmod.mimo("IWR1843", "demo")["bpm"] and fwmod.mimo("IWR6843", "demo")["bpm"]   # gui-39: the xwr18xx demo has no bpmCfg
+    assert not fwmod.mimo("IWR1843", "demo")["bpm"] and fwmod.mimo("IWR6843", "demo")["bpm"]   # the xwr18xx demo has no bpmCfg
     assert fwmod.mimo("IWR1443", "demo")["bpm"] is False                    # memo: unestablished -> false
     d = fwmod.mimo("IWR1843", "demo")
     assert (d["max_chirps_per_loop"], d["subframes"]) == (32, 4)
@@ -443,7 +443,7 @@ def test_mimo_block_on_every_descriptor():
     assert r["max_chirps_per_loop"] is None and r["subframes"] is None and r["confidence"] == "unverified"
     c = fwmod.mimo("AWR2243_CASCADE", "cascade_ddm")
     assert c["bpm"] is False and c["subframes"] == 0 and "8" in c["note"]
-    assert "radar_notes.md#chirp-patterns" in fwmod.mimo("IWR6843", "demo")["source"] and "mmw_cli.c" in d["source"]   # gui-39: 1843 override cites the SDK file
+    assert "radar_notes.md#chirp-patterns" in fwmod.mimo("IWR6843", "demo")["source"] and "mmw_cli.c" in d["source"]   # 1843 override cites the SDK file
     with pytest.raises(KeyError):
         fwmod.mimo("IWR1843", "nope")
 
@@ -507,7 +507,7 @@ def test_generated_text_only_changes_what_depends_on_targets():
     assert r.metrics.slope_mhz_us == pytest.approx(44.4, rel=0.03)
 
 
-# --- gui-13: per-board limits from the descriptors ---------------------------------------------------
+# --- per-board limits from the descriptors ---------------------------------------------------
 
 def _prof(path, old, new):
     return _mod(path, old, new)
@@ -580,7 +580,7 @@ def test_mimo_editable_flag():
     assert ids["cascade_ddm"]["mimo"]["editable"] is False and ids["demo"]["mimo"]["editable"] is True
 
 
-# --- gui-24: dataFmt set per firmware ------------------------------------------------------------
+# --- dataFmt set per firmware ------------------------------------------------------------
 
 def _fmt_cfg(fmt):
     return parse_cfg((RADAR / "IWR1843" / "demo" / "RadVel_10Hz.cfg").read_text().replace("lvdsStreamCfg -1 0 1 0", f"lvdsStreamCfg -1 0 {fmt} 0"))
@@ -610,7 +610,7 @@ def test_fmt4_on_dca1000_raw_warns_unverified():
     assert hit and hit[0].level == "warning" and "unverified" in hit[0].message
 
 
-# --- gui-30: IWR1843 + SAR firmware (driver_board alias, sar flavour, driver cfg_dialect) --------------------
+# --- IWR1843 + SAR firmware (driver_board alias, sar flavour, driver cfg_dialect) --------------------
 
 SAR_T = dict(max_range_m=100, max_velocity_ms=0.75, frame_rate_hz=2)
 
@@ -650,7 +650,7 @@ def test_sar_shipped_cfg_validates_without_errors_and_driver_dialect_is_enforced
     rep = validate(parse_cfg(no_calib), "IWR1843", "iwr1843_sar_lvds")
     assert not rep.ok and "missing_calibData" in {i.code for i in rep.errors}
     # the demo requires calibData too (SDK 3.6 xwr18xx sensorStart), but has no forbidden commands
-    assert "missing_calibData" in {i.code for i in validate(parse_cfg(no_calib), "IWR1843", "demo").issues}   # demo needs it too (gui-33 Step 4)
+    assert "missing_calibData" in {i.code for i in validate(parse_cfg(no_calib), "IWR1843", "demo").issues}   # demo needs it too
 
 
 def test_studio_dca_cfg_validates_for_1843_demo():
@@ -660,7 +660,7 @@ def test_studio_dca_cfg_validates_for_1843_demo():
     assert rep.ok and not rep.errors and not rep.warnings
 
 
-# --- gui-33 Step 4: cfg_rules / cli_overrides live in the firmware descriptors, one accessor ------------------
+# --- cfg_rules / cli_overrides live in the firmware descriptors, one accessor ------------------
 
 def test_cfg_rules_accessor_per_board_and_firmware():
     from radar_gui.cfg import firmware as fwmod

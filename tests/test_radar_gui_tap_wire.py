@@ -1,4 +1,4 @@
-"""Cross-check of the C++ live-tap encoder (gui-36 Step 1) against the Python reader.
+"""Cross-check of the C++ live-tap encoder against the Python reader.
 
 `CPSL_TI_Radar_cpp/tests/data/live_tap_golden.bin` is the byte stream test_live_tap.cpp asserts the C++
 encoder produces (hello, points with NaN -> null, adc); here `radar_gui/tap.py` parses the same file.

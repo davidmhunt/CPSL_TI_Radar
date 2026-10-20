@@ -1,4 +1,4 @@
-"""gui-15 Step 1: per-scheme chirp-pattern / BPM / subframe / profile validation rules, each with a violating cfg
+"""Per-scheme chirp-pattern / BPM / subframe / profile validation rules, each with a violating cfg
 and a passing counterpart (docs/design/mimo_modes.md section 4). Hardware-free."""
 import re
 from pathlib import Path
@@ -121,7 +121,7 @@ def test_bpm_on_a_bpm_false_firmware_is_error():
         r = rep(BPM, "IWR1843", "demo")
     assert lv(r, "bpm_unsupported") == ["error"] and not r.ok
     assert not lv(rep(BPM, "IWR6843", "demo"), "bpm_unsupported")        # the real xwr68xx demo allows it
-    assert lv(rep(BPM, "IWR1843", "demo"), "bpm_unsupported") == ["error"]   # gui-39: the xwr18xx demo has no bpmCfg
+    assert lv(rep(BPM, "IWR1843", "demo"), "bpm_unsupported") == ["error"]   # the xwr18xx demo has no bpmCfg
 
 
 def test_bpm_on_unverified_firmware_is_only_a_warning():
@@ -236,14 +236,14 @@ def test_shipped_cfgs_have_no_pattern_errors_and_only_known_warnings():
         errs = [i.message for i in r.errors]
         assert not errs, (str(p), errs)
         seen |= {(i.level, i.code) for i in r.issues} & {(l, c) for l in ("warning", "info", "error") for c in MIX}
-    # raw-ADC cfgs enable TX channels no chirp uses (reported, not an error). gui-38: the ODS cfgs now validate as
+    # raw-ADC cfgs enable TX channels no chirp uses (reported, not an error). the ODS cfgs now validate as
     # IWR6843ODS by folder, where their 1,2,4 order is the convention, so tx_order_convention no longer fires.
     assert seen == {("info", "tx_missing_from_loop")}, seen
 
 
 def test_tx_order_convention_is_per_board_ods_elevation_is_tx3():
-    # gui-25: ODS azimuth = TX1+TX2, elevation = TX3 (bit 4): 1,2,4 is clean, 1,4,2 warns; the ISK is the reverse
-    for fw in ("demo",):   # gui-30: dca1000_raw is IWR1443-only
+    # ODS azimuth = TX1+TX2, elevation = TX3 (bit 4): 1,2,4 is clean, 1,4,2 warns; the ISK is the reverse
+    for fw in ("demo",):   # dca1000_raw is IWR1443-only
         assert not lv(rep(tdm([1, 2, 4], tx=7), "IWR6843ODS", fw), "tx_order_convention")
         assert lv(rep(tdm([1, 4, 2], tx=7), "IWR6843ODS", fw), "tx_order_convention") == ["warning"]
         assert lv(rep(tdm([1, 2, 4], tx=7), "IWR6843", fw), "tx_order_convention") == ["warning"]

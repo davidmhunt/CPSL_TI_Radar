@@ -1,5 +1,5 @@
-"""gui-14 Step 2: chirp-sequence parse + MIMO-scheme-aware metrics against the hand-derived oracle
-(gui-14 directive Log, from docs/design/mimo_modes.md). Hardware-free."""
+"""Chirp-sequence parse + MIMO-scheme-aware metrics against the hand-derived oracle
+(from docs/design/mimo_modes.md). Hardware-free."""
 import json
 from pathlib import Path
 
@@ -155,10 +155,10 @@ def test_plain_cfg_has_no_subframes():
     assert metrics(parse_cfg_file(FIX / "s1_simo.cfg"), "IWR6843", "tdm").subframes == []
 
 
-# --- golden compare: every shipped cfg vs the pre-gui-14 output ----------------------------------
+# --- golden compare: every shipped cfg vs the pre-chirp-loop-model output ----------------------------------
 
 def test_golden_every_shipped_cfg_unchanged():
-    """The fixture is metrics() output from before gui-14 (key numeric fields). The directive Log lists
+    """The fixture is metrics() output from before the chirp-loop model (key numeric fields). The directive Log lists
     every diff: none in these fields (only the cascade azimuth note wording, not compared here)."""
     from test_radar_gui_cfg import SHIPPED, board_for
     gold = json.loads((FIX / "golden_metrics_pre_gui14.json").read_text())
@@ -173,7 +173,7 @@ def test_golden_every_shipped_cfg_unchanged():
             assert got[k][f] == want, (k, f)
 
 
-# --- gui-23: per-TX phase readout --------------------------------------------------------------
+# --- per-TX phase readout --------------------------------------------------------------
 
 def test_ddma_phase_table_6tx_cpl8():
     m = metrics(parse_cfg_file(RADAR / "AWR2243_CASCADE" / "cascade_ddm" / "shortrange.cfg"), "AWR2243_CASCADE", "ddma")

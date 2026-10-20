@@ -1,4 +1,4 @@
-"""Driver run control (gui-05 Step 1) against tests/fakes/fake_driver.py. No hardware, no real ports."""
+"""Driver run control against tests/fakes/fake_driver.py. No hardware, no real ports."""
 import json
 import subprocess
 import sys
@@ -260,7 +260,7 @@ def test_run_tab_is_served(env):
 
 
 def test_log_batches_keep_order_and_lose_nothing(env, monkeypatch):
-    """gui-09 D8: output lines reach the page as driver_log_batch, in order, and the tail is flushed before the exit state."""
+    """Output lines reach the page as driver_log_batch, in order, and the tail is flushed before the exit state."""
     make, cfg, _, _ = env
     monkeypatch.setenv("FAKE_DRIVER_LOG_LPS", "200")
     monkeypatch.setenv("FAKE_DRIVER_RATE", "50")
@@ -283,7 +283,7 @@ def test_log_batches_keep_order_and_lose_nothing(env, monkeypatch):
         assert lines[-1] == "Stopped."
 
 
-# ---- gui-33: the driver's `firmware:` check lines -> status.firmware_check -----------------------------------------
+# ---- the driver's `firmware:` check lines -> status.firmware_check -----------------------------------------
 from radar_gui.driver import parse_firmware_extra, parse_firmware_line  # noqa: E402
 
 FW_OK = "platform=xWR18xx sdk=03.06.02.00 device=IWR18xx ES 02.00"

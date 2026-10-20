@@ -66,7 +66,7 @@ def _frames(cfg: Cfg, cascade: bool) -> list[tuple[str, int, int, int]]:
 
 
 def mimo_issues(cfg: Cfg, board: str, m: Metrics, mm: dict | None, fw: dict | None) -> list[Issue]:
-    """Per-scheme chirp-pattern, BPM, subframe and profile rules (gui-15; docs/design/mimo_modes.md section 4).
+    """Per-scheme chirp-pattern, BPM, subframe and profile rules (docs/design/mimo_modes.md section 4).
     `mm` is the firmware's `mimo` block for `board` (None: no firmware known, only structural rules run).
     A rule whose own confidence or whose firmware's mimo confidence is unverified/low never yields an error."""
     out: list[Issue] = []
@@ -320,14 +320,14 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
     if issues:   # metrics would misread the fields
         return Report(board, False, issues)
 
-    # firmware cfg_rules: commands the firmware needs / rejects (gui-30/gui-33; data-driven, read through one accessor)
+    # firmware cfg_rules: commands the firmware needs / rejects (data-driven, read through one accessor)
     _fw0 = fwmod.get(firmware) if firmware else fwmod.default_for(board)
     rules = fwmod.cfg_rules(board, _fw0["id"] if _fw0 else None)
     dsrc = rules["source"]
     for name in rules["required_commands"]:
         if not cfg.has(name):
             issues.append(Issue("error", "missing_" + name, f"cfg has no {name}, which the {rules['firmware']} firmware requires on {board}", dsrc, "repo"))
-    for name in rules["skip_commands"]:   # gui-39: the driver drops these lines (`cli [skip] ...`); say so rather than let it look like a rejected command
+    for name in rules["skip_commands"]:   # the driver drops these lines (`cli [skip] ...`); say so rather than let it look like a rejected command
         if cfg.has(name):
             issues.append(Issue("warning", "skipped_" + name, f"{name}: not sent; the {board} {rules['firmware']} firmware has no such command (the driver skips the line)", dsrc, "repo"))
     for name in rules["forbidden_commands"]:
@@ -342,7 +342,7 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
         add("parse", "bad_cfg", str(e))
         return Report(board, False, issues)
 
-    # --- MIMO / chirp pattern / subframes / profiles (gui-15)
+    # --- MIMO / chirp pattern / subframes / profiles
     issues += mimo_issues(cfg, board, m, mm, _fw)
 
     # --- array sizes
@@ -411,7 +411,7 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
             f"ADC start {m.adc_start_us:g} + sampling {m.sampling_us:.2f} us = "
             f"{m.adc_start_us + m.sampling_us:.2f} us exceeds ramp end {m.ramp_us:g} us")
 
-    # --- profileCfg HPF codes and rxGain word (radar-36): bits 5:0 of rxGain are range/step-checked, bits 7:6 only looked up;
+    # --- profileCfg HPF codes and rxGain word: bits 5:0 of rxGain are range/step-checked, bits 7:6 only looked up;
     # a code outside the table is reported (never rewritten). Levels follow the limit entries (warning; weak confidence stays one).
     for pc in cfg.all("profileCfg"):
         try:
@@ -526,7 +526,7 @@ def validate(cfg: Cfg, board: str, firmware: str | None = None) -> Report:
                                 + (" [unverified set]" if _fm["confidence"] in ("unverified", "low") else ""),
                                 _fm["source"], _fm["confidence"]))
 
-    from . import detection   # gui-35: on-chip CFAR rules from the firmware descriptor (GUI-only, no C++ twin)
+    from . import detection   # on-chip CFAR rules from the firmware descriptor (GUI-only, no C++ twin)
 
     for lv, code, msg, src, conf in detection.issues(cfg, board, _fw0, m):
         issues.append(Issue(lv, code, msg, src, conf))

@@ -1,4 +1,4 @@
-"""Runtime source switching (gui-06): GET/POST /api/source, POST /api/source/stop, GET /api/source/boards."""
+"""Runtime source switching: GET/POST /api/source, POST /api/source/stop, GET /api/source/boards."""
 from __future__ import annotations
 
 import json
@@ -71,7 +71,7 @@ def replay_files(extra=None, runs_root=None) -> list[dict]:
 
 
 class SourceReq(BaseModel):
-    kind: Literal["mock", "replay", "serial"]   # "serial" only to answer 410 (gui-37 Step 6)
+    kind: Literal["mock", "replay", "serial"]   # "serial" only to answer 410
     file: str | None = None            # replay: TLV dump (default: the one the GUI was started with)
     dialect: Literal["sdk2", "sdk3", "mcuplus_cascade"] | None = None   # replay: TLV dialect (default: from the file name)
     rate_hz: float = 10.0
@@ -86,7 +86,7 @@ def make_router(hub, user_dir=None, run_root=None) -> APIRouter:
         for k in ("state", "msg"):
             if hasattr(s, k):
                 out["source_" + k] = getattr(s, k)
-        if s.name == "driver":   # gui-36: Live follows a driver run
+        if s.name == "driver":   # Live follows a driver run
             out.update(config=s.config, pid=s.pid, tap=s.tapped, frames_in=s.frames_in, skipped=s.skipped, hello=s.hello)
         return out
 

@@ -1,4 +1,4 @@
-"""gui-39 Step 1: bench-session-1 follow-ups in the Radar / Configure tabs: list refresh on every show, "Open in Radar" wording,
+"""Bench-session-1 follow-ups in the Radar / Configure tabs: list refresh on every show, "Open in Radar" wording,
 firmware-identify probes are not failures, and user .cfg files without a system JSON are listed (greyed) in the Radar tab."""
 import json
 import re
@@ -104,7 +104,7 @@ def test_save_button_does_not_pass_click_event_as_overwrite():
     assert not re.search(r"\.onclick\s*=\s*save\s*;", src)
 
 
-# ---- gui-41 A/B ----
+# ---- A/B ----
 def test_gui41_save_message_clears_on_reload_and_selection_change():
     run = js("run.js")
     assert "function clearSaveMsg()" in run

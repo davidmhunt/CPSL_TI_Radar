@@ -1,4 +1,4 @@
-"""gui-27: the chirp-construction diagram (web/js/profile.js) draws only fields the backend metrics supply. JS-free:
+"""The chirp-construction diagram (web/js/profile.js) draws only fields the backend metrics supply. JS-free:
 the field list is parsed out of profile.js (PROFILE_FIELDS) and checked against Metrics for several cfg flavours."""
 import re
 from pathlib import Path

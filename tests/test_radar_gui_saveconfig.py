@@ -1,4 +1,4 @@
-"""gui-37 Step 2: the configs listing carries what each file records, "Save to config" (POST /api/driver/config/save) writes the
+"""The configs listing carries what each file records, "Save to config" (POST /api/driver/config/save) writes the
 recording flags back into config/user/ (in place with a .bak, or as a copy; a shipped config is never overwritten), and run-folder
 serial captures are replayable. Temp dirs only."""
 import json

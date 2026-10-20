@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Layout-robust perf gate over saved `bench_pipeline` outputs (directive core-14).
+"""Layout-robust perf gate over saved `bench_pipeline` outputs.
 
 A perf change is measured as before/after pairs in two Release builds of the
 same tree: the default build and the `bench-aligned` preset build
 (`-falign-functions=64 -falign-loops=64`). Each build runs
 `bench_pipeline --frames 400` before/after interleaved x3; every run's stdout
 is saved to a file. This script reads those files and applies the gate
-(history.md, core-11 P1 ruling):
+(history.md, P1 ruling):
 
 * a row is a **regression** only if its mean ns/byte is more than the
   threshold (default 5%) slower **in both builds**; a shift in one build only

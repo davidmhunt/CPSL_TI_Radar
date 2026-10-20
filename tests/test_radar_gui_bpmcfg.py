@@ -1,4 +1,4 @@
-"""gui-39 Step 3: the IWR1843 stock demo has no bpmCfg command (SDK 3.6 xwr18xx mmw_cli.c; the xwr68xx demo has it).
+"""The IWR1843 stock demo has no bpmCfg command (SDK 3.6 xwr18xx mmw_cli.c; the xwr68xx demo has it).
 demo.json lists it under cfg_rules.IWR1843.skip_commands and sets mimo.boards.IWR1843.bpm false; the generator never emits
 it for the 1843, and the validator warns when a loaded cfg carries the line (the driver skips it: `cli [skip] bpmCfg`)."""
 import json

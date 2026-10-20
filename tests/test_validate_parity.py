@@ -1,4 +1,4 @@
-"""gui-04 Step 4: the real driver's `--validate --json` against the GUI's Python validate(): the same `ok` and the same
+"""The real driver's `--validate --json` against the GUI's Python validate(): the same `ok` and the same
 error-code set for every shipped system config and for the seeded-bad corpus (tests/fixtures/parity/).
 Skipped when no driver binary (build/, or $RADAR_GUI_DRIVER) supports `--json`."""
 import json
@@ -19,7 +19,7 @@ GUI_BOARD = {"IWR1843_SAR": "IWR1843"}   # the driver board that runs the SAR fi
 # Error codes only the Python validator emits; the driver does not port them, so they are dropped from the comparison:
 #  - the MIMO / chirp-pattern rules (need the GUI-only `mimo` block of the firmware descriptor),
 #  - lvds_fmt_unsupported (GUI-only `lvds_data_fmts`),
-#  - every cfar_* code (gui-35: on-chip CFAR editing is GUI-only by user ruling).
+#  - every cfar_* code (on-chip CFAR editing is GUI-only by user ruling).
 GUI_ONLY_CODES = frozenset({"subframes_unsupported", "chirps_span_profiles", "bpm_unsupported", "tx_pattern_invalid",
                             "tx_not_in_channelcfg", "lvds_fmt_unsupported"})
 

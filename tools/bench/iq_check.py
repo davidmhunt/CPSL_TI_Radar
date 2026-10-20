@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""I/Q order confirmation check for an IWR1843 DCA1000 capture (core-03 D9).
+"""I/Q order confirmation check for an IWR1843 DCA1000 capture.
 
 Input: adc_data.bin from a short ``save_to_file`` capture, the radar cfg used,
 and the measured distance (m) of a lone reflector.

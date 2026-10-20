@@ -1,4 +1,4 @@
-"""generate(board, targets): build a firmware-ready `.cfg` from high-level targets (gui-02 Step 2).
+"""generate(board, targets): build a firmware-ready `.cfg` from high-level targets.
 
 Generalises the solver of the retired v1 `cfggen.py` (git history, b416f61; cascade DDMA only) to the single-chip TDM
 boards. The boilerplate (everything that is not chirp/frame timing) comes from a shipped cfg of that
@@ -241,7 +241,7 @@ def generate(board: str, targets: Mapping[str, Any] | None = None, *, firmware: 
         n_given = _num(t_in, "num_samples")
         loops_given = _num(t_in, "num_loops")
         cfar_r, cfar_d = _num(t_in, "cfar_range_db"), _num(t_in, "cfar_doppler_db")
-        det = t_in.get("detection")        # gui-35: full CFAR values, applied after the aliases above
+        det = t_in.get("detection")        # full CFAR values, applied after the aliases above
         if det is not None and not isinstance(det, dict):
             raise CfgError("detection: expected an object")
         sar = mode == "sar"
@@ -412,7 +412,7 @@ def _assemble_candidate(board, fw_id, mode, tpl_rel, template, cand, n, rng, vma
         else:
             text = _single_text(board, mode, tpl_rel, template, cand, n, rng, vmax, rate, loops, cpl, tx_mask, rx_mask,
                                 cfar_r, cfar_d, chirp_masks, factor, bpm, data_fmt)
-        skip = set(fwmod.cfg_rules(board, fw_id)["skip_commands"])   # gui-39: lines the firmware has no command for (the driver would skip them anyway)
+        skip = set(fwmod.cfg_rules(board, fw_id)["skip_commands"])   # lines the firmware has no command for (the driver would skip them anyway)
         if skip:
             text = "\n".join(ln for ln in text.split("\n") if not (ln.split() and ln.split()[0] in skip))
         if det:

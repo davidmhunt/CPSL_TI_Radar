@@ -1,4 +1,4 @@
-"""radar-40: Configs tab backend (promote / delete / list). Every test works on a TEMP COPY of CPSL_TI_Radar_cpp/config
+"""Configs tab backend (promote / delete / list). Every test works on a TEMP COPY of CPSL_TI_Radar_cpp/config
 (system, radar, boards, firmware, limits, README, moved_paths) with its own config/user: the real tree is only read."""
 import hashlib
 import json
@@ -324,7 +324,7 @@ def test_delete_shipped_needs_both_confirms_and_restores_tree(env):
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["readme_updated"] and {x["id"] for x in j["results"]} == {js[0], cfgid}
-    assert all(x["action"] == "trashed" and "git status unavailable" in x["restore"] for x in j["results"])   # temp tree: no repo -> trash copy (radar-48 nit 2)
+    assert all(x["action"] == "trashed" and "git status unavailable" in x["restore"] for x in j["results"])   # temp tree: no repo -> trash copy
     after = digest(cfg)
     gone = {k for k in after if k.startswith(".")}
     assert not gone
@@ -490,7 +490,7 @@ def test_restore_hint_only_for_tracked_files(env):
     assert not (cfg / "system" / "IWR1843_iwr1843_sar_lvds_scratch.json").exists()
 
 
-# --- radar-48: owner warning, radar-40 nits, standalone .cfg promote -----------------------------------------------
+# --- owner warning, Configs-pane nits, standalone .cfg promote -----------------------------------------------
 
 _REAL_UID = ca._owner_uid
 

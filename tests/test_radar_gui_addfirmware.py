@@ -1,4 +1,4 @@
-"""gui-04 Step 2b: list_configs returns each file's `firmware`, and POST /api/driver/configs/firmware adds the mandatory key to a
+"""List_configs returns each file's `firmware`, and POST /api/driver/configs/firmware adds the mandatory key to a
 config/user system JSON (never overwrites, keeps a .bak, byte-identical to the migration tool). Temp dirs only."""
 import json
 import subprocess

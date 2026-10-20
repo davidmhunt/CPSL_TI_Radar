@@ -1,4 +1,4 @@
-"""The effective system JSON of one driver run (gui-37): `runs/gui/<UTC>_<name>/session.json` + the cfg copy `radar.cfg`.
+"""The effective system JSON of one driver run: `runs/gui/<UTC>_<name>/session.json` + the cfg copy `radar.cfg`.
 
 Every GUI start builds one, from either
   * a saved system JSON plus overrides (save flags, skip cfg, firmware check), or

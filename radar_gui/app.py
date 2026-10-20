@@ -24,7 +24,7 @@ WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
 class Hub:
     """Runs the current source and fans frames out to every connected browser (newest wins).
-    `set_source` swaps the source at runtime (gui-06)."""
+    `set_source` swaps the source at runtime."""
 
     def __init__(self, source: Source):
         self.source, self.clients = source, set()
@@ -165,7 +165,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
                            min_stop_grace=min_stop_grace, on_run=on_run)
 
     tune_mgr = TuneManager(driver, user_cfg_dir, system_cfg_dir, driver_bin, run_root)
-    driver.extern_busy = tune_mgr.busy_reason   # radar-37: no driver run starts while a Tune sweep is reconfiguring the radar
+    driver.extern_busy = tune_mgr.busy_reason   # no driver run starts while a Tune sweep is reconfiguring the radar
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -219,7 +219,7 @@ def create_app(source: Source, user_cfg_dir=None, driver_bin=None, system_cfg_di
 
     @app.websocket("/adc")
     async def adc_stream(ws: WebSocket):
-        """Binary ADC views (gui-07): each message = u32 header length + JSON header + arrays (radar_gui/adc.py `encode`).
+        """Binary ADC views: each message = u32 header length + JSON header + arrays (radar_gui/adc.py `encode`).
         Separate from /stream so heatmaps never delay point frames. Newest wins per client; the browser may send
         {"clutter": bool, "chirp": int} text messages to change the processing options."""
         await ws.accept()

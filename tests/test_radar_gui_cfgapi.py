@@ -1,4 +1,4 @@
-"""Configure-tab API (gui-03): analyze / generate / save / list, and the saved system JSON against the driver."""
+"""Configure-tab API: analyze / generate / save / list, and the saved system JSON against the driver."""
 import json
 import os
 import shutil
@@ -38,7 +38,7 @@ def test_firmware_list_per_board_and_generate_with_firmware(client):
     assert {f["id"] for f in allfw} >= {"demo", "dca1000_raw", "cascade_ddm", "iwr1843_sar_lvds"}
     assert not {"demo_stock", "demo_lvds"} & {f["id"] for f in allfw}
     f1843 = client.get("/api/cfg/firmware", params={"board": "IWR1843"}).json()["firmware"]
-    assert [f["id"] for f in f1843] == ["demo", "iwr1843_sar_lvds"]   # gui-30
+    assert [f["id"] for f in f1843] == ["demo", "iwr1843_sar_lvds"]
     assert [f["driver_board"] for f in f1843] == ["IWR1843", "IWR1843_SAR"]
     assert all("outputs" in f and f["template"] and f["mimo"]["scheme"] == "tdm" for f in f1843)
     f1443 = client.get("/api/cfg/firmware", params={"board": "IWR1443"}).json()["firmware"]
@@ -102,7 +102,7 @@ def test_save_writes_parseable_cfg_and_schema_v2_json(client):
     assert cfg.has("profileCfg")
     s = json.loads(Path(j["json_path"]).read_text())
     assert s["schema_version"] == 2 and s["board"] == "IWR1843" and s["radar_cfg"] == "t1.cfg"
-    assert s["firmware"] == "demo" and list(s)[:3] == ["schema_version", "board", "firmware"]   # gui-04: mandatory key, after board
+    assert s["firmware"] == "demo" and list(s)[:3] == ["schema_version", "board", "firmware"]   # mandatory key, after board
     assert s["dca1000"]["enabled"] and s["dca1000"]["cmd_port"] == 4092 and s["dca1000"]["data_port"] == 4094
     assert s["cli"]["port"] == "/dev/ttyACM0" and s["serial_stream"]["enabled"]
     # the saved cfg shows up in the listing
@@ -156,7 +156,7 @@ def test_saved_system_json_passes_driver_validate(client):
     assert "OK:" in p.stdout and "board:      IWR1843" in p.stdout
 
 
-# ---- gui-10 Step 2: firmware selector in the UI / save ----
+# ---- firmware selector in the UI / save ----
 def test_ui_has_firmware_selector_and_no_output_mode():
     js = (REPO / "radar_gui" / "web" / "js" / "cfg.js").read_text()
     html = (REPO / "radar_gui" / "web" / "index.html").read_text()
@@ -201,9 +201,9 @@ def test_save_uses_firmware_system_enables(client):
     assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
     s = saved("dca1000_raw", board="IWR1443", cfg_text=generate("IWR1443", T).text)
     assert not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"] and s["board"] == "IWR1443"
-    s = saved("iwr1843_sar_lvds", cfg_text=generate("IWR1843", T, firmware="iwr1843_sar_lvds").text)   # gui-30: driver board alias
+    s = saved("iwr1843_sar_lvds", cfg_text=generate("IWR1843", T, firmware="iwr1843_sar_lvds").text)   # driver board alias
     assert s["board"] == "IWR1843_SAR" and not s["serial_stream"]["enabled"] and s["dca1000"]["enabled"]
-    lvds_text = generate("IWR1843", {**T, "lvds": True}).text     # cfg LVDS on; system settings stay separate (gui-22)
+    lvds_text = generate("IWR1843", {**T, "lvds": True}).text     # cfg LVDS on; system settings stay separate
     s = saved("demo", cfg_text=lvds_text)
     assert s["serial_stream"]["enabled"] and not s["dca1000"]["enabled"]
     # explicit request values still win (the UI checkboxes)
@@ -217,7 +217,7 @@ def test_save_refuses_firmware_mismatch_unless_forced(client):
 
 
 def test_direct_mode_ui_served_and_flow(client):
-    """gui-11 step 2: the page has the mode toggle, cfg.js serves, and the seed/edit flow the UI drives works."""
+    """The page has the mode toggle, cfg.js serves, and the seed/edit flow the UI drives works."""
     html = client.get("/").text
     assert 'id="cInMode"' in html and "Chirp parameters" in html and 'id="pFields"' in html
     js = client.get("/js/cfg.js")
@@ -233,7 +233,7 @@ def test_direct_mode_ui_served_and_flow(client):
 
 
 def test_mimo_panel_payload_fields(client):
-    """gui-16: the Configure-tab MIMO panel reads these metrics fields (cfg.js renderMimo); no browser harness."""
+    """The Configure-tab MIMO panel reads these metrics fields (cfg.js renderMimo); no browser harness."""
     need = ("scheme", "bpm_enabled", "chirp_sequence", "n_bands", "loop_period_us", "pattern_period_us", "doppler_bins",
             "doppler_step_ms", "vmax_full_ms", "vmax_per_tx_ms", "lambda_mm", "derivations", "subframes", "n_tx",
             "n_virtual", "chirps_per_loop", "chirp_us", "idle_us", "ramp_us", "velocity_res_ms")
@@ -270,14 +270,14 @@ def test_save_warns_on_cfg_lvds_vs_dca1000_mismatch(client):
 
 
 def test_chirp_table_payloads(client):
-    """gui-16 step 2: the payloads the chirp table / presets post (cfg.js tableParams) and the fields it redraws from."""
+    """The payloads the chirp table / presets post (cfg.js tableParams) and the fields it redraws from."""
     js = client.get("/js/cfg.js").text
     assert 'id="mChirpTable"' in client.get("/").text and "chirp_tx_masks" in js and "bpm" in js
 
     def post(board, fw, base, params):
         return client.post("/api/cfg/params", json={"board": board, "firmware": fw, "base_cfg_text": base, "params": params}).json()
 
-    for board, bpm_ok in (("IWR1443", False), ("IWR1843", False), ("IWR6843", True)):   # gui-39: the xwr18xx demo has no bpmCfg
+    for board, bpm_ok in (("IWR1443", False), ("IWR1843", False), ("IWR6843", True)):   # the xwr18xx demo has no bpmCfg
         fw = client.get("/api/cfg/firmware", params={"board": board}).json()["firmware"][0]
         assert fw["mimo"]["bpm"] is bpm_ok and fw["mimo"]["max_chirps_per_loop"] != 0   # table shows the BPM preset only when true
     base = client.post("/api/cfg/generate", json={"board": "IWR1843", "targets": T, "firmware": "demo"}).json()["text"]
@@ -287,7 +287,7 @@ def test_chirp_table_payloads(client):
         r = post("IWR1843", "demo", base, {"chirp_tx_masks": masks})
         assert r["metrics"] and [c["tx_mask"] for c in r["metrics"]["chirp_sequence"]] == masks
         assert r["params"]["chirp_tx_masks"] == masks and r["metrics"]["scheme"] == "tdm" and not r["metrics"]["bpm_enabled"]
-    rej18 = post("IWR1843", "demo", base, {"bpm": True})              # gui-39: not on the IWR1843 stock demo
+    rej18 = post("IWR1843", "demo", base, {"bpm": True})              # not on the IWR1843 stock demo
     assert any(i["code"] == "params" and i["level"] == "error" for i in rej18["issues"])
     base68 = client.post("/api/cfg/generate", json={"board": "IWR6843", "targets": T, "firmware": "demo"}).json()["text"]
     r = post("IWR6843", "demo", base68, {"bpm": True})                  # BPM preset: only the flag is sent
@@ -304,7 +304,7 @@ def test_chirp_table_payloads(client):
 
 
 def test_save_sar_writes_the_driver_board_and_matches_the_shipped_system_json(client):
-    """gui-30: IWR1843 + iwr1843_sar_lvds saves the driver board IWR1843_SAR (descriptor driver_board), same schema as IWR1843_iwr1843_sar_lvds_SAR_2ms.json."""
+    """IWR1843 + iwr1843_sar_lvds saves the driver board IWR1843_SAR (descriptor driver_board), same schema as IWR1843_iwr1843_sar_lvds_SAR_2ms.json."""
     text = generate("IWR1843", T, firmware="iwr1843_sar_lvds").text
     r = client.post("/api/cfg/save", json={"board": "IWR1843", "name": "sar1", "cfg_text": text, "firmware": "iwr1843_sar_lvds"})
     assert r.status_code == 200, r.text
@@ -318,7 +318,7 @@ def test_save_sar_writes_the_driver_board_and_matches_the_shipped_system_json(cl
     assert d["ok"] and d["board"] == "IWR1843"                    # the GUI board stays IWR1843 everywhere but the saved JSON
 
 
-# ---- gui-39 Step 2: overwrite of user configs ----
+# ---- overwrite of user configs ----
 
 def _put_json(client, name="t1", **kw):
     doc = {"schema_version": 2, "board": "IWR1843", "firmware": "demo", "radar_cfg": f"{name}.cfg",

@@ -1,4 +1,4 @@
-"""gui-38: the shape of CPSL_TI_Radar_cpp/config/ (hardware-free).
+"""The shape of CPSL_TI_Radar_cpp/config/ (hardware-free).
 
 radar cfgs sit at radar/<BOARD>/<firmware>/<name>.cfg; system JSONs are named <BOARD>_<fw>_<purpose>[_<mount>].json;
 config/moved_paths.json maps every pre-reorganisation name to its new one.
@@ -35,7 +35,7 @@ def cfg_of(system_json: Path) -> Path:
 
 
 def test_counts():
-    # radar-40: the Configs pane adds and removes shipped files, so nothing here counts the tree. Floors only, and the
+    # the Configs pane adds and removes shipped files, so nothing here counts the tree. Floors only, and the
     # migration map must stay consistent with what is on disk (test_d checks every target exists).
     assert len(SYSTEMS) >= 40 and len(CFGS) >= 40
     assert MOVED["radar"] and MOVED["system"]
@@ -97,7 +97,7 @@ def test_e_system_name_matches_board_and_firmware(path):
     assert m.group(1) == gui_board(doc["board"]) and m.group(2) == doc["firmware"], path.name
 
 
-# --- config/README.md index (gui-38 Step 2) ---------------------------------------------------------------
+# --- config/README.md index ---------------------------------------------------------------
 
 README = (CONFIG / "README.md").read_text()
 _ROW = re.compile(r"^\| \[`([^`]+\.json)`\]\(system/([^)]+)\) \| ([^|]+?) \| ([^|]+?) \|", re.M)

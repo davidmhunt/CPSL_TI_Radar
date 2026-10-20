@@ -1,4 +1,4 @@
-"""The seeded-bad parity corpus (tests/fixtures/parity/, gui-04 Step 3b): manifest.json lists the error codes the
+"""The seeded-bad parity corpus (tests/fixtures/parity/): manifest.json lists the error codes the
 Python validator gives each cfg; the driver's ctest `test_validate_parity_corpus` checks the same lists against
 `--validate --json`. Step 4's tests/test_validate_parity.py compares the two live."""
 import json

@@ -1,5 +1,5 @@
 {
- "generator": "CPSL_TI_Radar_cpp/tests/data/sar_fmt2/make_fixtures.py (core-24)",
+ "generator": "CPSL_TI_Radar_cpp/tests/data/sar_fmt2/make_fixtures.py",
  "tools": "firmware_dev/projects/iwr1843_sar_lvds/tools (sar_synth.py, sar_parse.py)",
  "chirps_per_frame": 8,
  "scenarios": [

@@ -1,4 +1,4 @@
-"""gui-32: Settings tab API. Hardware-free: a fake /dev/serial/by-id mirroring the bench (symlinks to plain files in
+"""Settings tab API. Hardware-free: a fake /dev/serial/by-id mirroring the bench (symlinks to plain files in
 tmp_path, never a real port) and host_setup's FakeHost fixtures for the DCA checks."""
 import os
 

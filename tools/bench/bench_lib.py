@@ -206,7 +206,7 @@ def summarize(rows: list, events: list | None = None) -> dict:
             out["dca_dropped_packets_total"] = dca.get("dropped", 0)
             out["dca_dropped_packet_events_total"] = dca.get("drop_events", 0)
             out["dca_rx_overrun_count_final"] = dca.get("overrun", 0)
-            # since core-15: the RX path never discards (overrun stays 0);
+            # the RX path never discards (overrun stays 0);
             # a backlog the socket buffer could not hold is a kernel drop
             out["dca_kernel_drops_final"] = dca.get("kernel_drops", 0)
             out["dca_resyncs_final"] = dca.get("resyncs", 0)
@@ -256,11 +256,11 @@ def check_bin_size(actual: int, bytes_per_frame: int, received_frames: int,
                    stopped_by_sigint: bool) -> dict:
     """Compare adc_data.bin size with bytes_per_frame x received_frames.
 
-    Before core-11 the driver's SIGINT handler called exit() without
+    Before the stop-path fix the driver's SIGINT handler called exit() without
     destroying the Runner, so the ofstream was never flushed (896 B short in
     the baseline).  A short file on the SIGINT path is therefore classified
     separately from a genuine mismatch (it is still reported as a diff); a
-    build with the core-11 stop path should give "exact".
+    build with the fixed stop path should give "exact".
     """
     expected = bytes_per_frame * received_frames
     diff = expected - actual
