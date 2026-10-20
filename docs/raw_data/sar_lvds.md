@@ -4,12 +4,15 @@ Only what differs from the [pipeline](README.md). Not a TI-published format: TI'
 
 ## Stream
 
-```
- dataFmt 2, one LVDS packet per chirp (B bytes), no header, enableSW 0:
- [ ADC payload: 4 x R x Ns ][ metadata slot 0: 32 B ][ metadata slot 1: 32 B ]
-                              ^ record for chirp k in slot (k mod 2)
- B = H + 4 x R x Ns + 64   (H = 0, 56 or 64 bytes of header/padding)
-```
+`dataFmt` 2, one LVDS packet per chirp (B bytes), no header, `enableSW` 0:
+
+| Order | Part | Size | Note |
+|---|---|---|---|
+| 1 | ADC payload | 4 x R x Ns | |
+| 2 | metadata slot 0 | 32 B | record for chirp k sits in slot (k mod 2) |
+| 3 | metadata slot 1 | 32 B | record for chirp k sits in slot (k mod 2) |
+
+B = H + 4 x R x Ns + 64 (H = 0, 56 or 64 bytes of header/padding).
 
 - `dataFmt` 2: ADC plus two 32-byte per-chirp metadata record slots (CBUFF `ADC_USER`).
 - Requires complex output, ChanInterleave 1 (non-interleaved), R x Ns even, and `enableSW` 0.

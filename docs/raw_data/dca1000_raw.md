@@ -4,13 +4,15 @@ Only what differs from the [pipeline](README.md). **Not verified on a bench:** n
 
 ## Stream
 
-```
- IWR1443, 4 lanes, interleaved (one lane per RX), R = 4:
- per ADC time step t:
-   file:  c(RX0) c(RX1) c(RX2) c(RX3)  c'(RX0) c'(RX1) c'(RX2) c'(RX3)  | next t
-          \_____ first component ____/ \____ second component ____/
- t runs over sample, then chirp; no header, no lvdsStreamCfg
-```
+IWR1443, 4 lanes, interleaved (one lane per RX), R = 4. Per ADC time step t, the file holds:
+
+| Part of time step t | File words |
+|---|---|
+| first component | c(RX0) c(RX1) c(RX2) c(RX3) |
+| second component | c'(RX0) c'(RX1) c'(RX2) c'(RX3) |
+| next t | the same two groups again |
+
+t runs over sample, then chirp; no header, no lvdsStreamCfg.
 
 - 4-lane complex, interleaved: per time step, one word per lane for the first component (RX0..RX3), then one per lane for the second. TI shows I first.
 - TI says the 4-lane file always carries four lane words with unused lanes zero. Our code assumes one lane per enabled RX. Latent, since all shipped IWR1443 configs enable 4 RX.

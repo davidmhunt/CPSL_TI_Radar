@@ -24,25 +24,44 @@ TI sources: IWR1843 data sheet (SWRS228B), mmWave SDK 3.6 user guide, xWR TRM (S
 
 ## 1. The pipeline in one picture
 
-```
- chirp  -> ADC (12-bit, I+Q per RX) -> ADC buffer -> CBUFF/LVDS (2 or 4 lanes)
- (RF)      in the radar chip           (per chirp)     |  16-bit words, optional header
-                                                       v
- array <- host reassembly <- UDP packets <------  DCA1000 capture card (FPGA)
- [rx][sample][chirp]   by byte count    10 B header + <=1462 B payload, over Ethernet
+```mermaid
+flowchart LR
+  A["chirp (RF)"] --> B["ADC (12-bit, I+Q per RX)<br/>in the radar chip"]
+  B --> C["ADC buffer<br/>(per chirp)"]
+  C --> D["CBUFF/LVDS (2 or 4 lanes)<br/>16-bit words, optional header"]
+  D --> E["DCA1000 capture card (FPGA)"]
+  E -->|"UDP packets: 10 B header + up to 1462 B payload, over Ethernet"| F["host reassembly<br/>by byte count"]
+  F --> G["array<br/>[rx][sample][chirp]"]
 ```
 
 The LVDS interface on the IWR1843/6843 is a debug interface, not a production one (TI data sheet note).
 
 ## 2. Frame and chirp timing
 
-```
- time ->
- |<------------------------ frame period ------------------------>|
- | chirp 0 | chirp 1 | ... | chirp Nc-1 |        blank (Tb)         | next frame
- \_ loop 0 _/\_ loop 1 _/ ...            (Nc = slots-per-loop x loops)
-   TX0  TX1    TX0  TX1                  one chirp = idle + ramp (Tc)
-        |<-- Ns ADC samples during the ramp -->|
+```mermaid
+flowchart LR
+  subgraph FR["frame period (time runs left to right)"]
+    direction LR
+    subgraph LP0["loop 0"]
+      direction LR
+      K0["chirp 0 (TX0)"] --> K1["chirp 1 (TX1)"]
+    end
+    subgraph LP1["loop 1"]
+      direction LR
+      K2["chirp 2 (TX0)"] --> K3["chirp 3 (TX1)"]
+    end
+    KD["..."]
+    KN["chirp Nc-1"]
+    BL["blank (Tb)"]
+    K1 --> K2
+    K3 --> KD --> KN --> BL
+  end
+  BL --> NX["next frame"]
+  subgraph CH["one chirp = idle + ramp (Tc)"]
+    direction LR
+    ID["idle"] --> RP["ramp: Ns ADC samples during the ramp"]
+  end
+  NC["Nc = slots-per-loop x loops"] -.- KN
 ```
 
 - A frame is (chirpEnd - chirpStart + 1) chirp slots times `numLoops` (`frameCfg`); chirps leave the radar in time order.
@@ -54,13 +73,20 @@ The LVDS interface on the IWR1843/6843 is a debug interface, not a production on
 
 ## 3. Sample encoding on the chip
 
-```
- one complex sample = 2 x int16 (little-endian, two's complement) = 4 bytes
- SampleSwap = 1 (stock demo):  [ Q (low address) | I ]     Q first
- SampleSwap = 0:               [ I (low address) | Q ]     I first
- each int16:  s s s s b11 ... b0   <- 12-bit ADC value in a 16-bit container
-              ^ sign-extended, LSB-aligned: hypothesis (see Unverified)
-```
+One complex sample = 2 x int16 (little-endian, two's complement) = 4 bytes.
+
+| SampleSwap | Lower address | Higher address | Order |
+|---|---|---|---|
+| 1 (stock demo) | Q | I | Q first |
+| 0 | I | Q | I first |
+
+Each int16 (16-bit container):
+
+| Bits 15..12 | Bits 11..0 |
+|---|---|
+| `s s s s` (sign-extended) | `b11 ... b0`: the 12-bit ADC value |
+
+Sign-extended, LSB-aligned: hypothesis (see Unverified).
 
 - The receive ADC is 12-bit and complex: I and Q per RX channel.
 - Over LVDS every value rides in a 16-bit container. The SDK demo supports only 16-bit and only complex output (`adcCfg 2 1`).
@@ -72,11 +98,13 @@ The LVDS interface on the IWR1843/6843 is a debug interface, not a production on
 
 ## 4. Over the LVDS lanes
 
-```
- IWR1843/6843, 2 lanes, SampleSwap=1, memory units u0 u1 u2 u3 = Q0 I0 Q1 I1
-   lane A:  Q0  Q1  | ...      file (A0 A1 B0 B1) = Q0 Q1 I0 I1
-   lane B:  I0  I1  | ...      i.e. two Q, then two I, repeating
-```
+IWR1843/6843, 2 lanes, SampleSwap=1. Memory units u0 u1 u2 u3 = Q0 I0 Q1 I1.
+
+| Where | Units | Content (each row repeats: "...") |
+|---|---|---|
+| lane A | u0 u2 | Q0 Q1 ... |
+| lane B | u1 u3 | I0 I1 ... |
+| file (A0 A1 B0 B1) | u0 u2 u1 u3 | Q0 Q1 I0 I1, i.e. two Q, then two I, repeating |
 
 - IWR1843/6843 have 2 LVDS data lanes plus a bit clock and a frame clock (DDR). The IWR1443 has 4 (see [dca1000_raw](dca1000_raw.md)).
 - Data reach the pins through CBUFF, which reads the ADC buffer by EDMA. Minimum packet is 64 B. A session's size must be a multiple of 8 B; for 4 B samples this means R x Ns is even (enforced by our driver only for the SAR format).
@@ -88,27 +116,26 @@ The LVDS interface on the IWR1843/6843 is a debug interface, not a production on
 
 ## 5. Headers: what they carry
 
-```
- no header (dataFmt 1, enableHeader 0):  [ ADC payload ........................ ]
- HSI header on:   [ data-card hdr 16 B ][ SDK hdr ][ pad ][ ADC payload ][ pad ]
-                    8 B ID + 8 B length   CBUFF session description
- SAR (dataFmt 2): [ ADC payload (4 x R x Ns) ][ 2 x 32 B chirp metadata ]      -> sar_lvds.md: H, record fields, lane undo
-```
+| Mode | Layout, in stream order |
+|---|---|
+| No header (`dataFmt` 1, `enableHeader` 0) | `[ ADC payload ]` |
+| HSI header on | `[ data-card hdr 16 B ]` (8 B ID + 8 B length), `[ SDK hdr ]` (CBUFF session description), `[ pad ]`, `[ ADC payload ]`, `[ pad ]` |
+| SAR (`dataFmt` 2) | `[ ADC payload (4 x R x Ns) ]`, `[ 2 x 32 B chirp metadata ]`; see [sar_lvds.md](sar_lvds.md): H, record fields, lane undo |
 
 - `lvdsStreamCfg <subFrameIdx> <enableHeader> <dataFmt> <enableSW>`: `enableHeader` 1 adds an HSI header to all active streams; `enableSW` 1 adds a software session and needs `enableHeader` 1. Raw mode (no header) captures the payload only, "no header or extra bytes/padding".
 - Our driver counts header bytes only for the SAR format, so **header-on captures are supported only for SAR**; every other path here uses `enableHeader` 0. The header layout (IDs `0x0CDA0ADC0CDA0ADC` and `0x09CC0CC909CC0CC9`, CP/CQ blocks) is in the appendix and is not needed to decode anything in this document.
 
 ## 6. DCA1000 to UDP
 
-```
- UDP datagram, raw mode (1472 B max on the wire):
- byte  0         4                  10                                  1472
-       +---------+------------------+------------------------------------+
-       | seq u32 | byte count u48   | raw payload (48..1462 B)           |
-       | LE      | LE               | LVDS bytes exactly as received     |
-       +---------+------------------+------------------------------------+
-    data-separated mode adds 8 B ID + 8 B length, payload <= 1446 B
-```
+UDP datagram, raw mode (1472 B max on the wire):
+
+| Byte offset | Width | Field | Note |
+|---|---|---|---|
+| 0 | 4 B | seq u32 | LE |
+| 4 | 6 B | byte count u48 | LE |
+| 10 | 48..1462 B | raw payload | LVDS bytes exactly as received; datagram ends at byte 1472 |
+
+Data-separated mode adds 8 B ID + 8 B length, payload at most 1446 B.
 
 - The DCA1000 takes LVDS in and sends UDP out. Raw mode captures all LVDS data as is; data-separated mode splits by header. Mode comes from SW2.4 or software. Our driver always asks for raw.
 - Defaults: FPGA 192.168.33.180, host 192.168.33.30, command port 4096, ADC data port 4098.
@@ -130,18 +157,16 @@ The LVDS interface on the IWR1843/6843 is a debug interface, not a production on
 
 ## 7. Host reassembly and array axes
 
-```
- UDP payloads          stream (byte count = offset)         frames
- [p1][p2][p3]...  -->  |<---- frame 0 ---->|<-- frame 1 -->| ...    B bytes each
- memcpy at offset;     lost bytes stay zero (missing_bytes)
- frame f = offset / B
-                  |
-                  v  ADCCubeConverter: undo lane order, apply I/Q order
- C++ cube  [rx][sample][chirp]  complex<int16>   (chirp innermost)
- adc_data.bin       [chirp][rx][sample][re,im] int16
- live tap / GUI     [rx][sample][chirp][I,Q] int16   (radar_gui reshape)
- ROS ADCDataCube    dims rx_channel/sample/chirp, int16[] real_data, imag_data
- HDF5 radar_adc/data int16 (N, 2, rx, sample, chirp)   index 0 = I, 1 = Q
+```mermaid
+flowchart TD
+  P["UDP payloads<br/>[p1][p2][p3]..."] -->|"memcpy at offset;<br/>frame f = offset / B"| S["stream (byte count = offset)<br/>frame 0, frame 1, ...<br/>B bytes each"]
+  S -.- Z["lost bytes stay zero (missing_bytes)"]
+  S --> C["ADCCubeConverter:<br/>undo lane order, apply I/Q order"]
+  C --> O1["C++ cube [rx][sample][chirp]<br/>complex#lt;int16#gt; (chirp innermost)"]
+  C --> O2["adc_data.bin<br/>[chirp][rx][sample][re,im] int16"]
+  C --> O3["live tap / GUI<br/>[rx][sample][chirp][I,Q] int16<br/>(radar_gui reshape)"]
+  C --> O4["ROS ADCDataCube<br/>dims rx_channel/sample/chirp,<br/>int16[] real_data, imag_data"]
+  C --> O5["HDF5 radar_adc/data<br/>int16 (N, 2, rx, sample, chirp)<br/>index 0 = I, 1 = Q"]
 ```
 
 - A plain demo frame (dataFmt 1, no header) is B = 4 x R x Ns x Nc bytes. The tracked golden frame is 4 x 4 x 128 x 256 = 524 288 B.
@@ -175,14 +200,19 @@ Input: R, Ns, Nc from the cfg, and one frame of B = 4 x R x Ns x Nc bytes. `deco
 
 Worked example: the first 16 bytes of `CPSL_TI_Radar_cpp/tests/data/iq/iwr1843_R0.9m_frame99.bin` (R = 4, Ns = 128, Nc = 256), decoded with `decode_example.py`.
 
-```
- bytes:  b7 00 ad 00 d3 00 51 00 | ac 00 4a ff 0e 00 c1 ff
- int16:    183  173  211   81     |   172 -182   14  -63         file order u0 u2 u1 u3
- undo:   u0=183 u1=211 u2=173 u3=81 | u0=172 u1=14 u2=-182 u3=-63   memory order
- pairs:  (Q,I) = (183,211) (173,81) | (172,14) (-182,-63)       samples 0 1 | 2 3 of chirp 0, rx 0
- cube[rx0][sample 0..3][chirp 0] = 211+183j, 81+173j, 14+172j, -63-182j
- HDF5 (I,Q) for sample 0..3     = [211,183] [81,173] [14,172] [-63,-182]
-```
+First 16 bytes, as two 8-byte groups:
+
+| Step | Group 1 | Group 2 | Note |
+|---|---|---|---|
+| bytes | `b7 00 ad 00 d3 00 51 00` | `ac 00 4a ff 0e 00 c1 ff` | |
+| int16 | 183 173 211 81 | 172 -182 14 -63 | file order u0 u2 u1 u3 |
+| undo | u0=183 u1=211 u2=173 u3=81 | u0=172 u1=14 u2=-182 u3=-63 | memory order |
+| pairs (Q,I) | (183,211) (173,81) | (172,14) (-182,-63) | samples 0 1 (group 1) and 2 3 (group 2) of chirp 0, rx 0 |
+
+| Result | Values |
+|---|---|
+| `cube[rx0][sample 0..3][chirp 0]` | 211+183j, 81+173j, 14+172j, -63-182j |
+| HDF5 (I,Q) for sample 0..3 | [211,183] [81,173] [14,172] [-63,-182] |
 
 ## Unverified
 
