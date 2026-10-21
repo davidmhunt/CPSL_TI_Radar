@@ -7,7 +7,7 @@ Run every command from the repository root. Only one person at a time may hold t
 ## 1. Prerequisites
 
 1. Build the driver (Release; `bench_run.py` refuses other builds) and check the host by following [tutorial 1](../tutorials/01_install.md) (build) and [tutorial 2](../tutorials/02_host_setup.md) (host). Nothing may show MISSING; the host needs the DCA1000 NIC at `192.168.33.30/24` and your user in `dialout`.
-2. The board runs the matching image: SDK 3.6 mmWave demo on the IWR1843. For flashing and building see [`../firmware.md`](../firmware.md) and [`firmware_dev/README.md`](../../firmware_dev/README.md). For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
+2. The board runs the matching image: SDK 3.6 mmWave demo on the IWR1843. For flashing and building see [`../firmware.md`](../firmware.md) and [`firmware_dev/README.md`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev/blob/main/README.md). For the cascade, [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) Steps 2 to 4.
 3. About 600 MB of free disk per 60 s DCA run (raw captures in `tools/bench/runs/`, git-ignored).
 
 ## 2. Hardware setup (IWR1843 + DCA1000)

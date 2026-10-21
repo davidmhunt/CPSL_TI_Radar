@@ -1,6 +1,6 @@
 # `iwr1843_sar_lvds` (custom CBUFF firmware)
 
-Only what differs from the [pipeline](README.md). Not a TI-published format: TI's prebuilt CBUFF library leaves `ADC_USER` out, so this firmware rebuilds it. The byte-level specification is [`lvds_data_format.md`](../../firmware_dev/projects/iwr1843_sar_lvds/docs/lvds_data_format.md) in the firmware repo; it is not copied here.
+Only what differs from the [pipeline](README.md). Not a TI-published format: TI's prebuilt CBUFF library leaves `ADC_USER` out, so this firmware rebuilds it. The byte-level specification is [`lvds_data_format.md`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev/blob/main/projects/iwr1843_sar_lvds/docs/lvds_data_format.md) in the firmware repo; it is not copied here.
 
 ## Stream
 
