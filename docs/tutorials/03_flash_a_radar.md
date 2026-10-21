@@ -14,7 +14,7 @@ The board must run the image that matches the `"firmware"` key of the system con
 | IWR1843 `iwr1843_sar_lvds` | SAR / LVDS image | route 2 (`firmware_dev`) |
 | AWR2243 cascade `cascade_ddm` | cascade DDM demo | route 2; cascade steps: [`docs/hardware/cascade_setup.md`](../hardware/cascade_setup.md) |
 
-**Route 1, TI's SDK install.** Download mmWave SDK 3.6.x for Linux from [TI's mmWave SDK page](https://www.ti.com/tool/MMWAVE-SDK) (a free TI login) and run the installer. The prebuilt demo is in the install under `packages/ti/demo/xwr18xx/mmw/` (IWR1843; `xwr68xx` for the IWR6843); the image to flash is the `.bin` there (expected name `xwr18xx_mmw_demo.bin`; unverified, check the folder).
+**Route 1, TI's SDK install.** Download mmWave SDK 3.6.x for Linux from [TI's mmWave SDK page](https://www.ti.com/tool/MMWAVE-SDK) (a free TI login) and run the installer. The prebuilt demo is in the install under `packages/ti/demo/xwr18xx/mmw/` (IWR1843; `xwr68xx` for the IWR6843); the image to flash is the `.bin` there (`xwr18xx_mmw_demo.bin`).
 
 **Route 2, build it.** [`firmware_dev`](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev#readme) builds and flashes inside Docker, so you install no TI software, but it downloads about 3.6 GB of TI tools, wants about 25 GB of disk, and the image build is long (the cascade build alone is about 15 minutes). The `ti_stock_demos` project builds TI's own 3.6.02.00 demos unchanged (`iwr1843_demo.bin`, `iwr6843_demo.bin` in its `build/`). From this repo's root:
 
