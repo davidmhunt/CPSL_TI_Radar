@@ -98,6 +98,62 @@ does not send them ([config/boards/README.md](./config/boards/README.md), "TLV d
 call, the stop sequence, the stall policy and the threads, and the `adc_data.bin` layout ("Output
 files").
 
+## Running tests
+
+Unit tests live in `tests/` and need no radar, serial port, DCA1000 or network. They use a small in-tree harness (`tests/test_harness.hpp`), so there is nothing extra to install. Building the project builds them; run them with:
+
+```bash
+# after building as in tutorial 1
+ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure
+```
+
+The Python suite (`uv run pytest`, from the repo root) has a quick loop that skips the subprocess/driver/server tests: `uv run pytest -m "not slow"`.
+
+Each `tests/test_*.cpp` is one executable and one ctest test (config readers, TLV/serial frame parsing, DCA1000 packet assembly, ADC cube conversion, DCA1000 command encoding, frame publish ordering and the frame queue, the stop path: file flush, signal flag, CLI write errors). `test_radar_e2e_fake` runs a whole `Radar` on a fake CLI stream and an in-memory `ReplayPacketSource` (fakes in `tests/fake_transports.hpp`); `test_cli_stop` runs one on a fake CLI stream and a fake DCA1000 on loopback UDP (127.0.0.2); `test_radar_serial_fake` runs one on a fake serial data port, and `test_uart_parse` checks the serial frame parser on golden and malformed frames (fixtures in `tests/uart_test_frames.hpp`). No test opens a real serial port; `test_cli_stop` and `test_serial_latency_pty` use a pseudo-terminal. To add one, write `tests/test_<name>.cpp` with `TEST_CASE`s and a `TEST_MAIN()`, then add an `add_driver_test(...)` line to `tests/CMakeLists.txt`. The tests are characterization tests: they pin current behaviour. `KNOWN_BUG(...)` marks a bug that is not fixed yet; it starts failing once the bug is fixed, which is the cue to turn it into a normal check. Use `-DBUILD_TESTING=OFF` to skip building them.
+
+To run the same suite under AddressSanitizer and UndefinedBehaviorSanitizer (any report fails the test), use the `asan-ubsan` preset from `CPSL_TI_Radar_cpp/` (it builds in `build-asan-ubsan/`):
+
+```bash
+cd CPSL_TI_Radar_cpp
+cmake --preset asan-ubsan && cmake --build --preset asan-ubsan -j && ctest --preset asan-ubsan
+```
+
+`test_board_descriptor` covers the board descriptor files in [`config/boards/`](./config/boards/) (see "Board descriptors" below).
+
+### Replay benchmark (`ctest -C bench -L bench`)
+
+`bench/bench_pipeline` replays synthetic DCA1000 packets (clean, 1% dropped, duplicated/reordered) through `FrameAssembler` and the ADC converter, with no hardware. For each of three converter variants it prints frames/s, CPU ns per ADC byte and heap allocations per frame: (a) the driver's `ADCCubeConverter`, called as `DCA1000Handler` calls it, (b) a nested `[rx][sample][chirp]` cube with a reused buffer, and (c) a flat `[chirp][rx][sample]` buffer. (b) and (c) are bench-only kernels in `bench/converter_kernels.hpp`. The frame shape comes from `config/radar/IWR1843/demo/stress_test.cfg` unless you pass `--cfg`. The test is registered with `CONFIGURATIONS bench`, so the plain `ctest` run above never lists or runs it. `-C bench` adds it and `-L bench` runs only it. Use a Release build for numbers you can compare (the default build type, so the `-DCMAKE_BUILD_TYPE=Release` below is optional):
+
+```bash
+cmake -S CPSL_TI_Radar_cpp -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release -j
+ctest --test-dir build-release -C bench -L bench --verbose     # or: build-release/bench/bench_pipeline [--frames N] [--reps N]
+build-release/bench/bench_latency                              # frame complete -> next_adc_frame return, µs
+build-release/bench/bench_serial_latency --period-ms 50       # serial frame over a pty -> next_point_cloud return, µs
+```
+
+The `drv_*` rows (variant `(d)`) replay the same kind of stream through the driver's own `DCA1000Handler` (assembler, converter, frame publish and, for `drv_save`, `adc_data.bin`), the code the DCA worker thread runs. `drv_save` writes to a temp directory (`--tmp-dir`, default `/dev/shm`). Driver log messages go to a counting sink at `--log-level` (default `info`); the count per rep is in the "replay input" notes.
+
+**Perf gate (before/after a change).** Code placement alone can move a short kernel by tens of percent (one measured +76% on unchanged code). So a change is measured in two Release builds of each tree, the default one and the `bench-aligned` preset (`-falign-functions=64 -falign-loops=64`, a measurement build only), with `bench_pipeline --frames 400` run before/after interleaved three times per build. Save each run's stdout under a name with `before`/`after` and `default`/`aligned` in it, then:
+
+```bash
+cmake --preset bench-aligned && cmake --build --preset bench-aligned -j --target bench_pipeline
+uv run tools/bench/pipeline_gate.py runs/p3_{before,after}_{default,aligned}_{1,2,3}.txt
+```
+
+It prints a table per build (the runs' median ns/byte, Δ of the mean, allocs/frame) and fails (exit 1) only if a row is more than 5% slower in **both** builds, if allocations/frame rise, or if an "after" run is not golden. A shift in one build only is reported as layout noise.
+
+**Loopback RX path (`--udp`).** `bench_pipeline --udp` runs the real receive path with no hardware: a sender thread replays the clean synthetic stream over 127.0.0.1 into a `DCA1000Socket` (RX thread, packet ring) and a worker thread runs `DCA1000Handler::process_next_packet`, as the driver's DCA worker does. No DCA1000 command is sent. It prints one `udp ...` line of `key=value` pairs: frames and whether they are golden, packets sent and delivered, `discards` (user-space, the RX ring's overrun count), `kernel_drops` (the socket's drops column in `/proc/net/udp`) and `driver_kernel_drops` (the same count as `Stats::kernel_drops` sees it), `ring_full`, CPU ns per payload byte and the voluntary/involuntary context switches of the RX and worker threads (`getrusage`). It exits 1 only if frames are lost and no counter accounts for them.
+
+```bash
+build-release/bench/bench_pipeline --udp --frames 100                          # IWR1843 baseline rate, 3460 packets/s
+build-release/bench/bench_pipeline --udp --frames 400 --udp-rate max           # as fast as the sender goes
+build-release/bench/bench_pipeline --udp --frames 100 --stall-ms 200           # one 200 ms consumer stall mid-run: 0 discards, 0 kernel drops
+build-release/bench/bench_pipeline --udp --frames 100 --stall-ms 1000 --udp-rcvbuf 200000   # a stall beyond the buffer: counted kernel drops
+```
+
+`--stall-every K` repeats the stall every K frames; `--rx-cpu` / `--worker-cpu` pin the threads. The paced rate sends packets evenly, so each packet wakes both threads (about 2 context switches per packet); that CPU figure is mostly wake-up cost and moves with the host's idle state, so compare it before/after on one quiet host, interleaved.
+
 ## Running
 
 To run the cpp code, perform the following:
