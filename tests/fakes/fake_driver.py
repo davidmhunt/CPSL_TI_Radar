@@ -77,6 +77,8 @@ else:
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
 
 print(f"Using config: {cfg}" + (" (skip-configure)" if "--skip-configure" in args else ""), flush=True)
+if os.environ.get("FAKE_DRIVER_BADBYTE"):   # a non-UTF-8 byte mid-output (the real driver emitted 0xfe after "SO_RCVBUF granted")
+    sys.stdout.flush(); sys.stdout.buffer.write(b"bad \xfe byte\nafter bad byte\n"); sys.stdout.buffer.flush()
 if os.environ.get("FAKE_DRIVER_CLI"):
     kind = os.environ["FAKE_DRIVER_CLI"]
     if kind == "by-config":

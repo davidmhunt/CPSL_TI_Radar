@@ -359,3 +359,17 @@ def test_status_firmware_check_absent_and_reset(env, monkeypatch):
         monkeypatch.delenv("FAKE_DRIVER_FW")
         c.post("/api/driver/start", json={"config": str(cfg), "frames": 2})
         assert wait_for(c, {"exited"})["firmware_check"] is None   # an old driver / no check: a new run clears the last verdict
+
+
+def test_pump_survives_non_utf8_driver_output(env, monkeypatch):
+    """Incident 2026-11-07: a 0xfe byte killed _pump (UnicodeDecodeError): the log froze and the state stayed `stopping`."""
+    make, cfg, _, _ = env
+    monkeypatch.setenv("FAKE_DRIVER_BADBYTE", "1")
+    with make() as c:
+        c.post("/api/driver/start", json={"config": str(cfg), "frames": 3})
+        st = wait_for(c, {"exited", "failed"})
+        assert st["state"] == "exited" and st["exit_code"] == 0
+        log = st["log"]
+        assert any("bad � byte" in ln for ln in log)
+        i = next(i for i, ln in enumerate(log) if "after bad byte" in ln)   # lines after the bad one still arrive
+        assert any(ln == "Stopped." for ln in log[i:]) or len(log) > i

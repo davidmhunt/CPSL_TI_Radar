@@ -122,3 +122,30 @@ def test_routes_mounted_in_app():
     from radar_gui.sources import MockSource
     paths = set(create_app(MockSource()).openapi()["paths"])
     assert {"/api/settings/ports", "/api/settings/dca"} <= paths
+
+
+def _bad_sysctl_host():
+    h = bench_host()
+    h.files.pop("/etc/sysctl.d/99-radar.conf", None)
+    return h
+
+
+def test_dca_host_only_checks_in_container_say_run_on_host():
+    h = _bad_sysctl_host()
+    j = settings.dca_checks(h, "enp3s0", container=True)
+    sysctl = next(c for c in j["checks"] if c["name"] == "sysctl")
+    plain = next(c for c in settings.dca_checks(_bad_sysctl_host(), "enp3s0", container=False)["checks"] if c["name"] == "sysctl")
+    assert plain["status"] == "MISSING" and plain["fix_cmds"]
+    assert j["in_container"] is True
+    assert sysctl["status"] == "INFO" and sysctl["fix_cmds"] == []
+    assert sysctl["manual"][0] == "run on the host:" and sysctl["manual"][1:] == plain["fix_cmds"] + plain["manual"]
+    assert sysctl["detail"] == plain["detail"] and "134217728" in sysctl["detail"]   # runtime value kept
+
+
+def test_dca_host_only_checks_outside_container_unchanged(monkeypatch):
+    monkeypatch.setattr("radar_gui.configs_api.in_container", lambda: False)
+    j = settings.dca_checks(_bad_sysctl_host(), "enp3s0")
+    sysctl = next(c for c in j["checks"] if c["name"] == "sysctl")
+    assert j["in_container"] is False and sysctl["status"] == "MISSING"
+    monkeypatch.setattr("radar_gui.configs_api.in_container", lambda: True)
+    assert next(c for c in settings.dca_checks(_bad_sysctl_host(), "enp3s0")["checks"] if c["name"] == "sysctl")["status"] == "INFO"

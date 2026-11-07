@@ -54,14 +54,32 @@ def scan_ports(by_id_dir: str = BY_ID, proc: str = "/proc", host: hs.Host | None
             "radar_links": [{"id": k, "cli": c, "data": d} for k, (c, d) in radar_links(radar_dir).items()]}
 
 
-def dca_checks(host: hs.Host, nic: str | None = None, ping: bool = False) -> dict:
+HOST_ONLY = ("sysctl", "dca-nic", "firewall", "udev")   # state lives on the host, not in a container's filesystem
+
+
+def _host_only(c: dict) -> dict:
+    """In a container a failing host-only check is not evidence the host is misconfigured (e.g. /etc/sysctl.d/99-radar.conf
+    exists only on the host): show INFO + the fix command(s) verbatim; the runtime-value detail is kept."""
+    if c["name"] not in HOST_ONLY or c["status"] in (hs.OK, hs.NA):
+        return c
+    cmds = [*c.get("fix_cmds", []), *c.get("manual", [])]
+    if not cmds:
+        return c
+    return {**c, "status": "INFO", "fix_cmds": [], "manual": ["run on the host:", *cmds]}
+
+
+def dca_checks(host: hs.Host, nic: str | None = None, ping: bool = False, container: bool | None = None) -> dict:
     cands = hs.ethernet_candidates(host)
     if nic is not None and nic not in cands:
         raise ValueError(f"{nic!r} is not a wired ethernet interface on this host (candidates: {', '.join(cands) or 'none'})")
-    return {"candidates": cands, "nic": nic, "ping": ping,
-            "checks": [hs.check_dca_nic(host, nic, confirm=None, ping=ping).to_dict(),
-                       hs.check_sysctl(host).to_dict(),
-                       hs.check_firewall(host, nic).to_dict()]}
+    checks = [hs.check_dca_nic(host, nic, confirm=None, ping=ping).to_dict(),
+              hs.check_sysctl(host).to_dict(),
+              hs.check_firewall(host, nic).to_dict()]
+    from .configs_api import in_container
+    if in_container() if container is None else container:
+        checks = [_host_only(c) for c in checks]
+    return {"candidates": cands, "nic": nic, "ping": ping, "in_container": bool(in_container() if container is None else container),
+            "checks": checks}
 
 
 def make_router(host_factory=hs.Host, by_id_dir: str = BY_ID, proc: str = "/proc", radar_dir: str | None = None) -> APIRouter:
