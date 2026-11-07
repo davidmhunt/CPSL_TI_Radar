@@ -179,7 +179,7 @@ def validate_config(binary: Path, config: str | os.PathLike, env: dict | None = 
     (exit 2 / non-JSON output) falls back to the plain-text `--validate` and parse_validate."""
     def run(*flags):
         try:
-            return subprocess.run([str(binary), str(config), "--validate", *flags], capture_output=True, text=True,
+            return subprocess.run([str(binary), str(config), "--validate", *flags], capture_output=True, text=True, errors="replace",
                                   timeout=30, stdin=subprocess.DEVNULL, env=env)
         except subprocess.TimeoutExpired:
             raise DriverError("--validate timed out after 30 s", 503)
@@ -373,7 +373,7 @@ class DriverManager:
                         self._logf = None
                     try:
                         self.proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                                     stdin=subprocess.DEVNULL, text=True, bufsize=1,
+                                                     stdin=subprocess.DEVNULL, text=True, errors="replace", bufsize=1,
                                                      start_new_session=True, pass_fds=(wfd,) if wfd is not None else ())
                     except OSError as e:
                         for fd in (rfd, wfd):

@@ -95,7 +95,7 @@ def _accepts_key(binary: Path, mutate) -> bool:
         p = Path(d) / "probe.json"
         p.write_text(json.dumps(doc))
         try:
-            r = subprocess.run([str(binary), str(p), "--validate"], capture_output=True, text=True, timeout=15,
+            r = subprocess.run([str(binary), str(p), "--validate"], capture_output=True, text=True, errors="replace", timeout=15,
                                stdin=subprocess.DEVNULL, cwd=d)
         except (OSError, subprocess.TimeoutExpired):
             return False
