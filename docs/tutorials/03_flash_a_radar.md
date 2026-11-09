@@ -33,7 +33,7 @@ git submodule update --init --checkout firmware_dev && cd firmware_dev
 ## Flash with UniFlash (a prebuilt `.bin`)
 
 1. Install TI [UniFlash](https://www.ti.com/tool/UNIFLASH#downloads) on the host (the lab's `firmware_dev` uses 9.6.0). Close every program holding the board's ports (the GUI, the driver, a terminal).
-2. Power the board off and set the boot switches to **flashing mode**. IWR1843: SOP2 = 1, SOP1 = 0, SOP0 = 1; diagrams for the switch positions: [IWR1843](../images/boot_modes/IWR1843_SOP_nodes.png), [IWR1443](../images/boot_modes/IWR_SOP_modes.png). Power on.
+2. Power the board off and disconnect any DCA1000 from it (an attached one makes the flash fail; reconnect it after step 4). Set the boot switches to **flashing mode**. IWR1843: SOP2 = 1, SOP1 = 0, SOP0 = 1; diagrams for the switch positions: [IWR1843](../images/boot_modes/IWR1843_SOP_nodes.png), [IWR1443](../images/boot_modes/IWR_SOP_modes.png). Power on.
 3. In UniFlash pick the device (for example IWR1843), the board's CLI port (see [tutorial 2](02_host_setup.md#which-port-is-the-cli-which-the-data-port)) and the `.bin` as the meta image to flash; the format is `bin`. The exact UI labels differ between UniFlash versions. `firmware_dev` flashes the IWR1843 with image slot `1`; its [ti_stock_demos README](https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev/blob/main/projects/ti_stock_demos/README.md) has the by-hand steps. Wait for UniFlash's success message.
 4. Power off, set the switches to **functional mode** (IWR1843: SOP2 = 0, SOP1 = 0, SOP0 = 1), and power on. The board reads the switches only at power-up.
 
