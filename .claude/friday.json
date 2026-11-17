@@ -1,0 +1,19 @@
+{
+  "run_wrapper": "./run",
+  "run_only": ["python", "python3", "pytest", "uv", "cmake", "ctest", "make"],
+  "hardware": {
+    "radar-bench": [
+      "CPSL_TI_Radar_CPP\\b(?!.*--validate)",
+      "radar_gui\\b(?!.*--source\\s+replay)",
+      "/dev/(ttyACM|ttyUSB)\\d",
+      "/dev/serial/by-id/",
+      "--profile\\s+hw\\b",
+      "\\./fw\\s+flash\\b",
+      "\\b(uniflash|dslite)\\b"
+    ],
+    "host-config": [
+      "host_setup\\.py\\b(?=.*--apply)(?!.*--dry-run)",
+      "\\bnmcli\\s+connection\\s+(add|modify|up|down)\\b"
+    ]
+  }
+}
