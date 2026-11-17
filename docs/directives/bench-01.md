@@ -52,3 +52,4 @@ allocators.
   Release build, `./run ctest --test-dir CPSL_TI_Radar_cpp/build -C bench -L bench --verbose`: 0.0 in
   every row (converter/clean/drop_1pct/dup_reorder a-c, drv_clean, drv_drop_1pct, drv_save), identical.
   Equivalence "yes" and all replay rows "= golden" in both runs. Timings not compared.
+- Step 6: Verify passed (werror configure+build of bench_pipeline clean; tools/check.sh: 991 passed, 12 skipped, '== check passed').
