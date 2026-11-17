@@ -1,0 +1,32 @@
+# Dev container for ./run. Use ./run, not docker compose directly: it sets REPO_ROOT, the uid/gid
+# and a project name per checkout (so two worktrees never share a container), then starts this
+# service once and execs commands into it.
+#
+# Machine-specific additions (serial devices, host networking, a proxy) go in
+# docker/dev/compose.override.yaml, which is gitignored and picked up by ./run when present.
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UV_VERSION: ${UV_VERSION:-0.12.23}
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+    image: cpsl-ti-radar-dev:uid${HOST_UID:-1000}
+    init: true
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # The repo is mounted at the same absolute path as on the host, so paths in compiler
+    # errors, logs and the CMake cache read the same on both sides.
+    volumes:
+      - ${REPO_ROOT:?use ./run, which sets REPO_ROOT}:${REPO_ROOT}
+      - venv:/home/dev/venv
+      - uv-cache:/home/dev/.cache/uv
+    working_dir: ${REPO_ROOT}
+    restart: "no"
+
+volumes:
+  venv: {}
+  uv-cache:
+    name: friday-uv-cache   # shared by every project's dev container on this machine

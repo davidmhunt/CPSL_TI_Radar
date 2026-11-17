@@ -99,7 +99,8 @@ def test_dca_ok_and_candidates():
     assert ("ping", "-c", "1", "-W", "1", "192.168.33.180") not in h.calls and h.executed == []
 
 
-def test_dca_ping_only_on_request_and_text_fixes():
+def test_dca_ping_only_on_request_and_text_fixes(monkeypatch):
+    monkeypatch.setattr("radar_gui.configs_api.in_container", lambda: False)  # host behaviour, even when pytest runs in the dev container
     h = bench_host()
     j = client("/x", host=h, proc="/x").get("/api/settings/dca?nic=enp3s0&ping=1").json()
     assert ("ping", "-c", "1", "-W", "1", "192.168.33.180") in h.calls

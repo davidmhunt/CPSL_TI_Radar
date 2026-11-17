@@ -43,6 +43,25 @@ The GUI has no authentication: keep `GUI_HOST` on loopback, since a LAN or tailn
 
 A container shares the host kernel, so [tutorial 2](tutorials/02_host_setup.md) still applies on the host: `rmem_max`, the static `192.168.33.30` address, the firewall rule and group membership. Priorities above 0 (`runtime.rx_priority`) need `SYS_NICE` and an `rtprio` limit, which `hw` has and `demo` lacks (the driver then warns once). After a USB re-plug, run `up hw --force-recreate`.
 
+## Dev container (`./run`)
+
+A second image, `docker/dev/`, is the development toolchain: compiler, CMake, Python 3.12 and uv. You (and Claude Code) stay on the host; `./run` sends each command into the container.
+
+```bash
+./run tools/check.sh                 # C++ build + ctest + pytest -m "not slow": the hardware-free check
+./run uv run pytest tests/test_radar_gui_settings.py
+./run bash                           # a shell in the container
+```
+
+- **First use** builds the image (a few minutes) and starts one long-lived container for this checkout. Later calls exec into it in well under a second. `./run --rebuild` after a `docker/dev/Dockerfile` change; `./run --down` to stop it.
+- **Your files stay yours.** The container runs as the uid/gid that owns the checkout, and the repo is mounted at the same absolute path, so build outputs, logs and the CMake cache are interchangeable with a host build. A root-owned checkout is refused.
+- **uv** comes from `uv.lock` as on the host. The container's venv and the uv cache live in Docker volumes, never in the repo's `.venv`; `uv run` re-syncs the venv when the lock changes.
+- **Worktrees** each get their own container and venv (the compose project name is derived from the checkout path).
+- **Native machines** (a robot computer without Docker, say) set `FRIDAY_RUNTIME=native` or put `native` in `~/.config/friday/runtime`; `./run` then runs the command directly with the host's toolchain.
+- **Machine-specific additions** (serial devices, host networking, a proxy CA) go in `docker/dev/compose.override.yaml`, which is gitignored and picked up automatically.
+
+ROS 2 is not in the dev image; the ROS packages under `ros2/` still build on the host.
+
 ## Not covered
 
 Publishing the image to a registry; macOS and Windows (serial passthrough and host networking do not work through Docker Desktop). The `hw` profile was only config-checked while writing this page, never run against a board: confirm it on yours.

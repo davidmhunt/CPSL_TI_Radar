@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# ./run <command...>   Run a build, test or script in this project's runtime.
+#
+#   ./run tools/check.sh                    the full hardware-free check (C++ build, ctest, pytest)
+#   ./run uv run pytest -m "not slow"
+#   ./run bash                              a shell in the dev container
+#   ./run --rebuild                         rebuild the dev image (after a Dockerfile change)
+#   ./run --down                            stop this checkout's dev container
+#
+# Runtime, in order: $FRIDAY_RUNTIME, then ~/.config/friday/runtime, then "container".
+#   container  commands run in docker/dev (a long-lived container per checkout, started on
+#              first use, running as the uid/gid that owns this checkout)
+#   native     commands run directly on this machine with its own uv and toolchain
+# See docs/docker.md, "Dev container".
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+runtime="${FRIDAY_RUNTIME:-}"
+if [[ -z "$runtime" && -r "$HOME/.config/friday/runtime" ]]; then
+  runtime="$(tr -d '[:space:]' < "$HOME/.config/friday/runtime")"
+fi
+runtime="${runtime:-container}"
+
+if [[ "$runtime" == native ]]; then
+  [[ $# -gt 0 ]] || { echo "usage: ./run <command...>" >&2; exit 2; }
+  exec "$@"
+fi
+if [[ "$runtime" != container ]]; then
+  echo "./run: unknown runtime '$runtime' (expected container or native)" >&2
+  exit 2
+fi
+
+# --- container runtime ---------------------------------------------------------------
+export REPO_ROOT="$root"
+export HOST_UID HOST_GID
+HOST_UID="$(stat -c %u "$root")"
+HOST_GID="$(stat -c %g "$root")"
+if [[ "$HOST_UID" == 0 ]]; then
+  echo "./run: this checkout is owned by root; clone it as your own user (the dev container runs as the checkout's owner)" >&2
+  exit 2
+fi
+
+# One compose project per checkout, so worktrees never share a container or venv.
+hash="$(printf '%s' "$root" | sha1sum | cut -c1-8)"
+export COMPOSE_PROJECT_NAME="cpsl-dev-$hash"
+
+compose=(docker compose -f "$root/docker/dev/compose.yaml")
+[[ -f "$root/docker/dev/compose.override.yaml" ]] && compose+=(-f "$root/docker/dev/compose.override.yaml")
+
+case "${1:-}" in
+  --rebuild) "${compose[@]}" build dev && exec "${compose[@]}" up -d --force-recreate dev ;;
+  --down)    exec "${compose[@]}" down ;;
+  "")        echo "usage: ./run <command...> | --rebuild | --down" >&2; exit 2 ;;
+esac
+
+if [[ -z "$("${compose[@]}" ps --status running -q dev 2>/dev/null)" ]]; then
+  "${compose[@]}" up -d --build dev >&2
+fi
+
+# Run from the caller's directory when it is inside the checkout (same path in the container).
+workdir="$root"
+case "$PWD/" in "$root"/*) workdir="$PWD" ;; esac
+
+tty=(-T)
+[[ -t 0 && -t 1 ]] && tty=()
+exec "${compose[@]}" exec "${tty[@]}" -w "$workdir" dev "$@"

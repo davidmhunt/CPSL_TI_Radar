@@ -165,6 +165,7 @@ are read only when a rule's trigger matches your next action.
 
 ## Running tests
 
+- **Default:** `./run tools/check.sh` runs the C++ build, `ctest` and `pytest -m "not slow"` in the dev container and exits 0 only if all pass (`docs/docker.md`, "Dev container"). Prefix any other build or test command with `./run`.
 - C++ (hardware-free unit tests, in-tree harness, no extra dependencies):
   `cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build && cmake --build CPSL_TI_Radar_cpp/build -j && ctest --test-dir CPSL_TI_Radar_cpp/build --output-on-failure`.
   Add a test as `CPSL_TI_Radar_cpp/tests/test_<name>.cpp` plus an `add_driver_test` line in `tests/CMakeLists.txt`; details in `CPSL_TI_Radar_cpp/Readme.md`. Tests pin current behaviour; a bug found is recorded with `KNOWN_BUG(...)`, not fixed in the test pass.

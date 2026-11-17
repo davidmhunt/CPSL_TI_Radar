@@ -30,3 +30,6 @@ CPSL_TI_Radar_cpp/config/user/
 
 # radar_gui Run tab output (driver runs, adc_data.bin)
 runs/
+
+# Local dev-container additions (devices, proxy); picked up by ./run
+docker/dev/compose.override.yaml
