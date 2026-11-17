@@ -48,6 +48,9 @@ allocators.
 
 ## Log
 (execution appends here: commits, Verify results, verifier verdict, PR link, blockers)
+- Step 1: pre-change diagnostic, friday-v1/runtime bench_pipeline.cpp, c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0,
+  flags -Werror=mismatched-new-delete -O3 -std=gnu++17 -Wall -Wextra -Wpedantic:
+  `bench_pipeline.cpp:99:64: error: 'void free(void*)' called on pointer returned from a mismatched allocation function [-Werror=mismatched-new-delete]`
 - Step 5: allocs/frame, original source (baseline, built from cd87ea8~1) vs. with the pragma (cd87ea8),
   Release build, `./run ctest --test-dir CPSL_TI_Radar_cpp/build -C bench -L bench --verbose`: 0.0 in
   every row (converter/clean/drop_1pct/dup_reorder a-c, drv_clean, drv_drop_1pct, drv_save), identical.
