@@ -8,7 +8,6 @@ __pycache__/*
 
 # Secrets and local environment (never commit)
 .env
-harness.config.env
 .venv/
 
 # Generated / build outputs
@@ -16,9 +15,7 @@ harness.config.env
 generated_config.*
 jsonconfig.json
 
-# --- friday harness (managed by init_harness.py) ---
 __pycache__/
-# --- end friday harness ---
 
 # CMake preset build dirs (CPSL_TI_Radar_cpp/CMakePresets.json: build-asan-ubsan,
 # build-bench-aligned; build/ has its own .gitignore)

@@ -9,6 +9,3 @@
 	url = https://github.com/davidmhunt/CPSL_TI_Radar_Firmware_Dev.git
 	branch = release/v2.0
 	update = none
-[submodule ".friday"]
-	path = .friday
-	url = https://github.com/davidmhunt/friday.git
