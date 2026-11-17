@@ -1,5 +1,5 @@
 # bench-01: Silence the -Wmismatched-new-delete warning in bench_pipeline
-Status: approved
+Status: running@thinkpadP15v3
 Node: any
 Verify: ./run cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build-werror -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror=mismatched-new-delete && ./run cmake --build CPSL_TI_Radar_cpp/build-werror --target bench_pipeline --parallel 8 && ./run tools/check.sh
 Hardware: none
