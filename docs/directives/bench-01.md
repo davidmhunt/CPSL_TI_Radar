@@ -1,5 +1,5 @@
 # bench-01: Silence the -Wmismatched-new-delete warning in bench_pipeline
-Status: running@thinkpadP15v3
+Status: done
 Node: any
 Verify: ./run cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build-werror -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror=mismatched-new-delete && ./run cmake --build CPSL_TI_Radar_cpp/build-werror --target bench_pipeline --parallel 8 && ./run tools/check.sh
 Hardware: none
@@ -56,3 +56,12 @@ allocators.
   every row (converter/clean/drop_1pct/dup_reorder a-c, drv_clean, drv_drop_1pct, drv_save), identical.
   Equivalence "yes" and all replay rows "= golden" in both runs. Timings not compared.
 - Step 6: Verify passed (werror configure+build of bench_pipeline clean; tools/check.sh: 991 passed, 12 skipped, '== check passed').
+- 2026-11-17 landing:
+  Commits (`git log --oneline friday-v1/runtime..HEAD`):
+  - f3882be bench-01: log step 1 diagnostic text and compiler version
+  - c4449fe bench-01: log step 6 Verify result
+  - ce714c3 bench-01: log step 5 allocs/frame comparison
+  - 0a52769 bench_pipeline: silence -Wmismatched-new-delete false positive on replacement operator delete
+  - b53acb1 Start bench-01
+  Verify passed: ./run cmake -S CPSL_TI_Radar_cpp -B CPSL_TI_Radar_cpp/build-werror -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror=mismatched-new-delete && ./run cmake --build CPSL_TI_Radar_cpp/build-werror --target bench_pipeline --parallel 8 && ./run tools/check.sh
+  Independent review: no gaps
