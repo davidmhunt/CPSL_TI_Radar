@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(friday status)",
+      "Bash(friday status *)",
+      "Bash(friday new *)",
+      "Bash(friday start *)",
+      "Bash(friday verify)",
+      "Bash(friday verify *)",
+      "Bash(friday finish *)",
+      "Bash(friday land *)"
+    ]
+  }
+}
